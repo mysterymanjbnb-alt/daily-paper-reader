@@ -1,0 +1,705 @@
+Title: Robust Unsupervised Network Intrusion Detection via Federated Learning with Selective Aggregation under Anomalous Sample Contamination
+
+URL Source: https://arxiv.org/pdf/2607.25439v1
+
+Published Time: Wed, 29 Jul 2026 00:41:21 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+1
+
+# Robust Unsupervised Network Intrusion Detection via Federated Learning with Selective Aggregation under Anomalous Sample Contamination 
+
+Shohei Kamiguchi and Takayuki Nishio, Senior Member, IEEE 
+
+Abstract —Network intrusion detection systems (NIDS) have become essential for Internet of Things (IoT) environments, as malware targeting IoT devices continues to evolve in sophis-tication. Unsupervised learning approaches offer a promising direction by removing the dependency on labeled datasets. However, the common assumption that training data are entirely clean is often violated in practice, particularly when data samples are collected directly from deployed network devices, where anomalies are likely to be present in the training datasets. Such contamination degrades detection performance and highlights the need for robust unsupervised NIDS methods capable of operating effectively under contaminated unlabeled training data. To address this issue, we propose a robust training methodology for anomaly detection (AD) that remains effective even in the presence of unlabeled anomalies. Our method consists of two primary components. First, we exploit a known limitation of federated learning (FL)—its tendency to underrepresent minority data. By leveraging this characteristic, we attenuate the influ-ence of anomalous data originating from a small number of compromised clients. Second, we introduce a selective aggrega-tion mechanism during model aggregation, which quantifies the “distance” between local client models and a global reference. Specifically, we employ the Expectation-Maximization (EM) al-gorithm to detect and exclude client groups whose model updates significantly diverge from the majority. This selective aggrega-tion ensures that anomalous updates do not compromise the global model. Experiments conducted on multiple NIDS datasets demonstrate that our method outperforms existing approaches in environments contaminated with anomalous data. Furthermore, the proposed method maintains its detection performance even as the proportion of anomalies increases. 
+
+Index Terms —Network Intrusion Detection, Anomaly Detec-tion, Malware Detection, Federated Learning, IoT, Traffic Mon-itoring 
+
+I. I NTRODUCTION 
+
+The widespread adoption of IoT is transforming modern digital infrastructure, with billions of devices embedded in homes, industries, and public services. While this connectivity enables significant advances in automation and data-driven functionality, it also introduces substantial security risks [1]. Many IoT devices operate with limited computational capacity and are deployed in heterogeneous environments, making them attractive targets for malware. Attacks such as the Mirai botnet [2] have shown how vulnerable IoT devices can be leveraged to launch large-scale disruptions. Protocol-level 
+
+This work is supported in part by JST, PRESTO Grant Number JP-MJPR2035 and JST-ALCA-Next Japan Grant Number JPMJAN24F1. Shohei Kamiguchi and Takayuki Nishio are with the School of En-gineering, Institute of Science Tokyo, Tokyo 152-8550, Japan (e-mail: nishio@ict.e.titech.ac.jp). Challenge of conv. approach: Anomalous   
+
+> sample contamination
+> due to dataset aggregation
+> Gateway
+> Devices
+> Malware infected
+> dev. is lurking
+> Traffic Datasets w/o
+> anomalous samples
+> …
+> Anomalous Sample
+> Contaminated Dataset
+> Centralized Unspervised Training w/ Aggregated Dataset
+> Contaminated anomalous samples
+> degrades anomaly detection acc.
+> Proposed framework avoiding anomalous
+> sample contamination via federated learning
+> w/ selective model aggregation
+> …
+> Mitigating effect of anomalous
+> sample contamination
+> Training
+> locally
+> Most models are
+> trained w/ benign
+> dataset
+> Aggregate
+
+Figure 1: Challenge of conventional unsupervised NIDS, anomalous sample contamination, and proposed solution. Red-colored icons represent devices, datasets, and models affected by malware’s anomalous samples, which causes performance degradation. studies [3], [4] further reveal how complex device interactions can be exploited. According to Nokia’s Threat Intelligence Report 2023 [5], approximately 0.1% of connected devices were infected monthly, with IoT devices accounting for 9% 
+
+of these cases. In residential networks, the infection rate has remained at 2% per month since 2019. These trends highlight the urgent need for effective security mechanisms. Among them, NIDS play a critical role in detecting malicious activity within IoT traffic, offering a last line of defense in environments where endpoint protection is often insufficient. Recent developments in NIDS have increasingly turned to machine learning (ML) techniques, which enable the auto-mated identification of suspicious patterns in network traf-fic [1]. ML-based NIDS are particularly appealing in IoT contexts, where network behavior is heterogeneous and attack vectors are often unknown. Supervised ML approaches have demonstrated strong detection performance [6]–[8]; however, their effectiveness hinges on the availability of large volumes of labeled training data. In practice, such datasets are dif-ficult and costly to obtain, especially for newly emerging malware, for which labeled instances are often unavailable. Consequently, supervised methods face limitations in adapting to novel and evolving threats. As a more practical and scalable alternative, unsupervised NIDS have attracted growing atten-tion [9]–[11]. These methods learn patterns of normal behavior and detect anomalies without the need for labeled data, making them particularly suitable for real-world IoT environments where threat landscapes are continuously shifting and labeled data remain limited. In typical unsupervised NIDS settings, training data are arXiv:2607.25439v1 [cs.NI] 28 Jul 2026 2
+
+assumed to consist exclusively of benign traffic. However, this assumption often breaks down in practical IoT deployments. In many cases, traffic is collected from routers or gateways in operational environments, where already-infected devices may be actively communicating on the network. This means that anomalous traffic can be inadvertently included in the training data even before any detection model is applied. Such contamination poses a significant challenge: unsuper-vised models trained on mixed data are likely to internalize malicious behavior as normal, leading to degraded detection performance. Although the issue of anomalous contamination has been actively studied in the broader field of unsupervised AD [12], [13], existing methods are not directly tailored to NIDS. For instance, Qiu et al. [14] proposed a state-of-the-art (SoTA) AD approach that incorporates both inlier and outlier information into the loss function. While their method is generalizable and performs well across a range of tasks, it does not explicitly leverage the structural characteristics of IoT-based NIDS sce-narios—particularly the fact that malicious activity is typically confined to a small subset of devices, while the majority of the network traffic originates from benign sources. By exploiting this property, it becomes possible to achieve more effective and targeted mitigation of contamination in unsupervised NIDS. Building on this insight, we propose a novel unsupervised NIDS framework, FLANDRE ( Federated Learning-assisted Anomalous Node Detection & REmoval ) that explicitly in-corporates this device-level structure to enhance robustness in the presence of contaminated training data. Our approach assumes a realistic IoT setting where traffic is distributed across multiple clients—each representing a group of local devices—and only a minority of clients are compromised. We employ FL to enable collaborative model training without centralizing sensitive traffic data. Crucially, we turn a well-known limitation of FL—its tendency to underrepresent mi-nority patterns—into an advantage, naturally suppressing the influence of anomalous samples from compromised clients. Furthermore, we introduce a selective aggregation mechanism that evaluates the divergence between local and global models and excludes clients exhibiting suspicious behavior. In contrast to prior work that focuses on sample-level filtering [14], our method performs client-level filtering throughout training, requires no labeled data, and offers improved robustness and adaptability in practical IoT-based NIDS scenarios, as illustrated in Figure 1. The main contributions of this paper are summarized as follows: – Contamination-robust unsupervised NIDS framework: 
+
+We propose a novel training framework for unsupervised NIDS that addresses anomalous contamination in training data, a practical issue in IoT environments. The framework uses FL as an intrinsic client-level anomaly suppression mechanism. Rather than employing FL solely for privacy or scalability, we exploit its inherent tendency to underrepresent minority patterns to mitigate the impact of compromised devices, under the realistic assumption that most IoT devices generate benign traffic. Furthermore, we introduce a selective aggregation mechanism that identifies and excludes suspicious clients based on model divergence, enabling robust model aggregation without requiring labeled data. – Comprehensive evaluation and comparison with SoTA: 
+
+We conduct extensive experiments on three representa-tive NIDS benchmark datasets, namely ToN IoT, CSE-CIC-IDS2018 (IDS2018), and NF-UQ-NIDS-v2 (NF-UQ-NIDS), under varying contamination settings. Our proposed method consistently outperforms both conventional and SoTA ap-proaches, including the recent soft Latent Outlier Exposure (LOE-S) method. In particular, under a representative con-tamination setting, FLANDRE achieves F1 scores of 0.969 ,
+
+0.838 , and 0.823 on ToN IoT, NF-UQ-NIDS, and IDS2018, respectively, whereas LOE-S attains 0.916 , 0.742 , and 0.586 .Furthermore, FLANDRE remains consistently close to the ideal contamination-free reference, with a F1 score gap of only 0.004 on ToN IoT, highlighting its robustness against anomalous contamination. This work builds upon our previous conference publica-tion [15], which presented an initial proof-of-concept ap-plying FL framework to solve the contamination problem in unsupervised NIDS. The prior study did not incorporate any selective aggregation strategy and included only limited evaluation. In contrast, the present paper introduces a new client removal technique, expands the scope of analysis, and provides a detailed comparison with recent SoTA methods. Code for reproducing our results is available at https://github. com/nishio-laboratory/FLANDRE. Note that our problem setting differs from that of conven-tional studies on AD with FL. Prior work has applied FL to AD [16], primarily to protect training data by exchanging only model parameters. In existing FL-based AD approaches, client filtering methods are introduced to mitigate performance degradation caused by variations in data quality and distribu-tion across clients, as well as to reduce computational and communication costs during training [7], [8]. In contrast, our work addresses the problem of anomalous data contamination in NIDS. We propose a training framework for constructing a robust NIDS by leveraging the inherent robustness of FL against a minority of anomalous clients, together with a client filtering algorithm designed based on this property. II. R ELATED WORKS 
+
+We summarize related work in three categories: (i) unsu-pervised NIDS approaches and their vulnerability to training data contamination, (ii) contamination-robust unsupervised AD methods, and (iii) applications of FL in the context of AD and NIDS. Table I provides a high-level comparison, and the following subsections discuss each category in detail. 
+
+A. Unsupervised NIDS with Anomalous Data Contamination 
+
+Unsupervised learning has been widely adopted in NIDS, where models are typically trained only on normal traffic to detect deviations. Binbusayyis and Vaiyapuri [9] proposed a framework combining a one-dimensional convolutional au-toencoder with a one-class support vector machine (SVM). Alom and Taha [10] employed restricted Boltzmann machines with K-means clustering. Verkerken [11] compared several 3
+
+unsupervised approaches, including one-class SVM, isolation forest, principal component analysis (PCA), and autoencoders, reporting that autoencoders yielded the best results. However, these methods generally assume that the training data are entirely clean, and overlook the risk of anomalous sample contamination—a realistic concern in IoT environ-ments where traffic is often collected from deployed routers or gateways. Zhang et al. [17] explicitly investigated the impact of training data contamination, showing that the presence of anomalies degrades detection performance. Choi et al. [18] further analyzed the sensitivity of autoencoders to contami-nated training data, though their work did not propose methods to mitigate its effects. 
+
+B. Contamination-Robust Unsupervised AD 
+
+In the broader field of unsupervised AD, several studies have proposed methods to address training data contamination. Isolation Forest [13] detects anomalies by measuring how easily data points can be isolated in random partitions. Yoon 
+
+et al. [12] proposed a data refinement strategy that uses ensembles of one-class classifiers to remove outliers prior to model training. Other studies have incorporated similar strategies into latent space models, such as latent support vector data description (SVDD) [19] and autoencoder-based detectors [20], [21]. Zhou and Paffenroth [22] introduced a robust autoencoder that learns to reconstruct only normal samples while penalizing abnormal ones, though their approach requires training an auxiliary anomaly detector. Qiu et al. [14] proposed a unified training framework that separates the treatment of inliers and outliers through tailored loss functions, achieving SoTA performance across diverse AD tasks. Their method con-sistently outperforms earlier approaches such as refinement-based filtering [12], robust autoencoders [22], and SVDD-based methods [19], [20], particularly on tabular datasets. For this reason, we consider it the current SoTA in contamination-robust unsupervised AD and include it as a baseline in our evaluation. However, these methods has not been specifically designed and evaluated in the context of NIDS. In particular, they do not exploit the structural property often observed in NIDS scenar-ios—namely, that only a small subset of clients (or devices) are compromised, while the majority generate benign traffic. This motivates the need for approaches that are tailored to such structural characteristics of IoT-based NIDS environments. 
+
+C. FL for AD and NIDS 
+
+FL has been explored in various AD settings due to its ability to enable distributed training while preserving data locality. In the context of NIDS, existing FL-based studies have focused primarily on supervised learning. Mothukur et al. [6] proposed a federated gated recurrent unit (GRU) model for IoT intrusion detection, where model weights—not raw data—are shared with a central server. Dynamic weighted aggregation federated learning (DAFL) [7] incorporates aclient selection mechanism based on performance to improve aggregation quality. FedGroup [8] clusters clients by traffic similarity to enable group-wise training. While promising, these approaches require labeled data and do not address the issue of contaminated training data, limiting their practicality in unsupervised NIDS scenarios. In unsupervised FL-based AD, only a few studies exist. Nardi et al. [16] proposed a method that clusters clients based on inlier similarity and performs intra-group aggregation. However, this approach assumes the ability to partition clients based on shared normal patterns, which may not be applicable in NIDS settings where the presence of compromised clients is unknown. Unlike previous work that primarily adopts FL for privacy preservation, our study leverages FL to suppress the influence of compromised clients by exploiting its tendency to under-represent minority data. This often-cited limitation of FL is reinterpreted here as a useful mechanism for contamination mitigation. Additionally, we introduce a selective aggregation technique based on model divergence to dynamically exclude suspicious clients from the training process, thereby enhancing the robustness of the learned model under real-world condi-tions. III. P ROPOSED METHOD : FLANDRE This section presents our proposed method, FLANDRE ,which improves the robustness of unsupervised AD when training data are partially contaminated by malware traffic. The primary objective of FLANDRE is to suppress the influence of anomalous samples contributed by a small number of compro-mised clients—an inherent characteristic of many real-world NIDS scenarios. To achieve this, our approach leverages FL as a means to isolate and filter out such clients during training. We begin by introducing the system model and assumptions underlying our design. We then describe the implementation of our client exclusion and aggregation mechanism, followed by theoretical analysis of its robustness under contamination. 
+
+A. System Model 
+
+We consider the problem of detecting malware activity from IoT network traffic using flow-based features such as flow duration, the amount of transferred data, and the num-ber of packets, as provided in benchmark datasets including ToN IoT [23] and IDS2018 [24]. As illustrated in Figure 1, IoT devices connect to gateways (GWs), which serve as observation points for monitoring net-work traffic and generating unlabeled datasets for unsupervised AD. NIDS are deployed at these GWs and operate using a shared AD model trained collaboratively across multiple GWs. In our framework, each GW acts as a client in an FL setting, performing a small number of local training epochs before sending model updates to a central server. The server functions as the FL parameter server, aggregating updates and isolating potentially compromised clients without requiring access to raw traffic data. The dataset collected at the i-th GW is denoted by Di and consists of flow records xj ∈ Di. Each record has a ground-truth label yj = 1 for malware flows and yj = 0 for benign 4                                
+
+> Method Strategy NIDS Contaminated Training Unlabeled Data Contamination Robust
+> [9]–[11] Unsupervised ML Yes No Yes No [17], [18] Unsupervised ML Yes Yes Yes No [12], [14], [19]–[21] Contamination-Aware ML Needs Mod. Yes Yes Yes [6]–[8] Supervised FL Yes No No No [16] Unsupervised FL Not for NIDS Yes Yes Partial
+> This Work (FLANDRE) Unsupervised FL Yes Yes Yes Yes
+
+Table I: Comparison of related works by learning strategy, NIDS applicability, training data contamination, labeling needs, and robustness. flows. These labels are hidden during training and are used solely for evaluation. We assume that only a small fraction of IoT devices are infected with malware. A GW hosting at least one infected device inevitably collects anomalous flow data, contaminating its local dataset. Such GWs are referred to as compromised clients , while those whose datasets contain only benign IoT application flows are referred to as benign clients :Compromised: ∃ xj ∈ Di s.t. yj = 1 ,
+
+Benign: ∀ xj ∈ Di, y j = 0 .
+
+The proportion of compromised clients and the fraction of anomalous samples within each compromised client are both unknown. In conventional centralized training, datasets from all GWs are collected at a central server to form a large training set, which can improve model performance but risks incorporating anomalous samples. In contrast, FLANDRE trains models in a distributed manner, mitigating the influence of contaminated data while preserving data locality. The training procedure is detailed in the next section. 
+
+B. Overview of FLANDRE Training Process 
+
+To address performance degradation caused by anomalous sample contamination, our method combines FL with a selec-tive aggregation mechanism. While FL is typically adopted to preserve client data privacy, it is also known to underrepresent minority patterns when training data are imbalanced [25]. In FL, such imbalance can occur not only globally across all clients but also locally within each client, making minority patterns even more prone to being overlooked compared to centralized learning. In FLANDRE, we exploit this tendency to suppress the influence of anomalous flows, which constitute a minority class originating from a small fraction of compromised clients. Furthermore, by measuring the divergence between models trained on benign data and those affected by anomalies, and leveraging the assumption that the proportion of compromised clients is small, we exclude suspicious clients from model aggregation. This two-step process mitigates the impact of contamination while maintaining collaborative training among the remaining clients. Algorithm 1 outlines the training process of the proposed method. It follows the standard Federated Averaging (FedAvg) procedure [26], with two key differences: (i) selective aggre-gation is applied in each round after a specified threshold, and 
+
+Algorithm 1 FLANDRE  
+
+> 1:
+
+procedure FL S ERVER TRAINING 2: Initialize global model w0 
+
+> 3:
+
+for each round t = 0 , 1, . . . , T do  
+
+> 4:
+
+Broadcasts wt to all client i ∈ S 
+
+> 5:
+
+for each i ∈ S parallelly do  
+
+> 6:
+
+∆wt+1  
+
+> i
+
+← ClientUpdate (i, w t) 
+
+> 7:
+
+end for  
+
+> 8:
+
+if t > threshold then  
+
+> 9:
+
+St ← RemoveCompromisedClients (S) 
+
+> 10:
+
+else  
+
+> 11:
+
+St ← S 
+
+> 12:
+
+end if  
+
+> 13:
+
+wt+1 ← wt + 1 
+
+> |DSt|
+
+P 
+
+> i∈St
+
+|Di|∆wt+1  
+
+> i
+> 14:
+
+end for  
+
+> 15:
+
+end procedure  
+
+> 16:
+
+function CLIENT UPDATE (i, w )
+
+ˆw ← w − η∇L(Di; w) 
+
+> 17:
+
+return ∆w ← ˆw − w 
+
+> 18:
+
+end function  
+
+> 19:
+
+function REMOVE COMPROMISED CLIENTS (S) 
+
+> 20:
+
+S0, S 1 ← GaussianMixture( S) 
+
+> 21:
+
+if d(S0) > d (S1) then  
+
+> 22:
+
+return S1 
+
+> 23:
+
+else  
+
+> 24:
+
+return S0 
+
+> 25:
+
+end if  
+
+> 26:
+
+end function 
+
+(ii) the client update step involves training an unsupervised AD model. The threshold is not a sensitive parameter and is determined empirically. The process begins with the server initializing a global model. Let S denote the set of all clients. In each round, the server broadcasts the current global model to all clients. Each client trains the model locally on its own dataset and sends the resulting model update to the server. In the initial rounds, before selective aggregation is activated, the server aggregates updates from all clients in S. After a predefined warm-up period, the server selects a subset of clients St ⊆ S
+
+for aggregation by excluding clients suspected of containing 5t round t+1 round t+2 round 
+
+Exclude outlier local 
+
+mode ls from aggregation. 
+
+Local model used for model aggregation 
+
+Local mode l excluded from aggregation 
+
+Local model update 
+
+Globa l model update via aggregation 
+
+Globa l model to be updated 
+
+Figure 2: Illustration of the selective aggregation process in the model parameter space. Local models are divided into two clusters, one of which is identified as an outlier cluster corresponding to compromised client models and excluded from model aggregation. anomalous samples. Finally, the server aggregates the subset 
+
+St ⊆ S updates—weighted by the size of each client’s dataset—to update the global model. This process repeats iteratively until the end. Figure 2 shows the model updates during the iterative global model update. Initially, the distances between the global model and the updates from both benign and compromised clients are comparable, leading to insufficient refinement. However, due to the majority presence of benign clients, the aggre-gated updates predominantly reflect their contributions. Over successive iterations, models trained on compromised clients increasingly diverge from the global model, facilitating effec-tive clustering-based client type estimation. This enables the exclusion of compromised clients from the training process. Ultimately, the global model is constructed by aggregating benign-client models. 
+
+C. Unsupervised AD Based on Deep SVDD 
+
+In this paper, we employ a well-known AD method, Deep Support Vector Data Description (Deep SVDD). Introduced by Ruff et al. [27], Deep SVDD represents the first fully deep learning-based one-class classification objective aimed at unsupervised AD. While FLANDRE is adaptable to various AD models, Deep SVDD offers a computationally efficient and straightforward implementation in scenarios involving the removal of compromised clients, making it a favorable choice for NIDS. ×c
+
+> Rn
+> Ra
+> anomalous data point
+> normal data point F
+
+Figure 3: The conceptual framework wherein Deep SVDD establishes an optimal radius within the feature space, F,effectively enabling the exclusion of anomalous data points. Assume an input space X ⊆ Rd and an output space F ⊆
+
+Rp, and let ϕ(·; w) : X → F be a neural network with L ∈ N
+
+hidden layers and a set of weights w = {w1, . . . , wL}, where 
+
+wℓ are the weights of layer ℓ ∈ { 1, . . . , L }. Here, ϕ(x; w) ∈ F
+
+represents the feature mapping of x ∈ X determined by the network ϕ with parameters w.The goal of Deep SVDD is to jointly learn the network parameters w while minimizing the volume of a data-enclosing hypersphere in output space F , characterized by a radius R > 
+
+0 and a center c ∈ F , which we assume to be predefined for now. Given some training data D = {x1, . . . , x n} on X, we define the soft-boundary Deep SVDD objective as: 
+
+min  
+
+> R,w
+
+R2 + 1
+
+νn 
+
+> n
+
+X
+
+> i=1
+
+max 0, ∥ϕ (xi; w) − c∥2 − R2
+
++ λ
+
+2
+
+> L
+
+X
+
+> ℓ=1
+
+∥wℓ∥2 
+
+> F
+
+.
+
+(1) Minimizing R2 reduces the volume of the hypersphere. The second term is a penalty for points that, after being processed by the network, lie outside the sphere, i.e., if their distance to the center ∥ϕ(xi; w) − c∥ exceeds R. The hyperparameter ν ∈ (0 , 1] moderates the trade-off between the volume of the sphere and boundary violations, allowing some points to be mapped outside the sphere. The final term is a weight decay regularizer on the network parameters w with a hyperparameter λ > 0, where ∥ · ∥ F denotes the Frobenius norm. Optimizing objective (1) enables the network to learn parameters w such that data points are closely aligned to the center c of the hypersphere. To achieve this, the network must extract common factors of variation from the data. As illustrated in Figure 3, normal examples of the data are closely mapped to the center c, while anomalous examples are positioned further from the center or outside the hypersphere. This approach provides a compact description of the normal class and enforces the learning process through minimizing the size of the sphere. 6
+
+D. Model Training to Mitigate Effect of Contamination 
+
+FL-aided unsupervised NIDS model training: In this sec-tion, we describe our model training method based on the widely used FL algorithm, FedAvg. The primary goal is defined by the following distributed objective: 
+
+min 
+
+> w
+
+(
+
+f (w) := X
+
+> i∈S
+
+|Di||DS | L(Di; w)
+
+)
+
+, (2) where S denotes the set of clients participating in the training process, |Di| represents the size of client i’s dataset Di,
+
+|DS | := P 
+
+> i∈S
+
+|Di|, and L(·; ·) is a user-specified loss function based on Di with model parameters w. The global objective, 
+
+f (w), acts as a collective goal for multiple clients, which FL seeks to minimize by optimizing all local objectives. The FLANDRE algorithm is outlined in Algorithm 1, where 
+
+|Di| represents the size of the training data for client i, and the total size of the training data summed across clients in St
+
+is |DSt | := P 
+
+> i∈St
+
+|Di|. During communication round t, the server broadcasts the latest global model wt to all the clients for local training. Each client proceeds to fine-tune the local objective function using its own data. Following local training, the parameter updates ∆wti computed by the clients who have successfully completed training within the allotted time frame are collected and aggregated by the server. This aggregation updates the global model to wt+1 as follows: 
+
+wt+1 = wt + 1
+
+|DSt |
+
+X
+
+> i∈St
+
+|Di|∆wti , (3) where the update ∆w is given by 
+
+∆w = −η∇L(Di; w). (4) Achieving the desired accuracy in FL typically requires hun-dreds of rounds. Since our proposed method is unsuper-vised, the stopping condition should ideally be determined by whether the magnitude of the gradient falls below a certain threshold. In our experiments, we inspect the learning curves over a fixed number of communication rounds to analyze training dynamics. In this study, we also report oracle best-F1 values only to compare the achievable performance of different methods under the same evaluation protocol. 
+
+Selective Aggregation via Model Clustering: Our proposed method selectively excludes potentially compromised clients from model aggregation in order to mitigate their adverse impact on the global model. The key idea is that, because anomalous samples appear only at compromised clients, their locally updated models tend to deviate more from the global model than those of benign clients. FLANDRE exploits this deviation to identify and isolate compromised clients in a data-driven manner. Selective aggregation is performed in two steps: (i) clus-tering of client models and (ii) selection of the cluster to be aggregated. 
+
+Step 1: Clustering client models. As described in the system model, we assume that the participating clients consist of be-nign and compromised clients. Their training data distributions differ substantially; in particular, only the datasets of com-promised clients contain anomalous samples. Consequently, after local training, the model parameters of compromised clients are expected to differ significantly from those of benign clients. To capture this discrepancy, we apply a clustering algorithm to the client models and partition them into two clusters, which are expected to roughly correspond to groups dominated by benign and compromised clients, respectively. Various clustering algorithms can be employed in FLAN-DRE. Among them, the EM algorithm [28] within the Gaus-sian mixture model (GMM) framework is one of the most established choices. It is widely used to obtain maximum-likelihood estimates and has demonstrated robust performance across a variety of practical applications [29], [30]. The EM algorithm is an iterative procedure that estimates model parameters to maximize the likelihood function p(X |
+
+λ), where λ denotes model parameters. Starting from an initial model λ, the algorithm iteratively updates the parameters to obtain a new estimate ¯λ such that p(X | ¯λ) ≥ p(X | λ).The updated model ¯λ then serves as the initial model for the next iteration, and this process is repeated until a predefined convergence criterion is satisfied. In FLANDRE, we define distance di of client i ∈ S as follows: 
+
+di := wti − wt−1
+
+where wti is client i’s model and wt−1 is the global model stored at the parameter server from the previous round. The scalar distance di is used as a one-dimensional input to the GMM, and we set the number of mixture components to M =2. During each iteration of the EM algorithm, the following re-estimation formulas are applied; these guarantee a monotonic increase in the likelihood: 
+
+Mixture weights 
+
+¯ϕk = 1
+
+|S|
+
+X
+
+> i∈S
+
+Pr( k | di, λ ).
+
+Means 
+
+μk =
+
+P 
+
+> i∈S
+
+Pr( k | di, λ )di
+
+P 
+
+> i∈S
+
+Pr( k | di, λ ) .
+
+Variances (diagonal covariance) 
+
+¯σ2 
+
+> k
+
+=
+
+P 
+
+> i∈S
+
+Pr( k | di, λ )d2
+
+> i
+
+P 
+
+> i∈S
+
+Pr( k | di, λ ) − ¯μ2
+
+> k
+
+,
+
+where ¯ϕk, ¯μk and ¯σk denote the mixture weights and means, variances after re-estimation, respectively. The posterior prob-ability Pr( k | di, λ ) is computed as 
+
+Pr( k | di, λ ) = ϕk g(di | μk, Σk)
+
+p(di | λ)= ϕk g(di | μk, Σk)
+
+PMl=1 ϕl g(di | μl, Σl) ,
+
+(5) where g(di | μk, Σk) denotes the Gaussian probability density function parameterized by the mean μk and covariance Σk for the k-th component, and p(di | λ) is the likelihood of di under the GMM with parameters λ.7
+
+After convergence, each client model is assigned to one of the two clusters according to the maximum a posteriori rule 
+
+k∗(i) = arg max  
+
+> k∈{ 0,1}
+
+Pr( k | di, λ ),
+
+and we define the corresponding client index sets as 
+
+Sk = { i ∈ S | k = k∗(i) }, k ∈ { 0, 1}.
+
+These two sets S0 and S1 are then used in the subsequent cluster selection step. 
+
+Step 2: Selecting the cluster for aggregation. Next, we evalu-ate each cluster and decide which one should be excluded from aggregation. To this end, we leverage the distance between client models and the global model. Over successive training rounds, models trained on compromised clients typically di-verge more from the global model than those trained on benign clients. Let wti denote the locally updated model at client i in round t and wt−1 denote the global model from the previous round. In general, the Euclidean distance between wti and wt−1
+
+for compromised clients is larger than that for benign clients. For each cluster Sk, we therefore compute the average model distance 
+
+d(Sk) = 1
+
+|Sk|
+
+X
+
+> i∈Sk
+
+wti − wt−1 = 1
+
+|Sk|
+
+X
+
+> i∈Sk
+
+di, (6) where wti is client i’s model and wt−1 is the global model stored at the parameter server from the previous round. We re-gard the cluster with the larger average distance as containing a higher proportion of compromised clients and exclude it from model aggregation. The remaining cluster, whose distance 
+
+d(Sk) is smaller, is treated as the benign-dominated cluster and is used to update the global model wt.
+
+Option: Hypersphere radius of Deep SVDD. When Deep SVDD is used as the underlying anomaly detector, the hy-persphere radius Ri of the soft-boundary can be employed to replace di in both step 1 and 2. Specifically, instead of evaluating the distance to the global model, we compute the average radius within each cluster, P 
+
+> i∈Sk
+
+Ri/|Sk|, and interpret the cluster with the larger average radius as con-taining more compromised clients, which is then excluded from aggregation. A larger Ri indicates that the training data of client i are more widely spread in the embedding space of Deep SVDD, which is often a consequence of the influence of anomalous samples. An important advantage of this FLANDRE-R criterion is that it does not require collecting the entire model from each client, thereby reducing communication overhead during training. However, as shown later in the experimental evaluation, the FLANDRE-R criterion can be unstable and may fail to discriminate compromised clients in some tasks. We designate the method that employs the Euclidean dis-tance of model parameters simply as FLANDRE , and the variant that utilizes the Deep SVDD parameter R for selective aggregation as FLANDRE-R .IV. P ERFORMANCE EVALUATION 
+
+A. Evaluation Setup 
+
+Scenario: We evaluate FLANDRE in a simulated FL envi-ronment that emulates an IoT deployment of NIDS using publicly available NIDS benchmark datasets. All clients are simulated on a single server; network latency and inter-client communication overhead are not in scope of this study and are therefore ignored. The total number of clients is fixed to 
+
+N = 100 , and we assume full participation in every federated round, i.e., all clients perform local training and send updates to the server. For FLANDRE, however, only the client updates selected by the selective aggregation mechanism are used to update the global model. In the performance evaluation, we adopt the same as-sumptions as in the system model and consider two types of clients: benign clients, which store only normal traffic, and compromised clients, whose local datasets contain both normal and anomalous traffic. The parameter r denotes the 
+
+contamination ratio in the dataset. The parameter γ denotes the ratio of anomalous samples in the local dataset of a compromised client . Thus, each compromised client holds a fixed-size local dataset in which a proportion γ of the samples are anomalous and the rest are normal, whereas each benign client holds only normal samples. Table II summarizes the main hyperparameters used in the federated setting. Most hyperparameters are tuned using the centralized Deep SVDD model on the ToN IoT dataset and then reused across all experiments. In the federated setup, the learning rate used for centralized training was found to lead to slow convergence; therefore, the learning rate α is increased by a factor of ten for all federated experiments, while the other hyperparameters remain unchanged. To construct the client local datasets, we first separate the training split into anomalous and benign samples. Let 
+
+A and B denote the sets of anomalous and benign train-ing samples, respectively, where the overall contamination ratio is approximately r = |A| /(|A| + |B| ). Given the tar-get anomalous-sample ratio γ in compromised clients, we construct a compromised-client data pool by combining all anomalous samples with 
+
+
+
+|A| 1 − γγ
+
+
+
+benign samples drawn from B. The remaining benign samples form the benign-client data pool. This construction makes the anomalous-sample ratio in the compromised-client pool approximately γ. Since the size of the compromised-client pool is approximately |A| /γ , the fraction of compromised clients is approximately r/γ . We then partition the benign-client pool and the compromised-client pool separately into disjoint subsets, whose numbers are proportional to the sizes of the two pools, and assign each subset to one client. Consequently, benign clients contain only benign samples, whereas compromised clients contain a mixture of anomalous and benign samples with an anomalous-sample ratio of ap-proximately γ.8                   
+
+> number of clients N100
+> contamination ratio r0.1–0.40
+> anomalous-sample ratio in compromised clients γ20 –80%
+> learning rate (federated) α3.90 ×10 −4
+> weight decay β7.64 ×10 −7
+> learning-rate milestone 50
+> Deep SVDD hyperparameter ν0.975
+> number of federated rounds K100
+
+Table II: Experimental configuration in the FL setting. For the centralized baselines, we use the same hyperparameters except for the learning rate, which is set to α = 3 .90 × 10 −5. The ranges of r and γ are varied in separate experiments. 
+
+Datasets: We evaluate FLANDRE on three recent NIDS benchmarks: ToN IoT [23], IDS2018 [24], and NF-UQ-NIDS [31]. In all cases, we use the flow-based representations and apply a unified preprocessing and partitioning procedure. 
+
+ToN IoT is a heterogeneous dataset introduced in 2019 that contains IoT/industrial Internet of Things (IIoT) telemetry, host logs, and network traffic. We use the network flow subset provided in the Train Test datasets package, which is specifically designed for ML-based NIDS evaluation. This sub-set contains approximately 50k normal and 161k anomalous flows generated from a variety of attacks, including scanning, denial-of-service (DoS)/distributed denial-of-service (DDoS), ransomware, and backdoor attacks, executed in a large-scale cyber range environment. The original flow representation comprises 44 features extracted with Bro-IDS (now Zeek), in-cluding source and destination Internet Protocol (IP) addresses and ports, transport and application protocols, payload sizes, connection state, flow duration, packet counts, and statistics related to Domain Name System (DNS), Secure Sockets Layer (SSL), and Hypertext Transfer Protocol (HTTP) activity. 
+
+IDS2018 is a collaborative dataset from the Communica-tions Security Establishment and the Canadian Institute for Cy-bersecurity. It captures realistic benign and attack traffic over ten days and includes modern attack scenarios such as DDoS, DoS, brute-force, cross-site scripting (XSS), Structured Query Language (SQL) injection, botnet, and infiltration attacks. In our experiments, we use the network flows collected on March 23, 2018, which comprise about 331k flows, of which approximately 72% are normal. The flow features include duration, forward and backward packet counts, packet-size statistics, inter-arrival time statistics, header lengths, flow rates, and bulk transfer metrics. 
+
+NF-UQ-NIDS is a unified flow dataset constructed from UNSW-NB15, ToN IoT, BoT-IoT, and IDS2018. By harmo-nizing the feature sets of these benchmarks, it provides a comprehensive NIDS dataset covering diverse network con-figurations and attack contexts. An additional label indicates the original source dataset of each flow, enabling cross-dataset analysis. Attack categories are consolidated into broader classes such as DoS, DDoS, brute force, and injection. The features include Internet Protocol version 4 (IPv4) addresses and ports, protocol identifiers, byte and packet counts in each direction, flow duration, cumulative Transmission Control Protocol (TCP) flags, per-direction stream durations, minimum and maximum packet sizes, flow-level throughput statistics, and indicators for TCP, Internet Control Message Protocol (ICMP), DNS, and File Transfer Protocol (FTP) activity. For all three datasets, we remove explicit identifiers such as IP addresses and timestamps before training. For features with a wide dynamic range (e.g., packet lengths), we apply a logarithmic transformation to reduce skewness. The resulting feature vectors are used as inputs to the models. 
+
+Implementation Details: All experiments are implemented in Python. We use the Flower framework [32] to simulate the FL process, including client-side training and server-side aggregation. The simulations are executed on Amazon Elastic Compute Cloud (EC2) c5.4xlarge instances. 
+
+B. Baselines 
+
+To assess the effectiveness of FLANDRE, we compare it with both centralized and federated baselines that represent standard practice and SoTA AD approaches on NIDS dataset. Unless otherwise noted, all methods use the same backbone network as our proposed method, i.e., a feed-forward neural network with layer dimensions 64 → 32 → 64 , so that per-formance differences primarily reflect the learning paradigm (centralized vs. federated) and the treatment of contaminated data rather than the architectural capacity of the models. 
+
+Ideal Deep SVDD (no contamination): As a reference on achievable performance, we train a standard soft-boundary Deep SVDD model on a contamination-free training set composed only of normal samples. This idealized centralized setting assumes that no anomalous flows are present during training. Although difficult to realize in practice, it serves as a reference to quantify the degradation caused by contamination and by federated constraints. 
+
+Deep SVDD (Centralized): To evaluate the impact of contamination in a centralized setting that reflects the federated scenario, we construct a centralized training set by aggregat-ing all client-local datasets described above. The centralized dataset contains anomalous samples in the contamination ratio 
+
+r. We then train a soft-boundary Deep SVDD model on this contaminated centralized dataset in a fully unsupervised manner. 
+
+LOE-S (Centralized): We also compare against the SoTA ML-based AD method proposed by Qiu et al. [14], denoted as LOE-S (Centralized) . For a fair comparison, LOE-S is trained on the same contaminated centralized dataset obtained by aggregating all client-local datasets, which again contains anomalous samples in the contamination ratio r. LOE-S gen-erates synthetic labeled anomalies and optimizes a joint loss that leverages both normal data and synthetically generated anomalous samples, and has been shown to be highly effective for AD under contamination. In our experiments, we adapt LOE-S to the same model architecture as used for Deep SVDD, so that all centralized methods share comparable model capacity. 
+
+Federated Deep SVDD: To evaluate the effectiveness of the selective aggregation mechanism in FLANDRE, we also consider a baseline obtained by removing selective aggregation from FLANDRE and applying a standard FL framework to Deep SVDD. Similar to FLANDRE, this Federated Deep 9                                                                   
+
+> Method ToN IoT NF-UQ-NIDS IDS2018
+> Baselines
+> Ideal Deep SVDD (no contamination) 0.973 ±0.003 0.831 ±0.013 0.876 ±0.071
+> Deep SVDD (Centralized) 0.925 ±0.017 0.797 ±0.035 0.590 ±0.061
+> (−0.048) (−0.034) (−0.286)
+> LOE-S (Centralized) 0.916 ±0.019 0.742 ±0.034 0.586 ±0.057
+> (−0.057) (−0.089) (−0.290)
+> Federated Deep SVDD 0.948 ±0.009 0.779 ±0.025 0.630 ±0.060
+> (−0.025) (−0.052) (−0.246)
+> Proposed methods
+> FLANDRE 0.969 ±0.002 0.838 ±0.010 0.823 ±0.038
+> (−0.004 )(+ 0.007 )(−0.053 )
+> FLANDRE-R (optional) 0.968 ±0.003 0.801 ±0.024 0.790 ±0.059
+> (−0.005) (−0.030) (−0.086)
+
+Table III: F1 scores on three datasets. “Ideal (no contamination)” denotes centralized training without contaminated samples. Numbers in parentheses show the difference from this ideal setting (method minus ideal). We set the contamination ratio r of the training set to 0.1 and the anomalous-sample ratio in compromised clients to γ = 0 .5.
+
+SVDD baseline leverages federated training to mitigate the impact of anomalous sample contamination, but it does not perform any selective aggregation or client filtering. This setting allows us to isolate the additional benefit provided by FLANDRE’s selective aggregation mechanism. Furthermore, by comparing Federated Deep SVDD with the centralized Deep SVDD baseline, we can assess the advantage of em-ploying FL itself under contamination. 
+
+Proposed methods: FLANDRE and FLANDRE-R (op-tional). Our proposed method FLANDRE is built on the key idea of exploiting FL to reduce the impact of anomalous sample contamination. By aggregating models across many predominantly benign clients, FL naturally downweights the influence of a small number of compromised clients whose local data contain anomalies. On top of this effect, FLANDRE further introduces a selective aggregation mechanism based on the Euclidean distance between local models and the global model, explicitly suppressing updates from clients that deviate significantly and are likely to be compromised. This distance-based variant is reported simply as FLANDRE . In addition, we consider an optional variant that uses the Deep SVDD hypersphere radius R instead of model parameters for client selection, denoted as FLANDRE-R (optional) . Both FLAN-DRE and FLANDRE-R share the same backbone architecture and hyperparameters as the Deep SVDD-based baselines, allowing a fair comparison across all methods. 
+
+C. Evaluation Results 
+
+Performance across datasets: Table III reports the F1 scores on ToN IoT, NF-UQ-NIDS, and IDS2018 with the contam-ination ratio fixed to r = 0.1 and the anomalous-sample ratio in compromised clients fixed to γ = 0.5, i.e., 10% 
+
+of the aggregated training samples are anomalous and half of a compromised client’s local samples are anomalous. For each method and dataset, we report the mean and standard deviation of the best F1 score over 20 runs, where the best F1 is defined as the maximum test F1 along the learning curve for that run. Although this oracle stopping point is not available in practice, it is applied uniformly to all methods and thus provides a fair comparison of their achievable performance. In addition, Fig. 4 shows that FLANDRE exhibits a stable learning curve, whereas some baseline methods show peaky trajectories and experience sharp performance degradation after a certain number of rounds. Therefore, this evaluation protocol does not favor the proposed method. The values in parentheses indicate the difference from Ideal Deep SVDD (no contamination) .From Table III, FLANDRE achieves the highest F1 scores on all three datasets and remains very close to the ideal contamination-free reference. On ToN IoT, FLANDRE at-tains an F1 of 0.969 , only 0.004 below Ideal Deep SVDD ,and clearly surpasses Deep SVDD (Centralized), LOE-S (Centralized), and Federated Deep SVDD. A similar gap in favor of FLANDRE is observed on NF-UQ-NIDS and IDS2018, indicating that combining FL with distance-based selective aggregation is highly effective in mitigating client-level contamination. The optional variant FLANDRE-R also improves significantly over the baselines but is consistently slightly worse than FLANDRE, especially on NF-UQ-NIDS and IDS2018, suggesting that the R-based selection criterion is less robust. Figure 4 shows the corresponding learning curves (test F1 over communication rounds). While the table focuses on the best F1 values, the curves reveal the training dynamics. FLANDRE exhibits smooth and stable trajectories and quickly reaches a broad high-performance plateau, implying that rea-sonable early-stopping rules could achieve near-optimal per-formance without precise tuning. In contrast, the baselines, particularly centralized Deep SVDD, often show sharp peaks followed by degradation, making it difficult to exploit their best F1 in a fully unsupervised setting. FLANDRE-R generally follows FLANDRE but exhibits more fluctuation and overfit-ting on NF-UQ-NIDS and IDS2018, in line with its lower best F1 scores. Figure 5 further analyzes the selective aggregation mecha-nism by reporting the F1 scores for classifying clients into be-nign and compromised groups. On ToN IoT, both FLANDRE and FLANDRE-R almost perfectly separate compromised 10 0               
+
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> Ton IoT
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> NIDS
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> IDS2018
+> Ideal DeepSVDD (no contamination)
+> FLANDRE
+> FLANDRE-R
+> Federated DeepSVDD
+> LOE-S (Centralized)
+> Deep SVDD (Centralized)
+
+Figure 4: Learning curves (F1 score vs. communication rounds) on the three datasets under r = 0 .1 and γ = 0 .5.0                
+
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> Ton IoT
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> NIDS
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 020 40 60 80 100
+> F1 Score
+> Round
+> IDS2018
+> FLANDRE FLANDRE-R
+
+Figure 5: F1 score of selective aggregation for FLANDRE and FLANDRE-R under r = 0 .1 and γ = 0 .5.clients from benign ones. On NF-UQ-NIDS and IDS2018, the distance-based FLANDRE maintains high client-selection accuracy, whereas the R-based FLANDRE-R is clearly less reliable. This strong client-selection capability of FLANDRE explains why it can construct robust global models and achieve the high detection performance summarized in Table III. 
+
+Across Different Contamination Ratios: Figure 6 shows the F1 scores for various contamination ratios. In these ex-periments, we investigated the impact of varying contami-nation ratios within the dataset on model performance. We selected the ToN IoT dataset due to its widespread recognition and prominence in network AD research. The anomalous-sample ratio in compromised clients was set to γ = 0 .5,thereby yielding a compromised-client ratio that is twice the contamination rate r. We report the mean and standard deviation of the F1 scores over 20 independent trials, each using different model initializations and distinct anomalous samples for contamination. Our proposed method demonstrates robust performance under high contamination ratios, particularly when the compromised-client ratio remains below 50% . Federating the basic Deep SVDD model yields some performance improve-ments, but these gains remain relatively limited. In contrast, our proposed method demonstrates superior results, with both the FLANDRE and FLANDRE-R approaches outperforming the basic Deep SVDD by approximately 0.14 in terms of F1 score. Furthermore, the performance degradation from the ideal state is constrained to within 0.005, indicating the ro-bustness of our approach. Although FLANDRE demonstrates superior robustness against anomalous data contamination compared to the R-based method when the contamination ratio 
+
+r exceeds 35%, their performance remains largely comparable within practical contamination levels. The performance of LOE-S consistently falls below that of basic Deep SVDD. This can be attributed to the fact that basic Deep SVDD exhibits a sharp, peaky learning curve. 
+
+Across Different Anomalous-sample Ratios in Compro-mised Clients: Figure 7 shows the variation in performance when the proportion of anomalous data held by compromised clients changes, even though the overall proportion of anoma-lous data within the network remains constant. The ToN IoT dataset was chosen due to its established recognition and significance within the domain of network AD research. For these experiments, the contamination ratio was configured to 
+
+r = 0 .1, while the compromised-client ratio was determined based on the anomalous-sample ratio in the compromised 11 0                  
+
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 0510 15 20 25 30 35 40 45
+> 010 20 30 40 50 60 70 80 90
+> Ideal DeepSVDD (no contamination)
+> FLANDRE
+> FLANDRE-R
+> Federated DeepSVDD
+> LOE-S (Centralized)
+> Deep SVDD (Centralized)
+> F1 Score
+
+Percentage of Anomalies in Dataset %
+
+Infected Clients Ratio %
+
+Figure 6: Performance analysis across different contamination ratios on the ToN IoT dataset. We set the anomalous-sample ratio in compromised clients γ as γ = 0 .5.0.8     
+
+> 0.85
+> 0.9
+> 0.95
+> 1
+> 020 40 60 80 100
+> Ideal DeepSVDD (no contamination)
+> FLANDRE
+> FLANDRE-R
+> Federated DeepSVDD
+> LOE-S (Centralized)
+> Deep SVDD (Centralized)
+> F1 Score
+
+Percentage of Anomalies in Infected Clients %
+
+Figure 7: Performance analysis across different anomalous-sample ratios in compromised clients on ToN IoT dataset. There is an inverse relationship between the anomalous-sample ratio within compromised clients and the compromised-client ratio. clients, denoted as γ. We report the mean and standard deviation of the F1 scores over 20 independent trials, each using different model initializations and distinct anomalous samples for contamination. FLANDRE-R exhibits a slight performance degradation when the proportion of anomalous data within compromised clients is low. This degradation is likely attributed to the increase in the proportion of compromised clients as the contamination ratio r remains fixed. Because all clients are assigned the same number of local samples and benign clients contain no anomalous samples, the fraction of compromised clients is determined by the overall contamination ratio r and the anomalous-sample ratio γ within compromised clients as 
+
+r/γ . On the other hand, FLANDRE appears largely unaffected by the proportion of anomalous data within compromised clients, demonstrating robustness against such variations. 
+
+Training Cost Evaluation: FLANDRE incurs a training cost comparable to that of FedAvg. The training cost can be broadly decomposed into two primary components: communication cost and computational cost. Regarding the communication cost, the number of model parameters depends on the input dimensionality. In our ex-periments, the model contains approximately 5–7K trainable parameters. When stored in float32 format without compres-sion, a single model update requires approximately 20–30 KB. Since each participating client downloads the global model and uploads its local model in each communication round, the communication cost per round is approximately 40–60 KB per client. In our experimental setting, 100 communication rounds are performed, resulting in a total communication volume of approximately 4.0–6.0 MB per client over the entire training process. Equivalently, with 100 clients, the server-side aggregate communication volume is approximately 4–6 MB per round and 400–600 MB over the full training pro-cess. Furthermore, a variety of model compression techniques for reducing communication overhead have been extensively studied; applying such techniques can further reduce this cost. Regarding the computational cost, FLANDRE is lightweight because it employs a small neural network and operates on tabular traffic features. Therefore, graphics processing unit (GPU) acceleration or specialized hardware is not required. In our experiments, training was conducted on an Amazon EC2 c5.4xlarge instance with 16 virtual central processing units (vCPUs). Each client process used a single vCPU, and up to 16 clients were processed in parallel. Under this setting, the total wall-clock training time for FLANDRE with 100 clients was approximately 15 minutes. For reference, centralized training of LOE-S required approximately 7 minutes under the same hardware configuration. Compared with standard FedAvg, the additional server-side computation in FLANDRE consists only of computing client-level model distances and applying GMM-based clustering over the clients. Since this operation scales with the number of clients rather than the number of traffic samples, its overhead is negligible compared with local Deep SVDD training. V. C ONCLUSION 
+
+We propose FLANDRE, a contamination-robust unsuper-vised training framework for NIDS, tailored for real-world environments where some clients may be compromised. By leveraging FL’s inherent tendency to underrepresent minority data—often considered a drawback—we mitigate the impact of data contamination caused by a limited number of compro-mised clients. Moreover, to avoid performance degradation, we exclude clients suspected of containing anomalous data from model aggregation. Extensive evaluations on publicly available NIDS datasets demonstrate that FLANDRE con-sistently outperforms baseline methods and remains robust even under high contamination ratios. As future work, we will provide a theoretical analysis of how much FL can mitigate contamination in AD beyond the qualitative insights and empirical validation presented in this paper. We will also 12 
+
+investigate client heterogeneity, particularly non-independent and identically distributed (non-IID) normal traffic across clients, and develop methods to alleviate the adverse effects of non-IID data. REFERENCES [1] H. HaddadPajouh, A. Dehghantanha, R. M. Parizi, M. Aledhari, and H. Karimipour, “A survey on internet of things security: Requirements, challenges, and solutions,” Internet Things , vol. 14, p. 100129, 2021. [2] C. Kolias, G. Kambourakis, A. Stavrou, and J. Voas, “Ddos in the iot: Mirai and other botnets,” IEEE Internet Things J. , vol. 50, no. 7, pp. 80–84, 2017. [3] N. Neshenko, E. Bou-Harb, J. Crichigno, G. Kaddoum, and N. Ghani, “Demystifying iot security: An exhaustive survey on iot vulnerabilities and a first empirical look on internet-scale iot exploitations,” IEEE Commun. Surveys Tuts. , vol. 21, no. 3, pp. 2702–2733, 2019. [4] W. Zhou, Y. Jia, A. Peng, Y. Zhang, and P. Liu, “The effect of iot new features on security and privacy: New threats, existing solutions, and challenges yet to be solved,” IEEE Internet Things J. , vol. 6, no. 2, pp. 1606–1616, 2019. [5] Nokia, “Threat intelligence report 2023,” 2023, accessed: Aug. 25, 2024. [Online]. Available: https://www.nokia.com/networks/security-portfolio/ threat-intelligence-report/. [6] V. Mothukuri, P. Khare, R. M. Parizi, S. Pouriyeh, A. Dehghantanha, and G. Srivastava, “Federated-learning-based anomaly detection for iot security attacks,” IEEE Internet Things J. , vol. 9, no. 4, pp. 2545–2554, 2022. [7] J. Li, X. Tong, J. Liu, and L. Cheng, “An efficient federated learning system for network intrusion detection,” IEEE Syst. J. , vol. 17, no. 2, pp. 2455–2464, 2023. [8] Y. Zhang, B. Suleiman, and M. J. Alibasa, “Fedgroup: A federated learning approach for anomaly detection in iot environments,” in Proc. Mobile Ubiquitous Syst. Comput. Netw. Serv. Springer, 2023, pp. 121– 132. [9] A. Binbusayyis and T. Vaiyapuri, “Unsupervised deep learning approach for network intrusion detection combining convolutional autoencoder and one-class svm,” Appl. Intell. , vol. 51, no. 10, pp. 7094–7108, 2021. [10] M. Z. Alom and T. M. Taha, “Network intrusion detection for cyber security using unsupervised deep learning approaches,” in Proc. IEEE Nat. Aerosp. Electron. Conf. , 2017, pp. 63–69. [11] M. Verkerken, L. D’hooge, T. Wauters, B. Volckaert, and F. De Turck, “Unsupervised machine learning techniques for network intrusion de-tection on modern data,” in Proc. Cyber Secur. Netw. Conf. , 2020, pp. 1–8. [12] J. Yoon, K. Sohn, C.-L. Li, S. O. Arik, C.-Y. Lee, and T. Pfister, “Self-trained one-class classification for unsupervised anomaly detection,” 
+
+arXiv Preprint , vol. 2, 2021. [13] F. T. Liu, K. M. Ting, and Z.-H. Zhou, “Isolation forest,” in Proc. IEEE Int. Conf. Data Mining , 2008, pp. 413–422. [14] C. Qiu, A. Li, M. Kloft, M. Rudolph, and S. Mandt, “Latent outlier exposure for anomaly detection with contaminated data,” in Proc. Int. Conf. Mach. Learn. PMLR, 2022, pp. 18 153–18 167. [15] T. Nishio, M. Nakahara, N. Okui, A. Kubota, Y. Kobayashi, K. Sugiyama, and R. Shinkuma, “Anomaly traffic detection with feder-ated learning toward network-based malware detection in iot,” in Proc. IEEE Global Commun. Conf. , 2022, pp. 299–304. [16] M. Nardi, L. Valerio, and A. Passarella, “Anomaly detection through unsupervised federated learning,” in Proc. IEEE Int. Conf. Mobility, Sens. Netw. , 2022, pp. 495–501. [17] J. Zhang and M. Zulkernine, “Anomaly based network intrusion de-tection with unsupervised outlier detection,” in Proc. IEEE Int. Conf. Commun. , 2006, pp. 2388–2393. [18] H. Choi, M. Kim, G. Lee, and W. Kim, “Unsupervised learning approach for network intrusion detection system using autoencoders,” 
+
+J. Supercomput. , vol. 75, no. 9, pp. 5597–5621, 2019. [19] N. G¨ ornitz, A. Porbadnigk, A. Binder, C. Sannelli, M. Braun, K.-R. M¨ uller, and M. Kloft, “Learning and evaluation in presence of non-iid label noise,” in Proc. Int. Conf. Artif. Intell. Stat. PMLR, 2014, pp. 293–302. [20] Y. Xia, X. Cao, F. Wen, G. Hua, and J. Sun, “Learning discriminative reconstructions for unsupervised outlier removal,” in Proc. IEEE Int. Conf. Comput. Vis. , 2015, pp. 1511–1519. [21] L. Beggel, M. Pfeiffer, and B. Bischl, “Robust anomaly detection in images using adversarial autoencoders,” in Proc. Eur. Conf. Mach. Learn. Knowl. Discovery Databases (ECML PKDD) . Springer, 2020, pp. 206–222. [22] C. Zhou and R. C. Paffenroth, “Anomaly detection with robust deep autoencoders,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Min. , 2017, pp. 665–674. [23] T. M. Booij, I. Chiscop, E. Meeuwissen, N. Moustafa, and F. T. H. d. Hartog, “Ton iot: The role of heterogeneity and the need for standardization of features and attack types in iot network intrusion data sets,” IEEE Internet Things J. , vol. 9, no. 1, pp. 485–496, 2022. [24] I. Sharafaldin, A. Habibi Lashkari, and A. A. Ghorbani, “Toward generating a new intrusion detection dataset and intrusion traffic char-acterization,” in Proc. Int. Conf. Inf. Syst. Secur. Privacy , 2018, pp. 108–116. [25] L. Wang, S. Xu, X. Wang, and Q. Zhu, “Addressing class imbalance in federated learning,” in Proceedings of the AAAI conference on artificial intelligence , vol. 35, no. 11, 2021, pp. 10 165–10 173. [26] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y. Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Proc. Int. Conf. Artif. Intell. Stat. , ser. Proc. Mach. Learn. Res., vol. 54. PMLR, April 2017, pp. 1273–1282. [27] L. Ruff, R. Vandermeulen, N. Goernitz, L. Deecke, S. A. Siddiqui, A. Binder et al. , “Deep one-class classification,” in Proc. Int. Conf. Mach. Learn. , ser. Proc. Mach. Learn. Res., vol. 80. PMLR, July 2018, pp. 4393–4402. [28] D. A. Reynolds et al. , “Gaussian mixture models,” Encycl. Biometrics ,vol. 741, pp. 659–663, 2009. [29] A. Mirzal, “Statistical analysis of microarray data clustering using nmf, spectral clustering, kmeans, and gmm,” IEEE/ACM Trans. Comput. Biol. Bioinform. , vol. 19, no. 2, pp. 1173–1192, 2022. [30] Z. Wang, C. D. Cunha, M. Ritou, and B. Furet, “Comparison of k-means and gmm methods for contextual clustering in hsm,” Procedia Manuf. , vol. 28, pp. 154–159, 2019, 7th Int. Conf. Changeable, Agile, Reconfigurable Virtual Prod. (CARV2018). [31] M. Sarhan, S. Layeghy, and M. Portmann, “Towards a standard feature set for network intrusion detection system datasets,” Mobile Netw. Appl. ,vol. 27, no. 1, pp. 357–370, 2022. [32] D. J. Beutel, T. Topal, A. Mathur, X. Qiu, J. Fernandez-Marques, Y. Gao 
+
+et al. , “Flower: A friendly federated learning research framework,” arXiv preprint arXiv:2007.14390 , 2020.

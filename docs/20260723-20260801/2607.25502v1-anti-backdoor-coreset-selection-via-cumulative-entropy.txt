@@ -1,0 +1,1376 @@
+Title: Anti-Backdoor Coreset Selection via Cumulative Entropy
+
+URL Source: https://arxiv.org/pdf/2607.25502v1
+
+Published Time: Wed, 29 Jul 2026 00:53:37 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Qi Zhao 1 Christian Wressnegger 1
+
+Abstract 
+
+Recent training-time defenses against neural back-doors isolate a benign subset from poisoned train-ing data, to learn a backdoor-free model from it. In this paper, we formulate this defense strat-egy as a coreset selection problem, giving rise to so-called “Anti-Backdoor Coreset Selection.” 
+
+Since poisonous samples have a) lower predic-tion uncertainty and are b) less frequent than be-nign samples, coreset selection naturally focuses more on samples associated with benign function-ality than the backdoor functionality. We use the Cumulative Entropy as selection criterion to fur-ther facilitate this effect. The metric tracks the learning dynamics of training samples and allow-ing us to select benign samples with high informa-tiveness for the coreset. Additionally, we unlearn the chosen samples in each epoch to facilitate the separability between benign and poisonous samples. Together, this yields an exceptionally effective training-time defense that constructs a benign coreset to train a backdoor-free model. Unlike prior defenses that compromise natural ac-curacy and fail against certain attacks, our method mitigates backdooring attacks consistently with a negligible impact on natural performance. The im-plementation of our method is publicly available at: https://intellisec.de/research/abcs. 
+
+1. Introduction 
+
+Effectively training deep neural networks requires large amounts of training data (LeCun et al., 2015; Hestness et al., 2017; Sun et al., 2017). However, manually vetting these training datasets is infeasible, so that, in practice, models are frequently learned using data without any security guaran-tees (Carlini, 2021; Carlini et al., 2024). This circumstance gives rise to data-poisoning attacks (Biggio et al., 2012; Big-    
+
+> 1KASTEL Security Research Labs, Karlsruhe Institute of Tech-nology (KIT) . Correspondence to: Qi Zhao <qi.zhao@kit.edu >.
+> Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s).
+
+gio & Roli, 2018), e.g., to introduce neural backdoors (Gu et al., 2017; Chen et al., 2017; Liu et al., 2018; Nguyen & Tran, 2020; 2021; Turner et al., 2019; Shafahi et al., 2018; Zhao et al., 2023; Barni et al., 2019; Jha et al., 2023). A neural backdoor establishes a shortcut from a trigger pattern to a target prediction (Biggio & Roli, 2018; Gu et al., 2017; Chen et al., 2017), which can be established in different ways: So-called dirty-label attacks manipulate the training samples (to add the trigger pattern) and change their labels (to force the target prediction) (Gu et al., 2017; Chen et al., 2017; Liu et al., 2018; Nguyen & Tran, 2020; 2021). 
+
+Clean-label attacks , in turn, go a step further and do not change the ground-truth label but manipulate samples from the target class to strengthen the connection to the trigger pattern (Turner et al., 2019; Shafahi et al., 2018; Zhao et al., 2023; Barni et al., 2019). Recently, the community has focused on tackling data poi-soning at its root, that is, learning a clean, backdoor-free model despite the training dataset being poisoned (Li et al., 2021b; Zhang et al., 2023; Huang et al., 2022a; Gao et al., 2023; Chen et al., 2022; Zhu et al., 2023b; Zhao & Wress-negger, 2025). This setting poses several challenges beyond mitigating the backdoor: First, the natural performance (the accuracy on the primary, aimed for task) should match that of a model trained on a not poisoned dataset. Meanwhile, performance must not decline even if the training data is not poisoned. Second, the defense should not rely on a clean reference dataset as this is tied to manual vetting effort. Fi-nally, a defense should not significantly increase training time. Prior work unfortunately falls short in at least one of these criteria or even fails to mitigate the backdoor at all. In this paper, we consider an alternative viewpoint on training-time defenses. Most approaches (Huang et al., 2022a; Gao et al., 2023; Chen et al., 2022) aim for split-ting the training dataset in poisoned and benign (not poi-soned) data to learn a backdoor-free model on the benign subset. We formulate this strategy as a coreset selection problem (Coleman et al., 2020; Toneva et al., 2019; Hekmat-far & Farahani, 2009; Ducoffe & Precioso, 2018; Sener & Savarese, 2018; Mirzasoleiman et al., 2020; Killamsetty et al., 2021; 2020) and propose a new defense scheme: 
+
+“Anti-Backdoor Coreset Selection ( ABCS )” . Our method fol-lows the intuition that the training data encodes two different 1arXiv:2607.25502v1 [cs.LG] 28 Jul 2026 Anti-Backdoor Coreset Selection via Cumulative Entropy               
+
+> 1510 15 20
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Epoch
+> Entropy
+> Intermediate
+> Benign
+> Poisonous
+> 1510 15 20
+> Epoch
+> Cumulative
+> Figure 1. Intermediate and cumulative entropy across training epochs for CIFAR10 poisoned by Blend with using a ResNet18 model. Note, that entropy values of all training samples are rescaled to [0 ,1] at each epoch.
+
+tasks (the primary functionality and the backdoor) formed by mixing two datasets of benign and poisonous samples, respectively. By retrieving the coreset of the primary task, we effectively mitigate the backdoor and maintain the natu-ral performance. Moreover, focusing on the benign coreset explicitly does not attempt to retrieve all benign samples, thus, reducing the risk of accidentally including poisonous samples. Meanwhile, learning a model on this coreset is faster than on the full dataset, so that the overall runtime of the defense is comparable to a naive training run. Coreset selection most commonly measures either represen-tativeness (a data-centric criterion) or informativeness (a model-centric criterion). The former assesses the geometric coverage of data samples within the full dataset (Welling, 2009; Sener & Savarese, 2018). However, ensuring the full coverage increases the likelihood of including poisonous samples, e.g., using k-Center Greedy (Hekmatfar & Fara-hani, 2009) as shown in Figure 9. In contrast, informative-ness measures a data sample’s ability to increase model certainty (Huang et al., 2010). Interestingly, poisonous sam-ples typically induce fast and stable convergence of the training loss (Li et al., 2021b; Zhao & Wressnegger, 2025), resulting in high confidence in them. This effect can thus also be seen in the entropy trend across every intermediate training epoch as shown in Figure 1 (left). The model ex-hibits a rapid uncertainty decrease for poisonous samples so that additional training on them does not increase prediction certainty, indicating their low informativeness to the model. Therefore, selecting a coreset of the poisoned training dataset using the informativeness—without even consid-ering the presence of two separate tasks—naturally puts stronger focus on the primary task. We find that such a phenomenon not only exist in uncertainty-based selection criteria (Coleman et al., 2020) but particularly in cumula-tive metrics over multiple training epochs (Toneva et al., 2019; Paul et al., 2021). Such methods can partially miti-gate backdoors during training already, but fail to exclude all poisonous samples due to their inherent randomness of sampling at intermediate epochs and the selection process itself. We thus use Cumulative Entropy ( CENT ) as a selec-tion criterion that computes an uncertainty score for each sample by accumulating its entropy over multiple training epochs, capturing both predictive uncertainty and temporal consistency (cf. Figure 1, right). For backdoor mitigation, we then select samples with high cumulative entropy as the clean, informative coreset to use them for training a backdoor-free model. 
+
+Contributions. We present a novel interpretation of training-time backdoor defenses as a coreset selection prob-lem, introducing “Anti-backdoor Coreset Selection.” We implement this scheme based on a simple yet powerful cri-terion, the Cumulative Entropy, designed by us to reliably extract informative samples while ensuring to not misclas-sify poisonous samples during coreset selection. Extensive experiments across various backdoor attacks demonstrate the robustness of ABCS and the striking improvement over related work. We mitigate all investigated backdoor, achieve natural performance comparable to training on the original (clean) dataset, and also match the training time. 
+
+2. Threat Model 
+
+We consider backdoors that are introduced via data poi-soning, that is, the adversaries manipulate samples from a training dataset D. However, they cannot influence the train-ing process. Naively training on the manipulated/poisoned dataset ˜D learns the “primary task” (e.g., image classifica-tion) but also implants the backdoor as a “secondary task.” More formally, given a training dataset D = {(xi, y i)}Ni=1 
+
+with N samples xi ∈ Rd and ground-truth labels yi ∈{0, 1, . . . C − 1}, where C is the number of classes, the ad-versary poisons Np samples of D (Np ≪ N ), resulting in a poisoned dataset ˜D = ˜Dp ∪ D c composed of a poisoned subset ˜Dp and a clean subset Dc, with the same size as D,i.e., |D| = | ˜D| . The poisoning rate of ˜D thus is ρ = Np/N .Defenses using “dataset splitting” (Huang et al., 2022a; Gao et al., 2023; Zhu et al., 2023b; Zhao & Wressneg-ger, 2025; Chen et al., 2022) separate the already poisoned dataset ˜D into a poisoned set Dbad and a benign set Dbng ,and use the latter to train a backdoor-free model. To main-tain the natural performance, prior works (Gao et al., 2023; Zhu et al., 2023b; Zhao & Wressnegger, 2025; Chen et al., 2022) aim for Dbng containing as few poisonous samples as possible, ideally Dbng = Dc. We follow a similiar yet different aim: Dbng is intended to cover sufficient infor-mation of the clean subset Dc instead of include all clean samples. Consequently, it may be smaller than the clean subset, allowing |D bng | < |D c| and thus yielding a selec-tion ratio rse = |D bng |/| ˜D| ≪ 1. Moreover, the selected 
+
+Dbng should contain almost no poisonous samples, i.e., 
+
+ρbng = |Dbng ∩ ˜Dp|  
+
+> |D bng |
+
+≈ 0.0.2Anti-Backdoor Coreset Selection via Cumulative Entropy   
+
+> 0.30.40.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ACC / ASR [%]
+
+Entropy   
+
+> 0.30.40.5
+> Selection Ratio
+
+Margin   
+
+> 0.30.40.5
+> Selection Ratio
+
+LeastConf 
+
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> 2.5
+> ρbng  [%]
+
+(a) Uncertainty-based Criteria   
+
+> 0.30.40.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ACC / ASR [%]
+
+Forgetting   
+
+> 0.30.40.5
+> Selection Ratio
+
+GraNd   
+
+> ACC (baseline)
+> 0.30.40.5
+> Selection Ratio
+
+EL2N 
+
+> ACC
+> ASR
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> 2.5
+> ρbng  [%]
+> ρbng
+
+(b) Loss-based Criteria 
+
+Figure 2. Evaluation of coreset methods under the Blend attack using ResNet18 on CIFAR10 with ρ = 5 % . Error bars show the value range across five random runs per coreset size. 
+
+3. Coreset Selection as Backdoor Defense 
+
+Prior training-time defenses (Zhang et al., 2023; Zhu et al., 2023b) use the training loss for identifying benign and poi-sonous samples. There, the loss essentially serves as a proxy metric for the prediction confidence—or put differ-ently, the reference model’s (un)certainty about a sample. The model is certain about poisonous samples but uncer-tain about benign, hard-to-learn samples. Interestingly, for coreset selection, the community has explored loss-based criteria (Toneva et al., 2019; Paul et al., 2021) but also un-certainty measures directly (Coleman et al., 2020). In the following, we thus specifically investigate these two categories of selection criteria (Section 3.1) and discuss their stability in the backdoor defense setting (Section 3.2). In Section A, we additionally investigate other selection criteria, such as, geometric-based (Hekmatfar & Farahani, 2009) or decision boundary based (Ducoffe & Precioso, 2018) criteria. Note that we discard balanced selection across classes to lower the likelihood of including poisonous samples from backdoor target class. 
+
+3.1. Uncertainty-Based and Loss-Based Selection 
+
+We examine the performance of uncertainty-based and loss-based coreset selection from a poisoned dataset ˜D. In line with the intuition on the relation between learning speed (Li et al., 2021b) and a model’s uncertainty, we find that such criteria have a somewhat natural potential to mitigate back-dooring attacks as can be seen in Figure 2 using the example of the Blend attack (Chen et al., 2017). Uncertainty-based approaches (Coleman et al., 2020) (En-tropy, Margin, and LeastConf) consistently produce subsets, on which model training yields a natural performance com-parable to the baseline of training on the clean dataset. At the same time, the portion of poisonous samples in these coresets remains below the default poisoning rate of 5 % ,indicating their low informativeness. Similarly, coresets selected by loss-based methods (Forgetting (Toneva et al., 2019), GraNd, and EL2N (Paul et al., 2021) shown in the bottom row) stably reproduce the natural accuracy. Note that, the variance (indicated as error bars) is significantly lower for loss-based criteria that either compute scores across multiple training epochs (Forgetting, EL2N) or uses random initialization (GraNd), taming the randomness asso-ciated with single training run. Only, EL2N seems robust against Blend attack, yield-ing a moderate attack success rate (ASR) of 2–6 % 
+
+and reaching high natural accuracy. It computes the l2 norm between the predicted confidence of all classes and the one-hot encoded, ground-truth la-bel. This way, EL2N essentially accumulates the         
+
+> 0510 15 20 25 30 35 40
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> Epoch
+> ρbng  [%]  Epoch-wise
+> EL2N
+
+Figure 3. EL2N and its variant of sampling per epoch. 
+
+mean squared error over training epochs. Figure 3 shows the vanilla (cumu-lative) version of EL2N and its variant of using the 
+
+l2 norm score per epoch. Clearly, the accumulation is crucial, although a rele-vant portion of the coreset remains poisoned. 
+
+3.2. Instability of Uncertainty-Based Sampling 
+
+Uncertainty-based metrics are influenced by the randomness of intermediate sampling towards the end of the training, resulting in a large variance in both ASR and ρbng . Loss-based approaches are more stable, though. Thus, one-step sampling is not reliable for backdoor defense. Based on the insights gained from EL2N and the smoothing effect observed in Figure 3, we set out to investigate whether accumulation can help to contain the variance of uncertainty-based metrics also. Figure 4 compares sampling per epoch and accumulating scores across epochs for selection crite-ria Entropy, Margin and Least Confidence (Coleman et al., 2020). For each, one can clearly see that although they occasionally achieve a low poisoning rate ρbng , more often than not the coreset contains a large number of poisonous samples. Interestingly, the issue becomes increasingly se-vere toward the end of the training, as the uncertainty gap between benign and poisonous samples diminishes signifi-cantly, making them less distinguishable. 3Anti-Backdoor Coreset Selection via Cumulative Entropy         
+
+> 0510 15 20 25 30 35 40
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> Epoch
+> ρbng  [%]
+
+Entropy         
+
+> 0510 15 20 25 30 35 40
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> Epoch
+> ρbng  [%]
+
+Margin         
+
+> 0510 15 20 25 30 35 40
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> Epoch
+> ρbng  [%]
+
+LeastConf 
+
+> Epoch-wise
+> Cumulative
+
+Figure 4. Epoch-wise sampling vs. accumulation for uncertainty-based coreset selection. Selection ratio is 0.4. Each run trains a ResNet18 on CIFAR10 dataset that is poisoned by Blend attack with ρ = 5 % .
+
+Accumulating uncertainty measurements across epochs, in turn, yields a robust and stable coreset selection, and si-multaneously enables the elimination of poisonous samples. Unlike the accumulation of Entropy and Margin that yield near-zero ρbng , the accumulation of LeastConf cannot effec-tively eliminate poisonous samples, leading to a high ρbng .
+
+Backdoor Defense. Next, we investigate the performance of the cumulative versions of the three uncertainty-based criteria when used for backdoor defense verbatim and sum-marize the results in Figure 5. Despite prior reports that plain Entropy is less performant in sampling an informative coreset (Guo et al., 2022), Cumulative Entropy yields higher natural accuracy than all other criteria. Moreover, the Cu-mulative Entropy consistently yields the smallest poisoning rate ρbng and lowest ASR across coreset sizes, thus, making it an ideal choice for backdoor defense.       
+
+> 0.30.40.5
+> 89
+> 91
+> 93
+> 95
+> Selection Ratio
+> ACC [%]
+> Entropy
+> Margin
+> LeastConf
+> 0.30.40.5
+> 0
+> 15
+> 30
+> 45
+> Selection Ratio
+> ASR [%]
+> 0.30.40.5
+> 0
+> 0.3
+> 0.6
+> 0.9
+> Selection Ratio
+> ρbng  [%]
+
+Figure 5. Training baseline model ResNet18 from scratch on coresets of CIFAR10 selected from a poisoned dataset with Blend attack by using different uncertainty criteria in the accumulation. 
+
+4. Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Based on the observations made in the previous section, we propose a training-time defense, ABCS , using coreset selection via the Cumulative Entropy (C ENT ) criterion. CENT is a simple yet effective coreset selection criterion, that robustly sorts data samples according to their informa-tive value. It assigns low and high uncertainty to poisonous and benign samples, respectively, allowing to straightfor-wardly choose a benign and informative subset. Addition-ally, it is beneficial to min-max-scale the scores of accumu-lated entropy across all data samples for each of the Tse 
+
+epochs, normalize( ai) := ai−amin  
+
+> amax −amin
+
+, to avoid the interfer-ence in-between epochs, thus, further facilitating the stabil-ity of the overall metric. An empirical evidence in Table 5 demonstrate the benefit of using min-max normalization for the anti-backdoor coreset selection by C ENT .Formally, the CENT criterion to an input sample xi, i.e., CENT (xi), can be calculated via: 
+
+1
+
+Tse Tse X
+
+> t=1
+
+normalize 
+
+> C−1
+
+X
+
+> c=0
+
+−pθt (c|xi) · log ( pθt (c|xi)) 
+
+!| {z } 
+
+> Normalized Shannon Entropy H(xi)
+
+,
+
+where accumulation over Tse epochs and normalization across all sample in each is done as described in Section 3.2. However, plainly using CENT for backdoor defense is not sufficient for complex backdooring attacks (Nguyen & Tran, 2021; Zeng et al., 2021; Qi et al., 2023) .
+
+Our defense, ABCS , thus comprises three phases: First, a warm-up phase to stabilized the initial selection (Sec-tion 4.1). Second, the actual coreset selection with three individual steps (Section 4.2), and finally training a clean model from scratch using the selected coreset (Section 4.3). 
+
+4.1. Warm-Up 
+
+Each backdooring attack has a varying learning diffi-culty (Zhao & Wressnegger, 2024), so that we first bootstrap training in a warm-up phase of Twa epochs, yielding an ini-tial model. We use this model to determine the size s of the coreset to be selected as Dbng , which in turn specifies the selection ratio rse for a poisoned dataset ˜D as rse = s/| ˜D| .Many approaches (Toneva et al., 2019; Qin et al., 2024) use the mean of the importance score as a threshold to determine the coreset size. However, wrongly predicted samples are considered as not learned by the model despite the uncer-tainty (Toneva et al., 2019). Given the number of correct predictions Ncr = PNi=1 1arg max c(fθ (xi)c)= yi , hence, the 4Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+cut-off threshold τ of C ENT (xi) is defined as: 
+
+τ = 1
+
+Twa Twa X
+
+> t=1
+
+1
+
+Ncr NX
+
+> i=1
+
+H (xi) · 1arg max c(fθt (xi)c)=yi
+
+!
+
+and thus s =
+
+> N
+
+X
+
+> i=1
+
+1CENT (xi)>τ , which determines the final coreset size for the next selection stage, i.e., |D bng | = s.
+
+4.2. Selecting the Coreset 
+
+After the warm-up stage, we resume to train the model for 
+
+Tse epochs. Each epoch serves three purposes: First, learn-ing the entropy distribution of all samples in ˜D; Second, disentangling benign and uncertain samples from poisoned ones; Third, calculating the normalized entropy of individ-ual samples and accumulate it with results from the previ-ous epoch, yielding an updated CENT at the intermediate epoch. The coreset selection procedure within each individ-ual epoch is thus implemented in three steps: 
+
+Step-1. Learning the entire dataset ˜D . Backdooring attacks do not influence the natural performance and implic-itly preserve a data distribution comparable to training on the clean dataset. Thus, we first train on the entire poisoned dataset ˜D for one epoch to obtain a model θ∗, which outputs an intermediate entropy distribution of the entire dataset. 
+
+Step-2. Unlearning uncertain samples. Cumulative Entropy alone does not guarantee a coreset free of poisonous samples of various backdoors, particularly for stealthier ones, e.g., WaNet (cf. Figure 7). We thus unlearn uncertain samples to enlarge the discrepancy in uncertainty between poisonous and benign samples, thereby reducing the overlap between the final coreset Dbng 
+
+and the poisonous samples ˜Dp. To do so, we first measure the entropy of each sample xi, i.e., H(xi), at intermediate epoch t and select samples larger than the average as the intermediate unlearning subset Dul =(         
+
+> (xi, y i)|H(xi)>1
+> Ncr NX
+> i=1
+> H(xi)·1arg max c(fθt(xi)c)=yi
+> )
+
+Additionally, we use label smoothing (M ¨uller et al., 2019) to counter instability during unlearning (Di et al., 2026; Fan et al., 2024; Neel et al., 2020) and boost the forget-ting of the unlearning set. The label smoothing pushes the prediction still towards ground-truth but in a more smooth distribution, implicitly enlarging the uncertainty of hard-to-learn, benign samples, making them distant to poisonous samples in CENT distribution. Given a smoothing fac-tor ε, the smoothed target output z (often also referred to as “smoothed/soft label” in related work) of sample x is thus expressed as: 
+
+zc =
+
+(
+
+1 − ε + εC if c = y 
+
+> εC
+
+otherwise. A large ε lowers the targeted confidence of the sample’s label y, implicitly enlarging the prediction uncertainty. An ablation study of smoothing factor ε is shown in Section 5.3. Moreover, we include l2 regularization based on the current and the previous models’ weights, θ and θ∗, respectively, to restrict the overall change/impact on the learned task. Hence, we use the following loss function to unlearn sam-ples from Dul :
+
+LUL (x, z, θ ) := γ ·
+
+> label smoothing
+
+z }| {
+
+LCE (x, z, θ ) +  
+
+> l2regularization
+
+z }| {X
+
+> j
+
+(θj − θ∗ 
+
+> j
+
+)2 ,
+
+where γ is a regularization parameter. To avoid model col-lapse, we additionally lower the learning rate lr to 10 % of the initial value. Different from the unlearning by gradient ascending (Li et al., 2021b), which leads to an extraordi-narily large learning divergence, label smoothing stabilizes unlearning because the “smoothed label” still specifies a fixed target where the ground-truth label has the highest score and, thus, unlearning will not push the prediction to an extreme case. Additionally, label smoothing implicitly increases the entropy values of samples in Dul .
+
+Step-3. Updating the cumulative entropy. After Step-2, we compute the normalized entropy H(xi) for every sample 
+
+xi. For t = 1 , CENT (xi) is directly identical to H(xi). For 
+
+t > 1, the newly computed H(xi) is accumulated to the cumulative entropy values obtained from previous epochs 
+
+t = {1, . . . , t − 1}, yielding an updated C ENT (xi).Across Tse epochs, CENT (xi) progressively aligns with the data’s underlying distribution of informativeness. Mean-while, as the model has high confidence on the poisonous samples (yielding low uncertainty), the discrepancy between poisonous samples and informative clean samples is signif-icantly enlarged in the view of Cumulative Entropy. After running the last selection epoch (i.e., t = Tse ), we sort all training samples by their CENT scores and select s samples (the coreset size determined in Section 4.1) with highest CENT values, forming the final clean coreset Dbng .
+
+4.3. Final Training 
+
+Finally, we train a model on the final coreset Dbng from scratch for Tcln epochs using regular cross-entropy loss: 
+
+arg min θ
+
+P 
+
+> (x,y )∈D bng
+
+LCE (x, y, θ ). As the coreset Dbng 
+
+is significantly smaller than the full training dataset ˜D, train-ing the final model is fast. Thus, ABCS ’s overall training time (including coreset selection and training the model) is comparable to naive (unprotected) learning. 5Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 1. Comparing ABCS to prior training-time defenses. Each defense experiment contains the averaged value and the standard deviation in [ %] across five random runs. The best results across all defenses are highlighted as boldface . The defense failure (i.e., ASR 
+
+> 50 % ) is shown as orange boldface . We discard ASR for No-Defense as all attacks reach a ASR in the range of 95 % to 100 % .
+
+(a) CIFAR10 
+
+Attack No-Defense ABL DBD CBD 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 94.53 ± 0.24 92.96 ±0.35 0.36 ± 0.06 99.03 ± 0.18 92.19 ±1.69 2.24 ± 0.22 97.71 ± 0.88 88.63 ±1.53 20.15 ±42.28 86.98 ±21.80 
+
+Blend 94.49 ± 0.09 88.29 ±2.63 34.98 ±38.17 78.05 ±20.26 93.12 ±0.50 7.25 ± 3.20 94.33 ± 1.79 89.41 ±1.84 47.21 ±27.66 72.49 ±13.53 
+
+CLB 94.46 ± 0.13 85.75 ±1.67 1.46 ± 1.36 94.92 ± 0.45 91.85 ±1.15 3.85 ± 6.24 96.77 ± 2.66 89.11 ±1.84 14.71 ±32.90 89.97 ±15.60 
+
+IAB 94.53 ± 0.06 92.59 ±0.48 3.10 ± 0.89 97.40 ± 0.36 92.34 ±4.99 99.82 ± 0.13 48.47 ± 1.85 89.84 ±0.94 8.40 ± 2.82 93.38 ± 1.81 
+
+WaNet 94.02 ± 0.19 88.64 ±2.41 59.99 ±48.83 65.50 ±25.44 91.97 ±0.62 2.42 ± 0.29 95.77 ± 0.44 90.05 ±2.06 48.19 ±42.67 71.92 ±21.54 
+
+ISSBA 94.51 ± 0.22 87.54 ±1.77 0.98 ± 0.32 96.02 ± 0.77 92.53 ±0.43 10.91 ± 1.13 93.55 ± 0.42 93.01 ±0.27 83.08 ±34.68 57.71 ±17.31 
+
+LF 94.70 ± 0.08 89.38 ±3.38 41.42 ±51.18 75.80 ±25.36 92.86 ±0.40 96.69 ± 1.93 49.94 ± 1.11 90.85 ±0.59 69.37 ±27.15 62.55 ±13.59 
+
+A-Blend 94.02 ± 0.06 83.87 ±3.81 62.35 ± 9.65 61.74 ± 6.17 92.78 ±0.73 6.06 ± 1.59 94.34 ± 0.73 92.26 ±0.80 60.36 ± 7.91 66.93 ± 3.57 
+
+Average 94.41 88.63 25.58 83.56 92.45 28.66 83.86 90.40 43.94 75.24 WorstCase 94.02 83.87 62.35 61.74 91.85 99.82 48.47 88.63 83.08 57.71 
+
+Attack No-Defense V&B Harvey ABCS (Ours) 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 94.53 ± 0.24 94.64 ±0.16 0.91 ± 0.13 99.53 ± 0.05 93.92 ±0.31 1.08 ± 0.40 99.16 ± 0.23 94.38 ±0.23 1.00 ± 0.17 99.42 ± 0.19 
+
+Blend 94.49 ± 0.09 94.07 ±0.37 0.94 ± 0.06 97.96 ± 0.18 94.05 ±0.16 0.92 ± 0.32 97.96 ± 0.20 94.62 ±0.36 0.77 ± 0.08 98.22 ± 0.07 
+
+CLB 94.46 ± 0.13 94.23 ±0.11 1.06 ± 0.34 99.36 ± 0.17 93.86 ±0.22 0.45 ± 0.08 99.47 ± 0.09 94.51 ±0.23 0.88 ± 0.10 99.54 ± 0.06 
+
+IAB 94.53 ± 0.06 94.14 ±0.72 13.85 ±28.85 92.79 ±14.78 93.54 ±0.53 2.01 ± 0.74 98.42 ± 0.49 94.30 ±0.16 1.22 ± 0.37 99.19 ± 0.19 
+
+WaNet 94.02 ± 0.19 94.33 ±0.13 1.10 ± 0.39 97.45 ± 0.19 93.51 ±0.20 1.79 ± 0.93 96.85 ± 0.55 94.13 ±0.22 0.89 ± 0.16 97.53 ± 0.13 
+
+ISSBA 94.51 ± 0.22 93.87 ±0.77 0.64 ± 0.63 99.36 ± 0.62 93.35 ±0.48 1.26 ± 0.26 98.79 ± 0.36 94.66 ±0.41 1.22 ± 0.09 99.33 ± 0.15 
+
+LF 94.70 ± 0.08 93.88 ±1.28 57.34 ±41.79 70.15 ±21.09 93.44 ±0.57 39.63 ±50.98 78.75 ±25.19 94.06 ±0.30 3.04 ± 0.55 97.33 ± 0.17 
+
+A-Blend 94.02 ± 0.06 92.16 ±0.78 96.03 ± 5.43 50.03 ± 2.01 93.63 ±0.30 75.42 ± 3.90 60.08 ± 1.85 94.37 ±0.27 5.71 ± 1.59 95.12 ± 0.77 
+
+Average 94.41 93.92 21.48 88.33 93.66 15.32 91.18 94.38 1.84 98.21 
+
+WorstCase 94.02 92.16 96.03 50.03 93.35 75.42 60.08 94.06 5.71 95.12 
+
+(b) Tiny-ImageNet 
+
+Attack No-Defense ABL DBD CBD 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 61.77 ± 0.17 47.14 ±1.22 0.00 ± 0.00 92.66 ± 0.61 51.31 ±1.36 98.93 ± 1.69 45.29 ± 1.50 48.93 ±0.68 0.11 ± 0.04 93.50 ± 0.32 
+
+Blend 61.44 ± 0.37 38.40 ±1.16 0.00 ± 0.00 88.30 ± 0.58 51.68 ±0.39 99.87 ± 0.21 45.12 ± 0.20 49.11 ±0.58 16.51 ±22.55 85.40 ±11.52 
+
+IAB 61.98 ± 0.10 44.73 ±0.54 0.00 ± 0.00 91.37 ± 0.27 50.82 ±0.19 99.86 ± 0.19 44.49 ± 0.08 49.40 ±0.69 0.31 ± 0.06 93.55 ± 0.36 
+
+WaNet 60.71 ± 0.02 41.88 ±5.43 94.82 ± 4.78 42.66 ± 3.51 50.99 ±0.13 99.41 ± 1.02 45.26 ± 0.15 47.89 ±0.78 60.81 ±18.96 62.68 ± 9.61 
+
+ISSBA 61.29 ± 0.12 35.38 ±0.73 0.07 ± 0.10 86.99 ± 0.42 51.04 ±0.27 96.81 ± 1.39 46.45 ± 0.57 44.90 ±0.16 0.50 ± 0.27 91.54 ± 0.07 
+
+LF 61.40 ± 0.11 38.59 ±0.83 0.00 ± 0.00 87.51 ± 0.42 51.00 ±0.14 96.04 ± 0.75 45.70 ± 0.38 48.74 ±0.10 7.95 ± 5.18 88.61 ± 2.64 
+
+A-Blend 60.97 ± 0.06 39.20 ±0.97 76.07 ±13.73 49.56 ± 7.04 50.64 ±0.21 98.69 ± 1.23 44.84 ± 0.11 48.34 ±1.15 88.32 ±11.91 48.21 ± 5.71 
+
+Average 61.37 40.76 24.42 77.01 51.07 98.52 45.31 48.19 24.93 80.50 WorstCase 60.71 35.38 94.82 42.66 50.64 99.87 44.49 44.90 88.32 48.21 
+
+Attack No-Defense V&B Harvey ABCS (Ours) 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 61.77 ± 0.17 61.35 ±0.16 0.51 ± 0.15 99.51 ± 0.08 61.86 ±0.56 0.02 ± 0.02 99.88 ± 0.15 61.24 ±0.24 0.11 ± 0.04 99.65 ± 0.10 
+
+Blend 61.44 ± 0.37 61.84 ±0.28 2.41 ± 2.35 98.61 ± 1.17 61.28 ±0.58 0.18 ± 0.13 99.57 ± 0.21 61.11 ±0.07 0.18 ± 0.05 99.56 ± 0.06 
+
+IAB 61.98 ± 0.10 61.64 ±0.24 0.15 ± 0.04 99.75 ± 0.11 61.26 ±0.11 3.55 ± 2.07 97.86 ± 1.09 61.68 ±0.44 0.22 ± 0.04 99.73 ± 0.21 
+
+WaNet 60.71 ± 0.02 60.79 ±0.32 1.65 ± 1.12 98.62 ± 0.56 61.08 ±0.48 1.91 ± 2.06 98.53 ± 1.05 60.54 ±0.78 0.51 ± 0.22 99.06 ± 0.24 
+
+ISSBA 61.29 ± 0.12 58.02 ±0.68 14.34 ± 6.26 91.18 ± 2.82 57.95 ±0.75 0.39 ± 0.21 98.12 ± 0.30 58.01 ±0.37 0.25 ± 0.05 98.22 ± 0.16 
+
+LF 61.40 ± 0.11 61.91 ±0.63 17.87 ±13.74 89.98 ± 6.87 61.54 ±0.99 79.33 ±17.97 59.21 ± 8.76 61.44 ±0.35 0.18 ± 0.15 98.77 ± 0.02 
+
+A-Blend 60.97 ± 0.06 56.85 ±0.12 73.13 ±16.42 59.85 ± 8.26 60.93 ±0.60 74.26 ±12.08 61.23 ± 6.10 60.03 ±0.50 1.15 ± 0.43 97.43 ± 0.25 
+
+Average 61.37 60.34 15.72 91.07 60.84 22.80 87.77 60.58 0.37 98.92 
+
+WorstCase 60.71 56.85 73.13 59.85 57.95 79.33 59.21 58.01 1.15 97.43 
+
+5. Evaluation 
+
+We conduct extensive experiments across two small-scale datasets CIFAR10 (Krizhevsky et al., 2008) and GT-SRB (Stallkamp et al., 2012) with ResNet18 (He et al., 2016) , and one large-scale dataset Tiny-ImageNet (Le & Yang, 2015) with ResNet34 (He et al., 2016). To account for randomness, each experiment is repeated with five ran-dom seeds on CIFAR10 and GTSRB, and three seeds on Tiny-ImageNet. In the appendix, we provide details of experimental setups (cf. Section C), extend the evaluation (cf. Section D) to experiments for GTSRB, ablation studies on ABCS ’ hyper-settings, the robustness analysis across diverse attack settings, experiments for all-to-all attacks and for text classification task, and comparison to one defense using reference clean data, test ABCS against four adaptive attacks (cf. Section E), and finally analyze the coverage of selected coresets to full datasets (cf. Section F). 6Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 2. Comparing ABCS to training-time defenses on clean (not poisoned) datasets.                             
+
+> Dataset Naive ABL DBD CBD V&B Harvey ABCS
+> CIFAR10 94.64 ±0.17 83.42 ±3.35 92.32 ±2.23 92.90 ±0.41 94.16 ±0.41 93.80 ±0.29 94.77 ±0.11
+> GTSRB 98.36 ±0.21 91.79 ±2.11 93.38 ±0.37 80.54 ±9.73 92.50 ±2.44 97.95 ±0.22 98.12 ±0.28
+> Tiny-ImageNet 62.22 ±0.45 37.46 ±1.86 51.81 ±0.67 51.00 ±0.64 58.87 ±0.76 60.86 ±0.45 61.19 ±0.26
+
+Attacks and Defenses. We consider eight dataset poison-ing backdoors: BadNets (Gu et al., 2017), Blend (Chen et al., 2017), CLB (Turner et al., 2019), IAB (Nguyen & Tran, 2020), WaNet (Nguyen & Tran, 2021), ISSBA (Li et al., 2021a), Low Frequency (LF; Zeng et al., 2021), and Adaptive Blend (A-Blend; Qi et al., 2023). For a fair com-parison, we follow the default implementation of each attack. We choose class 0 as target label and use a 5 % poisoning rate, except for CLB, which uses ρ = 50 % on the target class. For Tiny-ImageNet, CLB is excluded due to its in-effectiveness. In the evaluation, we compare ABCS to six state-of-the-art training-time defenses that require no prior clean reference data: ABL (Li et al., 2021b), DBD (Huang et al., 2022a), CBD (Zhang et al., 2023), V&B (Zhu et al., 2023b), and Harvey (Zhao & Wressnegger, 2025). We evaluate each defense using its default settings and hyper-parameters. For ABCS , we set Twa = 10 and Tse = 40 .The unlearning step during coreset selection uses ε = 0 .9,and γ = 0 .1 and 0.01 for small-scale and for large-scale datasets. Moreover, we use ADAM optimizer with learning rate 0.001 during warm-up and coreset selection. 
+
+Evaluation metrics. We present the defensive perfor-mance with three metrics: Natural Accuracy (ACC), Attack Success Rate (ASR), and Defense Effectiveness Rate (DER) (Zhu et al., 2023a). Formally, DER is defined as: DER = [max (0 , ∆ASR ) − max (0 , ∆ACC ) + 1] /2,where ∆ASR is the drop of ASR and ∆ACC is the drop of ACC. The optimal defense achieves DER equal 100 % .
+
+5.1. Performance of Training-Time Defenses 
+
+Table 1 shows the results on CIFAR10 and Tiny-ImageNet. Across five random trials, prior defenses struggle to balance natural accuracy and the reduction of ASR. More notably, each is bypassed by one or multiple attacks. Specifically, ABL and CBD exhibit high variance in ASR while simul-taneously compromising natural accuracy. DBD shows sta-bility against the randomness but fails under several attacks. Advanced methods like V&B and Harvey maintain high nat-ural accuracy but remain vulnerable to strong attacks such as LF and A-Blend. In contrast, ABCS shows consistent robustness across attacks and random seeds, while preserv-ing ACC comparable to No-Defense. Although ABCS does not always achieve the best results on individual poisoned datasets, its strong ASR reduction and ACC retention con-sistently yield a high DER—above 95 % on CIFAR10 and 
+
+97 % on Tiny-ImageNet—demonstrating its effectiveness in selecting informative coresets that exclude poisonous data. 
+
+Adaptability to clean datasets. Prior defenses primarily focus on mitigating backdoors. However, they often suf-fer a drop in natural accuracy compared to naive training, highlighting a key limitation in their adaptability to clean (not poisoned) datasets (cf. Table 2). Differently, ABCS leverages the high informativeness of coresets, enabling full adaptability when training on clean datasets. 
+
+Time consumption. ABCS benefits from the small core-set size, resulting in faster training comparable to native training on Tiny-ImageNet (cf. Table 3), whereas other meth-ods require more time, in particular for DBD defense. 
+
+Table 3. Time consumption of native training and all defenses.                                
+
+> Dataset Naive (h) ABL DBD CBD V&B Harvey ABCS
+> CIFAR10 1.47 ×1.08 ×12.09 ×1.10 ×2.45 ×1.82 ×0.97 GTSRB 0.86 ×1.25 ×38.64 ×1.12 ×5.71 ×1.76 ×0.75 Tiny-ImageNet 9.14 ×1.17 ×13.92 ×1.20 ×5.58 ×1.82 ×1.25
+
+5.2. Investigation of Coreset Properties 
+
+We particularly look at the overall selection ratio of the coreset and its poisoning ratio, and finally inspect how well the class disribution is preserved. 
+
+Poisoning ratio ρbng and selection ratio rse . Un-like prior defenses (Huang et al., 2022a; Gao et al., 2023; Zhao & Wressnegger, 2025) that aim for pre-cise dataset splitting, our method selects coresets smaller than the entire clean dataset (i.e., selection ratio rse ≪
+
+100 % ). Table 4 summarizes the selected coresets for CI-FAR10, where the selection ratio rse is around 55 % and 
+
+Table 4. Coresets of CIFAR10 under different attack scenarios.                             
+
+> Attack rse [%] ρbng [%]
+> BadNets 54.52 ±0.58 0.00 ±0.00
+> Blend 53.85 ±0.58 0.00 ±0.00
+> CLB 54.53 ±0.45 0.00 ±0.00
+> IAB 54.90 ±0.83 0.01 ±0.01
+> WaNet 57.83 ±0.24 0.20 ±0.09
+> ISSBA 54.04 ±1.05 0.00 ±0.00
+> LF 54.89 ±0.77 0.19 ±0.05
+> A-Blend 56.03 ±0.51 0.54 ±0.15
+
+the poisoning rate ρbng 
+
+is significantly reduced to near 0 % . This effectively prevent backdoor implant-ing in the model training, and the strong natural per-formance shown in Table 1 underscores the high infor-mativeness of the selected coresets by ABCS. 
+
+Preservation of class-wise distribution. Figure 6 shows the class-wise distribution of natural accuracy and data com-position for CIFAR10. After training on coresets under 7Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 5. Impact of min-max normalization in C ENT criterion.                                                                  
+
+> Attack Min-Max Norm. rse = 0.3 rse = 0.4 rse = 0.5 ACC ASR ρbng ACC ASR ρbng ACC ASR ρbng
+> Blend ✗90.82 ±0.45 1.35 ±0.34 0.06 ±0.03 93.89 ±0.24 1.12 ±0.31 0.09 ±0.03 94.63 ±0.37 1.41 ±1.07 0.21 ±0.07
+> ✓90.89 ±0.20 1.38 ±0.05 0.06 ±0.03¸ 94.12 ±0.17 1.00 ±0.25 0.10 ±0.03 94.71 ±0.18 1.22 ±0.20 0.19 ±0.03
+> WaNet ✗88.12 ±0.47 3.36 ±0.33 1.50 ±0.33 91.55 ±0.93 1.55 ±0.49 0.62 ±0.19 93.94 ±0.24 6.86 ±5.29 1.36 ±0.46
+> ✓88.72 ±0.44 3.05 ±0.44 1.41 ±0.27 92.63 ±0.34 1.18 ±0.13 0.50 ±0.16 94.14 ±0.26 1.90 ±0.76 0.79 ±0.27
+> 0123456789
+> 80
+> 85
+> 90
+> 95
+> 100
+> Class
+> ACC [%]
+> Blend BadNets
+> WaNet IAB
+> Clean D
+
+(a) Class-wise accuracy          
+
+> 0123456789
+> 0.0
+> 0.05
+> 0.1
+> 0.15
+> 0.2
+> Class
+> Selection Ratio
+
+(b) Class-wise data selection ratio 
+
+Figure 6. Class-wise distribution on ResNet18 with CIFAR10 across different attacks over five runs. “Clean D” refers to using the full dataset for both (a) model training and (b) coreset selection. 
+
+various attacks (left), the class-wise accuracy has a distribu-tion similar to that obtained from the clean dataset D. Also the class-wise composition of the coresets remain consistent across attacks (right). ABCS consistently extracts coresets that retain informativeness regardless of data poisoning and achieves high coverage of the full clean dataset (cf. Sec-tion F), thereby robustly preserving natural performance. 
+
+5.3. Ablation Study 
+
+Finally, we conduct an ablation study on different building blocks of our method, such as the warm-up and unlearning, the label smoothing factor ε, and C ENT ’s normalization. 
+
+Warm-up training and unlearning. Using the Cumula-tive Entropy criterion can effectively mitigate strong neural backdoor attacks, such as the Blend attack (cf. Figure 5). The incorporation of warm-up and unlearning is particularly beneficial for stealthier attacks, where the convergence to the backdoor occurs more slowly. Figure 7 showcases core-sets with fixed selection ratios against the WaNet attack, where the coreset selection by Cumulative Entropy alone cannot fully exclude poisonous samples. While the natural accuracy remains unaffected, applying warm-up reduces the poisoning rate ρbng of coresets, which is further lowered by executing the additional unlearning step.        
+
+> 0.30.40.5
+> 80
+> 85
+> 90
+> 95
+> Selection Ratio
+> ACC [%]
+> CENT only
+> 0.30.40.5
+> 0
+> 30
+> 60
+> 90
+> Selection Ratio
+> ASR [%]
+> CENT
+> + Warm-Up
+> 0.30.40.5
+> 0
+> 2
+> 4
+> 6
+> Selection Ratio
+> ρbng  [%]
+> CENT
+> + Warm-Up + Unlearn
+
+Figure 7. Comparing the impact of using warm-up and unlearning in ABCS . Baseline model ResNet18 is trained from scratch on selected coresets of CIFAR10 under WaNet attack. 
+
+Label smoothing factor ε. The value ε is proportional to the strength of label smoothing. Thus, increasing ε
+
+will amplify the unlearning effect, and vice versa. Fig-ure 8 below investigates the impact of different ε values on ABCS ’s defense. Varying the smoothing factor does not affect the natural performance represented by the se-lected coreset, making ACC consistently high. However, an overly small ε indeed weakens the unlearning effect, finally resulting in an insufficient removal of poisoned samples,         
+
+> .3.4.5.6.7.8.9.99
+> 75
+> 80
+> 85
+> 90
+> 95
+> Label Smoothing Factor ε
+> ACC [%]  ACC (Blend)
+> ACC (WaNet)
+> 0
+> 10
+> 20
+> 30
+> 40
+> ASR [%]
+> ASR (Blend)
+> ASR (WaNet)
+
+Figure 8. Ablation study on label smoothing factor ε.
+
+particularly under the WaNet attack. As the result, residual poisoned samples in the coreset lead to a higher ASR. Overall, the effective-ness of ABCS depends on choosing ε within a reasonable range, rather than relying on a specific fixed value. 
+
+Min-max normalization in CENT . The min-max normal-ization balances the entropy scale across epochs from early to late training time. Experiments on CIFAR10 (cf. Table 5) show that, despite low ASR and poisoning rates of core-sets, using normalization improves ACC and enhances the elimination of poisonous samples particularly for WaNet. 8Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+6. Conclusion 
+
+Mitigating data-poisoning backdoors in the training proce-dure is challenging due to the high risk of misidentifying poisonous samples. Our approach, ABCS , leverages the defense nature of coreset selection and introduce the Cu-mulative Entropy criterion to extract an informative coreset while effectively excluding poisonous data. Training on this benign and informative coreset reproduces natural per-formance comparable to training on a fully clean dataset. ABCS demonstrates robustness across a wide range of at-tacks and diverse datasets. Notably, ABCS adapts well even in clean settings and incurs a computational cost similar to the naive training, reinforcing its practicality and giving rise to a promising novel paradigm in training-time backdoor defense: Anti-Backdoor Coreset Selection .
+
+Limitations. While ABCS demonstrates strong empirical performance, it lacks a theoretical foundation. Future work could investigate latent space separation between coreset and poisonous samples, focusing on data informativeness and backdoor effectiveness. Compared to the optimal core-set for clean datasets, ABCS results in a larger coreset size, suggesting further exploration into optimal selection from poisoned datasets. Its defense against sophisticated attacks, e.g., A-Blend, remains suboptimal, as it does not reduce ASR to the minimum, indicating the need for improvement. 
+
+Acknowledgments 
+
+We gratefully acknowledge funding by the Helmholtz As-sociation (HGF) within topic “46.23 Engineering Secure Systems.” 
+
+Impact Statement 
+
+Deep neural networks are widely applied across numer-ous domains, which makes evaluating their security in real-world settings essential. In this work, we propose Anti-Backdoor Coreset Selection , a simple yet effective defense scheme for training a backdoor-free model from a poisoned dataset. Our approach is developed strictly from the perspec-tive of a defender, as defined in the threat model. Therefore, this research does not introduce any ethical concerns or create additional security risks. 
+
+References 
+
+Barni, M., Kallas, K., and Tondi, B. A new backdoor attack in cnns by training set corruption without label poisoning. In Proc. of the IEEE International Conference on Image Processing (ICIP) , 2019. Biggio, B. and Roli, F. Wild patterns: Ten years after the rise of adversarial machine learning. Pattern Recognition ,84:317–331, 2018. Biggio, B., Nelson, B., and Laskov, P. Poisoning attacks against support vector machines. In Proc. of the Interna-tional Conference on Machine Learning (ICML) , 2012. Borgwardt, K. M., Gretton, A., Rasch, M. J., Kriegel, H.-P., Sch ¨olkopf, B., and Smola, A. J. Integrating structured bio-logical data by kernel maximum mean discrepancy. Bioin-formatics , 2006. doi: 10.1093/bioinformatics/btl242. Carlini, N. Poisoning the unlabeled dataset of Semi-Supervised learning. In Proc. of the USENIX Security Symposium , 2021. Carlini, N., Jagielski, M., Choquette-Choo, C. A., Paleka, D., Pearce, W., Anderson, H., Terzis, A., Thomas, K., and Tram `er, F. Poisoning web-scale training datasets is practical. In Proc. of the IEEE Symposium on Security and Privacy , 2024. Chen, W., Wu, B., and Wang, H. Effective backdoor defense by exploiting sensitivity of poisoned samples. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2022. Chen, X., Liu, C., Li, B., Lu, K., and Song, D. Targeted backdoor attacks on deep learning systems using data poisoning. CoRR , abs/1712.05526, 2017. Cheng, P., Wu, Z., Du, W., Zhao, H., Lu, W., and Liu, G. Backdoor attacks and countermeasures in natural lan-guage processing models: A comprehensive security re-view. IEEE Transactions on Neural Networks and Learn-ing Systems , 2025. doi: 10.1109/TNNLS.2025.3540303. Clark, P. J. and Evans, F. C. Distance to nearest neighbor as a measure of spatial relationships in populations. Ecology ,35(4):445–453, 1954. Coleman, C., Yeh, C., Mussmann, S., Mirzasoleiman, B., Bailis, P., Liang, P., Leskovec, J., and Zaharia, M. Selec-tion via proxy: Efficient data selection for deep learning. In Proc. of the International Conference on Learning Representations (ICLR) , 2020. Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proc. of the Annual Meeting of the Association for Computational Linguistics , 2019. Di, Z., Zhu, Z., Jia, J., Liu, J., Takhirov, Z., Jiang, B., Yao, Y., Liu, S., and Liu, Y. Label smoothing improves machine unlearning. In Proc. of the International Conference on Learning Representations (ICLR) , 2026. 9Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Ducoffe, M. and Precioso, F. Adversarial active learning for deep networks: a margin based approach. In Proc. of the AAAI Conference on Artificial Intelligence (AAAI) , 2018. Fan, C., Liu, J., Zhang, Y., Wong, E., Wei, D., and Liu, S. SalUn: Empowering machine unlearning via gradient-based weight saliency in both image classification and generation. In Proc. of the International Conference on Learning Representations (ICLR) , 2024. Gao, K., Bai, Y., Gu, J., Yang, Y., and Xia, S.-T. Backdoor defense via adaptively splitting poisoned dataset. In Proc. of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. Goodfellow, I., Shlens, J., and Szegedy, C. Explaining and harnessing adversarial examples. In Proc. of the International Conference on Learning Representations (ICLR) , 2015. Gu, T., Dolan-Gavitt, B., and Garg, S. Badnets: Identify-ing vulnerabilities in the machine learning model supply chain. Proceeding of Machine Learning and Computer Security Workshop , 2017. Guo, C., Zhao, B., and Bai, Y. DeepCore: A comprehensive library for coreset selection in deep learning. In Proc. of the International Conference on Database and Expert Systems Applications (DEXA) , 2022. He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learning for image recognition. In Proc. of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2016. He, X., Xu, Q., Wang, J., Rubinstein, B. I. P., and Cohn, T. SEEP: Training dynamics grounds latent represen-tation search for mitigating backdoor poisoning attacks. In Proc. of the Annual Meeting of the Association for Computational Linguistics , 2024. Hekmatfar, M. and Farahani, R. Z. (eds.). Facility Location: Concepts, Models, Algorithms and Case Studies . Con-tributions to Management Science. Springer, 2009. doi: 10.1007/978-3-7908-2151-2. Hestness, J., Narang, S., Ardalani, N., Diamos, G., Jun, H., Kianinejad, H., Patwary, M., Yang, Y., and Zhou, Y. Deep learning scaling is predictable, empirically. arXiv preprint arXiv:1712.00409 , 2017. Huang, G., Liu, Z., and van der Maaten, L. Densely con-nected convolutional networks. In Proc. of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2017. Huang, K., Li, Y., Wu, B., Qin, Z., and Ren, K. Backdoor de-fense via decoupling the training process. In Proc. of the International Conference on Learning Representations (ICLR) , 2022a. Huang, S.-j., Jin, R., and Zhou, Z.-H. Active learning by querying informative and representative examples. In 
+
+Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2010. Huang, Y., Bai, B., Zhao, S., Bai, K., and Wang, F. Uncertainty-aware learning against label noise on im-balanced datasets. In Proc. of the AAAI Conference on Artificial Intelligence (AAAI) , 2022b. Jha, R. D., Hayase, J., and Oh, S. Label poisoning is all you need. In Oh, A., Naumann, T., Globerson, A., Saenko, K., Hardt, M., and Levine, S. (eds.), Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2023. Killamsetty, K., Sivasubramanian, D., Ramakrishnan, G., of Texas at Dallas, R. I. U., of Technology Bombay In-stitution One, I. I., and Two, I. N. Glister: Generaliza-tion based data subset selection for efficient and robust learning. In Proc. of the AAAI Conference on Artificial Intelligence (AAAI) , 2020. Killamsetty, K., Sivasubramanian, D., Mirzasoleiman, B., Ramakrishnan, G., De, A., and Iyer, R. K. GRAD-MATCH: A gradient matching based data subset selection for efficient learning. In Proc. of the International Con-ference on Machine Learning (ICML) , 2021. Krizhevsky, A., Nair, V., and Hinton, G. CIFAR (canadian institute for advanced research), 2008. URL http:// www.cs.toronto.edu/˜kriz/cifar.html .Kurita, K., Michel, P., and Neubig, G. Weight poisoning attacks on pretrained models. In Proc. of the Annual Meeting of the Association for Computational Linguistics ,2020. K ¨ohler, J. M., Autenrieth, M., and Beluch, W. H. Un-certainty based detection and relabeling of noisy image labels. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Work-shops , 2019. Le, Y. and Yang, X. Tiny imagenet visual recognition chal-lenge. CS 231N , 2015. LeCun, Y., Bengio, Y., and Hinton, G. Deep learn-ing. Nature , 521(7553):436–444, 2015. doi: 10.1038/ nature14539. Li, Y., Li, Y., Wu, B., Li, L., He, R., and Lyu, S. Invisible backdoor attack with sample-specific triggers. In Proc. of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2021a. 10 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Li, Y., Lyu, X., Koren, N., Lyu, L., Li, B., and Ma, X. Anti-backdoor learning: Training clean models on poi-soned data. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2021b. Li, Y., Jiang, Y., Li, Z., and Xia, S.-T. Backdoor learning: A survey. IEEE Transactions on Neural Networks and Learning Systems , 2022. Liu, Y., Ma, S., Aafer, Y., Lee, W.-C., Zhai, J., Wang, W., and Zhang, X. Trojaning attack on neural networks. In 
+
+Proc. of the Network and Distributed System Security Symposium (NDSS) , 2018. Mirzasoleiman, B., Bilmes, J., and Leskovec, J. Coresets for data-efficient training of machine learning models. In Proc. of the International Conference on Machine Learning (ICML) , 2020. M ¨uller, R., Kornblith, S., and Hinton, G. When does label smoothing help? In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2019. Natarajan, N., Dhillon, I. S., Ravikumar, P. K., and Tewari, A. Learning with noisy labels. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2013. Neel, S., Roth, A., and Sharifi-Malvajerdi, S. Descent-to-delete: Gradient-based methods for machine unlearning. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2020. Nguyen, T. A. and Tran, A. Input-aware dynamic backdoor attack. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2020. Nguyen, T. A. and Tran, A. T. Wanet - imperceptible warping-based backdoor attack. In Proc. of the Interna-tional Conference on Learning Representations (ICLR) ,2021. Paul, M., Ganguli, S., and Dziugaite, G. K. Deep learning on a data diet: finding important examples early in training. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2021. Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A., Cour-napeau, D., Brucher, M., Perrot, M., and Duchesnay, E. Scikit-learn: Machine learning in python. Journal of Machine Learning Research , 12:2825–2830, 2011. Qi, F., Li, M., Chen, Y., Zhang, Z., Liu, Z., Wang, Y., and Sun, M. Hidden killer: Invisible textual backdoor attacks with syntactic trigger. In the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing , 2021. Qi, X., Xie, T., Li, Y., Mahloujifar, S., and Mittal, P. Revis-iting the assumption of latent separability for backdoor defenses. In Proc. of the International Conference on Learning Representations (ICLR) , 2023. Qin, Z., Wang, K., Zheng, Z., Gu, J., Peng, X., Xu, Z., Zhou, D., Shang, L., Sun, B., Xie, X., and You, Y. InfoBatch: Lossless training speed up by unbiased dynamic data pruning. In Proc. of the International Conference on Learning Representations (ICLR) , 2024. Qiu, H., Zeng, Y., Guo, S., Zhang, T., Qiu, M., and Thurais-ingham, B. Deepsweep: An evaluation framework for mitigating dnn backdoor attacks using data augmentation. In Proc. of the ACM Asia Conference on Computer and Communications Security (ASIA CCS) , 2021. Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., and Chen, L.-C. Mobilenetv2: Inverted residuals and linear bottlenecks. In Proc. of the IEEE Conference on Com-puter Vision and Pattern Recognition (CVPR) , 2018. Sener, O. and Savarese, S. Active learning for convolutional neural networks: A core-set approach. In Proc. of the International Conference on Learning Representations (ICLR) , 2018. Shafahi, A., Huang, W. R., Najibi, M., Suciu, O., Studer, C., Dumitras, T., and Goldstein, T. Poison frogs! targeted clean-label poisoning attacks on neural networks. In 
+
+Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2018. Simonyan, K. and Zisserman, A. Very deep convolutional networks for large-scale image recognition. In Proc. of the International Conference on Learning Representa-tions (ICLR) , 2015. Stallkamp, J., Schlipsing, M., Salmen, J., and Igel, C. Man vs. computer: Benchmarking machine learning al-gorithms for traffic sign recognition. Neural Networks ,2012. ISSN 0893-6080. Sun, C., Shrivastava, A., Singh, S., and Gupta, A. Revisiting Unreasonable Effectiveness of Data in Deep Learning Era . In Proc. of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2017. Toneva, M., Sordoni, A., des Combes, R. T., Trischler, A., Bengio, Y., and Gordon, G. J. An empirical study of example forgetting during deep neural network learning. In Proc. of the International Conference on Learning Representations (ICLR) , 2019. 11 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Turner, A., Tsipras, D., and Madry, A. Label-consistent backdoor attacks. ArXiv , abs/1912.02771, 2019. van der Maaten, L. and Hinton, G. Visualizing data using t-sne. Journal of Machine Learning Research , 2008. Wei, S., Zhang, M., Zha, H., and Wu, B. Shared adversarial unlearning: Backdoor mitigation by unlearning shared adversarial examples. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) ,2023. Welling, M. Herding dynamical weights to learn. In Proc. of the International Conference on Machine Learning (ICML) , 2009. Wu, B., Chen, H., Zhang, M., Zhu, Z., Wei, S., Yuan, D., and Shen, C. Backdoorbench: A comprehensive bench-mark of backdoor learning. In Thirty-sixth Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2022. Wu, D. and Wang, Y. Adversarial neuron pruning puri-fies backdoored deep models. In Proc. of the Annual Conference on Neural Information Processing Systems (NeurIPS) , 2021. Zeng, Y., Park, W., Mao, Z. M., and Jia, R. Rethinking the backdoor attacks’ triggers: A frequency perspective. In Proc. of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2021. Zhang, K., Cheng, S., Shen, G., Tao, G., An, S., Makur, A., Ma, S., and Zhang, X. Exploring the orthogonality and linearity of backdoor attacks. In Proc. of the IEEE Symposium on Security and Privacy , 2024. Zhang, Z., Liu, Q., Wang, Z., Lu, Z., and Hu, Q. Backdoor defense via deconfounded representation learning. In 
+
+Proc. of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. Zhao, Q. and Wressnegger, C. Adversarially robust anti-backdoor learning. In Proc. of the ACM Workshop on Ar-tificial Intelligence and Security (AISEC) , October 2024. Zhao, Q. and Wressnegger, C. Two sides of the same coin: Learning the backdoor to remove the backdoor. In Proc. of the Annual AAAI Conference on Artificial Intelligence (AAAI) , February 2025. Zhao, S., Ma, X., Zheng, X., Bailey, J., Chen, J., and Jiang, Y. Clean-label backdoor attacks on video recognition models. In Proc. of the IEEE/CVF International Confer-ence on Computer Vision (ICCV) , 2023. Zhu, M., Wei, S., Shen, L., Fan, Y., and Wu, B. Enhancing fine-tuning based backdoor defense with sharpness-aware minimization. In Proc. of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2023a. Zhu, Z., Wang, R., Zou, C., and Jing, L. The victim and the beneficiary: Exploiting a poisoned model to train a clean model on poisoned data. In Proc. of the IEEE/CVF International Conference on Computer Vision (ICCV) ,2023b. 
+
+Appendix 
+
+In the following, we first provide the coreset selection using other criteria (cf. Section A) and compare cumulative uncer-tainty criteria to three loss-based ones under WaNet attack (cf. Section B). In Section C, we elaborate on the experimen-tal setups of considered attacks and defenses. After that, we proceed to analyze the performance of ABCS in Section D, including: the defense performance on GTSRB dataset (Sec-tion D.1), the ablation study on different hyper-settings of ABCS (Section D.2), the robustness under different target classes and poisoning rates (Section D.3), the evaluation across other model architectures (Section D.4), the resis-tance against all-to-all attacks (Section D.5), the effective-ness on the text classification task with using BERT models (Section D.6), and the comparison to the dataset splitting approach using the clean reference data (Section D.7) . Fur-thermore, we evaluate the resistance of ABCS against vari-ous adaptive adversaries that constructs poisoned datasets by intensionally enlarging the prediction uncertainty or/and the learning difficulty of poisoned samples (Section E). Fi-nally, we investigate the geometric distribution of selected coresets in the latent space representation to empirically examine the coverage of the entire clean dataset (Section F).           
+
+> 0.30.40.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ACC / ASR [%]
+> DeepFool
+> 0.30.40.5
+> Selection Ratio
+> Glister
+> 0.30.40.5
+> Selection Ratio
+> k-Center Greedy
+> ACC (Baseline)
+> ACC
+> ASR
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> ρbng  [%]
+> ρbng
+> Figure 9. Coreset selected by three additional criteria on CIFAR10 poisoned by Blend with ρ= 5 % using ResNet18. Error bars indicate the range across five random trials per coreset size.
+
+A. Analysis of Other Coreset Selection Criteria 
+
+In Figure 9, we investigate the defensive behavior of three selection criteria: DeepFool (Ducoffe & Precioso, 2018), Glister (Killamsetty et al., 2020) and k-Center Greedy (Hek-matfar & Farahani, 2009). Unlike uncertainty-based and 12 Anti-Backdoor Coreset Selection via Cumulative Entropy   
+
+> 0.30.40.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ACC [%]
+
+Forgetting   
+
+> 0.30.40.5
+> Selection Ratio
+
+GraNd   
+
+> 0.30.40.5
+> Selection Ratio
+
+EL2N  
+
+> ACC (Baseline) 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ASR [%]
+
+(a) Loss-based Criteria   
+
+> 0.30.40.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Selection Ratio
+> ACC [%]
+
+Cumu. Entropy   
+
+> 0.30.40.5
+> Selection Ratio
+
+Cumu. Margin   
+
+> 0.30.40.5
+> Selection Ratio
+
+Cumu. LeastConf 
+
+> ACC
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> ASR [%]
+> ASR
+
+(b) Cumulative Uncertainty Criteria 
+
+Figure 10. Comparing loss-based criteria to uncertainty-based criteria with accumulation. All experiments are conducted by using ResNet18 model on CIFAR10 that is under the poisoning of WaNet attack with ρ = 5 % . Error bars show the value range across five random runs per coreset selection ratio. 
+
+loss-based criteria in Figure 2, these criteria above select coresets that either exhibit low stability, lack robustness of eliminating poisonous samples, leading to a high ASR after training, or even significantly degrade the natural perfor-mance after model training. Therefore, we see these criteria as unqualified methods. Hence, we focus on the uncertainty-based and loss-based methods in our main analysis. 
+
+B. Impact of Selection Criteria for WaNet 
+
+Figure 10 presents the comparison between the naive appli-cation of loss-based criteria and uncertainty-based criteria with accumulation, under WaNet attack scenario. Unlike Blend attack case (cf. Figure 2), the EL2N method fails to effectively exclude poisonous samples during coreset selec-tion, resulting a high ASR. This indicates that solely using loss-based criteria cannot achieve a robust elimination of poisonous samples across diverse attacks. In contrast, in-corporating accumulation with uncertainty criteria yields better defensive performance, despite a relatively high ASR at a selection ratio of 0.5. Notably, at the selection ratio 0.4,using CENT achieves a natural accuracy comparable to the baseline while significantly mitigating the WaNet backdoor. This demonstrates the advantage of adopting Cumulative En-tropy criterion in anti-backdoor coreset selection. 
+
+C. Experimental Setup 
+
+In this section, we outline the experimental setups for con-sidered attacks and defenses. Note that each experiment is conducted on one single Nvidia RTX-3090 GPU with Intel(R) Xeon(R) W-2245 CPU . Each result is conducted by 5 runs of experiment for small-scale datasets CIFAR10 and GTSRB, and 3 runs of experiment for the large-scale dataset Tiny-ImageNet. 
+
+C.1. Considered Attacks 
+
+We generate each poisoned dataset by conforming to the anti-backdoor learning application scenario, that is, the back-door is introduced via data poisoning only. Each attack is implemented as follows. 
+
+BadNets (Gu et al., 2017) : We use a colored 2 × 2 square pattern for dataset poisoning. 
+
+Blend (Chen et al., 2017) : We use the default Hello-Kitty image as the trigger pattern for poisoning CIFAR10 and GTSRB, and a random noise trigger for Tiny-ImageNet. We use a trigger opacity of α = 0 .1, as it has been proven effective to achieve an attack success rate near 100 % .
+
+CLB (Turner et al., 2019) : We poison each sample by adopting the projected gradient descent (PGD) method to generate adversarial perturbation with strength ϵ = 16 /255 
+
+and step size 2/255 for 30 steps. 
+
+IAB (Nguyen & Tran, 2020) : We train the generator on each dataset the default hyper-parameters: the backdoor probability ρb = 0 .1, the cross-trigger probability ρc = 0 .1,and the weighting parameter λdiv = 1 .0 for the diversity loss term. For each dataset, we train an individual generator for constructing IAB poisoning. 
+
+WaNet (Nguyen & Tran, 2021) : We follow the data poi-soning implementation of WaNet, i.e., first generating a warping trigger function and its accompanied noise function and, then, using both pattern functions to poison data sam-ples. For all datasets, we following the default settings of WaNet, i.e., using the noise ratio equal 2 × ρ, the grid size 
+
+k = 4 , and the warping strength s = 0 .5.
+
+ISSBA (Li et al., 2021a) : For each dataset and poisoning rate, we execute the ISSBA attack by following the imple-mentation provided by BackdoorBench (Wu et al., 2022). 
+
+Low Frequency (LF) (Zeng et al., 2021) : We reuse the generated triggers that are provided by BackdoorBench (Wu et al., 2022) and run the data poisoning. 
+
+Adaptive Blend (A-Blend) (Qi et al., 2023) : We adopt the same trigger as used in (Qi et al., 2023) and set the trigger opacity equal 0.15 for training set and 0.2 for test set. For the random trigger partitioning, we set the mask rate equal 
+
+0.5 and coverage rate equal 1.0 and use 16 masking pieces. 13 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 6. Comparing ABCS to prior training-time defenses on GTSRB. Each result contains the averaged value and the standard deviation over five random runs. The best results across all defenses are highlighted as boldface . The defense failure (i.e., ASR > 50 % ) is shown as orange boldface . We discard ASR for No-Defense as all attacks reach an ASR above 99 % .
+
+Attack No-Defense ABL DBD CBD 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 97.82 ± 0.70 89.30 ±9.59 53.13 ±50.23 69.18 ±28.85 92.36 ±0.42 0.02 ± 0.03 97.26 ± 0.21 91.80 ±3.11 80.31 ±43.98 56.84 ±21.34 
+
+Blend 98.08 ± 0.37 91.29 ±2.07 94.96 ± 7.21 48.81 ± 3.81 93.03 ±0.13 99.74 ± 0.38 47.48 ± 0.07 86.28 ±8.99 97.42 ± 2.20 45.02 ± 4.61 
+
+CLB 98.06 ± 0.08 86.64 ±2.95 7.53 ± 5.92 90.50 ± 1.96 92.98 ±0.11 0.47 ± 0.16 97.20 ± 0.10 82.99 ±2.57 10.21 ±11.70 87.34 ± 6.57 
+
+IAB 98.03 ± 0.45 94.56 ±3.68 20.74 ±43.91 87.87 ±23.79 92.83 ±0.61 0.28 ± 0.18 97.23 ± 0.28 83.05 ±4.10 39.12 ±38.06 72.92 ±19.46 
+
+WaNet 97.44 ± 0.61 86.32 ±6.16 99.76 ± 0.05 44.44 ± 3.08 92.64 ±0.31 0.00 ± 0.00 95.71 ± 0.16 96.20 ±0.25 97.25 ± 0.46 49.38 ± 0.12 
+
+ISSBA 98.04 ± 0.06 88.81 ±2.82 99.86 ± 0.14 45.45 ± 1.38 92.74 ±0.54 99.46 ± 0.64 47.62 ± 0.10 76.89 ±5.12 44.69 ±34.43 67.08 ±18.06 
+
+LF 97.93 ± 0.28 86.58 ±2.86 84.62 ±32.42 52.02 ±15.41 92.32 ±0.48 27.45 ± 9.53 83.47 ± 4.72 74.79 ±7.44 77.44 ±37.29 49.70 ±16.26 
+
+A-Blend 97.56 ± 0.29 92.28 ±3.06 0.22 ± 0.22 97.19 ± 1.62 92.84 ±0.25 80.29 ±18.00 57.46 ± 9.04 81.66 ±4.43 91.03 ± 2.03 46.47 ± 1.67 
+
+Average 97.87 89.47 57.60 66.93 92.72 38.46 77.93 84.21 67.18 59.34 WorstCase 97.44 86.32 99.86 44.44 92.32 99.74 47.48 74.79 97.42 45.02 
+
+Attack No-Defense V&B Harvey ABCS (Ours) 
+
+ACC ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 97.82 ± 0.70 93.35 ±0.73 0.05 ± 0.04 97.74 ± 0.38 98.19 ±0.20 0.00 ± 0.00 100.00 ± 0.00 98.27 ±0.25 0.00 ± 0.00 100.00 ± 0.00 
+
+Blend 98.08 ± 0.37 92.89 ±2.68 98.01 ± 1.38 48.04 ± 1.15 98.04 ±0.10 0.05 ± 0.05 99.56 ± 0.07 98.05 ±0.32 0.40 ± 0.37 99.33 ± 0.18 
+
+CLB 98.06 ± 0.08 91.16 ±0.53 13.00 ±16.88 90.02 ± 8.59 98.26 ±0.59 1.04 ± 0.64 99.38 ± 0.24 97.62 ±0.33 1.53 ± 0.44 98.98 ± 0.17 
+
+IAB 98.03 ± 0.45 93.56 ±2.40 89.30 ±15.36 53.09 ± 7.97 98.11 ±0.23 0.03 ± 0.06 99.93 ± 0.05 98.20 ±0.26 0.01 ± 0.02 99.94 ± 0.05 
+
+WaNet 97.44 ± 0.61 94.57 ±1.05 46.04 ±18.25 73.65 ± 9.14 97.88 ±0.30 7.08 ± 2.86 94.57 ± 1.43 98.11 ±0.39 0.01 ± 0.02 98.10 ± 0.01 
+
+ISSBA 98.04 ± 0.06 91.58 ±1.55 78.74 ±27.00 57.40 ±13.12 97.81 ±0.27 0.00 ± 0.00 99.88 ± 0.12 97.90 ±0.18 0.01 ± 0.03 99.91 ± 0.07 
+
+LF 97.93 ± 0.28 93.49 ±1.00 98.15 ± 2.29 48.70 ± 0.68 94.99 ±1.84 99.83 ± 0.20 48.61 ± 0.83 97.91 ±0.29 1.52 ± 1.69 99.18 ± 0.81 
+
+A-Blend 97.56 ± 0.29 93.36 ±1.74 98.55 ± 1.01 48.56 ± 1.22 94.97 ±2.56 96.66 ± 1.09 50.23 ± 1.32 96.37 ±0.98 7.94 ± 1.59 95.32 ± 1.07 
+
+Average 97.87 92.99 65.23 64.65 97.28 25.59 86.52 97.80 1.43 98.85 
+
+WorstCase 97.44 91.16 98.55 48.04 94.97 99.83 48.61 96.37 7.94 95.32 
+
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+100 
+
+Class 
+
+> Accuracy (ACC) [%]
+
+Blend BadNets WaNet IAB Clean D
+
+Figure 11. Class-wise accuracy distribution on GTSRB across different attacks, averaged over five runs. “Clean D” refers to using the original clean dataset for the model training. 
+
+C.2. Considered Defenses ABL (Li et al., 2021b) : The ABL procedure consists of three stages: (1) training for 20 epochs on the entire poi-soned dataset and isolating 1 % of the samples with the lowest loss, (2) fine-tuning the model on the remaining dataset, and (3) unlearning the isolated poisonous set for 5
+
+epochs with a learning rate of 0.0001. The hyperparameter 
+
+γ in LGA (Local Gradient Ascent) is sensitive to differ-ent attacks. However, for practicality, we consistently use 
+
+γ = 0 .5 in the implementation. 
+
+DBD (Huang et al., 2022a) : DBD first adopts self-supervised learning for 1,000 epochs to extract benign fea-tures from the dataset. Then, it fine-tunes the fully con-nected layer for 10 epochs with supervised learning, split-ting the dataset half-and-half, and subsequently uses semi-supervised learning to train the entire model for 200 epochs. DBD does not specify other hyperparameters for individual backdoor attacks. Therefore, we directly follow the default settings of DBD to conduct all experiments. 
+
+CBD (Zhang et al., 2023) : CBD learns a model on the poisoned dataset and then trains a clean model by maxi-mizing mutual independence from the former. Since the first model is responsible for identifying poisonous sam-ples, the number of training epochs in the first phase is a sensitive hyperparameter for different attacks. The original implementation selects the best number from {3, 5, 8}. Ac-cordingly, we tested different numbers of epochs and takes the result with the highest natural accuracy. 
+
+V&B (Zhu et al., 2023b) : The V&B defense first exploits a model with a backdoor to identify suspiciously poisoned samples and then trains a clean model on benign ones. Af-terward, it adopts semi-supervised learning, as in (Huang et al., 2022a), on the split datasets to further improve the nat-ural performance of the clean model while simultaneously 14 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+suppressing the backdoor functionality. In our evaluation, we use the default settings and hyperparameters of V&B for both the small-scale and large-scale datasets. 
+
+Harvey (Zhao & Wressnegger, 2025) : Harvey constructs a reference model with a backdoor through warm-up training and subsequently boosts convergence toward the backdoor by iteratively training on a poisoned subset and re-splitting the poisoned dataset. We follow the default settings de-scribed in the appendix of Harvey for all experiments. 
+
+ABCS (Ours) : During the coreset selection, we exclude all data augmentations to stabilize backdoor learning (Li et al., 2021b; Qiu et al., 2021). In addition to the setup in Section 5, the final training on coresets follows standard settings: models are trained for 200 epochs using the SGD optimizer with a weight decay of 0.0005 , and the learning rate is scheduled via cosine annealing from 0.1 to 0.0001 .
+
+D. Extended Evaluation 
+
+In this section, we conduct additional experiments to extend our evaluation. We first examine all defenses on GTSRB dataset (cf. Section D.1), and then investigate the impact of other global settings on ABCS (cf. Section D.2). After that, we test ABCS across different poisoning settings (cf. Sec-tion D.3), with various model architectures (cf. Section D.4) and against the all-to-all attacks (cf. Section D.5). Moreover, we examine the potential of ABCS for the text classification domain (cf. Section D.6). Finally, we compare to other de-fense formats that either possesses certain clean reference samples (cf. Section D.7) or remove backdoors after the training (cf. Section D.8). 
+
+D.1. Evaluation on GTSRB 
+
+Table 6 summarizes the experiments on the GTSRB dataset. For the ResNet18 model, learning on GTSRB is easier than on CIFAR10, resulting in a natural accuracy close to 98 % .However, most prior defenses fail to consistently maintain high accuracy across all attacks. Moreover, prior defenses show a drop in ACC up to 7 % and allow at least one attack to successfully implant the backdoor into the model. In contrast, training on the coreset selected by ABCS effec-tively mitigates all backdoor attacks while maintaining high natural accuracy. 
+
+Analysis of class-wise accuracy preservation. Unlike CI-FAR10 that has a uniform class-wise distribution, GTSRB is intrinsically imbalanced across its all 43 classes (Stallkamp et al., 2012). Figure 11 compares the class-wise accuracy yielded by training on coresets determined using a model trained on a fully clean dataset D. Our method benefits from the sufficiently large size of coresets (cf. Table 7) and, thus, ensures the coverage of the dataset informativeness. Moreover, training on the full clean dataset yields notably low accuracy at class 21 and 27 . For these difficult classes, our method yields comparable or even higher accuracies, demonstrating its potential to preserve fairness. 
+
+D.2. Impact of Other Global Settings on ABCS Rationale of excluding mis-predicted samples. To illus-trate the importance of automatic thresholding, we conduct additional experiments for the Blend attack across three datasets in Table 7. The selection ratio rse varies signif-icantly across datasets, highlighting the necessity of an automatic threshold over a fixed one. Our approach effec-tively adjusts the threshold to maintain high natural accuracy, thereby improving robustness and adaptability. Moreover, our method excludes mis-prediced samples when calculat-ing the threshold. In additon, we compare our strategy with a variant that applies the automatic threshold including mis-predicted samples as well, denoted as All Samples. The lat-ter leads to a smaller selection ratio and consequently worse natural accuracy (especially on Tiny-ImageNet). These find-ings emphasize that our automatic thresholding strategy not only preserves performance but also generalizes better across different datasets.     
+
+> 35810 20
+> 70
+> 75
+> 80
+> 85
+> 90
+> 95
+> Epochs
+> ACC [%]
+
+Across Twa     
+
+> ACC (BadNets)
+> ACC (Blend)
+> ACC (IAB)
+> ACC (WaNet)
+> 10 20 30 40 50
+> Epochs
+
+Across Tse 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> ASR [%]
+> ASR (BadNets)
+> ASR (Blend)
+> ASR (IAB)
+> ASR (WaNet)
+
+Figure 12. Investigating the impact of warm-up epochs Twa (left), selection epochs Tse (right) on ABCS’s defense for CIFAR10. 
+
+Twa and Tse . Based on the ablation study in Figure 12, both warm-up epochs Twa and selection epochs Tse have minimal impact on natural accuracy. However, a shorter warm-up phase may fail to capture backdoor behavior, lead-ing to less effective filtering of poisonous samples and, thus, a higher ASR in the final training. Similarly, ABCS benefits from a longer selection phase: accumulating entropy over more epochs ensures the exclusion of poisonous samples 
+
+Table 7. Impact of excluding mis-predicted samples during ABCS’s coreset selection.                          
+
+> Dataset All Samples Excl. Mis-predicted Samples
+> ACC ASR rse ACC ASR rse
+> CIFAR10 93.88 ±0.31 1.09 ±0.24 44.67 ±0.81 94.62 ±0.36 0.77 ±0.08 53.85 ±0.58
+> GTSRB 97.39 ±0.42 0.32 ±0.26 31.26 ±1.00 98.05 ±0.32 0.40 ±0.37 33.13 ±0.97
+> Tiny-ImageNet 38.53 ±1.02 0.01 ±0.01 48.72 ±0.15 61.11 ±0.07 0.18 ±0.05 82.30 ±0.64
+
+15 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+and retrain informative benign ones in the selected coreset, thereby yielding high natural accuracy and low ASR.     
+
+> 0.01 0.05 0.10.51
+> 70
+> 75
+> 80
+> 85
+> 90
+> 95
+> γ
+> ACC [%]
+> ACC (BadNets)
+> ACC (Blend)
+> ACC (IAB)
+> ACC (WaNet)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> ASR [%]
+> ASR (BadNets)
+> ASR (Blend)
+> ASR (IAB)
+> ASR (WaNet)
+
+Figure 13. Impact of γ on ABCS’s defense for CIFAR10. 
+
+Values of γ. While γ decreases, the natural accuracy (ACC) increases (cf. Figure 13). A large value of γ (≥ 0.1)effectively lowers the ASR, while a smaller γ leads to insuf-ficient unlearning and, thus, results in ineffective separation of poisoned samples and benign samples with high CENT 
+
+uncertainty, thereby yielding a high ASR in the final model. 
+
+D.3. Evaluation Across Different Poisoning Settings Target classes. We evaluate the robustness of ABCS across different target classes under variant attacks in Fig-ure 14 (left). For each poisoned CIFAR10, we report the average performance and error bar over five random trials. Across all target classes, ABCS consistently select a coreset that enables training a model from scratch with high natural performance while keeping ASR below 2 % .         
+
+> 0123456789
+> 70
+> 75
+> 80
+> 85
+> 90
+> 95
+> Class
+> ACC [%]
+
+Across Target Classes      
+
+> ACC (BadNets)
+> ACC (Blend)
+> ACC (IAB)
+> ACC (WaNet)
+> 1510 20
+> Poisoning Rate ρ[%]
+
+Across Poisoning Rates 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> ASR [%] ASR (BadNets)
+> ASR (Blend)
+> ASR (IAB)
+> ASR (WaNet)
+
+Figure 14. Evaluation across target classes (left) and different poisoning rates (right) on CIFAR10. 
+
+Poisoning rates. Figure 14 (right) shows the perfor-mance of ABCS across different poisoning rates. Ahigher poisoning rate ρ corresponds to a stronger at-tack mode, while a lower ρ increases the difficulty of learning backdoor. Figure 15 shows the training pro-cesses under different poisoning rates. We use Ldis =
+
+Lbng − L poi to measure the loss discrepancy between benign and poisoned samples, where Lbng and Lpoi are the mean loss value of benign and poisoned samples, re-spectively. A lower poisoning rate will slow down the convergence speed to the backdoor, thus, making the loss discrepancy become smaller in the initial epochs.    
+
+> 510 15 20
+> −3
+> −2
+> −1
+> 0
+> 1
+> Epoch
+> Ldis
+
+Blend Attack   
+
+> 1 % 5 %
+> 10 % 20 %
+
+Figure 15. Impact of varying ρ.
+
+For ρ ≥ 5 % , ABCS con-sistently selects a core-set that yields a model with high natural accu-racy and minimal ASR, indicating effective exclu-sion of poisonous sam-ples. At a lower poi-soning rate ( ρ = 1 % ), the increased difficulty of learning backdoor slightly raises the risk of including sev-eral poisoned samples in the coreset. Despite this, ABCS continues to perform robustly with anti-backdoor coreset se-lection, ensuring a strong mitigation of backdooring attacks (i.e., ASR < 5 % ) while maintaining high natural accuracy. 
+
+D.4. Evaluation with Different Model Architectures 
+
+We evaluate ABCS across three additional model architec-tures, i.e.,, VGG11 (Simonyan & Zisserman, 2015), Mo-bileNetV2 (Sandler et al., 2018) and DenseNet121 (Huang et al., 2017), under all considered attacks. As shown in Table 8, training on the coresets selected by ABCS consis-tently yields natural accuracy comparable to that of training on a clean dataset. Simultaneously, the low ASR demon-strates a strong backdoor mitigation, highlighting effective elimination of poisonous samples during coreset selection. 
+
+D.5. Evaluation on All-to-All Attacks 
+
+We set up all-to-all attacks with the same settings as (Li et al., 2022), i.e., taking the next neighbor class as the backdoor target of each poisoned sample. Additionally, we extend the setting to using the Hello-Kitty trigger of Blend attack. 
+
+Table 9. ABCS ’s defense against all-to-all attacks on CIFAR10.          
+
+> All-to-All ACC ASR DER
+> BadNets 94.36 ±0.30 0.56 ±0.05 94.19 ±0.46
+> Blend 94.00 ±0.16 1.86 ±0.86 93.34 ±0.40
+
+As shown in Table 9, our method remains ef-fective against both two all-to-all attacks, show-ing a high robustness our method. 
+
+D.6. Evaluation on Text Classification Task 
+
+Following Cheng et al. (2025), we adopt the standard data-poisoning setting (Kurita et al., 2020), where the trigger is a rare word “cf” inserted randomly into each poisoned text sample, and use the target label 0. Additionally, we reduce the poisoning rate to 5 % . We implement this attack on two versions of the Stanford Sentiment Treebank (SST) dataset: SST-2 (binary sentiment classification) and SST-5 (five sen-timent classes) using pre-trained BERT-base (uncased) and 16 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 8. Evaluation of ABCS across model architectures on CIFAR10. For each model, ACC from training on the clean dataset is shown next to the model name. In the table, ACC results (in [%]) correspond to training on selected coresets from each poisoned dataset. For backdoor mitigation, ASR (in [%]) is reported for training on the poisoned dataset and on the selected coreset derived by ABCS (shown to the left and right of “ / ”, respectively). 
+
+Attack VGG11 (91.85 % ) MobileNetV2 (93.15 % ) DenseNet121 (95.16 % )
+
+ACC ( ↑) ASR ( ↓) ACC ( ↑) ASR ( ↓) ACC ( ↑) ASR ( ↓)BadNets 91.76 ±0.08 99.98 ±0.11 / 1.32 ±0.22 92.93 ±0.07 99.96 ±0.06 / 0.99 ±0.13 94.97 ±0.26 100.00 ±0.00 / 0.83 ±0.06 
+
+Blend 90.88 ±0.85 99.12 ±0.31 / 2.00 ±0.23 92.84 ±0.02 99.23 ±0.25 / 1.14 ±0.18 94.65 ±0.15 99.25 ±0.32 / 0.90 ±0.45 
+
+CLB 91.38 ±0.11 99.62 ±0.25 / 2.90 ±0.29 92.83 ±0.16 99.87 ±0.13 / 1.18 ±0.16 94.60 ±0.02 99.48 ±0.15 / 0.90 ±0.15 
+
+IAB 91.48 ±0.35 99.84 ±0.35 / 1.62 ±0.39 92.87 ±0.27 99.94 ±0.04 / 2.37 ±0.38 94.98 ±0.21 99.69 ±0.28 / 1.25 ±0.33 
+
+WaNet 89.38 ±1.05 96.43 ±0.84 / 2.65 ±0.64 92.44 ±0.08 97.25 ±0.68 / 1.93 ±0.31 94.86 ±0.09 98.35 ±0.32 / 0.82 ±0.08 
+
+ISSBA 91.16 ±0.29 99.07 ±0.29 / 1.83 ±0.26 92.50 ±0.26 99.21 ±0.32 / 1.66 ±0.24 94.71 ±0.22 99.06 ±0.41 / 0.80 ±0.37 
+
+LF 91.22 ±0.38 98.14 ±0.74 / 7.22 ±1.86 92.48 ±0.10 98.31 ±0.57 / 6.66 ±1.97 94.52 ±0.18 98.36 ±0.89 / 5.83 ±1.61 
+
+A-Blend 90.82 ±0.29 99.04 ±0.54 / 9.02 ±0.79 91.93 ±0.47 99.52 ±0.22 / 7.82 ±1.07 94.47 ±0.11 99.42 ±0.51 / 7.32 ±0.95 
+
+BERT-large (uncased) models (Devlin et al., 2019) as basis. To stabilize the fine-tuning process during coreset selection on the pre-trained BERT model, we use the AdamW opti-mizer with a learning rate of 2e − 6. For training the final coreset, the learning rate is increased to 2e − 5. Due to the faster convergence during fine-tuning the pre-trained mod-els, we set Twarm = 5 epochs for warm-up and Tse = 10 
+
+epochs for coreset selection. The resulting coreset is then used to fine-tune the original pre-trained BERT model for 
+
+10 epochs. As shown in Table 10, our method adaptively determines different selection ratios rse for SST-2 and SST-5. Despite a slight drop in accuracy for SST-5, the results show that our method remains robust against data poisoning backdoors in text classification tasks. 
+
+Table 10. Effectiveness of ABCS on text classification task. 
+
+BERT Model Dataset No-Defense ABCS ACC ASR ACC ASR ρbng rse 
+
+Base SST-2 92.33 ±0.31 99.97 ±0.04 91.63 ±0.52 6.89 ±0.97 0.01 ±0.02 34.35 ±0.40 
+
+SST-5 49.83 ±0.37 99.45 ±0.33 48.20 ±0.82 3.53 ±0.58 0.00 ±0.00 57.21 ±1.97 
+
+Large SST-2 93.39 ±0.98 99.92 ±0.12 92.50 ±0.87 6.23 ±0.91 0.01 ±0.01 35.44 ±0.30 
+
+SST-5 50.80 ±0.87 99.75 ±0.09 48.53 ±0.73 3.40 ±0.32 0.00 ±0.00 56.72 ±0.51 
+
+In addition, we compare with SEEP (He et al., 2024), a typi-cal defense against data-poisoning backdoors in text classi-fication. Due to the lack of publicly available code, we fol-low SEEP’s reported poisoning settings and evaluate on the SST-2 dataset under BadNet (Kurita et al., 2020) and Syn-tactic (Qi et al., 2021) attacks. ABCS preserves high ACC while effectively eliminating poisoned samples, achieving defensive performance comparable to SEEP (cf. Table 11). 
+
+Table 11. Comparing ABCS to SEEP. 
+
+Attack SEEP ABCS (ours) 
+
+ACC / ASR ACC / ASR BadNet 92.6 / 7.4 92.3 / 4.9 
+
+Syntactic 91.5 / 10.0 91.7 / 12.7 
+
+D.7. Comparison to Defense with Clean Reference Data 
+
+While assuming the absence of any reference dataset is most practical, this setting imposes a strong restriction. Many post-training defenses thus permit the access to a small portion of clean data. A representative method is ASD, the Adaptively Splitting Defense (Gao et al., 2023), which picks 10 clean samples per class uniformly of random for model initialization. With the prior knowledge of benign samples, the subsequent adaptive dataset splitting can more effectively isolate poisoned samples due to their higher pre-diction losses than benign ones. 
+
+Table 12. Comparing ABCS to Adaptively Splitting Defense (ASD) on CIFAR10. Each result contains the averaged value and the standard deviation over five random runs. The best results are highlighted as boldface . ASR for No-Defense is discarded as all attacks reaches a ASR over 99 % .
+
+Attack ASD ABCS (Ours) 
+
+ACC ( ↑) ASR ( ↓) DER ( ↑) ACC ( ↑) ASR ( ↓) DER ( ↑)BadNets 93.56 ±0.39 1.39 ± 0.52 98.82 ± 0.29 94.38 ±0.23 1.00 ±0.17 99.42 ±0.19 
+
+Blend 93.31 ±0.65 5.50 ± 1.78 95.30 ± 0.79 94.62 ±0.36 0.77 ±0.08 98.22 ±0.07 
+
+CLB 92.92 ±0.64 1.30 ± 0.90 98.58 ± 0.30 94.51 ±0.23 0.88 ±0.10 99.54 ±0.06 
+
+IAB 93.42 ±0.45 2.25 ± 1.03 98.23 ± 0.48 94.30 ±0.16 1.22 ±0.37 99.19 ±0.19 
+
+WaNet 92.63 ±0.41 17.29 ±21.24 88.67 ±10.78 94.13 ±0.22 0.89 ±0.16 97.53 ±0.13 
+
+ISSBA 92.80 ±0.35 2.26 ± 0.67 98.01 ± 0.36 94.66 ±0.41 1.22 ±0.09 99.33 ±0.15 
+
+LF 93.72 ±0.23 5.66 ± 3.67 95.85 ± 1.78 94.06 ±0.30 3.04 ±0.55 97.33 ±0.17 
+
+A-Blend 93.24 ±0.38 34.84 ± 6.99 80.18 ± 3.44 94.37 ±0.27 5.71 ±1.59 95.12 ±0.77 
+
+Average 93.20 8.81 94.20 94.38 1.84 98.21 
+
+WorstCase 92.63 34.84 80.18 94.06 5.71 95.12 
+
+In Table 12, we evaluate ABCS ’s performance on CIFAR10 against ASD. Unlike other defenses that often fail (cf. Ta-ble 1a), ASD shows a higher robustness across diverse at-tacks. Nonetheless, its performance remains limited against A-Blend and WaNet, and it struggles to preserve natural accuracy. In contrast, ABCS consistently produces an infor-mative, clean coreset that supports training with minimal ASR while maintaining accuracy comparable to the orig-inal model. Although the reference data facilitates more reliable dataset splitting, it is intrinsically less effective in a training progress with dynamics. ABCS circumvents this limitation by extracting a backdoor-free coreset, enabling a 17 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+more reliable and robust training-time backdoor defense. 
+
+D.8. Comparison to Post-train Defenses 
+
+In addition, we compare ABCS to post-training defenses, ANP (Wu & Wang, 2021) and SAU (Wei et al., 2023), which aim to remove backdoors from models pre-trained on poi-soned datasets. Both methods are implemented using the BackdoorBench (Wu et al., 2022), with ResNet18 on CI-FAR10. Results are reported in Table 13. Although both de-fenses leverage some clean reference samples, they achieve effective backdoor removal at the cost of reduced natural ac-curacy. In contrast, ABCS preserves high natural accuracy while still strongly suppressing backdoors, demonstrating its effectiveness in selecting a backdoor-free coreset. 
+
+Table 13. Comparing ABCS to post-train defenses.                          
+
+> Attack ANP SAU ABCS
+> ACC / ASR ACC / ASR ACC / ASR BadNets 92.08 / 1.27 92.97 / 2.72 94.38 /1.00
+> Blend 88.55 / 4.40 91.64 / 1.20 94.62 /0.77
+> IAB 93.08 / 2.08 94.91 /0.45 94.30 / 1.22 WaNet 92.48 / 0.60 93.11 / 1.81 94.13 / 0.89
+
+E. Robustness Against Adaptive Attacks 
+
+Anti-backdoor learning allows a full access to the dataset without any control of the training process. Under this setting, we evaluate ABCS against five different adaptive attacks that attempt to circumvent our defense by either increasing the predictive uncertainty of poisoned samples (cf. Section E.1 and E.2), intentionally restricting the train-ing dataset utility (cf. Section E.3), or enforcing a larger learning difficulty for poisoned samples (cf. Section E.4, cf. Section E.5). 
+
+E.1. Poisoning Samples Using C ENT Ranking 
+
+We first assume that the adversary understands the coreset selection strategy of using the CENT criterion. Given that, we conduct two possible adversaries that utilizes the ranking of C ENT for the dataset poisoning. 
+
+One-shot poisoning of informative samples. Intuitively, the adversary can first rank all clean samples according to the order of Cumulative Entropy and only poisons ρ = 5 % 
+
+samples with the highest uncertainty. This way, poisoned samples contain hard-to-learn features, thereby implicitly increasing their prediction uncertainty during model train-ing. Table 14 summarizes the experiments of ABCS on CIFAR10 with a ResNet18 model against diverse attacks us-ing the adaptive method, where we exclude CLB attack due to its clean-label poisoning constraint. Compared to Table 1, poisoning informative samples increases the difficulty of learning backdoors, thereby reducing the attack success rate after naive training but also complicating the anti-backdoor coreset selection. As a result, ABCS yields a slightly higher ASR under adaptive attacks. Nevertheless, ABCS effec-tively selects coresets from the entire dataset, maintaining high natural accuracy while significantly reducing ASR. 
+
+Table 14. ABCS against adaptive attacks using CENT ranking. For both ACC and ASR, we show the results of No-Defense and ABCS on the left and right of “ / ”, respectively                                       
+
+> Attack ACC (↑)ASR (↓)BadNets 94.22 ±0.05 / 93.98 ±0.20 99.94 ±0.04 /1.31 ±0.22
+> Blend 94.11 ±0.11 / 94.01 ±0.11 92.19 ±1.09 /1.80 ±0.92
+> IAB 94.42 ±0.11 / 93.98 ±0.22 99.55 ±0.16 /3.58 ±3.71
+> WaNet 93.87 ±0.18 / 92.15 ±0.28 79.06 ±2.47 /6.44 ±2.80
+> ISSBA 94.13 ±0.09 / 94.06 ±0.09 98.01 ±0.35 /1.27 ±0.24
+> LF 94.37 ±0.09 / 93.29 ±0.24 92.60 ±1.48 /8.20 ±1.07
+> A-Blend 94.39 ±0.15 / 93.99 ±0.41 99.98 ±0.02 / 11.69 ±2.19
+
+Algorithm 1 Greedy Search of Poisoned Samples 
+
+Input: Clean dataset D, a ResNet18 as fθ , the number of iteration T and target poisoning rate ρ
+
+Output: A poisoned dataset ˜D
+
+Initialisation: 
+
+Train fθ for 40 epochs on D and poison 50% samples with highest CENT as ˜D(0) 
+
+Compute step size n = clip 
+
+ (0 .5 − ρ) · |D| 
+
+T
+
+
+
+for t ∈ [1 , . . . , T ] do 
+
+Step 1: Train fθ from scratch for 40 epochs Step 2: Calculate CENT for all poisoned samples Step 3: Sort poisoned samples and recover n samples with the lowest CENT to benign Step 4: Obtain poisoned ˜D(t) with (0 .5 × |D| − n) poisoned samples 
+
+end for 
+
+Few-shot poisoning of informative samples. We con-sider another adversary that increases the CENT of poisoned samples by using a greedy search strategy, which begins with a high poisoning ratio ( ρ = 50 % ) and iteratively re-covers a portion of poisoned samples with low CENT values back to their originally benign ones, finally reaching the target poisoning ratio. The full procedure is described in Algorithm 1. For typical attacks such as Blend and WaNet, we run for 5 and 10 iterations (cf. Table 15), where the latter is observed to converge. Across both settings, exploring poi-soned samples with high CENT scores does not realistically improve the uncertainty of poisoned samples close to those of informative and benign samples. Using ABCS remains effective of extracting clean and informative coreset. 
+
+E.2. Poisoning a Single Source Class 
+
+Given the threat model, an adversary can poison the dataset arbitrarily. One might be class-selective, where all poi-soned samples originate from a single class, leading to a 18 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 15. ABCS against few-shot poisoning with CENT ranking. For both ACC and ASR, we show the results of No-Defense and ABCS on the left and right of “ / ”, respectively                       
+
+> Attack ACC ( ↑)ASR ( ↓)
+> T= 5 Blend 94.89 ±0.24 / 94.85 ±0.16 99.94 ±0.03 / 0.94 ±0.14
+> WaNet 94.60 ±0.22 / 94.47 ±0.24 91.18 ±2.61 / 3.16 ±2.68
+> T= 10 Blend 94.85 ±0.32 / 94.43 ±0.27 99.96 ±0.02 / 1.46 ±0.48
+> WaNet 94.28 ±0.14 / 94.55 ±0.39 96.25 ±2.45 / 2.35 ±1.33
+
+distribution shift between clean and poisoned data. Such imbalanced poisoning could, in principle, increase predic-tion uncertainty or learning stochasticity associated with the backdoor trigger, potentially challenging the defensive robustness of ABCS. To directly evaluate this scenario, we treat each non-target class as the sole poisoning source and reduce the overall poisoning rate ρ to 1 % to preserve the majority of clean sam-ples in the chosen source class. As shown in Figure 16, we conduct experiments across all source classes on CIFAR10. Our results show that natural accuracy remains stable regard-less of the poisoning source. ABCS consistently produces a coreset that ensures a high post-training accuracy across all attack types. More importantly, our method remains robust even under this highly non-uniform poisoning setting and achieves ASR below 5 % on average. These results demonstrate that ABCS is resilient to class-selective and distribution-shifted poisoning.         
+
+> 123456789
+> 75
+> 80
+> 85
+> 90
+> 95
+> Class
+> ACC [%]
+> ACC (BadNets)
+> ACC (Blend)
+> ACC (IAB)
+> ACC (WaNet)
+> 0
+> 5
+> 10
+> 15
+> 20
+> ASR [%]
+> ASR (BadNets)
+> ASR (Blend)
+> ASR (IAB)
+> ASR (WaNet)
+
+Figure 16. Poisoning Single Source Class. 
+
+E.3. Constructing Low-Redundancy Training Datasets 
+
+Given adaptive adversaries aware of the coreset selection mechanism via CENT criterion, they may first extract a core-set with a selection ratio of 50 % and subsequently poison it before releasing it as the final training dataset. Due to the high informativeness of this coreset, applying anti-backdoor coreset selection becomes challenging due to the inherent trade-off between security and utility in the poisoned data. In Table 16, we additionally evaluate ABCS under such coreset-level poisoning attacks. ABCS remains effective in identifying backdoor-free coresets, yielding significantly lower ASR than No-Defense, although maintaining suffi-cient data coverage becomes more difficult. Compared to the No-Defense baseline, ABCS selects a slightly smaller coreset, leading to a modest drop in ACC. Importantly, it automatically converges to a relatively large selection ratio 
+
+rse (with respect to the original training coreset), thereby retaining as many samples as possible to preserve accuracy. This behavior is consistent with observations on the large-scale dataset Tiny-ImageNet (cf. Table 1b), highlighting the adaptability of ABCS in low-redundancy settings. 
+
+Table 16. Defending backdoors in CIFAR10 coresets ( rse = 50 % ).                                          
+
+> Attack Defense ACC ( ↑)ASR ( ↓)ρbng rse
+> BadNets No-Defense 94.68 ±0.24 98.44 ±0.06 //ABCS 93.52 ±0.46 1.20 ±0.38 0.00 ±0.00 77.04 ±0.62
+> Blend No-Defense 94.72 ±0.32 89.84 ±1.35 //ABCS 93.14 ±0.39 1.34 ±0.87 0.02 ±0.02 76.20 ±0.74
+> IAB No-Defense 94.62 ±0.34 96.87 ±1.40 //ABCS 92.85 ±0.31 1.07 ±0.82 0.02 ±0.01 76.20 ±0.56
+> WaNet No-Defense 93.92 ±0.74 71.86 ±4.25 //ABCS 92.02 ±1.12 4.40 ±2.25 1.38 ±0.45 75.48 ±1.26
+
+E.4. Trigger Randomization Attack 
+
+With full access to the training dataset, an adversary can randomize the assignment of trigger patterns from different attacks across training samples. This reduces the poisoning rate of individual attacks and simultaneously increases the uncertainty of poisoned samples. We select candidate trig-gers of BadNets, Blend, IAB and WaNet. During poisoning, we randomly assign one trigger to each selected sample.         
+
+> 0510 15 20 25 30 35 40
+> −0.5
+> 0
+> 0.5
+> Epoch
+> ∆H
+> Blend
+> Trigger Randomization
+
+Figure 17. Comparing learning procedures of Blend and trigger randomization attacks. 
+
+We use ∆H = Hbng −
+
+Hpoi to show the gap between the mean uncer-tainty values of benign and poisoned samples, where the uncertainty value is normalized to the range 
+
+0 − 1 at each epoch. Compared to Blend at-tack, trigger randomiza-tion makes poisoned sam-ples converge more slowly, therefore showing a smaller uncertainty distance to benign samples (cf. Figure 17). Nevertheless, our defense remains highly robust against the trigger randomization backdoor (cf. Table 17), showing strong adaptability. 
+
+Table 17. Defending trigger randomization attack for CIFAR10.                
+
+> Defense ACC ( ↑)ASR ( ↓)
+> BadNets Blend IAB WaNet No-Defense 94.63 ±0.08 99.92 ±0.04 91.30 ±0.96 99.66 ±0.04 75.60 ±1.37
+> ABCS (Ours) 94.10 ±0.12 1.40 ±0.34 0.47 ±0.08 0.91 ±0.38 2.06 ±0.27
+
+19 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 18. Investigating robustness of ABCS against adaptive attack using label randomization.                                                                                                     
+
+> Attack Defense 50 % 30 % 10 %
+> ACC ( ↑)ASR ( ↓)ACC ( ↑)ASR ( ↓)ACC ( ↑)ASR ( ↓)BadNets No-Defense 95.09 ±0.14 73.24 ±2.63 94.78 ±0.07 91.95 ±0.82 94.64 ±0.12 99.26 ±1.43
+> ABCS (ours) 93.80 ±0.26 16.63 ±2.90 93.94 ±0.26 6.63 ±2.90 94.25 ±0.44 3.36 ±0.93
+> Blend No-Defense 94.61 ±0.20 64.68 ±4.81 94.88 ±0.15 85.06 ±0.43 94.72 ±0.28 94.98 ±0.34
+> ABCS (ours) 93.22 ±0.35 9.74 ±6.99 93.13 ±0.24 3.92 ±2.35 94.13 ±0.30 2.36 ±0.60
+> IAB No-Defense 94.84 ±0.06 71.25 ±1.72 95.07 ±0.33 89.46 ±1.60 94.82 ±0.25 98.76 ±0.85
+> ABCS (ours) 93.30 ±0.50 30.03 ±4.80 93.51 ±0.48 9.82 ±1.35 94.73 ±0.14 5.74 ±0.56
+> WaNet No-Defense 94.43 ±0.19 78.56 ±0.25 94.46 ±0.21 80.85 ±2.15 94.43 ±0.46 90.47 ±1.61
+> ABCS (ours) 93.21 ±0.49 8.69 ±1.71 93.75 ±0.26 3.38 ±0.74 93.97 ±0.22 3.29 ±0.28
+> ISSBA No-Defense 94.51 ±0.06 65.94 ±2.86 94.37 ±0.11 89.43 ±2.96 94.49 ±0.21 94.08 ±1.87
+> ABCS (ours) 94.16 ±0.54 18.65 ±1.76 93.91 ±0.15 3.72 ±0.56 94.34 ±0.33 1.37 ±0.13
+> LF No-Defense 94.87 ±0.01 71.36 ±3.62 94.89 ±0.05 88.00 ±1.72 94.77 ±0.15 97.00 ±0.24
+> ABCS (ours) 93.67 ±0.53 23.99 ±4.97 93.53 ±0.28 11.45 ±3.64 94.55 ±0.58 8.93 ±2.53
+> A-Blend No-Defense 94.32 ±0.05 33.14 ±3.09 94.33 ±0.28 34.35 ±2.42 94.80 ±0.13 65.61 ±4.74
+> ABCS (ours) 93.12 ±0.33 15.69 ±2.53 93.14 ±0.11 15.89 ±4.86 93.62 ±0.34 13.94 ±3.87
+
+E.5. Label Randomization for Poisoned Samples 
+
+Training on datasets with randomly assigned label has been shown to increase learning difficulty (Natarajan et al., 2013), making the optimization process more stochastic due to the label randomization and thus inducing higher predictive un-certainty (Huang et al., 2022b; K ¨ohler et al., 2019). Assum-ing an adversary knows the design of ABCS , an adaptive strategy would aim to increase the uncertainty of poisoned samples and slow their convergence, thereby hindering the defense. To evaluate this scenario, we assess our method under poisoning schemes that introduce label randomization to varying fractions of poisoned data. For example, with a poisoning ratio ρ = 5 % , a random-labeling ratio of 30 % 
+
+means that 30 % of the generated poisoned samples receive randomized labels, while the remaining 3.5 % of poisoned samples maintain the backdoor target label.         
+
+> 0510 15 20 25 30 35 40
+> −1
+> −0.5
+> 0
+> 0.5
+> Epoch
+> ∆H
+
+Entropy Difference         
+
+> 0510 15 20 25 30 35 40
+> 45
+> 50
+> 55
+> 60
+> 65
+> Epoch
+> Orthogonality
+
+Orthogonality   
+
+> None 10 %
+> 30 % 50 %
+
+Figure 18. Impact of randomized label on Blend attack. 
+
+We first use the Blend attack to visualize how random la-beling affects model learning. Since coreset selection re-lies on the uncertainty gap between benign and poisoned data, we measure the intermediate entropy difference as 
+
+∆H = Hbng − Hpoi , where Hbng and Hpoi denote the mean 0–1 normalized entropy at each epoch of benign and poisoned samples. A value ∆H > 0 suggests faster learn-ing of poisoned samples due to lower entropy, whereas 
+
+∆H ≤ 0 indicates increased difficulty for our defense, as noise raises the prediction uncertainty of poisoned data. As shown in Figure 18, increasing the random-labeling ratio (10 % , 30 % , 50 % ) slows down the convergence of poisoned samples, often yielding ∆H < 0 within the first 30 epochs. Furthermore, we investigate the orthogonality (Zhang et al., 2024), that is, the angle between gradient directions of be-nign and poisoned samples. In the loss landscape, poisoned samples exhibit gradients highly orthogonal to clean sam-ples, enabling a more effective learning of the backdoor. With increasing the random-labeling ratio, the orthogonality decreases, showing again the effect of reducing the dis-similarity of benign and poisonous samples in the learning behavior. In Table 18, we report results across all attacks and show a trade-off: while larger random-labeling ratios increase uncertainty for poisoned samples, they simultane-ously reduce the ASR. Under moderate noise (e.g., 10 % ), ABCS consistently reduces ASR, demonstrating a strong robustness even against a highly knowledgeable adversary. 
+
+F. Empirical Analysis of Coreset Coverage 
+
+In this section, we further examine how well variant-selected coresets cover the full clean training dataset D under both clean and poisoned conditions. As a clean baseline with strong natural performance, we first train a ResNet18 on the complete clean training set of CIFAR10. A coreset that exhibits high visual and quantitative similarity to the full clean dataset D reflects a correspondingly high level of information coverage. 
+
+Latent space visualization. We extract the feature-space representations from the penultimate layer of ResNet18, i.e., the activation vectors immediately preceding the fully connected layer, and visualize their 2-D distributions using t-SNE (van der Maaten & Hinton, 2008). Compared with the full clean dataset D (cf. Figure 19a, top), selected coresets 20 Anti-Backdoor Coreset Selection via Cumulative Entropy           
+
+> Full Clean Set D
+> Coreset of Clean Set D
+> (a) Clean Train Set BadNets
+> Blend
+> IAB
+> WaNet
+> (b) Selected Coresets from Individual ˜D
+> Class 0 Class 1 Class 2 Class 3 Class 4 Class 5 Class 6 Class 7 Class 8 Class 9
+> Figure 19. T-SNE visualization of data distribution of full clean training set Dand its coreset (Figure 19a), and other coresets selected from individual poisoned training sets ˜D(Figure 19b).
+
+from various poisoned datasets shown in Figure 19b exhibit strong similarity in their global geometric structure. Aside from the easy classes 1 and 8 (cf. Figure 6), each remaining class preserves a cluster profile closely resembling that of the full dataset. This property consistently appears both in coresets derived from poisoned datasets and in those taken from the full clean dataset (cf. Figure 19a, bottom). 
+
+Quantitative evaluation. Furthermore, we conduct a quantitative evaluation along two dimensions: local geo-metric coverage and global distributional similarity. For the former aspect, we measure the 95 th -percentile Nearest-Neighbor distance (p95-NN) (Clark & Evans, 1954), using cosine distance as the metric. For the latter aspect, we compute the Maximum Mean Discrepancy (MMD) (Borg-wardt et al., 2006; Goodfellow et al., 2015), where inputs are first l2-normalized and an RBF kernel is applied with bandwidth chosen via the median heuristic. Both metrics are implemented using the Scikit-learn toolkit with the default settings (Pedregosa et al., 2011). Notably, the p95-NN met-ric yields values in [0 , 2] , where values close to 0 indicate strong local geometric coverage relative to the full clean dataset. MMD, in turn, is non-negative and attains 0 only for identical distributions and, thus, the larger the value, the lower the global similarity. Table 19 summarizes the similarity of the selected coresets with respect to the full clean dataset. Across all poisoning attacks, ABCS yields coresets with p95-NN and MMD un-der 0.015 , indicating that coreset samples lie very close to full-dataset samples and that the coreset distribution closely matches the full latent feature space distribution. These small values demonstrate both local geometric coverage and high distributional similarity of the coreset relative to the full clean dataset. Although some variance appears across classes, most of them have p95-NN and MMD values under 
+
+0.02 . Note that class-1 (that is comparably easy to learn) tolerates higher dissimilarity from its full class distribution, whereas class-3 (which is more difficult to learn) benefits from a larger data portion, ensuring adequate coverage of the full class and, thus, preserving the natural performance. 21 Anti-Backdoor Coreset Selection via Cumulative Entropy 
+
+Table 19. Similarity of the full dataset and the coresets extracted from poisoned CIFAR10. 
+
+Dataset 95 th -Percentile Nearest-Neighbor Distance Maximum Mean Discrepancy 
+
+BadNets Blend IAB WaNet BadNets Blend IAB WaNet Full 0.0112 ±0.0002 0.0114 ±0.0003 0.0116 ±0.0002 0.0113 ±0.0003 0.0121 ±0.0004 0.0130 ±0.0006 0.0142 ±0.0012 0.0126 ±0.0005 
+
+Class 0 0.0091 ±0.0004 0.0102 ±0.0026 0.0104 ±0.0012 0.0108 ±0.0002 0.0015 ±0.0008 0.0027 ±0.0015 0.0023 ±0.0010 0.0019 ±0.0002 
+
+Class 1 0.0107 ±0.0004 0.0111 ±0.0004 0.0104 ±0.0006 0.0094 ±0.0006 0.0297 ±0.0015 0.0334 ±0.0036 0.0331 ±0.0062 0.0096 ±0.0029 
+
+Class 2 0.0114 ±0.0007 0.0119 ±0.0008 0.0126 ±0.0010 0.0120 ±0.0011 0.0022 ±0.0006 0.0035 ±0.0009 0.0032 ±0.0012 0.0027 ±0.0006 
+
+Class 3 0.0084 ±0.0004 0.0091 ±0.0003 0.0076 ±0.0008 0.0078 ±0.0001 0.0007 ±0.0003 0.0008 ±0.0001 0.0004 ±0.0002 0.0002 ±0.0001 
+
+Class 4 0.0101 ±0.0011 0.0103 ±0.0003 0.0110 ±0.0016 0.0101 ±0.0010 0.0039 ±0.0014 0.0037 ±0.0007 0.0045 ±0.0010 0.0023 ±0.0006 
+
+Class 5 0.0111 ±0.0004 0.0112 ±0.0013 0.0121 ±0.0010 0.0109 ±0.0012 0.0033 ±0.0011 0.0035 ±0.0009 0.0037 ±0.0005 0.0015 ±0.0005 
+
+Class 6 0.0122 ±0.0004 0.0110 ±0.0008 0.0120 ±0.0014 0.0116 ±0.0011 0.0068 ±0.0003 0.0039 ±0.0009 0.0035 ±0.0006 0.0036 ±0.0007 
+
+Class 7 0.0116 ±0.0008 0.0113 ±0.0007 0.0120 ±0.0004 0.0111 ±0.0007 0.0161 ±0.0029 0.0134 ±0.0025 0.0169 ±0.0032 0.0135 ±0.0035 
+
+Class 8 0.0142 ±0.0008 0.0142 ±0.0016 0.0141 ±0.0016 0.0149 ±0.0017 0.0199 ±0.0025 0.0228 ±0.0050 0.0214 ±0.0075 0.0193 ±0.0028 
+
+Class 9 0.0113 ±0.0007 0.0113 ±0.0004 0.0108 ±0.0004 0.0114 ±0.0008 0.0140 ±0.0012 0.0116 ±0.0015 0.0111 ±0.0020 0.0078 ±0.0026 
+
+22
