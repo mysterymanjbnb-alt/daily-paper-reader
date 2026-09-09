@@ -1,0 +1,689 @@
+Title: Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators in Gradient Updates
+
+URL Source: https://arxiv.org/pdf/2609.04815v1
+
+Published Time: Mon, 07 Sep 2026 00:36:56 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators in Gradient Updates 
+
+Manuel Röder 1,2, Bibin Babu 1,3, and Frank-Michael Schleif 1 
+
+> 1
+
+Technical University of Applied Sciences Würzburg-Schweinfurt, Würzburg, Germany,  
+
+> 2
+
+Bielefeld University, Bielefeld, Germany  
+
+> 3
+
+Center for Cybersecurity TTZ-WUE, Ochsenfurt, Germany 
+
+Abstract. Detecting orchestrated cyberattack campaigns that span mul-tiple organizations traditionally requires sharing sensitive telemetry and threat intelligence across institutional boundaries and country borders, a barrier that Federated Learning removes by training shared threat detec-tors directly on local data. We propose FedIoC , a modular framework in which clients fold locally available structured threat indicators into their gradient updates; we instantiate the client-side encoder with a su-pervised contrastive loss over IoC-matched flows. Within each training batch, flows that match any known indicator pattern form the positive set; the contrastive objective pulls their learned embeddings together and pushes non-IoC embeddings away, so that campaign-relevant structure is, by design, expressed in the gradient direction. Clients sharing indica-tors for the same attack campaign then produce aligned gradient compo-nents, which the server clusters by the cosine similarity of their updates to recover global campaign patterns without any direct IoC transmis-sion. We evaluate FedIoC on two public threat-detection benchmarks distributed across FL clients that each observe only a fragment of every active campaign and hold disjoint indicator sets derived from their lo-cal telemetry. In this regime the FL server recovers cross-organizational campaign cohorts directly from gradient geometry. We contribute Fe-dIoC as a modular framework for this setting, and use it to pinpoint the non-IID gradient structure as the main driver of recovery and to define the open problem of designing encoders that improve on it. 
+
+Keywords: Federated Learning · Cyber Threat Intelligence · Contrastive Learning · Attack Campaign Detection · Privacy Preservation · Regula-tory Compliance 
+
+Reproducibility: Code and setup instructions to reproduce the experi-mental results are available at https://github.com/ManuelRoeder/fedioc. 
+
+## 1 Introduction 
+
+Detecting remote-orchestrated cyber attacks that span multiple organizations is fundamentally a fragmentation problem: no single defender observes the full arXiv:2609.04815v1 [cs.LG] 4 Sep 2026 2 Röder et al. 
+
+set of Indicators of Compromise ( IoC ) associated with a given campaign. These artifacts (file hashes, IP addresses, domain names, URLs, TLS fingerprints, reg-istry keys, and behavioral patterns) identify adversary tools, infrastructure, and tradecraft, but each organization holds only a partial view derived from its local telemetry. Pooling indicators through threat intelligence sharing standards such as MISP [25] or STIX/TAXII 4 is the conventional remedy, yet its effectiveness is limited by sharing reluctance, data sovereignty constraints under regimes such as the GDPR [6] and the NIS-2 directive [7], and the rapid staleness of low-level indicators as adversaries rotate infrastructure and re-tool [2]. Federated Learning ( FL ) offers an alternative solution: organizations ex-change gradient updates instead of raw telemetry [17]. Existing FL systems for intrusion and threat detection nevertheless reduce IoC to label assignment [24,4]: once a round begins, the indicators contribute nothing beyond the per-flow class label, and the resulting gradients carry only task-specific learning. The richer STIX metadata that characterizes an IoC, comprising confidence, temporal va-lidity, and kill-chain context, is therefore discarded before aggregation, and with it the campaign-cohort signal that gradient sharing could in principle convey. We consequently investigate whether this signal can be preserved by asking: 
+
+Main Research Question. Can IoC knowledge be encoded into federated gradient updates, such that the FL server is able to resolve client-local IoC views into global attack campaign signals? 
+
+In our work, we aim to answer this question by proposing FedIoC , a modular FL framework which adds a supervised contrastive loss over indicator-matched flows to local client training. Subsequently, the server is able to recover campaign structure by clustering clients on the cosine similarity of their gradient updates. 
+
+The key contributions are threefold: – FedIoC , a modular end-to-end framework (Sec. 2): clients encode locally available threat indicators into their gradient update, the server clusters the uploaded gradients by cosine similarity to recover campaign cohorts, and no raw indicator is transmitted. The client-side gradient encoder is interchange-able. 
+
+– Contrastive gradient encoding component (Sec. 2.3): a supervised contrastive loss over IoC-matched flows that we instantiate and evaluate; alternative encoders are left open for future work. 
+
+– Controlled empirical study on NIDS 5 benchmarks (Sec. 3): We evaluate server-side campaign recovery and client-side detection on CTU-13 and UNSW-NB15 datasets.          
+
+> 4STIX (Structured Threat Information eXpression) is a standardized language for representing cyber threat intelligence; TAXII (Trusted Automated eXchange of In-telligence Information) is the corresponding transport protocol for sharing STIX content.
+> 5NIDS: Network Intrusion Detection Systems FedIoC : Attack Campaign Detection via IoC Encoding 3
+> Fig. 1. FedIoC pipeline overview. Client side (blue): each client matches local mini-batch flows against its CTI feed and runs an indicator-weighted supervised contrastive pass alongside cross-entropy; the two pseudo-gradients sum into a single update that encodes campaign identity by design. Server side (orange): cosine clustering over per-client gradient directions yields a campaign-cohort report (clients with shared exposure to the same attack infrastructure) before standard aggregation and broadcast.
+
+## 2 Methodology 
+
+We first formalize the federated attack campaign detection setting (Sec. 2.1), then describe how each client identifies IoC-matched flows (Sec. 2.2) and trains an indicator-weighted supervised contrastive objective that aims to imprint cam-paign identity onto the gradient direction (Sec. 2.3); the server recovers the global campaign partition by clustering client gradients under cosine similarity (Sec. 2.4), and we close by discussing compatibility with gradient-transmitting FL aggregators (Sec. 2.5). Figure 1 presents the overall pipeline of FedIoC .
+
+2.1 Problem Formulation 
+
+Let C = {c1, . . . , c n} be a set of n federated clients, each holding a local dataset 
+
+Di of network traffic samples (x, y ) with binary or multi-class labels. Each client 
+
+ci has access to a set of indicator objects I(t) 
+
+> i
+
+extracted from a CTI 6 feed at round t, where each indicator ιk ∈ I (t) 
+
+> i
+
+carries a pattern πk and a confidence score βk ∈ [0 , 1] . The pattern πk is treated abstractly as a predicate that decides whether a sample x ∈ D i matches the indicator. FedIoC uses the pattern field   
+
+> 6CTI: Cyber Threat Intelligence 4Röder et al.
+
+πk to define the IoC-matched anchor set X IoC  
+
+> i
+
+(see Eq. (1)) and the confidence score βk as the per-anchor contrastive weight wa in the loss (Sec. 2.3). Further, let K = {1, . . . , K } be the set of ground-truth attack campaigns. Each indicator 
+
+ιk belongs to exactly one campaign κ(ιk) ∈ K . No single client holds all indicators for any campaign: each set I(t) 
+
+> i
+
+is a strict subset of the full collection of indicators for any campaign represented in client ci’s traffic. 
+
+Goal. Design a client-local training objective Li(θ) such that: (1) the gradi-ent g(t) 
+
+> i
+
+= ∇θ Li(θ(t−1) ) encodes the IoC knowledge available to client ci at round 
+
+t; (2) clients whose I(t) 
+
+> i
+
+share campaign membership produce gradients that are similar in cosine distance; (3) a server-side clustering of {g(t) 
+
+> i
+
+}ni=1 recovers the campaign partition κ, without any client transmitting raw telemetry data. 
+
+2.2 IoC-Matched Sample Identification 
+
+At each round t, client ci identifies the subset of its local training flows that match the indicators currently available to it: 
+
+X IoC  
+
+> i
+
+= x ∈ D i ∃ ιk ∈ I (t) 
+
+> i
+
+: x |= πk , (1) where πk is the predicate associated with indicator ιk and x |= πk denotes that 
+
+x satisfies it. We suppress the round superscript (t) on X IoC  
+
+> i
+
+for readability; it is understood to depend on I(t) 
+
+> i
+
+. FedIoC treats πk abstractly: any matching rule a client can evaluate on a local flow is admissible. STIX cyber observables [21] are one concrete instantiation that supply both the predicate and the confidence score used as the per-anchor weight wa.
+
+2.3 Contrastive IoC Objective 
+
+For a mini-batch B, let A(B) = {b ∈ B : xb ∈ X IoC  
+
+> i
+
+} be the IoC-matched anchors and P (a) = A(B) \ { a} the positives of anchor a. Let zb = ϕθ (xb)/∥ϕθ (xb)∥2 be the ℓ2-normalized penultimate embedding (so za · zp = cos  ϕθ (xa), ϕ θ (xp)). For each anchor a matched by indicator ιk(a) ∈ I (t) 
+
+> i
+
+, we define the indicator-derived weight wa := βk(a) ∈ [0 , 1] , where βk(a) is the confidence score of the matching indicator. Subsequently, the IoC contrastive loss is an indicator-weighted variant of the Supervised Contrastive Learning ( SupCon ) [13] objective restricted to the IoC-matched positive set: 
+
+LIoC (θ; B) = 
+
+
+
+− 1
+
+WB
+
+X
+
+> a∈A (B)
+
+wa · ℓτ (a) if |A (B)| ≥ 2,
+
+0 otherwise, (2) where WB := P 
+
+> a∈A (B)
+
+wa and the per-anchor SupCon log-softmax term is 
+
+ℓτ (a) := 1
+
+|P (a)|
+
+X 
+
+> p∈P(a)
+
+log exp( za · zp/τ )
+
+P 
+
+> b∈B , b ̸=a
+
+exp( za · zb/τ ) , (3) FedIoC : Attack Campaign Detection via IoC Encoding 5
+
+with τ > 0 the contrastive temperature (we use τ = 0 .1 in our experiments). The denominator in ℓτ (a) sums over all b ∈ B with b̸ = a, so every batch sample except the anchor contributes to the denominator: non-IoC flows serve as neg-atives, while other IoC-matched anchors appear simultaneously as positives in the numerator. In the edge case A(B) = B (every batch sample is IoC-matched), no negatives remain, the objective loses its negative-repelling term and degener-ates to pulling all embeddings together, so no campaign-discriminative gradient remains; ℓτ (a) → − log( |B|− 1) ; given the sparse IoC-matched fraction reported in Sec. 3 (1–2%), this corner does not arise in our experiments and we flag it as a deployment caveat for IoC-dense regimes. Ultimately, the conceptual local objective combines the two terms additively: 
+
+Li(θ; B) = LCE (θ; B) + λ · L IoC (θ; B), (4) where λ > 0 controls the strength of the IoC signal. When I(t) 
+
+> i
+
+= ∅ (no IoC available), X IoC  
+
+> i
+
+= ∅ and LIoC = 0 , the client-local objective reduces to cross-entropy optimization for the core use case of a classification task. Let g(t) 
+
+> i, CE
+
+:= ( θ(t−1) −θCE ,(t) 
+
+> i
+
+)/η denote the pseudo-gradient [17] from training on LCE alone for E local epochs under learning rate η (note that for FedProx ,
+
+LCE is replaced by the proximal-augmented objective). Instead of minimizing Eq. (4) jointly, which couples the two gradients across local SGD steps and entangles them, FedIoC uses a two-pass design that defines the transmitted client update directly as 
+
+g(t) 
+
+> i
+
+:= g(t)
+
+> i, CE
+
+| {z } 
+
+> Phase I : task component
+
++ λ · g(t)
+
+> i, IoC
+
+| {z } 
+
+> Phase II : IoC-contrastive component
+
+, (5) where g(t) 
+
+> i, IoC
+
+:= ( θ(t−1) − θIoC ,(t) 
+
+> i
+
+)/η is computed by training on LIoC alone for one epoch starting from the same weights θ(t−1) used by Phase I . We emphasize that g(t) 
+
+> i
+
+is defined by Eq. (5), not as the joint pseudo-gradient (θ(t−1) − θ(t) 
+
+> i
+
+)/η 
+
+obtained from running gradient optimization on LCE + λLIoC end-to-end; Fe-dIoC is the additive construction throughout this paper. We further note that Eq. (5) is a definition of the transmitted update, not a derived decomposition: because the two passes share initial weights and are computed independently, the additive form holds by construction within a round and avoids the cross-step coupling that joint minimization of Eq. (4) would induce; the cross-round interaction through θ(t) is empirical and base-dependent (Sec. 4). The additional 
+
+computational cost is one extra local epoch per round on top of the E epochs of Phase I ; communication cost is unchanged because only the summed up-date g(t) 
+
+> i
+
+is transmitted. In expectation, g(t) 
+
+> i, IoC
+
+is a functional of the matched-flow distribution Pκ, so same-campaign clients produce co-directed gradients while cross-campaign clients do not. 
+
+2.4 Server-Side Campaign Detection 
+
+At the end of each round, the server holds gradients {g(t) 
+
+> i
+
+}ni=1 before aggregation. Letting C+ = ck : ∥g(t) 
+
+> k
+
+∥ > 0 denote the set of non-zero-update clients (clients 6 Röder et al. 
+
+with ∥g(t) 
+
+> i
+
+∥ = 0 , typically those for which LIoC = 0 in every batch this round or whose Phase I update happened to vanish, are excluded as abstentions to avoid spurious singleton clusters), it computes a pairwise cosine similarity matrix 
+
+S ∈ R|C +|×|C +|:
+
+Sij = g(t) 
+
+> i
+
+· g(t)
+
+> j
+
+∥g(t) 
+
+> i
+
+∥ · ∥ g(t) 
+
+> j
+
+∥ , ci, c j ∈ C +, (6) and derives an elementwise distance matrix Dij = 1 − Sij . Note that 1 −
+
+cos ∠(gi, g j ) is a dissimilarity but not a metric (it does not satisfy the triangle inequality in general); this is considered unproblematic here because agglomera-tive clustering with complete linkage operates directly on the dissimilarity matrix and does not rely on metric properties. Agglomerative clustering with complete linkage [19] is then applied to D with distance threshold ε, yielding the cam-paign partition C(t) = AgglomerativeCluster (D, ε, complete ). Here, the complete linkage property merges two clusters only when the maximum pairwise distance between their members falls below ε, preventing the chain-collapse fail-ure mode of single-linkage methods under heterogeneous gradient norms. Each cluster groups clients whose IoC-enriched gradients are geometrically proximate, identifying a global attack campaign from gradient alignment alone. Appendix B details the threat model under which this no-raw-indicator-exchange property holds and enumerates the residual attack vectors against which FedIoC offers no defense. The server subsequently aggregates the transmitted pseudo-gradients 
+
+g(t) 
+
+> i
+
+(Eq. (5)): 
+
+θ(t) = θ(t−1) − η ·
+
+> n
+
+X
+
+> i=1
+
+|D i|
+
+Pnj=1 |D j | g(t) 
+
+> i
+
+. (7) We assume synchronous full-client participation each round, matching our exper-imental setup; the construction extends naturally to partial-participation sched-ules where the server aggregates and clusters only over the subset of clients that report in round t. The complete pseudocode of FedIoC is presented in Algo-rithm 1; amber lines mark the Phase I cross-entropy pass that any gradient-transmitting FL algorithm already performs, while blue lines mark the modular additions introduced by FedIoC (the Phase II IoC-contrastive pass, the addi-tive update, and the server-side cosine clustering). 
+
+2.5 Compatibility with FL Methods 
+
+FedIoC has two orthogonal components: the client-side IoC objective (Eq. (4)) is agnostic to the server’s aggregation rule, and the server-side clustering (Sec. 2.4) is agnostic to the client training algorithm. The single structural requirement is that the server observes individual client updates to compute pairwise cosine similarities, which is satisfied by FedAvg [17], FedProx [15], and SCAF-FOLD [11] but not by secure aggregation [3] or split/vertical FL [12]; this is a fundamental privacy-utility trade-off, since secure aggregation is the canonical mitigation against the gradient-inversion channel discussed in App. B. Protocol-level compatibility does not guarantee effective clustering either: algorithms that FedIoC : Attack Campaign Detection via IoC Encoding 7
+
+Algorithm 1 FedIoC : Contrastive IoC-Encoded Federated Campaign Detection 
+
+Require: Global model θ(0) , clients C = {c1, . . . , c n}, rounds T , local epochs E (we use E = 1 ), λ, τ , distance threshold ε, local learning rate η
+
+Ensure: Final model θ(T ), campaign clusters {C (t)}Tt=1 
+
+1: for t = 1 to T do 
+
+2: Server broadcasts θ(t−1) to all clients 3: for each client ci ∈ C (in parallel) do 
+
+4: Retrieve IoC set I(t) 
+
+> i
+
+from local CTI feed 5: Phase I : CE gradient (classification, E local epochs from θ(t−1) ): 6: θCE  
+
+> i
+
+← θ(t−1) 
+
+7: for e = 1 to E do 
+
+8: for each mini-batch B ⊆ D i do 
+
+9: θCE  
+
+> i
+
+← θCE  
+
+> i
+
+− η ∇θ LCE (θCE  
+
+> i
+
+; B)
+
+10: end for 
+
+11: end for 
+
+12: g(t) 
+
+> i, CE
+
+←  θ(t−1) − θCE 
+
+> i
+
+/η 
+
+13: if I(t)
+
+> i
+
+̸ = ∅ then 
+
+14: Match local samples: X IoC  
+
+> i
+
+← { x ∈ D i | ∃ ιk ∈ I (t) 
+
+> i
+
+: x |= πk } ▷ Eq. (1) 15: Phase II : IoC gradient (campaign encoding module): 16: θIoC  
+
+> i
+
+← θ(t−1) 
+
+17: for each mini-batch B ⊆ D i with |A (B)| ≥ 2 do ▷ Eq. (2) 18: θIoC  
+
+> i
+
+← θIoC  
+
+> i
+
+− η ∇θ LIoC (θIoC  
+
+> i
+
+; B)
+
+19: end for 
+
+20: g(t) 
+
+> i, IoC
+
+←  θ(t−1) − θIoC 
+
+> i
+
+/η 
+
+21: g(t) 
+
+> i
+
+← g(t) 
+
+> i, CE
+
++ λ · g(t) 
+
+> i, IoC
+
+▷ Two-pass additive update (Eq. 5) 22: else 
+
+23: g(t) 
+
+> i
+
+← g(t) 
+
+> i, CE
+
+▷ Falls back to the underlying aggregation rule 24: end if 
+
+25: Transmit g(t) 
+
+> i
+
+to server 26: end for 
+
+27: Server computes Sij ← cos  g(t) 
+
+> i
+
+, g (t)
+
+> j
+
+ for all i, j ; derives Dij ← 1 − Sij 
+
+28: Server detects campaigns: C(t) ← AgglomerativeCluster (D, ε, complete )
+
+29: Server aggregates: θ(t) ← θ(t−1) − η · Pni=1    
+
+> |D i|P
+> j|D j|
+
+g(t)
+
+> i
+
+30: end for 
+
+31: return θ(T ), {C (t)}Tt=1 
+
+strongly homogenize inter-client gradient directions (e.g. FedProx with large 
+
+μ) would suppress the very diversity the clustering exploits. 
+
+## 3 Experimental Setup 
+
+3.1 Datasets and IoC Extraction CTU-13 [8] contains real botnet traffic from 13 distinct campaigns captured on a university network, each campaign corresponding to a different botnet fam-ily. The structured campaign labeling makes CTU-13 our primary benchmark: 8 Röder et al. 
+
+ground-truth campaign membership provides an unambiguous reference parti-tion for computing cluster quality metrics, and the shared command-and-control infrastructure within each family yields the cohesive IoC sets that the contrastive objective is designed to exploit. 
+
+UNSW-NB15 [18] contains nine heterogeneous attack families (treated as cam-paigns) that span reconnaissance, exploits, fuzzers, DoS, worms, generic, back-doors, analysis, and shellcode. This diverse mix lacks the shared C&C infras-tructure binding flows within a single botnet family, and we use UNSW-NB15 as a generalization test for whether the gradient-clustering signal extends beyond cohesive infrastructure-bound campaigns. 
+
+IoC extraction. For each client ci we extract source IP addresses from malicious flows in Di and encode them as STIX Indicator objects, simulating clients deriving indicators from observed network traffic.The STIX confidence field is set to βk = log(1 + nk)/ log(1 + max k′ nk′ ), where nk counts the matched malicious flows in the issuing client’s partition, so frequently-matched indicators receive weight near 1 and one-off matches a fractional weight via the per-anchor weight wa (when max k′ nk′ = 0 no IoC are matched and LIoC = 0 , so the formula is vacuous). All indicators are available from round 1, and the IoC-matched fraction is sparse on both datasets (1–2% of flows on CTU-13), so most mini-batches satisfy |A (B)| < 2 and LIoC = 0 .
+
+3.2 Federated Setup 
+
+Ten clients are constructed via a campaign-stratified non-IID partition of CTU-13: each scenario is split into three equal chunks and assigned round-robin so every client sees 3–5 campaigns but never a complete view of any single campaign, mirroring a realistic scenario in which organizations observe differ-ent segments of attacker infrastructure. Each client therefore holds partial IoC, with STIX indicators covering only the campaign fragments present in its local slice. UNSW-NB15 uses the identical partitioning strategy and pipeline without dataset-specific tuning. Training runs for 15 FL rounds with a small MLP over five flow-level features. Implementation details are outlined in Appendix A. Fig-ure 2 further visually demonstrates the clustering spectrum that the FL server produces from the per-client gradient updates. 
+
+3.3 Method Baselines – Local-only: a single representative client trains on its local partition with-out federation. Confirms that campaign-cohort recovery requires cross-client gradient exchange. 
+
+– FedAvg [17]: standard federated averaging with no IoC. Measures the cam-paign structure plain gradient clustering recovers from non-IID partitions. 
+
+– FedProx [15]: FedAvg with a proximal regularization term limiting per-client drift. 
+
+– SCAFFOLD [11]: variance-reduced FL using server- and client-side control variates to counter client drift. FedIoC : Attack Campaign Detection via IoC Encoding 9c0           
+
+> c1
+> c2
+> c3
+> c4c5
+> c6
+> c7
+> c8
+> c9
+> (a) FedAvg
+> c0
+> c1
+> c2
+> c3
+> c4
+> c5
+> c6
+> c7
+> c8
+> c9
+> (b) FedIoC (ours)
+> κ1κ2κ3κ4κ5edge ∝cos( gi, g j)
+
+Fig. 2. Single-round visualization of the FL server’s campaign-cohort output computed from the uploaded per-client gradient updates under (a) FedAvg and (b) FedIoC on CTU-13. Nodes are federated clients colored by their dominant ground-truth campaign 
+
+κk ; edge opacity scales with the similarity cos  gi, g j
+
+ of their gradient updates; dashed hulls enclose the clusters returned by the server’s agglomerative clustering step at threshold ε = 0 .5 (gray hull = multi-campaign cluster). Takeaway: the server recovers campaign-aligned clusters directly from gradient geometry; in this illustrative round the IoC-contrastive variant (b) yields tighter single-campaign hulls than FedAvg (a). 
+
+– FedProx +IoC and SCAFFOLD +IoC: plugin demonstrations combining the IoC contrastive loss (Sec. 2.5) with each base method, testing whether the contrastive signal composes with proximal + variance-reduction regularizers. 
+
+– FedAvg +SupCon-lbl: an ablation control identical to FedIoC except the contrastive positive set is the malicious class label instead of IoC matches; it isolates whether the indicator-specific objective contributes beyond con-trastive up-weighting of the minority class. 
+
+– FedIoC (ours): IoC-contrastive gradients over a FedAvg base with server-side agglomerative campaign detection. 
+
+3.4 Evaluation Metrics 
+
+Campaign recovery (primary): Adjusted Rand Index ( ARI ) [10] and Normalized Mutual Information ( NMI ) [23] between cluster assignments C(t) and ground-truth campaign labels. We further report both peak ARI (max t ARI (t)) and mean ARI over an early detection window. 
+
+Detection performance (secondary): Macro-averaged F1 [22] on the held-out test set, confirming that IoC encoding does not degrade intrusion detection capability. 10 Röder et al. 
+
+## 4 Preliminary Results and Discussion 
+
+4.1 Campaign Detection 
+
+Table 1 reports multi-seed campaign-recovery and classification metrics across all methods in both cyber attack scenarios. Our main findings are as follows: 
+
+Gradient geometry recovers campaign cohorts, but the IoC encod-ing needs further investigation. Across both benchmarks the FL server recovers campaign cohorts directly from the cosine geometry of client gradi-ents: on CTU-13 every contrastive variant and FedAvg reach high agreement with the ground truth (Peak ARI 0.89 –0.97 , Mean ARI 0.76 –0.86 ; Fig. 2). This recovery is the capability FedIoC targets, but it is not exclusively at-tributable to the indicator-specific objective: on CTU-13 FedIoC (Peak 0.97 ,Mean 0.85 ) lies within run-to-run variance of a label-only contrastive control (FedAvg+SupCon-lbl , 0.94 /0.86 ) and of plain FedAvg (0.97 /0.80 ) (overlap-ping ±1 SD, Table 1), on UNSW-NB15 FedAvg /FedProx match or exceed it, and any contrastive advantage appears only at larger learning rates that sup-press the FedAvg baseline. The indicator-weighted objective therefore does not yet yield a gain separable from contrastive up-weighting of the malicious class; isolating a regime in which IoC-identity encoding provably helps is the central open problem. 
+
+Composition with regularized bases is uneven. Adding the contrastive term to FedProx improves its CTU-13 Mean ARI ( 0.69 → 0.76 ) at no F1 cost, whereas on SCAFFOLD it raises Peak ARI ( 0.59 → 0.72 ) but degrades Mean ARI and F1; SCAFFOLD is moreover unstable in our E=1 regime (F1 0.36 ,high variance). The contrastive signal thus composes unevenly with proximal and variance-reduction regularizers. 
+
+Gradient clustering recovers campaign cohorts without raw IoC ex-change. Each cluster is a set of clients whose gradient updates are geometrically 
+
+Table 1. Method comparison on CTU-13 (13 botnet campaigns) and UNSW-NB15 (9 attack-family campaigns), mean ± SD across 3 seeds ( E=1 , learning rate 10 −4). 
+
+Takeaway : the FL server recovers campaign cohorts from gradient geometry across methods, but on CTU-13 the contrastive variants are statistically comparable to Fe-dAvg and to the label-only control. Bold : within 1 SD of the best CTU-13 value per column; UNSW-NB15 entries are comparable within variance and left unmarked. F1 Peak ARI Mean ARI (R1–7) NMI Method CTU-13 UNSW CTU-13 UNSW CTU-13 UNSW CTU-13 UNSW Local-only 0.48 ± 0.01 0 .42 ± 0.26 – – – – – –                                                                                                                                               
+
+> FedAvg 0.49 ±0.01 0 .48 ±0.09 0.97 ±0.05 0.58 ±0.33 0.80 ±0.16 0.47 ±0.33 0.95 ±0.05 0.84 ±0.08
+> FedProx 0.49 ±0.00 0 .49 ±0.10 0 .89 ±0.09 0 .58 ±0.33 0 .69 ±0.17 0 .49 ±0.30 0 .88 ±0.06 0 .84 ±0.08
+> SCAFFOLD 0.36 ±0.19 0 .23 ±0.20 0 .59 ±0.13 0 .42 ±0.37 0 .42 ±0.18 0 .06 ±0.05 0 .81 ±0.06 0 .82 ±0.03
+> FedProx +IoC 0.49 ±0.01 0 .45 ±0.08 0 .89 ±0.09 0 .58 ±0.33 0.76 ±0.16 0.43 ±0.29 0.93 ±0.07 0.89 ±0.09
+> SCAFFOLD +IoC 0.28 ±0.16 0 .23 ±0.20 0 .72 ±0.09 0 .33 ±0.37 0 .36 ±0.23 0 .05 ±0.05 0 .79 ±0.10 0 .82 ±0.03
+> FedAvg +SupCon-lbl 0.50 ±0.01 0 .43 ±0.09 0.94 ±0.10 0.53 ±0.27 0.86 ±0.16 0.39 ±0.24 0.93 ±0.07 0.86 ±0.06
+> FedIoC (ours) 0.50 ±0.01 0 .45 ±0.08 0.97 ±0.05 0.58 ±0.33 0.85 ±0.14 0.43 ±0.32 0.94 ±0.05 0.89 ±0.09 FedIoC : Attack Campaign Detection via IoC Encoding 11
+
+proximate, which our results tie to a shared campaign-correlated traffic distribu-tion, not to the indicator-specific component alone. The server’s cluster output is thus an implicit campaign-cohort report: it identifies which organizations ob-serve the same attacker infrastructure without any organization disclosing which specific indicators it holds (raw-indicator exposure only; cohort membership and gradient-inversion channels are discussed in App. B). Detection concentrates in early rounds: client gradients are most campaign-discriminative while clients are still diverging from a common initialization, and as the shared model converges they grow more homogeneous and the campaign signal weakens. Practically, this matches the operational lifecycle of IP-based IoC [16], for which indicators are most actionable immediately after issuance. 
+
+4.2 Classification Performance 
+
+The two-pass design (Sec. 2.3) yields approximate non-interference : the IoC pass leaves classification essentially unchanged, with FedIoC ’s macro-F1 within noise of FedAvg on both datasets (CTU-13 0.50 vs 0.49 ; UNSW-NB15 0.45 vs 
+
+0.48 ), and the label-only control matching it as well ( 0.50 / 0.43 ). Absolute F1 is modest across all non-degenerate methods ( 0.43 –0.50 ) at this configuration, which favors gradient-clustering stability ( E=1 , lr 10 −4) over classifier fitting; the SCAFFOLD variants are degenerate here (F1 0.23 –0.36 , high variance). So while the IoC objective does not degrade detection, it also does not improve it, mirroring the clustering result. Class imbalance (2.2% botnet traffic in CTU-13) is handled by class-weighted cross-entropy on all training flows; the contrastive loss operates over penultimate embeddings without separate class weighting. 
+
+## 5 Related Work 
+
+FL for Threat Detection and Gradient-Level Encoding. FL has been applied ex-tensively to NIDS and IoT anomaly detection [4]; surveys of federated cyber intelligence [24] confirm that existing systems treat IoC exclusively as training-time artifacts, so the gradient is a statistical artifact of local loss minimization and not a vehicle for encoded threat knowledge. Dataset condensation via gra-dient matching [26] establishes that gradients can be sculpted to carry specific semantic knowledge, the key property FedIoC exploits: same-campaign clients produce contrastively-aligned gradients the server can cluster without observing any raw indicator. 
+
+FL Aggregation under Heterogeneity. FedAvg [17], FedProx [15], and SCAF-FOLD [11] are the standard FL aggregation methods for non-IID settings; Fed-Prox and SCAFFOLD specifically aim to suppress inter-client gradient diver-gence via proximal regularization and variance reduction with control variates, respectively. FedIoC takes the opposite stance: instead of suppressing gradient divergence, it reads the divergence already present under non-IID partitions as a 12 Röder et al. 
+
+campaign signal and clusters on it. In our experiments the contrastive term com-poses acceptably with proximal regularization ( FedProx ) but interacts poorly with variance reduction ( SCAFFOLD ), which is unstable in our regime; char-acterizing these interactions is left open. 
+
+Supervised Contrastive Learning and FL. Supervised contrastive learning [13] extends the self-supervised SimCLR framework [5] to the labeled setting: same-class samples form the positive set, and the loss maximizes their embedding similarity relative to all other batch samples. Bringing this objective into fed-erated learning, the closest prior work is MOON [14], which contrasts each client’s local representation against the global model to curb non-IID client drift. 
+
+FedIoC inverts this: instead of contrasting against the global model to sup-press drift, it contrasts indicator-matched flows within each client so that same-campaign clients produce aligned gradient directions, repurposing the super-vised contrastive signal from a drift regularizer into a server-readable campaign-coordination primitive. 
+
+Research Gap. All three threads miss the same opportunity: none uses the client gradient to carry threat-indicator structure that a server can read to recover campaigns across organizations. Federated threat-detection systems treat IoC as training labels and stop at per-flow classification [24,4]. Aggregation methods treat inter-client gradient divergence as instability to suppress, not as a signal. And supervised contrastive learning shapes embeddings inside one model, never to align gradients across clients. FedIoC fills this gap: it encodes indicators contrastively so that each client’s gradient signals its campaign membership, and the server clusters these gradients to recover the global campaign partition. 
+
+## 6 Conclusion 
+
+We propose a modular framework for gradient-space campaign attribution that gives the main research question of Section 1 a partial, affirmative answer: the server detects campaign cohorts by cosine clustering over the uploaded gradients, without raw indicator transmission. However, our controlled study shows this recovery arises largely from the non-IID gradient structure, since the indicator-weighted objective is not separable from a label-only control on the benchmark dataset; we therefore offer FedIoC as an initial infrastructure for follow-up in-vestigation. Future work: The highest-priority target is evaluating more effec-tive gradient-encoding methods within our novel framework.Further directions include whether the encoding channel is task-agnostic (the cohort signal surviv-ing when clients optimize an unrelated primary task such as image classification, making gradient-level coordination general-purpose), streaming-campaign pro-tocols in which indicators arrive mid-federation, and extension to richer cyber observables such as file hashes or registry key changes.  
+
+> Acknowledgments. This work is funded by the European Regional Development Fund (ERDF) under grant FKZ: 2404-003-1.2 (EU-EFRE GREEN-INNO), as well as by ProPere THWS, the Center for Cybersecurity TTZ-WUE, and the Center for Artificial Intelligence Würzburg (CAIRO).
+
+FedIoC : Attack Campaign Detection via IoC Encoding 13 
+
+## References 
+
+1. Abadi, M., Chu, A., Goodfellow, I.J., McMahan, H.B., Mironov, I., Talwar, K., Zhang, L.: Deep learning with differential privacy. In: Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communications Security (CCS). pp. 308–318. ACM (2016). https://doi.org/10.1145/2976749.2976803 
+
+2. Alaeifar, P., Pal, S., Jadidi, Z., Hussain, M., Foo, E.: Current approaches and future directions for cyber threat intelligence sharing: A survey. Journal of Information Security and Applications 83 , 103786 (2024). https://doi.org/10.1016/j.jisa. 2024.103786 
+
+3. Bonawitz, K., Ivanov, V., Kreuter, B., Marcedone, A., McMahan, H.B., Patel, S., Ramage, D., Segal, A., Seth, K.: Practical secure aggregation for privacy-preserving machine learning. In: Proceedings of the 2017 ACM SIGSAC Conference on Computer and Communications Security (CCS). pp. 1175–1191. ACM (2017). 
+
+https://doi.org/10.1145/3133956.3133982 
+
+4. Campos, E.M., Saura, P.F., González-Vidal, A., Hernández-Ramos, J.L., Bernabé, J.B., Baldini, G., Skarmeta, A.: Evaluating federated learning for intrusion detec-tion in the internet of things: Review and challenges. Computer Networks 203 ,108661 (2022). https://doi.org/10.1016/j.comnet.2021.108661 
+
+5. Chen, T., Kornblith, S., Norouzi, M., Hinton, G.: A simple framework for con-trastive learning of visual representations. In: Proceedings of the 37th International Conference on Machine Learning (ICML). Proceedings of Machine Learning Re-search, vol. 119, pp. 1597–1607. PMLR (2020), https://proceedings.mlr.press/ v119/chen20j.html 
+
+6. European Parliament and Council of the European Union: Regulation (EU) 2016/679 on the protection of natural persons with regard to the processing of personal data (GDPR). Tech. rep., Official Journal of the European Union (2016), available: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng 
+
+7. European Parliament and Council of the European Union: Directive (EU) 2022/2555 on measures for a high common level of cybersecurity across the union (NIS-2). Tech. rep., Official Journal of the European Union (2022), available: 
+
+https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng 
+
+8. Garcia, S., Grill, M., Stiborek, J., Zunino, A.: An empirical comparison of botnet detection methods. Computers & Security 45 , 100–123 (2014). https://doi.org/ 10.1016/j.cose.2014.05.011 
+
+9. Geiping, J., Bauermeister, H., Dröge, H., Moeller, M.: Inverting gradients — how easy is it to break privacy in federated learning? In: Advances in Neural Information Processing Systems (NeurIPS). vol. 33, pp. 16937–16947 (2020) 10. Hubert, L., Arabie, P.: Comparing partitions. Journal of Classification 2(1), 193– 218 (1985). https://doi.org/10.1007/BF01908075 
+
+11. Karimireddy, S.J., Kale, S., Mohri, M., Sra, S., Stich, S.U., Suresh, A.T.: SCAF-FOLD: Stochastic controlled averaging for federated learning. In: Proceedings of the 37th International Conference on Machine Learning (ICML). Proceed-ings of Machine Learning Research, vol. 119, pp. 5132–5143. PMLR (2020), 
+
+https://proceedings.mlr.press/v119/karimireddy20a.html 
+
+12. Khan, A., ten Thij, M., Wilbik, A.: Vertical federated learning: a structured liter-ature review. Knowl. Inf. Syst. 67 (4), 3205–3243 (2 2025). https://doi.org/10. 1007/s10115-025-02356-y , https://doi.org/10.1007/s10115-025-02356-y 
+
+13. Khosla, P., Teterwak, P., Wang, C., Sarna, A., Tian, Y., Isola, P., Maschinot, A., Liu, C., Krishnan, D.: Supervised contrastive learning. In: Advances in Neural Information Processing Systems (NeurIPS). vol. 33, pp. 18661–18673 (2020) 14 Röder et al. 14. Li, Q., He, B., Song, D.: Model-contrastive federated learning. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 10713–10722 (2021). https://doi.org/10.1109/CVPR46437.2021.01057 
+
+15. Li, T., Sahu, A.K., Zaheer, M., Sanjabi, M., Talwalkar, A., Smith, V.: Federated optimization in heterogeneous networks. In: Proceedings of Machine Learning and Systems (MLSys). vol. 2, pp. 429–450 (2020) 16. Liao, X., Yuan, K., Wang, X., Li, Z., Xing, L., Beyah, R.: Acing the IOC game: To-ward automatic discovery and analysis of open-source cyber threat intelligence. In: Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communi-cations Security (CCS). pp. 755–766 (2016). https://doi.org/10.1145/2976749. 2978315 
+
+17. McMahan, B., Moore, E., Ramage, D., Hampson, S., y Arcas, B.A.: Communication-efficient learning of deep networks from decentralized data. In: Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS). Proceedings of Machine Learning Research, vol. 54, pp. 1273–1282. PMLR (2017), https://proceedings.mlr.press/v54/mcmahan17a. html 
+
+18. Moustafa, N., Slay, J.: UNSW-NB15: A comprehensive data set for network in-trusion detection systems. In: 2015 Military Communications and Information Systems Conference (MilCIS). pp. 1–6. IEEE (2015). https://doi.org/10.1109/ MilCIS.2015.7348942 
+
+19. Müllner, D.: Modern hierarchical, agglomerative clustering algorithms (2011), 
+
+https://arxiv.org/abs/1109.2378 
+
+20. Nguyen, T., Rieger, P., Chen, H., Yalame, H., Möllering, H., Fereidooni, H., Mar-chal, S., Miettinen, M., Mirhoseini, A., Zeitouni, S., Koushanfar, F., Sadeghi, A.R., Schneider, T.: FLAME: Taming backdoors in federated learning. In: 31st USENIX Security Symposium. pp. 1415–1432. USENIX Association (2022) 21. OASIS Open: STIX version 2.1. Tech. rep., OASIS Standard (2021), available: 
+
+https://docs.oasis-open.org/cti/stix/v2.1/stix-v2.1.html 
+
+22. Sokolova, M., Lapalme, G.: A systematic analysis of performance measures for classification tasks. Information Processing & Management 45 (4), 427–437 (2009). 
+
+https://doi.org/10.1016/j.ipm.2009.03.002 
+
+23. Strehl, A., Ghosh, J.: Cluster ensembles – a knowledge reuse framework for combin-ing multiple partitions. Journal of Machine Learning Research (JMLR) 3, 583–617 (2002) 24. Tabrizchi, H., Aghasi, A.: Federated Cyber Intelligence: Federated Learning for Cybersecurity. SpringerBriefs in Computer Science, Springer (2025). https://doi. org/10.1007/978-3-031-86592-3 
+
+25. Wagner, C., Dulaunoy, A., Wagener, G., Iklody, A.: MISP: The design and imple-mentation of a collaborative threat intelligence sharing platform. In: Proceedings of the 2016 ACM Workshop on Information Sharing and Collaborative Security (WISCS). pp. 49–56. ACM (2016). https://doi.org/10.1145/2994539.2994542 
+
+26. Zhao, B., Mopuri, K.R., Bilen, H.: Dataset condensation with gradient matching. In: International Conference on Learning Representations (ICLR) (2021) FedIoC : Attack Campaign Detection via IoC Encoding 15 
+
+## Appendix A Implementation Details 
+
+Model and optimization. The global model is a three-hidden-layer MLP (in-put → 256 → 128 → 64 → output) with ReLU activations and dropout 0.3, operating on five flow-level features: duration, total packets, total bytes, source bytes, and protocol (encoded as an integer). Training uses the Adam optimizer with learning rate 1 × 10 −4, batch size 256, and E = 1 local epoch per round. 
+
+E = 1 is deliberate: additional local epochs homogenize client gradients and col-lapse the cosine-similarity structure the server clusters on (CTU-13 Peak ARI falls from 0.97 at E=1 to below 0.40 at E=10 ). The clustering signal is likewise sensitive to the local learning rate: at 10 −4 plain FedAvg already recovers cam-paigns well, whereas a larger rate ( 10 −3) suppresses the baseline and inflates the apparent benefit of the contrastive objective, which is why we report the smaller, more conservative rate. The reported experiments use sample_frac = 0 .1 (10% of each scenario’s rows) to enable rapid iteration. 
+
+Hyperparameters. We use λ=1 .0 on both datasets; the clustering threshold is ε=0 .5 on CTU-13 and ε=0 .07 on UNSW-NB15. The contrastive tempera-ture is τ =0 .1 throughout, and FedProx uses the literature-standard μ=0 .01 .Because g(t) 
+
+> i, IoC
+
+= ( θ(t−1) − θIoC  
+
+> i
+
+)/η accumulates one full Phase II epoch of mini-batch SGD steps, the effective contrastive strength scales with the number of IoC-bearing batches per client; the headline λ=1 .0 is therefore not directly portable across datasets with very different IoC-match counts, and a λ rescaled by Phase II step count (or an explicit server learning rate separate from η) is the natural reformulation for cross-dataset transfer. Other baseline hyperparameters are held at standard literature values. 
+
+Detection window. The 7-round window for ¯ARI is motivated operationally by the short actionable lifetime of IP-based IoC [16]: source-IP indicators typically remain useful for hours to a few days before attacker infrastructure rotation degrades coverage, corresponding to the earliest federation rounds under any realistic round cadence. We complement the early-window mean with Peak ARI throughout to make the round at which each method’s signal is strongest visible to the reader, and report all-rounds curves in the per-round figures so the early-window choice does not hide late-round behaviour. 
+
+## B Threat Model and Privacy Properties 
+
+FedIoC assumes an honest-but-curious server and honest clients. The mecha-nism guarantees one concrete property: raw IoC patterns never leave the client; only the blended gradient g(t) 
+
+> i
+
+is transmitted, and when I(t) 
+
+> i
+
+= ∅ this reduces to a standard FedAvg update. FedIoC does not defend against (i) gradient inver-sion attacks [9], (ii) malicious clients injecting adversarial indicators (analogous to FL data poisoning [20]), or (iii) a compromised server using the cohort report offensively; the cohort graph itself is a sensitive artifact whose governance lies 16 Röder et al. 
+
+outside the protocol guarantees of FedIoC . Gradient inversion is a particular concern because the IoC-contrastive component λg (t) 
+
+> i, IoC
+
+encodes IoC-membership by design, so inversion targets the matched source IPs more directly than the CE component alone, and per-round observation of g(t) 
+
+> i
+
+compounds across rounds as a separate leakage channel. Secure aggregation [3] is structurally incompatible with the per-client visibility our clustering requires, so the relevant mitigation is per-client differential privacy on the IoC component instead of aggregation-time hiding; FedIoC provides no formal differential-privacy guarantee, and bounding 
+
+I(g(t) 
+
+> i
+
+; I(t) 
+
+> i
+
+) together with applying DP [1] to the IoC gradient component are left to future work.

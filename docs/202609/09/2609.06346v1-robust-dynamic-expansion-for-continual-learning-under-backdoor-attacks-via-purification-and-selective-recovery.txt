@@ -1,0 +1,1250 @@
+Title: Robust Dynamic Expansion for Continual Learning under Backdoor Attacks via Purification and Selective Recovery
+
+URL Source: https://arxiv.org/pdf/2609.06346v1
+
+Published Time: Wed, 09 Sep 2026 01:03:31 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> 1
+
+# Robust Dynamic Expansion for Continual Learning under Backdoor Attacks via Purification and Selective Recovery 
+
+Keyu Lin, Fei Ye*, Qihe Liu, Shijie Zhou, and Jiguo Yu, Fellow, IEEE 
+
+Abstract —Continual learning (CL) enables models to acquire new knowledge from sequentially arriving tasks while retaining previously learned knowledge. However, in practical scenarios, task streams collected from untrusted sources may contain backdoor-poisoned samples, posing a critical challenge to the stability, plasticity, and security of continual learners. In this work, we investigate a challenging setting termed Continual Learning Under Backdoor Attack (CLUBA), where each incremental task may involve a small proportion of maliciously manipulated training samples. Unlike conventional continual learning or backdoor defense scenarios, CLUBA requires models to simultaneously mitigate catastrophic forgetting, preserve adaptation capability, and prevent the absorption of malicious supervision during sequential updates. To address this challenge, we propose a robust dynamic-expansion framework that integrates sample purification, selective recovery, and robust expert routing into a unified con-tinual learning paradigm. Specifically, we introduce Bi-Prototype Purification (BPP) to identify suspicious samples by exploiting semantic discrepancies in feature space. Based on purified data, Gradient Discrepancy-based Robustness Optimization (GDBRO) selectively recovers informative poisoned samples through pseudo-label correction and gradient consistency evaluation, improving robustness while maintaining model plasticity. Furthermore, Robust Feature Consistency-based Expert Selection (RFCBES) constructs perturbation-aware class prototypes to enable reliable expert routing under corrupted or shifted inputs. 
+
+Index Terms —Continual learning, backdoor attacks, robust learning, dynamic expansion, expert selection. 
+
+I. I NTRODUCTION 
+
+# CONTINUAL learning (CL) corresponds to a training paradigm in which the model is sequentially exposed to discrete tasks, with access restricted to only a small subset of samples belonging to the current task, while all previous training data become unavailable. Optimization under this paradigm typically induces significant performance degradation on previously learned tasks, a well-documented phenomenon termed catastrophic forgetting [1]. This degradation stems from the tendency of the standard training process to overwrite model parameters wholesale in adapting to new task data. To mitigate these issues, numerous methodologies have been developed, broadly categorized into three families: regularization-based methods [2], which impose constraints on updates to parameters deemed important for prior tasks; memory replay approaches [3], which leverage a fixed-capacity buffer of exemplars to 
+
+Keyu Lin, Fei Ye, Qihe Liu, Shijie Zhou, and Jiguo Yu are with the University of Electronic Science and Technology of China, Chengdu 610054, China (e-mail: 202522090409@std.uestc.edu.cn; feiye@uestc.edu.cn; qiheliu@uestc.edu.cn; sjzhou@uestc.edu.cn; jiguoyu17@uestc.edu.cn). * Corresponding author. 
+
+preserve knowledge through rehearsal; and dynamic network ar-chitectures [4], which expand network capacity by instantiating new parameters for learning emerging tasks. In practical applications, continual learners are often updated with continuously arriving data collected from heterogeneous and potentially unreliable sources [5]. Such data streams may contain maliciously manipulated samples designed to implant hidden behaviors into the model. This motivates a more challenging setting, referred to as Continual Learning Under Backdoor Attack (CLUBA), where each task may contain a small proportion of backdoor-poisoned training samples. Compared with conventional continual learning, CLUBA introduces an additional security constraint: the learner must not only preserve previous knowledge and adapt to new tasks, but also avoid absorbing malicious supervision during incremental updates. The difficulty of CLUBA arises from the strong coupling among three objectives. First, the model must maintain stability to prevent catastrophic forgetting of previous tasks. Second, it must retain sufficient plasticity to learn new task-specific knowledge from limited current-task data. Third, it must achieve robustness against poisoned supervision, which may otherwise induce incorrect feature representations and trigger–label asso-ciations. These objectives are inherently conflicting: aggressive adaptation may amplify malicious patterns, while conservative optimization may suppress useful task information. Therefore, directly applying conventional continual learning or backdoor defense methods often leads to unsatisfactory performance under sequential poisoning scenarios. To mitigate the threat posed by poisoning examples within CL, an early defense mechanism, termed the Anisotropic and Isotropic Replay (AIR) [5], incorporates a strategic replay buffer. This mechanism combines three distinct replay paradigms with a consistency regularization loss term to counteract catastrophic forgetting and improve model robust-ness. Another approach examines differential logit calibration between historical and newly encountered tasks to regulate gradient dynamics and introduces a gradient-selection criterion for preserving critical exemplars into the memory buffer [6]. Nevertheless, these methods primarily address adversarial robustness in continual learning; their objectives do not directly provide the task-local identification and selective recovery of backdoor-poisoned samples considered here. Furthermore, these methodologies typically utilize a fixed-capacity replay buffer for storing exemplars extracted from previous tasks. Such a design requires retaining historical training examples and demonstrates arXiv:2609.06346v1 [cs.LG] 6 Sep 2026 2
+
+constrained effectiveness in managing extended sequences of tasks [7]. In this paper, we propose a robust dynamic-expansion framework for CLUBA based on a principle: corrupted samples should not be treated as uniformly unusable; instead, they should be identified, filtered, and selectively recovered when-ever their supervision can be corrected reliably. Building on this principle, our framework combines three components that address the three central challenges of CLUBA in a coordinated way. (1) Bi-Prototype Purification (BPP) separates each class into candidate clean and candidate poisoned subsets in semantic feature space, exploiting the observation that poisoned samples tend to deviate from the dominant semantic structure of their class. (2) Gradient Discrepancy-based Robustness Optimization (GDBRO) first warms up the current expert on purified clean data to recover plasticity, and then selectively reincorporates reliable candidate poisoned samples through pseudo-label correction and gradient-based filtering to improve robustness without amplifying label noise. (3) Robust Feature Consistency-based Expert Selection (RFCBES) constructs perturbation-aware class prototypes for inference-time routing, making expert selection more reliable under corrupted or shifted inputs. Our method differs from prior continual learning approaches in two key aspects. First, rather than viewing robustness as an auxiliary add-on to anti-forgetting mechanisms, we treat robustness and continual adaptation as a joint optimization problem. Second, instead of relying on replay buffers to compensate for corrupted updates, we leverage task-local purifi-cation and selective recovery to improve both robustness and plasticity while preserving the benefits of dynamic expansion. We evaluate the proposed framework on multiple continual backdoor benchmarks under both clean and poisoned settings. The results show that our method consistently outperforms strong baselines, achieving better robustness on current tasks while maintaining competitive retention on previous ones. The contributions of this paper are summarized as : (1) We study CLUBA, a continual learning setting in which each task may contain a small fraction of poisoned training samples, and highlight the joint challenge of forgetting, weak robustness, and reduced plasticity; (1) We propose a unified robust dynamic-expansion framework that couples purification, selective poisoned-sample recov-ery, and robust expert routing, rather than treating these goals independently; (1) We demonstrate through extensive experiments that the pro-posed framework improves both adaptation and retention under task-wise backdoor attacks, outperforming strong continual learning baselines across multiple benchmarks. II. R ELATED WORK 
+
+Continual Learning. Continual Learning (CL) addresses catastrophic forgetting when learning from a task stream [1], [8]. Regularization-based methods such as EWC [2], SI [9], MAS [10], and LwF [11] constrain important parameters or preserve historical predictions. Replay-based methods [12]–[16] rehearse stored examples, whereas gradient-based methods such as GEM and A-GEM project new-task gradients to reduce interference with previously acquired knowledge [17], [18]. Prompt-based approaches, including L2P [19], Dual-Prompt [20], CODA-Prompt [21], and HiP [22], as well as parameter-efficient adaptation methods [23], [24], reduce the number of parameters updated for each new task. Recent pre-trained-model-based approaches further improve the stability–plasticity trade-off by integrating representations from multiple pre-trained backbones and adaptively controlling the optimization of individual representation layers [25]. When historical samples cannot be retained because of privacy or storage constraints, data-free knowledge distillation provides an alternative means of transferring prior knowledge [26]. Continual-learning techniques have also been extended to generative settings, where task-aware memory enhancement and elastic-concept distillation preserve previously learned concepts during lifelong text-to-image generation [27]. Nevertheless, these methods generally assume that the incoming training data are benign and do not explicitly address backdoor-corrupted task streams. 
+
+Backdoor Attacks and Defenses. Backdoor attacks inject hidden triggers (BadNets [28], Blend [29], WaNet [30], ISSBA [31], Clean-Label [32], BadToken [33]). In CL, models are uniquely vulnerable to sequential data poisoning [34], [35]. Since traditional backdoors suffer from forgetting, recent works motivate persistent attacks like LTB [36] (targeting stable neurons) and CBACL [37] (addressing label shift via anchor features). Defenses include fine-tuning [38], Neural Cleanse [39], Fine-Pruning [40], STRIP [41], ABL [42], AC [43], NAD [44], ANP [45], I-BAU [46], and adversarial inspection [47], [48]. However, most static defenses fail against dynamic CL threats. 
+
+Dynamic Networks for Continual Learning. Architecture-based continual-learning methods isolate task knowledge through dynamic network expansion [4], [49], [50]. Rep-resentative methods such as DEM [51] and DyTox [52] preserve previously learned components while allocating ad-ditional capacity to new tasks, whereas mixture-of-experts adapters [23] improve parameter efficiency. More recently, the Adaptive and Expandable Mixture Model employs invariant and evolving representation networks and incrementally introduces lightweight expert modules, thereby balancing stable knowledge preservation with adaptive representation learning [53]. The Dynamic Siamese Expansion Framework similarly combines static and dynamic backbones, but additionally optimizes the resulting representations to improve robustness against adversarial perturbations [54]. Despite these advantages, dynamic architectures remain vulnerable to training-time backdoor attacks. A newly allocated expert may directly learn trigger–label associations from its current task, while freezing that expert can cause the acquired backdoor to persist throughout subsequent tasks. Moreover, existing robust dynamic-expansion methods primarily con-sider adversarial perturbations rather than task-wise backdoor poisoning. Consequently, systematically securing dynamic experts against poisoned continual-learning streams remains underexplored. 
+
+Security Implications of Continual Learning Strategies. 
+
+The security behavior of a continual learner is closely related 3Dataset 
+
+Task 1 
+
+Task 2 
+
+Task  i
+
+A
+
+B Training Phase  C Expert Routing 
+
+Backbone  Dynamic Expert Pool  
+
+> Expert 𝝎 𝒊
+> FC Layer  𝐹 𝜃 𝑖
+> 𝑓
+
+Detection 
+
+(Bi -Prototype Purification) 
+
+H𝑖 (Clean set) 
+
+> (poisoned
+
+H
+
+> x𝑎
+
+෩𝑖 
+
+> set)
+
+Correction 
+
+(GDBRO)  
+
+> 𝜔 𝑖
+> Historical Experts
+> 𝜔 1
+> 𝐹 disc (
+> 𝐹 cos (∇,∇ ')
+> x෤,𝜔 𝑠 ∗)< 𝜆
+> Routing
+
+H𝑖 ෡ (Robust set)    
+
+> Prototype Bank
+> Class
+> Prototypes
+> Test Sample
+> 𝜔
+> t
+> 𝜔 1
+> Experts
+> Compute
+> Distance
+> 𝑆 11
+> 𝑆 21
+> 𝑆 𝑡 1
+> 𝑆 ′1
+> m
+> 𝑆 ′n
+> SoftMax  Selector
+> Chosen Expert 𝑡 ∗
+> Expert 𝝎 𝟐
+> FC Layer
+> Classifier
+> Expert 𝝎 𝟏
+> FC Layer
+> Classifier
+
+𝐹 𝜉 
+
+> Classifier  𝐹 𝜃 𝑖 𝑐
+> 𝜔 𝑖
+
+𝐹 p(x ,𝜔 𝑖 )
+
+> -1
+> x𝑏
+> 。
+
+Sሚ 𝑖        
+
+> Fig. 1. Overview of our proposed continual data backdoor defense framework. (A) Overall Architecture: A shared backbone extracts features for sequential tasks, utilizing a Dynamic Expert Pool to prevent catastrophic forgetting. (B) Training Phase: The Bi-Prototype Purification (BPP) mechanism detects candidate poisoned samples. The proposed GDBRO module then rescues clean samples by evaluating gradient similarities against all experts, forming a robust training set. (C) Expert Routing: During inference, test samples are accurately routed to the optimal task-specific expert based on their feature distances to the robust class prototypes stored in the Routing Prototype Bank.
+
+to the mechanism used to preserve previous knowledge. Regularization-based methods constrain the modification of im-portant parameters or historical predictions; however, the same constraints may also preserve malicious behavior if a backdoor has already been incorporated into those parameters. Replay-based methods retain representative historical samples to mitigate forgetting, but a contaminated memory may repeatedly expose the model to poisoned examples and reinforce trigger– label associations. Similarly, parameter-isolation and dynamic-expansion methods prevent later tasks from overwriting earlier experts, but this isolation can also make an implanted backdoor difficult to remove once the corresponding expert has been frozen. Security-oriented continual learning has also been inves-tigated in cross-domain face anti-spoofing, where rehearsal-free adapters and attention-consistency regularization reduce forgetting while improving generalization to previously un-seen spoofing domains [55]. This setting demonstrates the importance of jointly considering knowledge retention and security-related generalization. Nevertheless, face anti-spoofing focuses on recognizing presentation attacks and domain shifts at inference time, rather than identifying poisoned training samples that implant hidden behavior during continual learning. 
+
+Backdoor Defense in the Continual Setting. Defenses can intervene at data purification, robust training, or model repair. Activation Clustering filters training data in feature space; Anti-Backdoor Learning changes the training objective to suppress trigger memorization; Neural Cleanse and Fine-Pruning examine or repair a trained model [39], [40], [42], [43]. Applying these strategies sequentially requires accounting for task-local data availability and the preservation of earlier benign knowledge. Our framework connects purification with robust training for each arriving task without requiring access to historical images. The resulting security problem couples stability, plasticity, and purification. Preserving learned functions can also preserve an already acquired backdoor, whereas aggressive updates intended to remove a backdoor can disturb benign knowledge. Adversarial continual-learning methods such as AFLC and AIR address robustness objectives that do not directly identify and selectively recover the backdoor-poisoned samples considered here. This motivates combining task-local data selection with isolated experts and a refined routing bank. III. M ETHODOLOGY 
+
+A. Problem Definition and Threat Model 
+
+The learning scenario. Continual learning seeks to optimize a model that can incrementally acquire new information while retaining previously acquired knowledge. Given a sequence of 
+
+n tasks {E 1, · · · , En}, each task Ei comprises a corresponding training dataset Di = {xj , yj }ni
+
+> j=1
+
+, where ni signifies the number of training samples within Di. Here, xj ∈ X and 
+
+yj ∈ Y denote the j-th training sample and its associated class label belonging to the data space X and label space Y,respectively. In the CLUBA scenario, a portion of the training dataset for each task Ei is corrupted according to a specified threat model. During the learning phase for each task Ei, the victim model has access exclusively to the current training dataset Di, while all prior datasets {D 1, · · · , Di−1} remain unavailable. 
+
+The threat model. The CLUBA scenario formulates each threat model as a data poisoning mechanism designed to corrupt a small subset of training samples. In this study, we consider implementing the data poisoning mechanism using the backdoor attack algorithm [56]. The defender receives the potentially poisoned task data and knows the permitted class 4
+
+set of the current training task. Attacker access depends on the attack configuration described in the experimental protocol. Specifically, for a given training dataset Di, a small, randomly selected subset ˜Di is drawn from Di. Each clean sample x
+
+within ˜Di is then adversarially corrupted by its corresponding threat model via the transformation ˜x = Mi(x). The resulting contaminated samples may include input perturbations, label corruption, or a combination thereof, contingent upon the specified threat model. This setting differs from standard continual learning in that the learner must simultaneously (i) retain knowledge from previous tasks, (ii) adapt to the current task, and (iii) avoid overfitting to corrupted supervision within the current task. 
+
+B. Dynamic Expansion Model 
+
+Within the domain of continual learning, the Dynamic Expansion Model (DEM) constitutes a potent strategy for mitigating forgetting. This architectural paradigm autonomously generates a new expert module for each subsequent task, while existing model parameters remain frozen to conserve previously acquired knowledge. By leveraging Pretrained Models (PTMs) as its foundational backbone, DEM augments performance in sequential task scenarios. Building upon its established efficacy, this work investigates a PTM-based dynamic expansion framework to address the problem of Continual Learning Under Backdoor Attack (CLUBA). Formally, let Fξ : X → Z 
+
+denote a primary representation network instantiated by a PTM. This network maps an input sample x to a representation 
+
+z ∈ Z within the feature space Z. To encapsulate task-specific information, an expert module Wi is defined, comprising a feature transformation function Fθfi
+
+: Z → Z ′ and a linear classifier Fθci : Z × Z ′ → Y , where subscript i indexes the expert. The transformation function Fθfi
+
+processes the output from the primary backbone Fξ to produce a task-specific representation z′ ∈ Z ′, where Z′ denotes the feature space. This representation is concatenated with the shared backbone feature and subsequently passed to the linear classifier Fθci to yield a prediction : 
+
+Fp(x, Wi) = Fθci ([ Fξ (x); Fθfi
+
+(Fξ (x))]) , (1) where y′ = Fp(x, Wi) is the predicted probability vector. For clarity, define the classifier input and normalized shared feature as hi(x) = [ Fξ (x); Fθfi
+
+(Fξ (x))] ,u(x) = Fξ (x)/ ∥Fξ (x)∥2 . (2) The shared ViT backbone remains frozen. BPP and expert routing use u(x); classification and sample-gradient evaluation use hi(x).
+
+C. Backdoor Sample Detecting via Bi-Prototype Purification Mechanism 
+
+Poisoned samples often differ from clean samples only through subtle perturbations in image or label space, making them difficult to detect directly at the pixel level. We therefore identify candidate poisoned samples in semantic feature space, where class-level structure is more stable. To achieve this goal, we introduce a novel Bi-Prototype Purification (BPP) mech-anism to identify backdoor samples by assessing knowledge similarity within the semantic feature space rather than the original image space. Specifically, when learning the i-th task 
+
+Ei, we obtain the training dataset Di, which may contain a small proportion of backdoor samples. The BPP mechanism first partitions Di into ci subsets {C1 
+
+> i
+
+, · · · , Cci 
+
+> i
+
+} based on category labels. Each subset, defined as Cji = Fsplit (Di, Cji ),comprises samples belonging to the same class : 
+
+Fsplit (Di, Cji )= {xs | Fcat (xs) = Cji , xs ∈ D i,s = 1 , . . . , |D i|} .
+
+(3) where the symbol Cji denotes the classification label associated with cluster Cji , while the function Fcat (·) provides the observed training label for any given data sample xs. The cardinality |D i| represents the total sample count in dataset 
+
+Di. As each class subset may contain backdoor instances, BPP separates candidate clean and suspicious data using two-center clustering of normalized shared features. Samples whose observed labels fall outside the current task’s permitted class set are first assigned to the suspicious set. For each remaining class, the clustering objective is 
+
+min 
+
+> μa,μ b,z s∈{ a,b }
+
+X
+
+> xs∈Cji
+
+∥u(xs) − μzs ∥22 . (4) The resulting groups Hj,i a and Hj,i b contain samples assigned to their respective centers. Define their mean within-cluster distances and the smaller-cluster fraction by 
+
+dk = 1
+
+|Hj,i k |
+
+X
+
+> x∈Hj,i k
+
+∥u(x) − μk∥2 ,r = min( |Hj,i a |, |Hj,i b |)
+
+|Cji | .
+
+(5) BPP exploits the observation that a shared trigger may induce a compact subcluster, whereas benign examples exhibit greater semantic diversity. To avoid forcing a split in balanced, naturally multimodal classes, the whole class is retained when r > 0.35 
+
+and its sample count is at most 1.5 times the median count over present valid classes. Otherwise, the more dispersed group is retained as candidate clean data and the more compact group is marked suspicious. Classes with fewer than ten examples or degenerate clustering outcomes are retained without splitting. For notational brevity, Hj,i and ˜Hj,i denote the candidate clean and suspicious subsets for class j in task i. Their unions form Hi and ˜Hi. These are selection decisions rather than ground-truth clean/poison labels; GDBRO subsequently evaluates suspicious samples for selective recovery. 
+
+Implementation and fallback conventions. The two-center K-Means procedure uses ten initializations and random state 42. If the within-cluster dispersions are tied, cluster 1 is retained. A clustering exception or a single occupied cluster causes the whole valid class to be retained. Together with the small-class and balance/count checks described above, these conventions avoid imposing a clean/poison split when the clustering result is uninformative. 5                                             
+
+> TABLE I BASIC IMAGE CONFIGURATIONS AND PREPROCESSING TRANSFORMATIONS .
+> Dataset Original Size Phase Resizing & Augmentation
+> Split CIFAR-10 3×32 ×32 Training Random crop (pad 4), Horizontal Flip, Resize 224 ×224
+> Testing Resize 224 ×224
+> Split CIFAR-100 3×32 ×32 Training Random crop (pad 4), Horizontal Flip, Resize 224 ×224
+> Testing Resize 224 ×224
+> Split Tiny-ImageNet 3×64 ×64 Training Random crop (pad 4), Horizontal Flip, Resize 224 ×224
+> Testing Resize 224 ×224
+
+D. Gradient Discrepancy-based Robustness Optimization 
+
+Training only on the purified clean set Hi can protect the active expert from corrupted supervision, but it also discards potentially useful information contained in the candidate poisoned subset. To balance robustness and plasticity, we introduce Gradient Discrepancy-based Robustness Optimization (GDBRO) to correct backdoor samples and integrate them during the training process. Specifically, the proposed GDBRO mechanism consists of a warm-up optimization process to enhance the model’s discrimination ability and an integration optimization process to selectively integrate many critical training samples for improving model robustness. 
+
+The warm-up optimization process. This strategy aims to optimize the current expert module Wi on the clean training dataset Hi during the i-th task learning. This is implemented by using the cross-entropy loss, expressed as : 
+
+Lwarm 
+
+= E(x,y)∼PHi
+
+−
+
+> |Y|
+
+X
+
+> j=1
+
+y[j] log Fp(x, Wi)[ j]
+
+ . (6) where PHi denotes the distribution of the set Hi and |Y| 
+
+represents the total number of categories. y[j] and Fp(x, Wi)[ j]
+
+denote the j-th dimension of the class label y and the predicted vector Fp(x, Wi), respectively. Once the training process of the current active expert Wi is finished, the proposed GDBRO mechanism captures the statistical information for each category by determining the class prototype, which can be used for the backdoor sample correction process. Specifically, for the given set Hj,i , the class prototype is the normalized mean of normalized shared features: 
+
+Sj,i = normalize 1
+
+|Hj,i |
+
+X
+
+> x∈Hj,i
+
+u(x)
+
+!
+
+. (7) Its corresponding classifier input is href  
+
+> i,j
+
+= [ Sj,i ; Fθfi
+
+(Sj,i )] .The target-class row of the cross-entropy classifier-weight gradient is cached after warm-up. This reference captures class-level information for the subsequent correction process. 
+
+The integration optimization process. Many backdoor data samples would contain perturbations on the class label and image spaces. Correcting these samples with reliable pseudo-labels and integrating them into the training process can enhance the model’s robustness against backdoor samples. To achieve this goal, one reasonable approach is to use the learned expert Wi to generate the pseudo-label for a given sample ˜x from the set ˜Hj,i . However, the presence of adversarial perturbations within the samples precludes any guarantee regarding the correctness of the generated pseudo-labels. To address this issue, the proposed GDBRO mechanism introduces a new gradient discrepancy-based sample selection process that evaluates the similarity between novel instances and class prototypes with identical labels within gradient space. Specifically, for a given sample ˜x ∈ ˜Hj,i , the proposed GDBRO mechanism first determines an appropriate expert during the 
+
+i-th task learning by comparing the confidence levels among experts, expressed as : 
+
+Ffind (˜ x)= argmax 
+
+> s=1 ,...,i
+
+n
+
+max 
+
+> t=1 ,..., |Y|
+
+Fp(˜ x, Ws)[ t]
+
+o
+
+. (8) where s⋆ = Ffind (˜ x) denotes the index of the selected expert used for generating the pseudo-label y′ = Flabel (Fp(˜ x, Ws⋆ )) .
+
+Flabel (·) is a function that transfers the probability vector to a class label. In order to assess the class-reference consistency of the pseudo-label y′, the proposed GDBRO mechanism evaluates the gradient discrepancy between the given sample ˜x and the corresponding class prototype, expressed as : 
+
+Fdisc (˜ x, Ws⋆ ) = 1 − Fcos (∇, ∇′),
+
+∇ = ∇Ws⋆ [y′,:] LCE (hs⋆ (˜ x), y ′),
+
+∇′ = gref  
+
+> s⋆,y ′
+
+.
+
+(9) where y′ is the predicted class used as the target for both the sample and its cached reference. Only row y′ of classifier weights Ws⋆ is differentiated, rather than the full classifier or model. Samples without an available class-reference gradient are skipped. In the following cross-entropy expression, y
+
+denotes this one-hot pseudo-label: 
+
+LCE (Ws⋆ , z, y)= −
+
+> |Y|
+
+X
+
+> j=1
+
+y[j] log Fθcs⋆ (z)[ j] . (10) where Fθcs⋆ (z)[ j] denotes the j-th dimension of the predicted vector returned by Fθcs⋆ (z). Fcos (·, ·) evaluates the cosine sim-ilarity between the two target-row gradient vectors, expressed by: 
+
+Fcos (∇, ∇′) = 
+
+P|∇|  
+
+> j=1
+
+∇[j]∇′[j]
+
+qP|∇| 
+
+> i=1
+
+(∇[i]) 2
+
+qP|∇| 
+
+> i=1
+
+(∇′[i]) 2
+
+, (11) where |∇| denotes the dimension of the gradient vector ∇.
+
+∇[j] and ∇′[j] represent the j-th dimension of the gradient vectors ∇ and ∇′, respectively. A high gradient discrepancy score calculated by Eq. (9) indicates that the data ˜x is far 6
+
+away from the semantic feature center of the same class label and suggests weaker support for the generated pseudo-label y′.To reduce labeling errors, the proposed GDBRO mechanism forms a robust subset ˆHi by retaining only candidate poisoned samples whose pseudo-labels are supported by low gradient discrepancy : 
+
+ˆHi = (˜ xj , ˜yj ) | ˜xj ∈ ˜Hi,
+
+˜yj = Flabel (Fp(˜ xj , Ws⋆j )) ,Fdisc (˜ xj , Ws⋆j ) < λ, s⋆j = Ffind (˜ xj ), j = 1 , . . . , | ˜Hi| .
+
+(12) where λ is a pre-defined threshold to filter out samples that contain significantly different semantic feature information with respect to the category center. By utilizing the clean and robust datasets Hi and ˆHi, the proposed GDBRO mechanism integrates them to optimize the current expert Wi during the i-th task learning, aiming to improve the model’s clean performance and generalization performance : 
+
+Lintegr = E(x,y )∼PHi∪ ˆHi [− log Fp(x, Wi)[ y]] . (13) The joint stage samples the concatenated retained and recovered dataset without a separate recovered-sample loss weight. 
+
+E. Robust Feature Consistency-based Expert Selection 
+
+Dynamic-expansion models rely on selecting an appropriate expert at inference time. Under poisoned or perturbed inputs, standard feature-distance-based routing can become unreliable because the sample representation may drift away from clean class prototypes. We address this issue by proposing a novel Robust Feature Consistency-based Expert Selection (RFCBES) that incorporates corrected samples into the class prototypes to improve expert selection. In order to learn robust representations, once the current task learning is finished ( Ei), the proposed RFCBES mechanism employs the learned expert module Wi to update the sample prototypes by using the joint dataset that contains clean and corrected candidate-poisoned samples. To achieve this goal, we first compute the sample prototype set by : 
+
+˜Sj,i = normalize 
+
+P  
+
+> x∈Hj,i ∪ˆHj,i
+
+u(x)
+
+|Hj,i ∪ ˆHj,i |
+
+!
+
+,
+
+˜Si = {˜Sj,i }ci
+
+> j=1
+
+.
+
+(14) where ˜Si denotes the sample prototype set and is preserved for the expert Wi. Each member of ˜Si captures the statistical information for a unique category. Once the learning process of 
+
+n tasks is finished, the proposed RFCBES mechanism chooses the best expert for a given testing sample x by : 
+
+i⋆ = argmin 
+
+> i=1 ,...,n
+
+n
+
+min 
+
+> j=1 ,...,c i
+
+Fwdis (˜Si[j], u (x)) 
+
+o
+
+. (15) where ˜Si[j] denotes the j-th instance of the sample prototype set preserved by Wi and ci represents the total number of classes within the i-th task. Fwdis denotes the L2 Euclidean distance between the normalized features. i⋆ denotes the index of the selected expert used to make the prediction for the given testing sample x.The final routing prototypes are recomputed after joint training; the correction-gradient cache retains its warm-up state. These two stores serve different purposes. 
+
+Representation choice and numerical scope. The BPP and routing features are normalized shared-backbone outputs. The correction feature is the concatenation of shared and expert-specific outputs, while its reference is constructed by passing a normalized class mean through the expert. Comparing a distance in the shared feature space with a class-row gradient distance can therefore compare different feature spaces and different reference normalization. A controlled diagnostic should explicitly identify the two representations and also compare gradient cosine with cosine on the identical classifier-input vectors. The code uses the cosine-similarity operator with its nu-merical denominator protection. When a probability saturates or a feature/gradient becomes very small, the exact idealized cancellation need not hold numerically. These cases should be diagnosed separately; they are not evidence of a distinct gradient separation mechanism. No lower noise rate for every selected subset is claimed from the angular criterion alone. IV. T HEORETICAL ANALYSIS 
+
+This section provides a theoretical analysis of the proposed CLUBA defense framework. Different from conventional continual learning analysis that mainly focuses on catastrophic forgetting, our analysis investigates the robustness of incremen-tal learners against contaminated supervision. Specifically, we establish theoretical guarantees for three key components: (1) the capability of Bi-Prototype Purification (BPP) to identify suspicious samples in semantic feature space, (2) the reliabil-ity of Gradient Discrepancy-based Robustness Optimization (GDBRO) for recovering informative poisoned samples, and (3) the stability of Robust Feature Consistency-based Expert Selection (RFCBES). The analysis is based on three mild assumptions regarding feature distribution, gradient concentration, and prototype separability. These assumptions are commonly adopted in rep-resentation learning and prototype-based classification analysis. 
+
+A. Assumptions and Preliminaries 
+
+Let u(x) denote the normalized shared representation ex-tracted by the frozen pretrained backbone: 
+
+u(x) = Fξ (x)
+
+∥Fξ (x)∥2
+
+. (16) For each class j in task i, let Pj,i c and Pj,i p denote the distributions of clean and poisoned samples, respectively. 
+
+Assumption 1 (Semantic Feature Concentration). For each class j of task i, the shared representations of clean samples are concentrated around an unknown semantic center μj,i c :
+
+Ex∼P j,i c
+
+∥u(x) − μj,i c ∥22
+
+ ≤ σ2 
+
+> c
+
+. (17) 7
+
+Similarly, poisoned samples follow another distribution with center μj,i p satisfying 
+
+Ex∼P j,i p
+
+∥u(x) − μj,i p ∥22
+
+ ≤ σ2 
+
+> p
+
+. (18) The assumption indicates that although backdoor perturbations may be imperceptible in the original input space, they introduce a semantic deviation in the learned representation space. Such an assumption is reasonable because backdoor samples are expected to form distinguishable latent patterns during training. 
+
+Assumption 2 (Backdoor Semantic Separation). For each contaminated class, the distance between clean and poisoned semantic centers satisfies 
+
+∆j,i = ∥μj,i c − μj,i p ∥2 > σ c + σp. (19) 
+
+Assumption 3 (Gradient Concentration). For a correctly pseudo-labeled sample (x, y ), the classifier-row gradient 
+
+g(x, y ) = ∇Wy LCE (hi(x), y ) (20) is concentrated around its class reference gradient g∗ 
+
+> y
+
+=
+
+E[g(x, y )] . Specifically, ∥g(x, y ) − g∗ 
+
+> y
+
+∥2 ≤ ϵ.
+
+Definition 1 (Prototype Margin). For a class prototype set 
+
+Si = {S1,i , ..., S ci,i }, (21) the prototype margin of task i is defined as 
+
+δi = min  
+
+> a̸=b
+
+∥Sa,i − Sb,i ∥2. (22) A larger δi indicates better class-level separability. 
+
+B. Analysis of Bi-Prototype Purification 
+
+The BPP module performs two-center clustering within each semantic class. The following theorem shows that when poisoned samples induce a sufficiently different semantic center, the clustering objective can recover the two populations with bounded error. 
+
+Lemma 1. Given a class subset Cji containing mc clean samples and mp poisoned samples, the empirical centers obtained by two-center clustering satisfy 
+
+∥ˆμc − μc∥2 ≤ σc
+
+s
+
+2 log(2 /ρ )
+
+mc
+
+, (23) and 
+
+∥ˆμp − μp∥2 ≤ σp
+
+s
+
+2 log(2 /ρ )
+
+mp
+
+, (24) with probability at least 1 − ρ.
+
+Proof. The result follows from the concentration inequality of bounded second-order moments. Since normalized representa-tions satisfy ∥u(x)∥2 = 1 , the empirical mean is a sub-Gaussian estimator of the true distribution center. Applying Hoeffding’s inequality independently to clean and poisoned subsets gives 
+
+P (∥ˆμc − μc∥2 > η ) ≤ 2e−mcη2/(2 σ2 
+
+> c)
+
+. (25) Solving the above inequality for η yields the desired bound. The poisoned case follows identically. 
+
+Theorem 1 (BPP Purification Guarantee). Under Assump-tions 1–2, if 
+
+∆j,i > 2
+
+σc
+
+s
+
+2 log(2 /ρ )
+
+mc
+
++ σp
+
+s
+
+2 log(2 /ρ )
+
+mp
+
+ , (26) then the two clusters generated by BPP correspond to the clean and poisoned populations with probability at least 1 − ρ.
+
+Proof. According to Lemma 1, the estimated centers satisfy 
+
+∥ˆμc − μc∥ ≤ ϵc, (27) and 
+
+∥ˆμp − μp∥ ≤ ϵp. (28) Using the triangle inequality, we have: 
+
+∥ˆμc − ˆμp∥ ≥ ∥ μc − μp∥ − ∥ ˆμc − μc∥ − ∥ ˆμp − μp∥≥ ∆j,i − ϵc − ϵp. (29) According to Eq. (26), we have: 
+
+∥ˆμc − ˆμp∥ > ϵ c + ϵp. (30) Therefore, the empirical centers remain separated after esti-mation error. Consequently, the optimal two-center clustering assigns samples according to their generating distributions, completing the proof. 
+
+Theoretical implication. Theorem 1 demonstrates that the effectiveness of BPP is guaranteed by semantic separability rather than explicit access to poisoning patterns. When the semantic deviation introduced by contaminated supervision is larger than the estimation uncertainty of feature prototypes, BPP can preserve the intrinsic distribution structure and obtain reliable clean–poisoned separation. Therefore, BPP provides a theoretically justified mechanism for identifying suspicious samples in the shared representation space. 
+
+C. Theoretical Analysis of Gradient Discrepancy-based Ro-bustness Optimization 
+
+After BPP purification, the suspicious subset may still contain informative samples that are incorrectly separated due to limited feature discrimination. GDBRO further evaluates these samples from the optimization perspective. Instead of relying solely on representation similarity, GDBRO measures whether the gradient induced by a suspicious sample is consistent with the class-level optimization direction obtained from reliable samples. The following analysis demonstrates that the proposed gradient discrepancy criterion provides a theoretically justified reliability measurement for pseudo-label recovery. 
+
+Definition 2 (Class Gradient Prototype). For class j of task 
+
+i, the gradient prototype is defined as 
+
+gref  
+
+> i,j
+
+= ∇Wi[j, :] LCE (hi(Sj,i ), j ), (31) where Sj,i is the semantic class prototype obtained from Eq. (7). 8
+
+Definition 3 (Gradient Discrepancy). For a sample ˜x with pseudo-label ˜y, the gradient discrepancy used by GDBRO is defined as 
+
+Dg (˜ x, ˜y) = 1 − g(˜ x, ˜y)⊤gref i, ˜y
+
+∥g(˜ x, ˜y)∥2∥gref i, ˜y ∥2
+
+. (32) 
+
+Lemma 2. Under Assumption 3, for a correctly pseudo-labeled clean sample, the gradient discrepancy satisfies 
+
+Dg (x, y ) ≤ 2ϵ2
+
+∥g∗ 
+
+> y
+
+∥22
+
+, (33) with probability at least 1 − ρ.
+
+Proof. Let g(x, y ) = g∗ 
+
+> y
+
++ ∆ g where ∥∆g∥2 ≤ ϵ. The cosine similarity can be rewritten as 
+
+cos( g, g ∗ 
+
+> y
+
+) = (g∗ 
+
+> y
+
++ ∆ g)⊤g∗
+
+> y
+
+∥g∗ 
+
+> y
+
++ ∆ g∥2∥g∗ 
+
+> y
+
+∥2
+
+. (34) Since ∆g is bounded, applying the perturbation inequality of cosine similarity gives 
+
+1 − cos( g, g ∗ 
+
+> y
+
+) ≤ 2∥∆g∥22
+
+∥g∗ 
+
+> y
+
+∥22
+
+. (35) Substituting ∥∆g∥2 ≤ ϵ yields 
+
+Dg (x, y ) ≤ 2ϵ2
+
+∥g∗ 
+
+> y
+
+∥22
+
+. (36) 
+
+Lemma 3. Assume that a poisoned sample generates a gradient deviation satisfying 
+
+∥gp − g∗ 
+
+> y
+
+∥2 ≥ γ. (37) Then the corresponding gradient discrepancy satisfies 
+
+Dg (xp, y ) ≥ γ2
+
+2∥g∗ 
+
+> y
+
+∥22
+
+. (38) 
+
+Proof. Let gp = g∗ 
+
+> y
+
++ ∆ p where ∥∆p∥2 ≥ γ. Using the reverse perturbation property of cosine similarity, 
+
+1 − cos( gp, g ∗ 
+
+> y
+
+) ≥ ∥∆p∥22
+
+2∥g∗ 
+
+> y
+
+∥22
+
+. (39) Since ∥∆p∥2 ≥ γ, we obtain 
+
+Dg (xp, y ) ≥ γ2
+
+2∥g∗ 
+
+> y
+
+∥22
+
+. (40) 
+
+Theorem 2 (Gradient-based Recovery Guarantee). Under Assumptions 1–3, if the gradient deviation satisfies γ > 2ϵ,there exists a threshold λ such that 
+
+2ϵ2
+
+∥g∗ 
+
+> y
+
+∥22
+
+< λ < γ2
+
+2∥g∗ 
+
+> y
+
+∥22
+
+, (41) and GDBRO correctly retains clean-supported suspicious samples while rejecting samples whose pseudo-labels are inconsistent with the class gradient direction. 
+
+Proof. According to Lemma 2, clean-supported samples satisfy 
+
+Dg (x, y ) ≤ 2ϵ2
+
+∥g∗ 
+
+> y
+
+∥22
+
+. (42) According to Lemma 3, unreliable poisoned samples satisfy 
+
+Dg (xp, y ) ≥ γ2
+
+2∥g∗ 
+
+> y
+
+∥22
+
+. (43) The condition γ > 2ϵ guarantees 
+
+2ϵ2
+
+∥g∗ 
+
+> y
+
+∥22
+
+< γ2
+
+2∥g∗ 
+
+> y
+
+∥22
+
+. (44) Therefore a non-empty interval exists for selecting λ. Any threshold within this interval separates the two gradient distributions. 
+
+Theoretical implication. Theorem 2 reveals that gradient discrepancy provides an optimization-level reliability criterion for suspicious samples. Specifically, samples whose pseudo-labels are consistent with the class optimization direction produce bounded gradient deviation, while samples inducing conflicting optimization directions can be separated by an appropriate discrepancy threshold. Consequently, GDBRO is able to recover informative samples from the suspicious set without relying solely on semantic similarity. 
+
+D. Theoretical Analysis of Robust Feature Consistency-based Expert Selection 
+
+In dynamic expansion-based continual learning, each expert module is optimized for a specific task. Therefore, selecting an appropriate expert is critical for maintaining prediction accuracy under task-incremental inference. However, backdoor pertur-bations may cause feature deviation and result in unreliable routing decisions. RFCBES addresses this problem by constructing robust prototypes using both purified samples and gradient-verified recovered samples. This section theoretically analyzes the stability of the proposed routing mechanism. 
+
+Definition 4 (Expert Prototype). For expert Wi, the robust prototype of class j is defined as 
+
+˜Sj,i = normalize 
+
+ 1
+
+|Hj,i ∪ ˆHj,i |
+
+X 
+
+> x∈Hj,i ∪ˆHj,i
+
+u(x)
+
+ . (45) The corresponding ideal prototype obtained from clean samples is denoted as Sj,i .
+
+Lemma 4. Assume that the recovered subset satisfies 
+
+P (y ˆH = y) ≥ 1 − η. (46) Then the robust prototype error satisfies 
+
+∥ ˜Sj,i − Sj,i ∥2 ≤ η + O
+
+r 1
+
+m
+
+!
+
+, (47) where m denotes the number of samples used for prototype estimation. 
+
+Proof. Let ˜Sj,i = (1 − η) ¯Sc + η ¯Sr, where ¯Sc represents the mean feature of correctly recovered samples and ¯Sr represents the contribution from incorrectly recovered samples. 9
+
+TABLE II COMPREHENSIVE PERFORMANCE COMPARISON OF DIFFERENT DEFENSES AGAINST VARIOUS ATTACKS ACROSS THREE DATASETS . W E REPORT THE BASELINE CLEAN ACCURACY (CA, %) TRAINED ON PURE CLEAN DATA , ALONGSIDE THE CA (%) AND ATTACK SUCCESS RATE (ASR, %) UNDER POISONED SCENARIOS . E ACH ENTRY REPORTS A SINGLE -SEED EXPERIMENT . T HE BEST RESULTS ARE HIGHLIGHTED IN BOLD .                                                                                                                                                                                                                                                                                             
+
+> Method CIFAR-10 CIFAR-100 Tiny-ImageNet
+> Clean BadNets LTB CBACL Clean BadNets LTB CBACL Clean BadNets LTB CBACL CA ↑CA ↑ASR ↓CA ↑ASR ↓CA ↑ASR ↓CA ↑CA ↑ASR ↓CA ↑ASR ↓CA ↑ASR ↓CA ↑CA ↑ASR ↓CA ↑ASR ↓CA ↑ASR ↓
+> DER 95.86 93.79 13.07 93.94 9.17 68.11 33.83 42.97 31.31 45.08 43.03 30.99 43.58 46.12 68.16 66.74 28.19 64.20 35.14 46.80 51.18 DER++ 93.75 94.66 33.59 84.94 15.56 90.54 34.21 39.81 33.03 40.66 61.78 42.12 35.68 41.24 70.98 72.51 22.11 68.33 29.80 54.17 43.91 ER-ACE 95.48 93.05 52.10 92.50 25.40 94.32 13.34 58.99 58.77 0.84 57.12 11.20 60.09 2.04 65.00 64.72 1.01 36.78 68.10 64.77 1.12 GEM 95.89 93.73 47.22 94.10 18.20 95.67 10.80 75.85 75.29 2.45 73.50 14.50 75.27 1.88 82.42 81.25 2.93 67.57 20.25 81.27 3.60 A-GEM 86.54 87.58 14.23 85.30 20.10 87.29 14.32 46.94 31.64 44.91 42.10 38.60 32.00 43.43 68.65 49.26 46.52 48.10 40.20 47.47 46.59 AFLC 81.82 86.18 21.68 77.25 79.03 65.31 46.95 30.29 47.72 36.32 67.92 41.46 32.78 41.24 60.27 62.58 33.55 58.40 39.10 54.17 43.91 AIR 65.57 45.30 58.58 67.22 65.31 67.81 16.76 70.08 67.27 68.80 44.60 70.69 15.56 51.85 54.41 54.75 79.71 51.20 75.40 21.32 73.28 FT 72.06 80.32 26.75 77.22 18.82 79.09 40.77 39.19 74.44 33.91 77.13 1.46 74.21 36.06 75.55 77.72 17.88 74.10 22.30 78.32 12.70 SAM-FT 69.08 71.09 9.70 40.50 67.53 70.62 24.41 39.19 40.68 11.17 38.50 15.40 37.10 18.20 66.77 67.75 9.48 65.20 12.50 64.10 14.20 AIBD 71.72 58.49 44.19 87.00 9.43 59.59 44.26 46.19 27.30 54.70 44.20 50.10 28.08 52.36 71.77 42.27 55.12 40.10 52.30 39.87 58.14 RGAN 93.96 79.87 15.79 70.44 65.11 65.29 54.77 33.76 31.94 69.62 65.29 54.77 8.78 41.51 68.05 25.08 62.90 24.10 60.15 25.02 62.93
+> OURS 99.30 99.10 0.37 99.02 0.31 99.17 0.51 93.20 90.94 0.07 92.15 0.12 91.50 0.45 93.45 91.19 0.15 92.05 1.20 91.80 0.50
+
+The deviation from the clean prototype satisfies 
+
+∥ ˜Sj,i − Sj,i ∥ = ∥(1 − η) ¯Sc + η ¯Sr − Sj,i ∥≤ (1 − η)∥ ¯Sc − Sj,i ∥ + η∥ ¯Sr − Sj,i ∥. (48) Since normalized features satisfy ∥ ¯Sr − Sj,i ∥ ≤ 2, we obtain 
+
+∥ ˜Sj,i − Sj,i ∥ ≤ O
+
+r 1
+
+m
+
+!
+
++ 2 η. (49) Ignoring constant scaling gives Eq. (47). 
+
+Theorem 3 (RFCBES Routing Stability). Assume that the ideal expert prototypes satisfy a minimum inter-expert margin 
+
+∆r = min  
+
+> i̸=k
+
+∥Si − Sk∥2. (50) If the prototype estimation error satisfies 
+
+η + O(
+
+r 1
+
+m ) < ∆r
+
+2 , (51) then RFCBES selects the correct expert for a test sample whose feature noise is bounded by 
+
+∥u(x) − Si∥2 < ∆r
+
+2 − η. (52) 
+
+Proof. For a sample belonging to expert i, the routing rule selects 
+
+i⋆ = arg min  
+
+> k
+
+∥u(x) − ˜Sk∥2. (53) For the correct expert, we have 
+
+∥u(x) − ˜Si∥ ≤ ∥ u(x) − Si∥ + ∥Si − ˜Si∥ < ∆r
+
+2 . (54) For any incorrect expert k, we have 
+
+∥u(x) − ˜Sk∥ ≥ ∥ Si − Sk∥ − ∥ u(x) − Si∥ − ∥ Sk − ˜Sk∥
+
+> ∆r − ∆r
+
+2 − ∆r
+
+2
+
+> ∥u(x) − ˜Si∥.
+
+(55) Therefore, we obtain i⋆ = i. 
+
+Theoretical implication. Theorem 3 establishes the stability of RFCBES under bounded prototype estimation errors. The result indicates that robust prototype construction using purified and gradient-verified samples can effectively preserve the inter-expert discrimination margin. Therefore, RFCBES maintains consistent expert routing decisions even when incremental training data contains contaminated supervision. V. E XPERIMENTS 
+
+Benchmark Datasets and Attack Configurations. We evalu-ate our framework on three standard class-incremental bench-marks: Split CIFAR-10 (5 tasks), Split CIFAR-100 (10 tasks), and Split Tiny-ImageNet (20 tasks). We evaluate against three representative continual backdoor attacks: BadNets [28], 
+
+LTB [36], and CBACL [37]. The backdoor injection rate is fixed at 5% across all tasks. Detailed descriptions of the datasets and attack mechanisms are provided below. 
+
+Comparison Baselines and Implementation Details. We com-pare our method against 11 representative baselines, including vanilla continual learning approaches (DER, DER++ [13], ER-ACE [16], GEM [17], A-GEM [18]), adversarial defenses (AFLC [6], AIR [5]), and backdoor defenses (FT [38], SAM-FT [57], AIBD [47], RGAN [58]). All methods utilize a shared 
+
+Pre-trained ViT backbone. For replay-based methods, the memory buffer size is strictly limited to 500. All models are trained using the SGD optimizer with a learning rate of 0.001 and a batch size of 32, using a requested epoch argument of 1. The proposed method additionally performs five default warm-up epochs, giving five warm-up epochs plus one joint epoch. Training budgets and the repeated-run protocol are specified below. 
+
+Evaluation Metrics. We adopt Clean Accuracy (CA) to measure the retention of benign knowledge (higher is better) and Attack Success Rate (ASR) to measure the efficacy of the backdoor defense (lower is better). Both metrics are evaluated on the test sets of all learned tasks after the entire sequential training process is completed. 10           
+
+> TABLE III DETAILED DIVISION OF CONTINUAL LEARNING BENCHMARKS .
+> Dataset Total Classes Number of Tasks Classes per Task
+> Split CIFAR-10 10 52Split CIFAR-100 100 10 10 Split Tiny-ImageNet 200 20 10
+
+A. Datasets and Preprocessing 
+
+We comprehensively evaluate our defense framework on three standard image classification benchmarks tailored for Continual Backdoor Attacks (CBA): Split CIFAR-10, Split CIFAR-100, and Split Tiny-ImageNet. In our continual learning configuration, we divide each dataset into N non-overlapping subsets, with each subset cor-responding to a sequentially arriving task Ti. The detailed task division and class allocations for each dataset are summarized in Table III. To accommodate the input dimensional requirements of the shared pre-trained ViT-B/16 backbone, all original images must be standardized. During the training phase, standard data augmentation techniques are applied to prevent overfitting, while deterministic resizing is applied during the testing phase. Table I details the original resolutions alongside the specific preprocessing protocols applied across different datasets. 
+
+Data and model attribution. The experiments use the publicly released CIFAR-10 and CIFAR-100 datasets, Tiny-ImageNet derived from ImageNet, and pre-trained ViT weights. The CIFAR release is available at https://www.cs.toronto.edu/~kriz/ cifar.html. These existing assets provide the benchmarks and shared representation used throughout the evaluation. 
+
+B. Framework and Architectural Configurations 
+
+Pre-trained ViT Backbone. Our framework and all baseline methods utilize a unified pre-trained Vision Transformer ( ViT-B/16 ) as the shared backbone. The backbone leverages publicly available weights pre-trained on ImageNet-1K. During the sequential learning process, the shared backbone’s parameters are entirely frozen to act as a robust universal feature extractor, mitigating initial vulnerability to poisoned features. 
+
+Dynamic Expert Modules. For each newly arriving task Ti,our framework dynamically instantiates a dedicated expert mod-ule Wi. Each expert comprises a lightweight fully-connected transformation layer and a linear classification head. Upon the completion of task Ti, the parameters of its corresponding expert are strictly frozen. This parameter isolation prevents subsequent gradient updates from modifying the previous experts; inference additionally depends on the routing bank. 
+
+C. Backdoor Attack Configurations 
+
+To rigorously evaluate the robustness of the proposed frame-work, we implement three state-of-the-art backdoor attacks tailored for or adapted to the continual learning (CL) paradigm. Across all attacks, the poisoning rate is fixed at 5% for each infected task. 
+
+BadNets: We adopt the standard BadNets attack with a static visual trigger. For Split CIFAR-10/100, a 3 × 3 white square patch is injected into the bottom-right corner of the images. For Split Tiny-ImageNet, a 4 × 4 patch is used. The attack operates under a label-flip setting, where the labels of poisoned samples are forcefully altered to a predefined target class . 
+
+Latent Task Backdoor (LTB): Specifically designed for continual learning, LTB achieves persistence by embedding triggers into the most stable neurons of the model. We utilize a static patch trigger combined with a label-flip strategy mapping to a target class. The poisoning strategy explicitly targets the parameter optimization of the current task to ensure the backdoor survives subsequent benign task updates. 
+
+Controllable Backdoor Attack in CL (CBACL): CBACL leverages an anchor-based representation manipulation strategy. We configure CBACL with a blended trigger (blending a pattern with a 20% ratio). It operates under a label-flip setting targeting a specific class. During training, it utilizes a Triplet Margin Loss to forcefully map poisoned features into a tight target feature space, actively resisting catastrophic forgetting of the backdoor mapping. 
+
+D. Training Protocol and Repeated Runs 
+
+Experiments use SGD, a learning rate of 0.001, and mini-batches of 32. The requested epoch argument is 1. The proposed method first warms up the current expert for Ewarm = 5 
+
+epochs and then performs max(1 , E requested − Ewarm ) = 1 
+
+joint epoch. Replay-based baselines use a capacity of 500 exemplars. Our method stores experts, class prototypes, and cached class-reference gradients instead of historical training images. The main comparison is based on one training seed. The macro component ablation reports mean and standard deviation across seeds 42, 256, and 512. K-Means uses two clusters, ten initializations, and a fixed clustering random state of 42; this clustering state is separate from the network-training seeds. Diagnostic studies specify their correction threshold and warm-up settings individually below. 
+
+E. Evaluation Metrics 
+
+To comprehensively evaluate the robustness of our defense framework and its ability to mitigate catastrophic forgetting under persistent continual backdoor attacks, we employ two primary evaluation metrics: Average Clean Accuracy (CA) and Average Attack Success Rate (ASR). Both metrics are evaluated on the test sets of all learned tasks after the entire sequential training process is completed. 
+
+Average Clean Accuracy (CA): The Clean Accuracy measures the model’s ability to retain benign knowledge and represents the overall classification performance on clean test samples. Specifically, it is defined as the average accuracy on the clean test sets across all N learned tasks: CA = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Aclean  
+
+> i
+
+, (56) where N is the total number of tasks, and Aclean  
+
+> i
+
+is the accuracy of the model on the clean test set of the i-th task. A higher CA implies that the model exhibits strong plasticity for learning 11                                                                  
+
+> TABLE IV ABLATION STUDY ON THE CORE COMPONENTS OF OUR PROPOSED DEFENSE FRAMEWORK . E XPERIMENTS ARE PERFORMED ON CIFAR-100 UNDER THE
+> BAD NETS ATTACK .✓INDICATES THE COMPONENT IS ENABLED ,WHILE ✗INDICATES IT IS DISABLED . W E REPORT THE MEAN ±STANDARD DEVIATION OVER THREE RANDOM SEEDS (42, 256, AND 512).
+> Method Variant Components Metrics Dynamic Expert Feature Clustering Label Correction CA (%) ↑ASR (%) ↓
+> Baseline (DER++) ✗✗✗42.90 ±1.32 35.80 ±3.25 w/o Dynamic Expert ✗✓✓34.98 ±2.37 0.10 ±0.03 w/o Defense Pipeline ✓✗✗89.87 ±0.46 27.54 ±2.15 w/o Label Correction ✓✓✗91.36 ±0.58 0.14 ±0.09
+> Ours (Full Model) ✓✓✓91.16 ±0.33 0.08 ±0.10
+
+new sequential tasks while effectively resisting catastrophic forgetting of previously acquired benign knowledge. 
+
+Average Attack Success Rate (ASR): To strictly evaluate the model’s vulnerability against continuous data poisoning, we use the Attack Success Rate. ASR measures the average proportion of poisoned test samples (i.e., inputs embedded with malicious triggers) that are successfully misclassified into the attacker-specified target class across all tasks. It is formulated as: ASR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+M poison 
+
+> i
+
+T poison 
+
+> i
+
+!
+
+× 100% , (57) where M poison  
+
+> i
+
+denotes the number of poisoned samples successfully misclassified as the target label in task i, and 
+
+T poison  
+
+> i
+
+represents the total number of poisoned test samples in task i. A highly robust defense mechanism is characterized by an ASR close to 0%, indicating that the model successfully neutralizes the backdoor perturbations and refuses to output the malicious target label during inference. 
+
+F. Main Results 
+
+Table II summarizes the comprehensive performance com-parison of our proposed defense framework against existing CL baselines under three distinct backdoor attacks across CIFAR-10, CIFAR-100, and Tiny-ImageNet datasets. 
+
+Vulnerability of Baseline Models. As observed, standard CL methods severely lack robustness when confronted with continual backdoor attacks. For instance, while methods like ER-ACE and GEM maintain relatively high CA on CIFAR-10, their ASR scores soar beyond 40% under the BadNets attack. In more complex datasets like CIFAR-100 and Tiny-ImageNet, conventional methods experience catastrophic failures. Ad-vanced attacks such as LTB and CBACL consistently deceive the standard baselines, forcing significant drops in CA or pushing the ASR to perilous levels (e.g., AIR exhibits an ASR of 79.71% under BadNets on Tiny-ImageNet). This indicates that without an explicit purification mechanism, standard dynamic or regularization-based CL frameworks inherently absorb corrupted supervision. 
+
+Effectiveness of the Proposed Framework. In contrast, our proposed method demonstrates superior and stable defense capabilities. Across all three datasets and attack paradigms, our model consistently suppresses the ASR to near-zero levels while maintaining high plasticity. Notably, on CIFAR-100 against the BadNets attack, our method reduces the ASR to 0.07% with a CA of 90 .94% . Furthermore, against state-of-the-art continual backdoor attacks like LTB and CBACL, our framework effectively rejects poisoned perturbations while maintaining high clean accuracy, achieving class-leading CA performance on complex datasets. Moreover, the strictly isolated parameters in our dynamic expert architecture prevent new-task updates from changing earlier expert parameters. Overall task-free predictions also depend on routing through the expanding prototype bank. 
+
+G. Ablation Study 
+
+Effectiveness of Core Components. Table IV summarizes the macro-ablation results under BadNets on CIFAR-100 (three-seed mean ± std; seeds 42, 256, and 512). Removing the Dy-namic Expert leads to severe forgetting (CA 34 .98% ± 2.37% ), while keeping the defense keeps ASR low ( 0.10% ± 0.03% ). Omitting the Defense Pipeline raises ASR to 27 .54% ± 2.15% 
+
+despite high CA ( 89 .87% ±0.46% ). Disabling Label Correction yields the highest CA ( 91 .36% ±0.58% ) but a slightly increased ASR ( 0.14% ± 0.09% ). Our full model achieves the best trade-off, with CA 91 .16% ± 0.33% and the lowest ASR 
+
+0.08% ± 0.10% , demonstrating robust, low-variance defense. The DER++ baseline, with CA 42 .90% ± 1.32% and ASR 
+
+35 .80% ± 3.25% , further validates the effectiveness of each proposed component. 
+
+Why Gradient-guided Correction? We conduct this analy-sis on CIFAR-100 under BadNets and visualize feature distance versus gradient distance of suspicious samples in Figure 2(b). The reported feature-distance scores overlap, while the gradient-based correction score shows separation at a threshold of 0.4. 
+
+H. Analytical Results 
+
+Experimental Setup. The macro and step-wise component ablations are evaluated on the CIFAR-100 dataset with the BadNets attack. We report the average clean accuracy (CA, %) and attack success rate (ASR, %) over three seeds for the macro ablation; the main table reports single-seed results. 
+
+Resistance to Catastrophic Forgetting. Figure 2(a) visualizes the average forgetting rate across sequentially arriving tasks. While standard continual learning methods such as DER++ and AIR suffer from severe catastrophic forgetting (with DER++ exceeding a 40% forgetting rate by the final task), our frame-work effectively mitigates this issue. By dynamically expanding 12 1 2 3 4 5 6 7 8 9 10 
+
+> Tasks Completed
+> 010 20 30 40
+> Average Forgetting (%)
+> DER++ GEM ER-ACE AIR OURS
+
+(a) Average Forgetting 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9  
+
+> Feature Cosine Distance (1 - CosSim)
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8
+> Gradient Cosine Distance (1 - CosSim)
+> Accept Region (Clean) Reject Region (Poison)
+> Sample Status
+> Poison Samples (Rejected) Rescued Clean Samples (Corrected) Gradient Threshold (0.4)
+
+(b) Gradient vs. Feature Distance DER++ AGEM AIR FT RGAN Ours   
+
+> 020 40 60 80 100
+> Performance (%)
+> Clean Acc ASR Params (M)
+> 0.07 040 80 120 160 200
+> Parameters (M)
+> 86.2M 172.5M 91.1M
+
+(c) Parameters vs. Performance 
+
+Fig. 2. Visual analysis of our framework. (a) Average forgetting rate across tasks. (b) Gradient vs. Feature distance distribution during the correction phase. (c) Trade-off between parameter overhead and defense efficacy. TABLE V DETAILED ABLATION STUDY ON THE STEP -WISE INTEGRATION OF THE PROPOSED MECHANISMS ON CIFAR-100 UNDER BAD NETS . BPP :BI-P ROTOTYPE PURIFICATION ; WARM -UP : W ARM -UP OPTIMIZATION ;
+
+RELABEL : G RADIENT -GUIDED LABEL CORRECTION ; RFCBES : R OBUST 
+
+FEATURE CONSISTENCY -BASED EXPERT SELECTION . T HE BEST CA AND 
+
+ASR ARE HIGHLIGHTED IN BOLD .
+
+Method Variants CA (%) ↑ ASR (%) ↓
+
+BPP Only 55.68 3.22 + Warm-up 61.78 1.19 + Warm-up + Relabel 90.67 1.47 
+
++ RFCBES (Full Model) 90.21 0.07 
+
+lightweight experts tailored to task-specific distributions, our method maintains a near-zero average forgetting rate, preserving previously acquired knowledge remarkably well. 
+
+Parameter Efficiency and Performance Trade-off. A critical concern in dynamic network architectures is the potential explosion of model parameters. Figure 2(c) highlights the trade-off between parameter overhead and defense efficacy. Methods like AIR drastically inflate the parameter count (up to 172.5M) yet still fail to provide satisfactory robustness. In contrast, our framework leverages a shared Pre-trained ViT backbone combined with highly compact task-specific expert layers, resulting in a minimal parameter increase (91.1M compared to the 86.2M of baseline architectures). Despite this lightweight footprint, our model achieves the highest Clean Accuracy while suppressing the ASR to a negligible 0.07% , proving its exceptional parameter efficiency and practical deployment viability. 
+
+I. Step-wise Ablation Experiments 
+
+Experimental Setup. Before delving into the component-wise analysis, we briefly outline the experimental configurations for this ablation study. The experiments are conducted on the Split CIFAR-100 (Seq-CIFAR-100) dataset under the highly challenging Class-Incremental Learning (Class-IL) setting, where task identities are strictly unavailable during inference. We employ the BadNets attack on CIFAR-100. The defense hyperparameters are kept constant across all variants to ensure fairness: the warm-up period is set to 5 epochs, and the gradient correction threshold is fixed at 0.5. To systematically evaluate the contribution of each algorithmic design in our framework, we conduct a step-wise (additive) ablation study, transitioning from a naive baseline to the full model. The results are summarized in Table V. 
+
+The baseline purification (BPP Only): Relying solely on the Bi-Prototype Purification (BPP) mechanism effectively discards the suspicious feature clusters, leading to a preliminary suppression of backdoors (ASR stays below 5% at 3.22%). However, this hard-rejection strategy inevitably discards a considerable amount of hard-to-learn but benign samples. Consequently, the model suffers from underfitting on clean distributions, resulting in a suboptimal Clean Accuracy (CA) of 55.68%. 
+
+The effect of Warm-up optimization: Introducing the warm-up phase on candidate clean subsets stabilizes the initial feature representations of the newly generated expert module. This optimization significantly boosts the CA by 6.10 percentage points (from 55.68% to 61.78%), demonstrating the necessity of establishing a reliable initial optimization trajectory before tackling complex or noisy training instances. The ASR also decreases from 3.22% to 1.19%, showing improved resistance in this comparison. 
+
+The power of Gradient-guided Relabeling: By applying gradient-guided label correction to rescue misclassified clean samples from the rejected subsets, the model reaches its peak CA of 90.67%. This supports our hypothesis that gradient discrepancy effectively distinguishes and recovers benign instances, enriching the training set and supporting plasticity during continual learning. Nevertheless, this enhanced plasticity comes with a minor security trade-off, slightly raising the ASR to 1.47% consistent with a less conservative recovery decision. 
+
+The necessity of RFCBES (Full Model): To perfectly address the aforementioned security trade-off, our Robust Feature Consistency-based Expert Selection (RFCBES) acts as the ultimate gatekeeper during the testing phase. Back-door attacks typically rely on generating abnormally high softmax confidences to hijack the routing mechanism in 13 0.1 0.2 0.3 0.4 0.5 0.6 0.7               
+
+> correction_threshold
+> 90 91 92 93 94 95 96 97
+> CA (%)
+> (a) correction_threshold
+> Clean Accuracy (CA) Attack Success Rate (ASR)
+> 246810 12 14
+> warmup_epochs
+> 90 91 92 93 94 95 96 97
+> CA (%)
+> (b) warmup_epochs
+> Clean Accuracy (CA) Attack Success Rate (ASR)
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0
+> ASR (%)
+> 0.0 0.2 0.4 0.6 0.8 1.0 1.2
+> ASR (%)
+> Fig. 3. Hyperparameter sensitivity analysis. Left: Effect of gradient discrepancy threshold λ(fix Ewarm = 5 ). Right: Effect of warm-up epochs Ewarm (fix
+> λ= 0 .5).
+
+Dynamic-expansion Models. By switching from confidence-based routing to prototype-distance-based routing (RFCBES), backdoor triggers completely fail to deceive the expert selection. Consequently, the ASR drops drastically from 1.47% to a near-zero 0.07% , while maintaining an excellent CA of 90.21%. In conclusion, the training-stage components (Warm-up and Relabeling) predominantly improve the model’s plasticity and CA, whereas the testing-stage routing mechanism (RFCBES) reduces the remaining ASR in this experiment. This step-wise study is reported separately from the three-seed macro ablation; their absolute values are not pooled. 
+
+J. Computational Overhead Analysis 
+
+We evaluate practical deployment cost on Split CIFAR-100 by profiling total and trainable parameters, peak GPU memory, training time per task, and GFLOPs per forward pass. The reported setup uses a pre-trained ViT backbone, an NVIDIA RTX 3090 GPU, and a batch size of 32. Figure 4 presents our method alongside two representative baselines: DER++ for rehearsal-based continual learning and AIBD for backdoor defense. 
+
+Representative Overhead Profiles. DER++ uses a fixed architecture, while AIBD provides a comparison with aspecialized defense pipeline. Our dynamic architecture adds a lightweight expert for each task while freezing the shared backbone and earlier experts. The reported parameter increment is approximately 0.5M per task, with only the current expert updated. The selected profiles compare this gradual capacity increase with the GPU memory, training time, and inference cost of the two baselines. 
+
+Defense Performance and Computational Cost. Combined with Table II, these profiles illustrate the accuracy–ASR trade-off alongside the cost of dynamic expansion. The shared backbone and single selected prediction head keep inference computation close to that of the underlying ViT. Training includes warm-up, correction, and joint optimization; correction evaluates the available experts, and persistent state includes class-reference gradient caches and routing prototypes. These components are included in the scope of resource accounting rather than treating the absence of exemplar replay as zero storage cost. 
+
+K. Hyperparameter Sensitivity Analysis 
+
+We evaluate the sensitivity of two key hyperparameters in our proposed defense: the gradient discrepancy threshold 
+
+λ (denoted as correction_threshold ) and the number of warm-up epochs Ewarm (denoted as warmup_epochs ). Experiments are conducted on the Seq-CIFAR10 benchmark under BadNets attack with a poisoning rate of 5%. The clean accuracy (CA, %) and attack success rate (ASR, %) are reported in Figure 3. 
+
+Effect of Gradient Discrepancy Threshold λ. As shown in the left panel of Figure 3, when λ increases from 0.1 to 0.3, the ASR remains near zero (0.02%–0.00%) and CA stays above 94%. This indicates that a small threshold effectively filters out most poisoned samples during the gradient-discrepancy-based selection , because only samples with gradient vectors very close to the clean prototype are accepted. When λ exceeds 0.5, the ASR begins to rise (0.31% at λ = 0 .5, 2.70% at 
+
+λ = 0 .7), while CA declines slightly to 92%–94%. This degradation occurs because a larger threshold admits samples with larger gradient discrepancies, some of which are true poisoned samples whose pseudo-labels are incorrect, thereby compromising both robustness and clean accuracy. Notably, at λ = 0 .6 and 0.7, the ASR increases sharply, suggesting that the gradient discrepancy criterion becomes too permissive, admitting samples with weaker class-reference consistency. Within this sweep, the results favor λ ∈ [0 .1, 0.4] for the displayed accuracy–ASR trade-off. Note that in the subsequent warm-up analysis we fix λ = 0 .5; although this value lies slightly outside the strict optimal range, it still yields acceptable ASR ( 0.31% ) and high CA, and importantly it resides at the transition point where the defense transitions from very robust to gradually more permissive. Choosing λ = 0 .5 allows the warm-up study to be conducted in a regime where the effect of Ewarm is clearly observable, without being masked by an overly stringent filter that might otherwise limit the dynamic range of the performance metrics. 14 1 2 3 4 5 6 7 8 9 10 
+
+Task ID 
+
+> 78 80 82 84 86 88
+> Total Params (M)
+
+(a) Model Parameters Growth          
+
+> Total Params Trainable Params
+> 12345678910
+
+Task ID 
+
+> 0.062 0.064 0.066 0.068 0.070 0.072
+> VRAM (MB)
+> +6.088e2
+
+(b) Peak VRAM Allocation          
+
+> 12345678910
+
+Task ID 
+
+> 60 70 80 90
+> Time (Seconds)
+
+(c) Training Time per Task          
+
+> 12345678910
+
+Task ID 
+
+> 16.00 16.25 16.50 16.75 17.00 17.25 17.50 17.75
+> GFLOPs / Forward Pass
+
+(d) Computational Complexity 
+
+> 0.43 0.44 0.45 0.46 0.47
+> Trainable Params (M)
+
+(A) DER++ 1 2 3 4 5 6 7 8 9 10 
+
+Task ID 
+
+> 78 80 82 84 86 88
+> Total Params (M)
+
+(a) Model Parameters Growth          
+
+> Total Params Trainable Params
+> 12345678910
+
+Task ID 
+
+> 608.80 608.82 608.84 608.86
+> VRAM (MB)
+
+(b) Peak VRAM Allocation          
+
+> 12345678910
+
+Task ID 
+
+> 90 100 110 120 130 140 150 160
+> Time (Seconds)
+
+(c) Training Time per Task          
+
+> 12345678910
+
+Task ID 
+
+> 16.00 16.25 16.50 16.75 17.00 17.25 17.50 17.75
+> GFLOPs / Forward Pass
+
+(d) Computational Complexity 
+
+> 0.43 0.44 0.45 0.46 0.47
+> Trainable Params (M)
+
+(B) AIBD 1 2 3 4 5 6 7 8 9 10 
+
+Task ID 
+
+> 78 80 82 84 86 88 90 92
+> Total Params (M)
+
+(a) Model Parameters Growth          
+
+> Total Params Trainable Params
+> 12345678910
+
+Task ID 
+
+> 590 595 600 605 610 615
+> VRAM (MB)
+
+(b) Peak VRAM Allocation          
+
+> 12345678910
+
+Task ID 
+
+> 140 160 180 200 220
+> Time (Seconds)
+
+(c) Training Time per Task          
+
+> 12345678910
+
+Task ID 
+
+> 16.849 16.850 16.851 16.852 16.853
+> GFLOPs / Forward Pass
+
+(d) Computational Complexity 
+
+> 0.51 0.52 0.53 0.54 0.55 0.56 0.57
+> Trainable Params (M)
+
+(C) Ours (BPP-GDBRO) 
+
+Fig. 4. Computational overhead on Split CIFAR-100 for (A) DER++, (B) AIBD, and (C) our BPP-GDBRO framework. Each original plot reports (a) total and trainable parameters, (b) peak GPU memory, (c) training time per task, and (d) GFLOPs per forward pass. 
+
+Effect of Warm-up Epochs Ewarm . The right panel of Figure 3 depicts the results for Ewarm ∈ { 1, 3, 5, 7, 10 , 15 } with λ = 0 .5.The warm-up phase trains the current expert exclusively on the clean set Hi using Lwarm . A small number of epochs (e.g., 1–3) yields moderate CA ( ∼ 92% ) but relatively higher ASR (0.45% at Ewarm = 1 ). With 5–10 epochs, CA stabilizes around 93%–94% and ASR drops to 0.05%–0.31%, indicating that sufficient warm-up enables the expert to learn discriminative class prototypes Sj,i that are robust to residual noise. However, further increasing Ewarm to 15 epochs does not improve CA and slightly elevates ASR (0.67%), likely due to overfitting to the limited clean subset, which reduces the model’s ability to generalize to corrected samples during the integration optimization . Thus, Ewarm = 5 or 10 provides the best balance. The warm-up results describe the slice at λ = 0 .5; interactions with other thresholds are not measured by this one-dimensional sweep. Overall, the proposed defense is stable within a reasonable range of hyperparameters: CA fluctuates within ∼2% and ASR remains below 1% for most settings. These results confirm that our BPP and GDBRO mechanisms are not overly sensitive to hyperparameter choices, which is desirable for practical deployment in continual learning under poisoning attacks. 15 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8                              
+
+> Gradient Discrepancy disc
+> 0246810 12
+> Density
+> Task 0 - Gradient Discrepancy Distribution
+> Clean Poison (pseudo correct) Poison (pseudo wrong) =0.4 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+> Gradient Discrepancy disc
+> 0123456
+> Density
+> Task 1 - Gradient Discrepancy Distribution
+> Clean Poison (pseudo correct) Poison (pseudo wrong) =0.4 0.2 0.3 0.4 0.5 0.6 0.7 0.8
+> Gradient Discrepancy disc
+> 0123456
+> Density
+> Task 2 - Gradient Discrepancy Distribution
+> Clean Poison (pseudo correct) Poison (pseudo wrong) =0.4 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+> Gradient Discrepancy disc
+> 0123456
+> Density
+> Task 3 - Gradient Discrepancy Distribution
+> Clean Poison (pseudo correct) Poison (pseudo wrong) =0.4 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+> Gradient Discrepancy disc
+> 01234567
+> Density
+> Task 4 - Gradient Discrepancy Distribution
+> Clean Poison (pseudo correct) Poison (pseudo wrong) =0.4
+
+Fig. 5. Gradient discrepancy distributions for all five sequential tasks under BadNets attack on CIFAR-10. Clean samples are shown in blue, poisoned samples with correct pseudo-labels in orange, and poisoned samples with wrong pseudo-labels in red. The green dashed line denotes the correction threshold λ = 0 .4.
+
+L. Analysis of Gradient Discrepancy Distributions 
+
+Experimental setup. We conduct experiments on the CIFAR-10 dataset under the sequential class-incremental learning protocol, where the 10 classes are divided into 5 tasks with 2 classes per task. The backdoor attack adopts the BadNets scheme with a 3 × 3 white patch trigger placed at the bottom-right corner, a target label 0, and for this diagnostic experiment we deliberately raise the poisoning rate to 10% 
+
+(instead of the 5% used in all other main experiments) to obtain a richer set of poisoned samples for visualizing the gradient discrepancy distributions. The defense hyperparameters are set to warm-up epochs Ewarm = 5 and correction threshold 
+
+λ = 0 .4.
+
+Validation of GDBRO. The Gradient Discrepancy-Based Ro-bustness Optimization (GDBRO) module plays a central role in our defense framework by identifying and correcting poisoned samples that would otherwise degrade model robustness. As defined in Eq. (9), the gradient discrepancy Fdisc measures the cosine distance between the gradient of a candidate sample 
+
+˜x and the gradient of its pseudo-label class prototype Sy′,s ⋆
+
+with respect to the classifier parameters. The correction score measures agreement with the class reference. Therefore, a suitable threshold λ can effectively separate clean and correctly corrected samples from mislabeled backdoor ones. Figure 5 visualizes the Fdisc distributions for all five sequen-tial tasks, where samples are grouped into three categories: clean samples, poisoned samples that receive correct pseudo-labels, and poisoned samples that receive wrong pseudo-labels. It is evident that clean samples consistently concentrate at low 
+
+Fdisc values, typically below 0.2, confirming that their gradient directions are highly aligned with the corresponding class prototypes. Poisoned samples with correct pseudo-labels also exhibit predominantly small discrepancies, only slightly higher than clean ones, because the trigger perturbation is not sufficient to alter the semantic class intended by the attacker. In sharp contrast, poisoned samples whose pseudo-labels are erroneous (e.g., predicting the target class instead of the original ground-truth label) display markedly larger Fdisc values, forming a distinct distribution shifted to the right. This clear separation demonstrates the effectiveness of GDBRO in distinguishing suspicious backdoor examples from benign ones. 
+
+Justification of λ = 0 .4. The choice of the hyperparameter 
+
+λ directly influences the quality of the robustness subset 
+
+ˆHi formed by the threshold rule. A too stringent threshold would exclude many poisoned samples that could otherwise be corrected, while a too liberal threshold risks admitting genuinely corrupted samples. From Figure 5, we observe that the majority of clean samples and poison-correct samples lie well below 0.4, whereas a substantial portion of poison-wrong samples exceeds this value. Setting λ = 0 .4 thus achieves a favorable trade-off: it retains most clean and correctly pseudo-labeled data while filtering out a large fraction of poisoned samples with highly inconsistent gradient signatures. This is an empirical diagnostic of selective recovery, rather than a guarantee that every accepted pseudo-label is correct. Notably, Task 0, which contains the target class, exhibits a higher absolute count of poisoned samples, but the discrimina-tive pattern remains consistent with other tasks. The overall similarity of the histograms across tasks further demonstrates the stability of GDBRO under the dynamic expansion regime, making the fixed threshold λ = 0 .4 a robust choice throughout the continual learning process. VI. C ONCLUSION AND LIMITATION 
+
+In this paper, we investigate a challenging yet practical sce-nario of continual learning under backdoor attacks (CLUBA), where models must simultaneously preserve previously ac-quired knowledge, adapt to newly arriving tasks, and resist 16 
+
+malicious supervision injected during incremental updates. To address this challenge, we propose a robust dynamic-expansion framework that integrates backdoor purification, selective sample recovery, and robust expert routing into a unified continual learning paradigm. Specifically, the proposed Bi-Prototype Purification (BPP) mechanism identifies suspicious samples by exploiting semantic inconsistencies in feature space, while Gradient Discrepancy-based Robustness Optimization (GDBRO) further evaluates and selectively recovers informative samples through gradient-level consistency. Moreover, Robust Feature Consistency-based Expert Selection (RFCBES) im-proves inference-time robustness by constructing reliable class prototypes for expert routing. Extensive experiments on multiple continual backdoor bench-marks demonstrate that our framework achieves a favorable balance among stability, plasticity, and security. Unlike con-ventional continual learning approaches that mainly focus on preventing catastrophic forgetting, our method explicitly considers the risk of absorbing corrupted supervision during sequential learning. The results validate that combining task-local purification with selective recovery provides an effective solution for maintaining model adaptability while reducing vulnerability to persistent backdoor attacks. Despite these promising results, several limitations remain. First, although we evaluate our framework against represen-tative continual backdoor attacks, the current study does not exhaustively cover all possible attack strategies, especially adaptive attackers that may intentionally manipulate feature distributions to evade purification or gradient-based detection. A broader evaluation involving more diverse and adaptive attack scenarios is an important direction for future research. Second, the effectiveness of BPP relies on the assumption that poisoned samples exhibit sufficient semantic deviation from clean samples in the learned representation space. When attackers design stealthier triggers that preserve strong semantic alignment with clean samples, purification performance may degrade. Developing attack-agnostic purification strategies with weaker distribution assumptions remains an open problem. Third, the current GDBRO module adopts a fixed discrepancy threshold for sample recovery, which may require additional adaptation when task distributions or attack intensities vary significantly. Future work could explore adaptive threshold estimation or meta-learning-based calibration strategies to improve scalability in more dynamic environments. Finally, our experiments mainly focus on supervised image classification benchmarks with controlled task sequences. Extending the proposed framework to large-scale real-world continual learning systems, including multimodal models, streaming applications, and open-world scenarios with unknown task boundaries, represents another promising research direc-tion. We believe that developing secure and adaptive continual learners capable of continuously acquiring knowledge while resisting evolving threats will remain an important challenge for future machine learning systems. REFERENCES [1] G. I. Parisi, R. Kemker, J. L. Part, C. Kanan, and S. Wermter, “Continual lifelong learning with neural networks: A review,” Neural networks , vol. 113, pp. 54–71, 2019. [2] J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K. Milan, J. Quan, T. Ramalho, A. Grabska-Barwinska, D. Hassabis, C. Clopath, D. Kumaran, and R. Hadsell, “Overcoming catastrophic forgetting in neural networks,” Proc. of the National Academy of Sciences (PNAS) , vol. 114, no. 13, pp. 3521–3526, 2017. [3] J. Bang, H. Kim, Y. Yoo, J.-W. Ha, and J. Choi, “Rainbow memory: Continual learning with a memory of diverse samples,” in Proc. of IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2021, pp. 8218–8227. [4] A. A. Rusu, N. C. Rabinowitz, G. Desjardins, H. Soyer, J. Kirkpatrick, K. Kavukcuoglu, R. Pascanu, and R. Hadsell, “Progressive neural networks,” arXiv preprint arXiv:1606.04671 , 2016. [5] Y. Zhou and Z. Hua, “Defense without forgetting: Continual adversarial defense with anisotropic & isotropic pseudo replay,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2024, pp. 24 263–24 272. [6] X. Mi, F. Tang, Z. Yang, D. Wang, J. Cao, P. Li, and Y. Liu, “Adversarial robust memory-based continual learner,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 562–572. [7] F. Ye and A. G. Bors, “Dynamic self-supervised teacher-student net-work learning,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2022. [8] M. De Lange, R. Aljundi, M. Masana, S. Parisot, X. Jia, A. Leonardis, G. Slabaugh, and T. Tuytelaars, “A continual learning survey: Defying forgetting in classification tasks,” IEEE transactions on pattern analysis and machine intelligence , vol. 44, no. 7, pp. 3366–3385, 2021. [9] F. Zenke, B. Poole, and S. Ganguli, “Continual learning through synaptic intelligence,” in International conference on machine learning . Pmlr, 2017, pp. 3987–3995. [10] R. Aljundi, F. Babiloni, M. Elhoseiny, M. Rohrbach, and T. Tuytelaars, “Memory aware synapses: Learning what (not) to forget,” in Proceedings of the European conference on computer vision (ECCV) , 2018, pp. 139– 154. [11] Z. Li and D. Hoiem, “Learning without forgetting,” IEEE Trans. on Pattern Analysis and Machine Intelligence , vol. 40, no. 12, pp. 2935–2947, 2017. [12] S.-A. Rebuffi, A. Kolesnikov, G. Sperl, and C. H. Lampert, “iCaRL: Incremental classifier and representation learning,” in Proc. of the IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , 2017, pp. 2001–2010. [13] P. Buzzega, M. Boschini, A. Porrello, D. Abati, and S. Calderara, “Dark experience for general continual learning: a strong, simple baseline,” 
+
+Advances in neural information processing systems , vol. 33, pp. 15 920– 15 930, 2020. [14] D. Rolnick, A. Ahuja, J. Schwarz, T. Lillicrap, and G. Wayne, “Experience replay for continual learning,” Advances in neural information processing systems , vol. 32, 2019. [15] R. Aljundi, E. Belilovsky, T. Tuytelaars, L. Charlin, M. Caccia, M. Lin, and L. Page-Caccia, “Online continual learning with maximal interfered retrieval,” Advances in neural information processing systems , vol. 32, 2019. [16] L. Caccia, R. Aljundi, N. Asadi, T. Tuytelaars, J. Pineau, and E. Belilovsky, “New insights on reducing abrupt representation change in online continual learning,” arXiv preprint arXiv:2104.05025 , 2021. [17] D. Lopez-Paz and M. Ranzato, “Gradient episodic memory for continual learning,” Advances in neural information processing systems , vol. 30, 2017. [18] A. Chaudhry, M. Ranzato, M. Rohrbach, and M. Elhoseiny, “Efficient lifelong learning with a-gem,” arXiv preprint arXiv:1812.00420 , 2018. [19] Z. Wang, Z. Zhang, C.-Y. Lee, H. Zhang, R. Sun, X. Ren, G. Su, V. Perot, J. Dy, and T. Pfister, “Learning to prompt for continual learning,” in 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, pp. 139–149. [20] Z. Wang, Z. Zhang, S. Ebrahimi, R. Sun, H. Zhang, C.-Y. Lee, X. Ren, G. Su, V. Perot, J. Dy et al. , “Dualprompt: Complementary prompting for rehearsal-free continual learning,” in European conference on computer vision . Springer, 2022, pp. 631–648. [21] J. S. Smith, L. Karlinsky, V. Gutta, P. Cascante-Bonilla, D. Kim, A. Arbelle, R. Panda, R. Feris, and Z. Kira, “Coda-prompt: Continual decomposed attention-based prompting for rehearsal-free continual learning,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2023, pp. 11 909–11 919. [22] L. Wang, J. Xie, X. Zhang, M. Huang, H. Su, and J. Zhu, “Hierarchical decomposition of prompt-based continual learning: Rethinking obscured sub-optimality,” Advances in Neural Information Processing Systems ,vol. 36, pp. 69 054–69 076, 2023. 17 
+
+[23] J. Yu, Z. Huang, Y. Zhuge, L. Zhang, P. Hu, D. Wang, H. Lu, and Y. He, “Moe-adapters++: Towards more efficient continual learning of vision-language models via dynamic mixture-of-experts adapters,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2025. [24] Q. Gao, C. Zhao, Y. Sun, T. Xi, G. Zhang, B. Ghanem, and J. Zhang, “A unified continual learning framework with general parameter-efficient tuning,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 11 483–11 493. [25] F. Ye, Y. Zhong, Q. Liu, A. G. Bors, R. Hu et al. , “Learning multi-source and robust representations for continual learning,” Advances in Neural Information Processing Systems , vol. 38, pp. 175 126–175 146, 2026. [26] X. Li, S. Wang, J. Sun, and Z. Xu, “Variational data-free knowledge distillation for continual learning,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 10, pp. 12 618–12 634, 2023. [27] G. Sun, W. Liang, J. Dong, J. Li, Z. Ding, and Y. Cong, “Create your world: Lifelong text-to-image diffusion,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 46, no. 9, pp. 6454–6470, 2024. [28] T. Gu, K. Liu, B. Dolan-Gavitt, and S. Garg, “Badnets: Evaluating backdooring attacks on deep neural networks,” Ieee Access , vol. 7, pp. 47 230–47 244, 2019. [29] X. Chen, C. Liu, B. Li, K. Lu, and D. Song, “Targeted backdoor attacks on deep learning systems using data poisoning,” arXiv preprint arXiv:1712.05526 , 2017. [30] A. Nguyen and A. Tran, “Wanet–imperceptible warping-based backdoor attack,” arXiv preprint arXiv:2102.10369 , 2021. [31] X. Wang, M. Xue, K. Chen, J. Xu, W. Liu, L. Y. Zhang, and Y. Zhang, “Isbad: Imperceptible sample-specific backdoor to dnn with denoising autoencoder,” IEEE Transactions on Emerging Topics in Computing ,2025. [32] A. Turner, D. Tsipras, and A. Madry, “Clean-label backdoor attacks,” 2019. [Online]. Available: https://openreview.net/forum?id=HJg6e2CcK7 [33] Z. Yuan, J. Shi, P. Zhou, N. Z. Gong, and L. Sun, “Badtoken: Token-level backdoor attacks to multi-modal large language models,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 29 927–29 936. [34] H. Li and G. Ditzler, “Targeted data poisoning attacks against continual learning neural networks,” in 2022 International Joint Conference on Neural Networks (IJCNN) . IEEE, 2022, pp. 1–8. [35] M. Umer and R. Polikar, “Adversarial targeted forgetting in regularization and generative based continual learning models,” in 2021 International Joint Conference on Neural Networks (IJCNN) . IEEE, 2021, pp. 1–8. [36] Z. Guo, A. Kumar, and R. Tourani, “Persistent backdoor attacks in continual learning,” in 34th USENIX Security Symposium (USENIX Security 25) , 2025, pp. 6379–6397. [37] R. Gao and W. Liu, “Red alarm: Controllable backdoor attack in continual learning,” Neural Networks , vol. 188, p. 107479, 2025. [38] Z. Sha, X. He, P. Berrang, M. Humbert, and Y. Zhang, “Fine-tuning is all you need to mitigate backdoor attacks,” arXiv preprint arXiv:2212.09067 ,2022. [39] B. Wang, Y. Yao, S. Shan, H. Li, B. Viswanath, H. Zheng, and B. Y. Zhao, “Neural cleanse: Identifying and mitigating backdoor attacks in neural networks,” in 2019 IEEE symposium on security and privacy (SP) .IEEE, 2019, pp. 707–723. [40] K. Liu, B. Dolan-Gavitt, and S. Garg, “Fine-pruning: Defending against backdooring attacks on deep neural networks,” in International symposium on research in attacks, intrusions, and defenses . Springer, 2018, pp. 273–294. [41] Y. Gao, C. Xu, D. Wang, S. Chen, D. C. Ranasinghe, and S. Nepal, “Strip: A defence against trojan attacks on deep neural networks,” in Proceedings of the 35th annual computer security applications conference , 2019, pp. 113–125. [42] Y. Li, X. Lyu, N. Koren, L. Lyu, B. Li, and X. Ma, “Anti-backdoor learning: Training clean models on poisoned data,” Advances in Neural Information Processing Systems , vol. 34, pp. 14 900–14 912, 2021. [43] B. Chen, W. Carvalho, N. Baracaldo, H. Ludwig, B. Edwards, T. Lee, I. Molloy, and B. Srivastava, “Detecting backdoor attacks on deep neural networks by activation clustering,” arXiv preprint arXiv:1811.03728 ,2018. [44] Y. Li, X. Lyu, N. Koren, L. Lyu, B. Li, and X. Ma, “Neural attention distillation: Erasing backdoor triggers from deep neural networks,” arXiv preprint arXiv:2101.05930 , 2021. [45] D. Wu and Y. Wang, “Adversarial neuron pruning purifies backdoored deep models,” Advances in Neural Information Processing Systems ,vol. 34, pp. 16 913–16 925, 2021. [46] Y. Zeng, S. Chen, W. Park, Z. M. Mao, M. Jin, and R. Jia, “Adversarial unlearning of backdoors via implicit hypergradient,” arXiv preprint arXiv:2110.03735 , 2021. [47] J.-L. Yin, W. Wang, W. Lin, X. Liu et al. , “Adversarial-inspired backdoor defense via bridging backdoor and adversarial attacks,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 39, no. 9, 2025, pp. 9508–9516. [48] K. Huang, Y. Li, B. Wu, Z. Qin, and K. Ren, “Backdoor defense via decoupling the training process,” arXiv preprint arXiv:2202.03423 , 2022. [49] Y. Han, G. Huang, S. Song, L. Yang, H. Wang, and Y. Wang, “Dynamic neural networks: A survey,” IEEE transactions on pattern analysis and machine intelligence , vol. 44, no. 11, pp. 7436–7456, 2021. [50] A. Mallya and S. Lazebnik, “Packnet: Adding multiple tasks to a single network by iterative pruning,” in Proceedings of the IEEE conference on Computer Vision and Pattern Recognition , 2018, pp. 7765–7773. [51] H. Wang, H. Lu, L. Yao, and D. Gong, “Self-expansion of pre-trained models with mixture of adapters for continual learning,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 10 087–10 098. [52] A. Douillard, A. Ramé, G. Couairon, and M. Cord, “Dytox: Transformers for continual learning with dynamic token expansion,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 9285–9295. [53] F. Ye, Y. Zhong, Q. Liu, A. G. Bors, J. Sun, J. Guo, and S. Zhou, “Learning adaptive and expandable mixture model for continual learning,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 40, no. 33, 2026, pp. 27 773–27 781. [54] F. Ye, Y. Zhao, Q. Liu, J. Chen, A. G. Bors, R. Hu et al. , “Dynamic siamese expansion framework for improving robustness in online continual learning,” Advances in Neural Information Processing Systems ,vol. 38, pp. 71 293–71 312, 2026. [55] R. Cai, Y. Cui, Z. Yu, X. Lin, C. Chen, and A. Kot, “Rehearsal-free and efficient continual learning for cross-domain face anti-spoofing,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2025. [56] Y. Li, Y. Jiang, Z. Li, and S.-T. Xia, “Backdoor learning: A survey,” 
+
+IEEE transactions on neural networks and learning systems , vol. 35, no. 1, pp. 5–22, 2022. [57] M. Zhu, S. Wei, L. Shen, Y. Fan, and B. Wu, “Enhancing fine-tuning based backdoor defense with sharpness-aware minimization,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 4466–4477. [58] Y. Li, L. Huang, S. Tian, H. Liu, and Z. Li, “Robust generative adaptation network for open-set adversarial defense,” IEEE Transactions on Information Forensics and Security , vol. 20, pp. 1649–1664, 2025. 
+
+Keyu Lin is currently pursuing the master degree at University of Electronic Science and Technology of China (UESTC). He received the bachelor degree from Southwest Jiaotong University, China, in 2025. His research interests include continual learning and deep learning. 
+
+Fei Ye is currently a full professor at University of Electronic Science and Technology of China (UESTC). He got the PhD degree from University of York. He received the bachelor degree from Chengdu University of Technology, China, in 2014 and the master degree in computer science and technology from Southwest Jiaotong University, China, in 2018. His research topics includes deep generative image models, lifelong learning and mixture models. 
+
+Qihe Liu received the B.S. degree in mathematics from Sichuan Normal University, Chengdu, China, in 1995, the M.S. degree in mathematics from Sichuan University, Chengdu, China, in 1998, and the Ph.D. degree in computer application technology from the University of Electronic Science and Technology of China (UESTC), Chengdu, China, in 2005. Since 1998, he has been with the School of Computer Science and Engineering, UESTC, where he is currently an Associate Professor. 18 
+
+Shijie Zhou (Member, IEEE) received the Ph.D. degree in computer application technology from the University of Electronic Science and Technology of China (UESTC), Chengdu, China, in June 2004, where he has since been with the School of Computer Science and Engineering. He was a Visiting Scholar at the University of Hong Kong from September 2006 to April 2007 and at Purdue University from January 2009 to January 2010. 
+
+Jiguo Yu (Fellow, IEEE) received the B.S. and M.S. degrees from Qufu Normal University, Qufu, China, and the Ph.D. degree from Shandong University, Jinan, China. He is currently a Professor with the School of Information and Software Engineering, University of Electronic Science and Technology of China (UESTC), Chengdu, China. He was previously a Professor and Dean with the School of Computer Science and Technology, Qilu University of Technol-ogy, Jinan, China, and a Professor with Qufu Normal University.

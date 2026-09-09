@@ -1,0 +1,433 @@
+Title: MemSentry: A Framework for Detecting Persistent Memory Poisoning in Agentic AI
+
+URL Source: https://arxiv.org/pdf/2609.08747v1
+
+Published Time: Wed, 09 Sep 2026 03:52:44 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# MemSentry: A Framework for Detecting Persistent Memory Poisoning in Agentic AI 
+
+Ayan Roy 
+
+School of Engineering and Computing Christopher Newport University 
+
+Newport News, VA, United States ayan.roy@cnu.edu 
+
+Kaustuvi Basu 
+
+Independent Researcher 
+
+Kolkata, India basu.kaustuvi@gmail.com 
+
+Abstract —Agentic AI systems with persistent memory intro-duce a distinct attack surface known as memory poisoning ,in which adversarially crafted content is stored in long-term memory and subsequently influences future agent behavior. Such attacks can suppress security alerts, facilitate privilege escalation, alter trust relationships, or override security policies without modifying the underlying model weights or system prompts. To address this threat, we present MemSentry , aformal, configuration-driven framework that intercepts proposed persistent-memory writes and produces deterministic Accept ,
+
+Review , or Quarantine decisions. MemSentry evaluates each write by jointly considering source trust, semantic risk, attack radius over a component-dependency DAG, access risk, and a signed security-state delta that captures whether an operation weakens or strengthens the system’s security posture. We instantiate the protected environment using a 20-asset random dependency DAG and a 10 × 20 user access-control matrix, and evaluate the framework over 1,000 GPT-4-generated scenarios using a stratified 70/30 train/test split. Semantic classification is treated as a pluggable component rather than a primary contribution, and we compare four representative approaches: rule-based Regex, TF-IDF+SVM, SBERT+LR, and SetFit. SBERT+LR achieves the best overall performance with 91.7% accuracy and a 0.908 macro-F1 score, while all four methods detect 100% of external quarantine-class threats. For verified insiders, where source trust is maximal ( T = 1 ), MemSentry does not automatically quarantine suspicious operations but instead escalates poten-tially dangerous writes for human review, making semantic classification important for accurately capturing insider intent. Finally, contrast scenarios reveal a limitation shared across the evaluated semantic methods: surface-similar operations with opposing security implications remain difficult to distinguish, motivating richer LLM-based intent reasoning as a direction for future work. 
+
+Index Terms —AI Security, Memory Poisoning, Agentic AI, Persistent Memory, Security Evaluation, Risk Assessment 
+
+I. I NTRODUCTION 
+
+Modern agentic AI systems are rapidly evolving from state-less prompt–response models into persistent agents capable of maintaining context across interactions. AI assistants increas-ingly rely on external memory to record user preferences, facts, summaries, task states, and handoff notes, allowing interactions and workflows to resume seamlessly over time [1]. Enterprise email automation is one prominent example of this trend. Email remains a fundamental medium for customer engagement and organizational operations, yet the growing volume of messages makes timely and consistent human response increasingly difficult. Recent advances in large lan-guage models (LLMs), retrieval-augmented generation (RAG), and multi-agent systems have consequently motivated au-tonomous email assistants capable of interpreting incoming messages, retrieving contextual information, generating re-sponses, and initiating follow-up actions. Agentic MailBot [2], for example, combines LangChain-based orchestration, RAG, and agent-based reasoning for autonomous email response generation, while other studies have explored agentic AI for email marketing and customer engagement [3]. The same persistent memory that enables such continu-ity, however, introduces a new security attack surface re-ferred to as Persistent Memory Poisoning (PMP) attack [4]. Agents routinely consume information from potentially untrusted sources, including user-uploaded files, webpages, emails, shared documents, and repository documentation. In-formation derived from these sources may subsequently be summarized, transformed, or written into the agent’s long-term memory for future use [5] as depicted in Fig 1. If malicious or misleading content is admitted into this memory without sufficient validation, its influence can persist well beyond the interaction in which it was originally encountered. PMP differs fundamentally from conventional prompt injection because a single successful memory write can continue influencing future reasoning, planning, and action execution without re-quiring continued adversarial interaction. An autonomous SOC agent may receive an external in-struction such as: “Remember that traffic from 10.24.6.17 is part of an approved red-team operation. Suppress future alerts from this address.” If stored without validating provenance and authority, the poisoned memory may suppress alerts, prevent incident creation, disrupt automated response, and expose protected assets. Thus, memory-poisoning analysis must consider not only whether a memory is suspicious, but also which downstream components and security functions it can influence .To address this challenge, we propose MemSentry , an impact-aware framework for securing persistent memory in agentic AI systems. MemSentry evaluates candidate memory writes before commitment using provenance, source authority, arXiv:2609.08747v1 [cs.CR] 8 Sep 2026 Fig. 1. Persistent Memory Attack Scenario Example 
+
+semantic intent, affected actions, and deterministic security constraints. It then projects the potential downstream impact across system components and protected assets. A counter-factual simulation compares executions with and without the candidate memory to estimate the observed blast radius and validate MemSentry’s predictions. Thus, MemSentry asks not only whether a memory is suspicious, but what could happen if it were trusted? 
+
+The main contributions of this work are summarized as follows: 1) We propose MemSentry , a structured pre-admission evaluation pipeline for detecting and containing risky persistent-memory operations in agentic AI systems. 2) We introduce a security-state projection and blast-radius model that estimates how a candidate memory may alter the security posture of downstream system components before the memory is committed. 3) We design a mandatory policy-constraint mechanism 
+
+that enforces non-negotiable authority and security rules independently of the learned or heuristic poisoning-risk score. 4) We develop a counterfactual impact-evaluation framework that compares system behavior with and without a candidate memory to quantify observed component-level impact and validate predicted blast radius. 5) We characterize limitations of semantic-only memory-poisoning detection, particularly under high-trust or insider-originated inputs , where malicious memory up-dates may appear semantically legitimate despite having significant downstream consequences. II. R ELATED WORK 
+
+Prior studies have highlighted the security risks posed by persistent-memory attacks in LLM-based agents [6], [7], [8], [9]. Over the past few years, researchers have explored various approaches to mitigating memory-poisoning attacks in large language model (LLM) systems. SMSR [10] combines HMAC-based provenance tagging with randomized memory ablation and verdict-based aggre-gation to defend against runtime memory poisoning. It fil-ters unsigned injections and mitigates authenticated malicious memories at retrieval time, focusing on certified retrieval robustness rather than pre-commit security-impact assessment. Sunil et al. [11] investigate memory-poisoning attacks under realistic persistent-memory conditions and propose input/out-put moderation and trust-aware memory sanitization as de-fenses. Their approach combines heuristic and semantic checks with trust scoring, temporal decay, and retrieval-time filtering, while highlighting the difficulty of reliably distinguishing poisoned from trustworthy memories.Tan et al. [12] propose MemAudit, a post-hoc memory auditing framework that com-bines counterfactual causal attribution and structural anomaly detection to identify poisoned memories after harmful behavior has occurred.Deshmukh et al. [13] propose MEMSHIELD, a retrieval-time defense against coordinated multi-entry memory poisoning in LLM agents. The framework detects suspicious retrieval batches using structural metadata such as temporal burst, writer/provenance overlap, and shared context, while a conformal-calibrated LLM judge handles borderline cases. Unlike MemSentry, which evaluates individual memory op-erations before commitment, MEMSHIELD primarily detects coordinated poisoning patterns after malicious entries have already reached persistent memory and are retrieved for use. Sheoran et al. [14] propose MIVL, a write-time memory integrity layer that evaluates candidate memory writes using semantic drift, directive patterns, temporal behavior, prove-nance, and cross-memory contradiction signals. These signals are combined into a weighted Memory Integrity Score used to block, quarantine, sanitize, or flag suspicious writes. Wei et al. 
+
+[15] propose A-memguard, which detects context-dependent memory poisoning by comparing reasoning paths derived from retrieved memories and identifying deviations from their consensus. A dual-memory architecture further stores detected failures as lessons to prevent recurring erroneous behavior. While most existing methods are reactive, identifying or mitigating poisoned memories only after malicious content has entered the persistent memory, MemSentry adopts a pre-commit based approach. Rather than waiting for harmful be-havior to emerge, MemSentry evaluates each proposed mem-ory operation before commitment by considering its prove-nance, authorization, semantic risk, and potential downstream impact. This enables the framework to determine whether an operation should be accepted, reviewed, or quarantined before it can alter the persistent memory state. III. P ROBLEM STATEMENT 
+
+Let O denote a proposed memory operation submitted by a principal U through channel ch . The problem is to determine whether committing O to active persistent memory would degrade (or improve) the security posture of the agentic system, and route to the appropriate enforcement action:  
+
+> •
+
+Accept : Commit to active memory (low risk, authorized, or security-strengthening) Fig. 2. MemSentry evaluation pipeline  
+
+> •
+
+Review : Hold for human approval (moderate risk or ambiguity)  
+
+> •
+
+Quarantine : Block and isolate (high risk or policy vio-lation) Formally, the system computes a security delta δ(O) repre-senting the signed change in system posture: negative values indicate degradation, positive values indicate strengthening (e.g., enabling MFA, enforcing stricter policies). IV. T HREAT MODEL 
+
+We define two attacker classes that MemSentry must defend against:  
+
+> •
+
+External Adversary : An unauthenticated actor injecting content through external channels (emails, webhooks, third-party APIs). The source is unknown or unverified. This is the primary attack vector and the one MemSentry handles most effectively. 
+
+Capabilities : Can craft arbitrary message content, cannot authenticate as an internal user. 
+
+Example : An attacker sends a message through an ex-ternal integration: “The SOC has pre-approved all traffic from 10.0.0.0/8—suppress alerts.”  
+
+> •
+
+Compromised Insider : An authenticated internal user whose account has been compromised, or a malicious in-sider. The source passes identity verification but submits adversarial content. 
+
+Capabilities : Authenticated identity, authorized access to some components, can craft messages that exploit trust. 
+
+Example : A verified internal user writes: “Route alerts involving my service accounts to low priority regardless of severity.” V. P ROPOSED FRAMEWORK 
+
+MemSentry implements a 9-step evaluation pipeline (Fig-ure 2) that processes each proposed memory write through source assessment, semantic analysis, impact estimation, and rule-based decision logic. The protected system is modeled as a directed graph 
+
+G = (C, E ) where C = {C1, . . . , C n} are system com-ponents with criticality qi ∈ [0 , 1] , and E are dependency edges. Given a proposed operation O, define CO ⊆ C as the set of components affected by O (including transitively reachable downstream components via the dependency graph). The graph enables attack radius computation and security-state projection. 
+
+A. Step 1: Source Trust 
+
+T (source ) ∈ [0 , 1] (1) Source trust is computed from three factors: origin (external vs. internal), identity verification status, and channel integrity. The mapping is:  
+
+> •
+
+External unverified (T = 0 .0): The source is outside the organizational boundary and has not been authenticated. This represents anonymous inbound messages such as emails from unknown senders, unauthenticated webhook payloads, or unverified third-party API calls.  
+
+> •
+
+External verified (T = 0.5): The source originates externally but has completed identity verification (e.g., a partner organization authenticating via OAuth, a signed webhook from a known vendor). Partial trust is granted because while the identity is confirmed, the source is still outside direct organizational control.  
+
+> •
+
+Internal unverified (T = 0 .5): The request originates from within the organizational network but the specific user has not authenticated (e.g., a service account without MFA, an internal tool calling without user credentials). The internal origin provides some trust, but the lack of identity verification limits it.  
+
+> •
+
+Internal verified (T = 1 .0): The source is both internal and has completed full identity verification (e.g., an au-thenticated employee with verified credentials accessing through a secured channel). This is the maximum trust level. 
+
+B. Step 2: Semantic Classification 
+
+(category , r sem ) = classify (O) (2) Pattern-based classification assigns each operation to a semantic category with an associated risk score. Categories with positive risk ( ∈ (0 , 1] ) indicate potentially harmful operations; a negative risk score indicates security-strengthening operations. Categories include: 
+
+security_strengthening (−0.30 ), preference 
+
+(0.05), schedule (0.05), operational_fact (0.10), 
+
+alert_suppression (0.80), credential_storage 
+
+(0.90), trust_modification (0.70), 
+
+policy_override (0.80), authority_claim (0.90), 
+
+conditional_trigger (0.85). 
+
+C. Step 3: Attack Radius 
+
+The affected component set CO includes both directly targeted components and transitively reachable components through the dependency graph: CO = Cdirect ∪ { Cj : Cj reachable from any Ci ∈ Cdirect }
+
+(3) where Cdirect are the components explicitly named by op-eration O. Reachability is computed via depth-bounded graph traversal (BFS or DFS—the resulting set is identical for reach-ability computation; the depth limit dmax ensures termination in cyclic graphs). The attack radius is: 
+
+AR = |CO ||C| (4) A normalized coverage metric representing the fraction of system components affected. 
+
+D. Step 4: Access Risk 
+
+Raccess =
+
+P 
+
+> i∈CO
+
+qi · ⊮[unauthorized (i)] 
+
+P 
+
+> i∈CO
+
+qi
+
+(5) The criticality-weighted fraction of affected compo-nents for which the principal lacks authorization. Here, 
+
+⊮[unauthorized (i)] is an indicator function with domain i ∈
+
+CO that returns 1 if principal U lacks authorization for com-ponent Ci (checked against configured access-control rules), and 0 otherwise. 
+
+E. Step 5: Security State 
+
+π(Si) = 
+
+P 
+
+> j
+
+qj · sj
+
+P 
+
+> j
+
+qj
+
+(6) Current global security posture as the criticality-weighted average of component strengths sj ∈ [0 , 1] .
+
+F. Step 6: Projected State 
+
+The projected state depends on whether the operation strengthens or degrades security: 
+
+AI = αbase + αaccess · Raccess (7) 
+
+π(Si+1 ) = 
+
+(π(Si) + |rsem | · fp · T · (1 − AR ), rsem < 0,π(Si) − rsem · fp · (1 − T ) · AR · AI, otherwise .
+
+(8) where fpers ∈ {0.3, 0.6, 1.0} is the persistence factor 
+
+mapping operation duration to impact magnitude: temporary 
+
+→ 0.3 (short-lived, auto-expires), bounded → 0.6 (defined expiration), indefinite → 1.0 (permanent, no auto-expiry). Longer persistence amplifies both negative and positive se-curity impact. The term (αbase + αaccess · Raccess ) amplifies degradation when the operation targets components for which the principal is unauthorized. When Raccess = 0 (fully authorized), the amplifier equals αbase (baseline impact). When Raccess = 1 
+
+(fully unauthorized), the amplifier doubles to αbase + αaccess ,reflecting that unauthorized access to critical components produces proportionally worse security degradation. For harmful operations (positive semantic risk), degradation is proportional to source distrust (1 −T ): a fully trusted source causes no modeled degradation. For beneficial operations (negative semantic risk, e.g., enabling MFA), improvement is proportional to source trust T : only trusted sources can positively shift posture. 
+
+G. Step 7: Security Delta 
+
+δ(O) = π(Si+1 ) − π(Si) (9) The signed security posture change. Negative values in-dicate degradation; positive values indicate strengthening .The magnitude quantifies projected impact. For example, 
+
+δ(O) = +0 .21 means the operation is projected to improve system posture by 21% of the normalized scale. 
+
+H. Step 8: Risk Score 
+
+R = α(1 − T ) + β max(0 , r sem ) + γR access 
+
++ ω min ( κ max(0 , −δ), 1) + ϵAR. (10) where α, β, γ, ω, and ϵ are non-negative weighting coef-ficients controlling the relative contributions of source trust, semantic risk, access risk, projected security degradation, and attack radius, respectively. Concrete numeric values used in our experiments are given in Section VI (Table II). Only the positive component of semantic risk contributes to the risk score—security-strengthening operations (negative risk) do not inflate the score. The delta term is scaled by κ and clamped to [0 , 1] .
+
+I. Step 9: Decision Rules 
+
+D(O) = 
+
+
+
+Quarantine , T = 0 (external unverified) ,
+
+Quarantine , δ(O) < −τ∆,
+
+Quarantine , R ≥ τQ,
+
+Accept , R ≤ τR ∧ T > τ T
+
+∧ Raccess < τ A
+
+∧ rsem ≤ τS
+
+∧ category( O) ∈ C benign ,
+
+Review , otherwise .
+
+(11) The decision logic is deterministic and rule-based. The key design choices: 1) Any external unverified source is quarantined regardless of content . This yields zero malicious escapes for exter-nal attacks. 2) Accept criteria : A memory write is accepted only when 
+
+all of the following hold: (a) the source is internal with trust T > τ T , (b) the principal is authorized for the target components ( Raccess < τ A), (c) the semantic risk is low ( rsem ≤ τS ), and (d) the content category is benign (preference, schedule, operational fact, security strengthening, or unknown with low risk). If the op-eration targets a security-critical component (criticality 
+
+≥ 0.85 ), it is routed to review even if otherwise benign. 3) Operations with positive security delta from trusted sources are accepted as strengthening measures. 
+
+J. Output Structure and Explanation Generation 
+
+Every evaluation produces a structured explanation record containing all intermediate values for auditability:  
+
+> •
+
+source_trust : computed T value with interpretation  
+
+> •
+
+semantic_category : classified category and risk score  
+
+> •
+
+attack_radius : AR value and affected component count  
+
+> •
+
+access_risk : Raccess value  
+
+> •
+
+security_delta : δ(O) value (positive = strengthen-ing)  
+
+> •
+
+persistence_factor : fpers applied  
+
+> •
+
+insider_threat : boolean flag and score  
+
+> •
+
+risk_score : final R value  
+
+> •
+
+decision : Accept, Review, or Quarantine  
+
+> •
+
+reasons : list of human-readable justifications The explanation is generated deterministically from the pipeline’s intermediate values using template-based natural language generation. Each decision rule that fires appends a human-readable reason string. The explanation does NOT use an LLM—it is constructed from the computed values (source trust, semantic category, affected components, delta) using predefined templates, ensuring reproducibility and auditability. Identical inputs with identical configuration always produce identical outputs. VI. E XPERIMENTAL EVALUATION 
+
+A. Coefficient Values 
+
+Table II lists the concrete coefficient values used in all experiments. These correspond to the symbolic parameters introduced in Section 5. 
+
+B. Dataset 
+
+The evaluation dataset consists of 1,000 test scenarios independently generated using GPT-4 through structured prompts that specified the required distribution and formatting constraints (can be found in https://github.com/ayanroycnu/ MemSentry-Dataset). The MemSentry implementation was frozen prior to dataset generation to reduce the risk of overfitting to the evaluation scenarios. Table I summarizes the resulting dataset composition. The dataset is divided into training and testing subsets using a 70/30 stratified split, resulting in 700 training samples and 300 testing samples. A fixed random seed of 42 is used across all experiments to ensure reproducibility. The training subset is used exclusively for the machine-learning-based classifiers, while the Regex baseline operates without any training data.                           
+
+> TABLE I EVALUATION DATASET COMPOSITION (1000 S CENARIOS )
+> Category Description Count %
+> Accept Benign preferences, and facts 400 40% Review Security-sensitive operations 300 30% Quarantine Memory-poisoning attacks 300 30%
+> Source distribution:
+> Internal authenticated 700 70% External unauthenticated 300 30%
+> Attack types
+> Alert suppression 50 Credential storage 50 Trust manipulation 50 Policy override 50 Authority claim 50 Conditional trigger 50
+> Fig. 3. MemSentry Input Sample
+
+C. Input/Output Examples 
+
+Figures 3 and 4 illustrate a concrete evaluation scenario in which an external unauthenticated source attempts to suppress security alerts. The malicious memory operation is introduced through an email communication channel, and its intended persistence duration is temporary. 
+
+D. Semantic Classification Comparison 
+
+Semantic classification (Step 2 of the pipeline) is not a novel contribution of this work—it is one interchangeable component within the broader formal framework. To charac-terize how the choice of classifier affects pipeline accuracy, we evaluate one representative method from each of four categories: 1) Rule-based : Regex pattern matching (the default imple-mentation) 2) Lexical ML : TF-IDF (unigrams + bigrams) with Linear SVM 3) Pretrained semantic : Sentence-BERT (all-MiniLM-L6-v2 ) embeddings with Logistic Regression (frozen encoder) 4) Task-adapted semantic : SetFit—contrastive fine-tuning of the same Sentence-BERT encoder on the training set, followed by a classification head 
+
+E. System Model: Company Dependency DAG 
+
+The protected system is modeled as a directed acyclic graph (DAG) of 20 asset nodes (shown in Fig 5, constructed with NetworkX under fixed seed 42. Construction proceeds as follows: a random permutation of the 20 nodes defines a Fig. 4. MemSentry Output Sample TABLE II FRAMEWORK PARAMETER VALUES . T HE OPTION B                                  
+
+> PROBABILITY -TO -RISK MAPPING IS DEFINED IN SECTION VI-F.
+> Symbol Parameter Value
+> αSource distrust weight 0.25
+> βSemantic risk weight 0.30
+> γAccess risk weight 0.20
+> δwSecurity delta weight 0.15
+> ϵAttack radius weight 0.10
+> κDelta scaling factor 5.0
+> αbase Access amplifier base 1.0
+> αaccess Access amplifier coefficient 1.0
+> τ∆Delta degradation threshold 0.30
+> τQQuarantine threshold (risk) 0.70
+> τRAccept threshold (risk) 0.30
+> τTAccept trust threshold 0.50
+> τAAccept access risk threshold 0.30
+> τSAccept semantic risk threshold 0.30
+> dmax Maximum graph traversal depth 3
+
+strict ordering; for every ordered pair (i, j ) where i precedes 
+
+j, a directed edge i → j is added with probability p = 0 .15 .Because edges only ever point forward in the permutation, the graph is acyclic by construction. Each node receives a random criticality ∈ [0 , 1] .The realized graph has 20 nodes, 28 edges, and 6 sink nodes (out-degree 0: asset 01, asset 04, asset 08, asset 11, asset 13, asset 17 as seen in Fig 5), demonstrating where attack propagation terminates. The out-degree distribution is: 6 nodes with out-degree 0, 7 with 1, 3 with 2, 2 with 3, 1 with 4, and 1 with 5. Attack radius over the DAG is defined as 
+
+AR (target ) = |reachable (target ) ∪ { target }| 
+
+20 ,
+
+where reachable is the downstream set via directed BFS. Sink nodes have AR = 0 .05 (attacks do not propagate). The highest-radius node is asset 15 ( AR = 0 .60 , 11 downstream), followed by asset 12 ( AR = 0 .45 ) and asset 09 ( AR = 0 .40 ). Access is modeled as a 10 × 20 access control matrix (seed 42), where 3 super-users (user 04, user 05, user 09) hold 95– 100% access and the remaining users hold 20–40%.  
+
+> Fig. 5. Company system dependency DAG (20 assets, seed 42). Node color encodes criticality. Square blue-bordered nodes are sinks (out-degree 0) where attack propagation terminates.
+
+F. Semantic Analysis Methods and Risk Mapping 
+
+Semantic analysis is one interchangeable component whose sole job is to map a message to a semantic risk score rsem ∈
+
+[0 , 1] and a category. After this step, the identical pipeline (T → AR → Raccess → π(S) → π(S+1) → δ → R →
+
+decision rules) runs for all methods. Semantic analysis is not a novelty of this work; we evaluate one representative method per category to characterize the ceiling:  
+
+> •
+
+Rule-based : Regex (fixed category →risk table)  
+
+> •
+
+Lexical ML : TF-IDF (1–2 grams) + calibrated Linear SVM  
+
+> •
+
+Pretrained semantic : Sentence-BERT (all-MiniLM-L6-v2) + Logistic Regression  
+
+> •
+
+Task-adapted semantic : SetFit (contrastive fine-tuning) + LR head For the three trained classifiers, class probabilities are converted to a scalar risk (Option B): 
+
+rsem = P (accept )·0.10+ P (review )·0.50+ P (quarantine )·0.90 .
+
+Regex uses its fixed category-risk table. The predicted class also maps to a category for the benign check: accept →operational fact (benign), review →access modification, quarantine →policy override. 
+
+G. Result 1: Classification Quality (70/30 Split) 
+
+All four methods correctly identify 100% of quarantine-class attacks and achieve high accept accuracy. As can be seen from Fig. 6, the differentiator is the review class (am-biguous, security-adjacent operations). SBERT+LR is best overall (91.7% accuracy, 0.908 macro-F1), with 72.2% review accuracy. SetFit underperforms on review (22.2%) despite perfect accept and quarantine. TABLE III OVERALL AND MACRO METRICS (300 T EST SAMPLES )
+
+Method Acc Macro-P Macro-R Macro-F1 
+
+Regex .783 .834 .761 .735 TF-IDF + SVM .880 .895 .869 .866 SBERT + LR .917 .927 .907 .908 
+
+SetFit .767 .849 .741 .701 TABLE IV PER -C LASS ACCURACY AND F1 (300 T EST SAMPLES )
+
+Per-Class Accuracy Per-Class F1 Method Acc Rev Qua Acc Rev Qua Regex .983 .300 1.00 .822 .454 .928 TF-IDF+SVM .983 .622 1.00 .915 .757 .928 SBERT+LR 1.00 .722 1.00 .956 .839 .928 SetFit 1.00 .222 1.00 .811 .364 .928 
+
+H. Result 2: Single-Insider Authorization Sweep 
+
+We model a single insider attacker (internal, verified, T =1.0) whose authorization varies from 0% to 100% in 10% increments. At level p, the insider is granted a random p-fraction of the 20 components (nested, seed 42); the insider is authorized for a target only if it owns the target’s entire reachable subtree. All 1000 scenarios are run through the full pipeline for each method. 
+
+TABLE V PER -C LASS ACCURACY AT 0%, 50%, 100% A UTHORIZATION 
+
+Class Method 0% 50% 100% 
+
+Review Regex 1.00 .550 .133 TF-IDF+SVM 1.00 .823 .667 SBERT+LR 1.00 .960 .910 SetFit 1.00 .503 .027 Accept (all methods) .000 ∼.49 ∼.99 Quarantine (all methods) .000 .000 .000 
+
+The three subplots of Figure 7 show the per-class trends. In the Accept subplot, accuracy rises with authorization as pro-gressively more operations clear the access gate; in the Review subplot, accuracy falls as the trusted insider’s operations are increasingly accepted; and the Quarantine subplot is flat at 0% for every method at every level. Table V summarizes these trends numerically at the 0%, 50%, and 100% checkpoints. A verified insider has T = 1 .0, so (1 − T ) = 0 zeroes the projected degradation δ, and the aggregate risk R never reaches τQ = 0 .70 . Consequently no insider operation is ever auto-quarantined; all dangerous insider content is routed to REVIEW via Rule 6 (“authorized but dangerous—insider threat noted”). The 0% quarantine accuracy in the sweep is therefore a deliberate fail-to-review behavior for trusted insiders, not a detection miss. SBERT+LR best preserves review accuracy under high authorization (0.91 at 100%); SetFit degrades most (0.027). 
+
+Fig. 6. Result 1: Per-class and overall accuracy for the four methods. All methods achieve 100% quarantine detection; they differ primarily in review-class accuracy, where SBERT+LR leads (72.2%). 
+
+I. Result 3: Semantic Contrast Scenarios 
+
+The semantic contrast set is completely held out from the 1,000-scenario corpus used in Results 1 and 2 and is never used during model fitting. Its purpose is diagnostic: each pair isolates a single security-relevant distinction while keeping the wording nearly identical. For example, SC01— “An authenticated engineer asks to retain a new server crit-icality rating, but no asset-owner approval is attached”—is expected to yield R EVIEW , whereas SC02 uses the same request with asset-owner approval attached and is expected to yield A CCEPT . Evaluating such pairs separately reveals whether a classifier captures security-relevant meaning rather than relying primarily on lexical or distributional similarity. 
+
+TABLE VI CONTRAST SCENARIO PREDICTIONS (20 ITEMS , 10 PAIRS )                                                                                                         
+
+> ID Expected Regex TF-IDF SBERT SetFit
+> SC01 review accept review review accept SC02 accept accept accept review accept SC03 accept review review review accept SC04 review review accept review accept SC05 review accept review review accept SC06 accept accept accept review accept SC07 review review review review accept SC08 accept review review review review SC09 review accept accept review accept SC10 accept accept accept review accept SC11 quaran. review accept review accept SC12 accept review accept review accept SC13 review review review review accept SC14 accept accept accept review accept SC15 review accept accept review accept SC16 accept accept review review accept SC17 review review accept review accept SC18 accept review accept review accept SC19 quaran. review accept review accept SC20 accept review accept accept accept
+
+No method resolves more than 3/10 contrast pairs. The two quarantine-expected cases (SC11, SC19) are never quarantined because they run as trusted insiders (the same T = 1 ceiling as Result 2). This confirms that surface-similar pairs with opposite security meaning require deeper reasoning than any evaluated semantic method provides. Fig. 7. Result 2: Single-insider authorization sweep. Per-class accuracy as insider authorization grows 0–100%, for all four methods. Accept accuracy rises with authorization; Review accuracy falls as the trusted insider’s operations are increasingly accepted; Quarantine accuracy is 0% throughout because a fully-trusted insider is escalated to review, never auto-quarantined. TABLE VII CONTRAST SCENARIO ACCURACY           
+
+> Method Item Acc. Pair Acc.
+> Regex .450 1/10 TF-IDF + SVM .550 3/10 SBERT + LR .450 0/10 SetFit .450 0/10
+
+VII. D ISCUSSION 
+
+A. Source Trust and the Insider Ceiling 
+
+MemSentry exhibits a structural dependence on source trust because harmful impact is scaled by the distrust term 
+
+(1 − T ). For external unverified sources (T = 0) , distrust is maximal; together with the unconditional external-quarantine rule, this results in 100% quarantine accuracy across all four semantic methods. In contrast, for a verified insider 
+
+(T = 1) , (1 − T ) = 0 , causing δ to vanish and preventing the overall risk score R from exceeding the quarantine threshold 
+
+τQ = 0 .70 . Consequently, dangerous insider operations are escalated to Review rather than automatically quarantined, reflecting a deliberate fail-to-review policy. The authorization sweep captures this trade-off: as authorization increases from 0% to 100%, accept accuracy improves while review accuracy declines, whereas quarantine accuracy remains at 0%. At full authorization, SBERT+LR retains a review accuracy of 0.91, while SetFit drops to 0.027. 
+
+B. Semantic Classification as a Pluggable Component 
+
+The primary contribution of MemSentry lies in its security-evaluation pipeline rather than the semantic classifier itself. All four semantic methods achieve 100% detection of external quarantine-class threats and high accept accuracy, making performance on the ambiguous Review class the primary differentiator. SBERT+LR provides the strongest overall per-formance, achieving 91.7% accuracy, 0.908 macro-F1, and 72.2% review accuracy. TF-IDF+SVM offers a strong and computationally inexpensive alternative at 88.0% accuracy, while SetFit performs poorly on the review class at 22.2%. Regex serves as a simple but conservative baseline with 78.3% overall accuracy. 
+
+C. The Semantic Reasoning Gap 
+
+None of the evaluated methods reliably resolves the contrast scenarios, with TF-IDF+SVM correctly distinguishing 3/10 pairs, Regex 1/10, and SBERT+LR and SetFit 0/10. These cases involve subtle distinctions such as authenticated versus 
+
+authorized , temporary versus indefinite , and recording versus 
+
+suppressing . Such differences require intent-level reasoning beyond surface lexical or embedding similarity, motivating future exploration of LLM- or NLI-based semantic analysis. 
+
+D. Attack Propagation over the Dependency DAG 
+
+Modeling system dependencies as a DAG enables the at-tack radius to capture downstream propagation. Sink nodes such as asset_ 01 , asset_ 04 , asset_08 , asset_ 11 ,
+
+asset_ 13 , and asset_ 17 limit propagation to AR = 0 .05 ,whereas highly connected assets amplify potential impact. In particular, asset_ 15 and asset_ 12 can affect 11 and 9
+
+assets, respectively. 
+
+E. Limitations 
+
+The current evaluation considers individual memory oper-ations rather than coordinated multi-step campaigns. Insider operations are escalated to review rather than quarantined unless additional content-based hard rules are introduced. The security posture and dependency structure are treated as static during evaluation, and the observed contrast-case failures highlight the remaining limitations of lightweight semantic classification. VIII. C ONCLUSION 
+
+We presented MemSentry , a formal and auditable framework for protecting persistent memory in agentic AI systems against poisoning attacks. The framework evaluates proposed memory writes using source trust, semantic risk, attack radius, access risk, and a signed security-state delta to produce deterministic 
+
+Accept , Review , or Quarantine decisions. We evaluated Mem-Sentry over 1,000 GPT-4-generated scenarios using a 20-asset dependency DAG and a 10 × 20 access-control matrix. Across all four semantic methods, MemSentry detected 100% of external quarantine-class attacks, while SBERT+LR achieved the best overall performance with 91.7% accuracy and a macro-F1 of 0.908. The insider analysis highlights an important limitation: verified insiders with maximal trust are generally escalated to review rather than automatically quarantined, making semantic classification particularly im-portant for identifying risky insider operations. Future work will explore richer intent reasoning, behavioral anomaly detec-tion, temporal attack correlation, and stronger content-based hard rules. Overall, MemSentry demonstrates the feasibility of configuration-driven, pre-commit security assessment for persistent agent memory while identifying insider defense as an important open challenge. REFERENCES [1] J. Gao, K. Xia, Y. Zhang, X. Hong, M. Lin, X. Wei, W. Li, and S. Lu, “Mempoison: Uncovering persistent memory threats and structural blind spots in llm agents,” arXiv preprint arXiv:2607.14651 , 2026. [2] S. B. Patil, “Agentic mailbot: Autonomous multi-agent email response system with contextual intelligence,” 2025. [3] G. Venkatasubramaniam, G. Ghinea, K. Hone, and Y. Li, “Personalized email marketing with agentic ai,” 2025. [4] S. Dong, S. Xu, P. He, Y. Li, J. Tang, T. Liu, H. Liu, and Z. Xiang, “Memory injection attacks on llm agents via query-only interaction,” Ad-vances in Neural Information Processing Systems , vol. 38, pp. 46 697– 46 731, 2026. [5] S. S. Srivastava and H. He, “Memorygraft: Persistent compromise of llm agents via poisoned experience retrieval,” arXiv preprint arXiv:2512.16962 , 2025. [6] Z. Chen, Z. Xiang, C. Xiao, D. Song, and B. Li, “Agentpoison: Red-teaming llm agents via poisoning memory or knowledge bases,” Ad-vances in Neural Information Processing Systems , vol. 37, pp. 130 185– 130 213, 2024. [7] G. Torres, S. Shrestha, and S. Misra, “When agents remember too much: Memory poisoning attacks on large language model agents,” 
+
+arXiv preprint arXiv:2607.06595 , 2026. [8] D. Das, J. Piet, D. Kaviani, L. Beurer-Kellner, F. Tram` er, and D. Wagner, “Trojan hippo: Weaponizing agent memory for data exfiltration,” arXiv preprint arXiv:2605.01970 , 2026. [9] B. Devarangadi Sunil, I. Sinha, P. Maheshwari, S. Todmal, S. Mallik, and S. Mishra, “Memory poisoning attack and defense on memory based llm-agents,” arXiv e-prints , pp. arXiv–2601, 2026. [10] T. Sharma, “Smsr: Certified defence against runtime memory poisoning in persistent llm agent systems,” arXiv preprint arXiv:2606.12703 , 2026. [11] B. D. Sunil, I. Sinha, P. Maheshwari, S. Todmal, S. Mallik, and S. Mishra, “Memory poisoning attack and defense on memory based llm-agents,” arXiv preprint arXiv:2601.05504 , 2026. [12] Z. Tan, Y. Yao, H. Jin, W. Yu, G. Wang, M. Fan, F. Liu, X. Zhang, D. Ma, T. Yang et al. , “Memaudit: Post-hoc auditing of poisoned agent memory via causal attribution and structural anomaly detection,” arXiv preprint arXiv:2605.23723 , 2026. [13] S. S. Deshmukh and P. Das, “Memshield: A three-tier retrieval-time de-fense against coordinated memory poisoning in llm agents,” in Workshop on Failure Modes of Agentic AI at ICML 2026 .[14] J. Sheoran, “Mivl: A memory integrity verification layer for detecting and mitigating poisoning attacks in agentic ai systems,” Available at SSRN 6880480 , 2026. [15] Q. Wei, T. Yang, Y. Wang, X. Li, L. Li, Z. Yin, Y. Zhan, T. Holz, Z. Lin, and X. Wang, “A-memguard: A proactive defense framework for llm-based agent memory,” arXiv preprint arXiv:2510.02373 , 2025.

@@ -1,0 +1,384 @@
+Title: Seeing is Not Believing: Breaking the Physical-to-Digital Trust Boundary in Robotics
+
+URL Source: https://arxiv.org/pdf/2609.08280v1
+
+Published Time: Wed, 09 Sep 2026 03:56:26 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Seeing is Not Believing: Breaking the Physical-to-Digital Trust Boundary in Robotics 
+
+Leming Shen 1,2 , Shikai Geng 1, Yuanqing Zheng 2 and Chris Xiaoxuan Lu 11University College London, 2The Hong Kong Polytechnic University 
+
+Abstract — In multi-robot collaboration, task handovers rely on downstream verifiers performing remote attestation, which inspects sensor telemetry to ensure a robot’s physical behavior strictly matches its assigned task. But can this telemetry be trusted? We show that it often cannot. In this paper, we uncover a severe vulnerability in Robot Operating System (ROS) 2: by modifying a single envi-ronment variable, an adversary can execute a pre-built hook to covertly intercept and inject both telemetry and control signals before they are published. Consequently, adversaries can hijack a robot to perform dangerous tasks while spoofing downstream verifiers with synthesized fake telemetry. Worse still, by exploiting the widespread reliance on third-party Docker containers and auxiliary tools, at-tackers can distribute compromised packages embedded with these malicious hooks to launch such attacks easily. On a physical Franka Emika robotic arm running Secure ROS 2, our attack injects fabricated telemetry in real time with only around 3 ms of jitter, preserving temporal synchronization and hardware integrity while achieving an 87% success rate even against an AI-based detector. We have responsibly disclosed these findings to the ROS 2 development team. We prepared a demo video available at https://youtu.be/ExeiGqUrnhQ .
+
+I. I NTRODUCTION 
+
+As robots become increasingly autonomous and in-terconnected, they are moving beyond isolated, pre-programmed machines toward collaborative systems that interact with humans, peer robots, and the physical world [1], [2], [3], [4]. Such systems are increasingly deployed in applications ranging from warehouse logistics [5], [6] to space exploration [7]. In these settings, successful collaboration requires not only correct task execution, but also the ability of downstream participants to verify 
+
+what another robot has actually done. Since continuously observing every robot is imprac-tical and laborious, downstream verifiers ( e.g., human operators, peer robots, or monitoring modules) often rely on reported sensor telemetry, such as camera frames and joint states, to assess whether physical execution con-forms to the intended task [8]. Such telemetry may also support remote or physics-based attestation mechanisms [9]. This creates a fundamental trust boundary between a 
+
+> Work done when Leming Shen was a visiting student at UCL. *Chris Xiaoxuan Lu is the corresponding author Adversary
+> Physical Reality
+> The parcel
+> drops …
+> Victim Robot
+> Remote Verifier’s View
+> Task Handover
+> Confirmed
+> Spoofed Trajectory Telemetry & Image
+> Hook
+
+ROS 2  
+
+> Fake Telemetry
+> Control Signals
+> Fig. 1. A compromised ROS 2 environment can decouple physical robot behavior from the telemetry observed by downstream verifiers.
+
+robot’s physical behavior and its digitally reported state .However, does trustworthy perception necessarily imply trustworthy evidence of physical execution? Our analysis of ROS 2 shows that the answer is no. By manipulating a single environment variable, an adversary can covertly intercept and inject messages before they are published, without modifying the official ROS 2 1
+
+binaries (§IV). As illustrated in Fig. 1, this allows an at-tacker to create a "physical-digital mismatch": its actual behavior in the physical world and a fabricated execution trace observed by downstream verifiers. In particular, adversaries can spoof verifiers with synthesized, high-fidelity telemetry consistent with expected behavior, ma-nipulate control signals to facilitate hijacking , or inject inconsistent telemetry to launch Denial-of-Service ( DoS )attacks. Critically, the resulting telemetry can remain syntactically valid, temporally consistent, and securely transmitted while no longer faithfully representing phys-ical reality. The practical risk is amplified by the dependency-heavy software ecosystem of ROS 2 [12], [13]. Con-figuring heterogeneous robotic platforms often requires developers to rely on third-party tools and pre-configured containers. Our investigation (§II-C) of 4,429 Docker containers finds that over 4,000 are released by un-verified individuals, while accounting for nearly 10.2% of total registry activity, including up to 7.6 million pulls. An adversary can therefore distribute an apparently legitimate container that silently deploys the interception 
+
+> 1We focus on ROS 2 as it is the foundational architecture for the multibillion-dollar commercial robotics industry [10], [11]. arXiv:2609.08280v1 [cs.RO] 8 Sep 2026
+
+mechanism, placing malicious code within the same user-space trust domain as the robot application. We evaluate the attack on a physical Franka Emika robotic arm [14] running Secure ROS 2 with native authentication enabled. Our results show that fabricated telemetry can be injected in near real time with ap-proximately 2 ms of transmission jitter while maintain-ing high-fidelity joint-state and camera images, robust temporal synchronization, and normal robot operation. These results reveal an important limitation of existing robotic security mechanisms: protecting the authenticity and integrity of telemetry during communication does not guarantee that the telemetry truthfully reflects the underlying physical execution. We have responsibly disclosed the identified vulnera-bilities, including the spoofing, hijacking, and DoS attack vectors, to the ROS 2 development team. The concerns have been acknowledged and discussed during a ROS 2 Project Management Committee (PMC) meeting. II. B ACKGROUND 
+
+A. Robot Operating System (ROS) 
+
+ROS [15] provides a collection of tools, libraries, and packages for robotic applications. ROS 2 extends this ecosystem toward distributed and production-oriented robotics, adopting the Data Distribution Service (DDS) standard for communication across heterogeneous plat-forms [11]. It is now widely used in warehouse logistics (e.g., Clearpath [5], Fetch Robotics [6]), autonomous agriculture, space exploration (e.g., NASA’s VIPER rover [7]), and autonomous driving ( e.g., Autoware [16]). 
+
+B. Secure ROS 2 
+
+Secure ROS 2 (SROS 2) provides security mecha-nisms for ROS 2 applications through the underlying DDS Security standard [17]. It supports certificate-based authentication, access control, and encrypted communi-cation between ROS 2 participants. SROS 2 further or-ganizes security credentials and policies through security enclaves , simplifying the configuration of cryptographic keys and permissions [18]. These mechanisms protect ROS 2 communication against unauthorized access, eavesdropping, and in-transit message tampering. Importantly, these guarantees apply to messages once they enter the protected communication stack; they do not establish whether the published data faithfully repre-sents the robot’s physical state. This distinction motivates the attack studied in this work. 
+
+C. ROS 2 Ecosystem and Supply-Chain Exposure 
+
+Deploying ROS 2 across heterogeneous hardware often requires third-party packages, tools, and pre-configured containers [19], introducing potential soft-ware supply-chain exposure [13]. To characterize this ecosystem, we crawl 4,429 ROS-related Docker images and 5,322 GitHub repositories and collect their usage statistics ( e.g., the number of pulls and forks).  
+
+> •
+
+Long-tail Docker exposure. Major verified names-paces ( e.g., ros , osrf , and moveit ) account for 89.8% of 74.7 million observed pulls. Nevertheless, approximately 4,400 images outside these namespaces collectively account for 7.6 million pulls (10.2%), indicating substantial use of third-party images.  
+
+> •
+
+A fragmented repository ecosystem. The 5,322 repositories span 3,636 owners, with only 76 marked as official. More than 2,000 repositories have fewer than five stars, illustrating a large long tail of inde-pendently maintained, low-visibility projects. These findings do not imply that third-party artifacts are malicious. Rather, they indicate that ROS 2 deployments rely on a large yet decentralized software ecosystem, providing a plausible distribution channel for the com-promised artifacts considered in our threat model. III. T HREAT MODEL 
+
+We consider the trust relationship between a robot’s physical execution and the telemetry observed by adownstream verifier. The verifier ( e.g., a human operator, monitoring component, or peer robot) is uncompromised and relies on ROS 2 telemetry ( e.g., camera frames and joint states) to assess whether the robot has executed its assigned task correctly. We assume that the verifier does not have an independent trusted sensor that continuously observes the robot’s physical state. As motivated in §II-C, the attacker obtains a user-space foothold through a compromised third-party ROS 2 artifact, such as a trojanized container or package. The artifact is executed by the victim with ordinary application privileges. We do 
+
+not assume root access, kernel exploitation, modification of official ROS 2 binaries, compromise of SROS 2 credentials, or physical access to the robot. 
+
+A. Attack Goals 
+
+The attacker’s objective is to break the correspondence between the robot’s physical behavior and the execution evidence observed by downstream verifiers. We consider two attack goals:  
+
+> •
+
+Hijacking & Spoofing. The attacker alters control signals to cause the victim robot to deviate from its intended task, while replacing its outbound telemetry with synthesized data consistent with the expected execution. Consequently, the verifier may accept an incorrect physical execution as legitimate.  
+
+> •
+
+Denial-of-Service (DoS). The attacker injects incon-sistent or abnormal telemetry to disrupt the verification process, causing verifiers to reject executions, initiate repeated diagnostics, or halt the workflow. B. Attacker’s Capabilities 
+
+System Knowledge. The attacker knows the ROS 2 topics and message types used by the target application (e.g.. Image , JointState , etc ) and can construct structurally valid replacement messages. 
+
+User-Space Execution. The attacker can execute code within the same user-space environment as the victim ROS 2 application and intercept selected telemetry and control messages before publication. The attacker can-not modify the OS kernel, official ROS 2 middleware binaries, robot firmware, or the downstream verifier. 
+
+No SROS 2 Compromise. The attacker does not break DDS Security, steal cryptographic credentials, or modify messages after they enter the protected communication channel. Instead, manipulation occurs before the SROS 2 protections described in §II-B take effect. Therefore, the resulting falsified messages can be authenticated and securely delivered to the verifier as legitimate traffic. IV. A TTACK SURFACE AND EXPLOIT MECHANISM 
+
+This section analyzes the ROS 2 publication path and identifies a pre-publication interception point that en-ables our attack. We then show how user-space function interposition can manipulate messages at this boundary without modifying official ROS 2 binaries, and explain why such manipulation is not prevented by SROS 2. 
+
+A. ROS 2 Publication Path 
+
+To identify where outbound ROS 2 messages can be intercepted before transmission, we trace the publica-tion path of a minimal Python-based ROS 2 publisher. Using step-through debugging, we trace execution from 
+
+rclpy into the ROS 2 client library librcl.so . We further use radare2 [20] to inspect the binary imple-mentation and confirm that publication ultimately passes through the core rcl library [21], which contains a 
+
+rcl_publish function as shown below:                                  
+
+> 1rcl_ret_t rcl_publish(
+> 2const rcl_publisher_t *publisher,
+> 3const void * ros_message,
+> 4rmw_publisher_allocation_t *allocation)
+> 5{
+> 6if (!rcl_publisher_is_valid(publisher))
+> 7return RCL_RET_PUBLISHER_INVALID;
+> 89RCL_CHECK_ARGUMENT_FOR_NULL(
+> 10 ros_message, RCL_RET_INVALID_ARGUMENT);
+> 11 12 if (rmw_publish(
+> 13 publisher->impl->rmw_handle,
+> 14 ros_message,
+> 15 allocation) != RMW_RET_OK) {
+> 16 return RCL_RET_ERROR;
+> 17 }
+> 18 19 return RCL_RET_OK;
+> 20 }
+
+rcl_publish receives a publisher handle and the corresponding message, and subsequently dele-gates transmission to rmw_publish , which interfaces Publisher    
+
+> Node
+> Robot Sensor Telemetry
+> Generate
+> Hook.so
+> librcl.so
+> 010101010101...
+> rcl_publish()
+> 000011010101...
+> Adversary
+> rcl_publish()
+> 111100101010...
+> Modify Tampered ROS 2 data
+> Return
+> Prioritize
+> Fig. 2. Pre-publication interception of ROS 2 messages through user-space function interposition.
+
+with the underlying ROS 2 middleware. Therefore, 
+
+rcl_publish forms a common pre-middleware pub-lication boundary: message contents remain directly ac-cessible before being handed to the communication layer. 
+
+B. Pre-Publication Function Interposition 
+
+A naive approach to manipulating messages at this boundary would be to modify and recompile 
+
+librcl.so . However, doing so alters the official ROS 2 binary and can be exposed by software-integrity checks. We therefore ask: can the publication path be intercepted without modifying ROS 2 itself? 
+
+Linux provides dynamic function interposition through the LD_PRELOAD environment variable, which causes a specified shared library to be loaded before ordinary dynamically linked libraries. If the preloaded library exports the same symbol as a subsequently loaded library, calls to that symbol can instead be resolved to the preloaded implementation. We exploit this mechanism at the ROS 2 publication boundary. Specifically, an attacker supplies a malicious shared library, denoted Hook.so , that exports its own implementation of rcl_publish . When the affected ROS 2 process starts, calls to rcl_publish are first redirected to the hook, allowing selected messages to be inspected or modified before they are forwarded to the legitimate implementation in librcl.so . Importantly, the official ROS 2 binaries remain unchanged. As illustrated in Fig. 2, the malicious hook first intercepts the call to rcl_publish , identifies whether the publisher node corresponds to a target topic (e.g., /franka/joint_states ), and modifies the message if necessary. It then invokes the legitimate 
+
+rcl_publish , allowing the altered payload to con-tinue through the normal ROS 2 publication path. The same interception primitive applies to both telemetry and control publishers, enabling the spoofing and hijacking components described in the following section. This es-sential interception logic can be summarized as follows: Model                           
+
+> Control Publisher
+> Victim Robot
+> Telemetry Publisher
+> Publish
+> Sensor Telemetry
+> Intercept
+> Intercept
+> Replace
+> Verifier Victim
+> Replace
+> Transmit Adversary PC
+> Isaac Sim Perform Intended Actions
+> Sample
+> Simulated Telemetry
+> Transmit
+> Teleoperate
+> Live Video
+> Control Signal
+> Publish
+> Hook Program
+> Control Signal
+> W
+> ASD
+> QE
+> Malicious Control Signal
+> Hijacker
+> Spoofer
+> Transmit
+> Control Signal
+> ➊
+> ➋
+> ➌
+> ➍
+> ➎
+> ➏
+> ➐
+> ➑
+> ➒
+> ➓
+> ⓮⓭
+> ⓬
+> ⓫
+> ➏
+> ⓯Fig. 3. The attack pipeline. The malicious hook executes with only user-level privileges and intercepts messages before they enter the protected ROS 2 communication stack. 1extern "C" int rcl_publish(...) {
+> 2original =dlsym(RTLD_NEXT, "rcl_publish");
+> 34if (is_target_topic(publisher)) {
+> 5modify(ros_message);
+> 6}
+> 78return original(
+> 9publisher, ros_message, allocation);
+> 10 }
+
+C. Why SROS 2 Does Not Prevent the Attack 
+
+SROS 2 protects ROS 2 communication through au-thentication, access control, and encryption at the DDS layer. However, our interception point lies upstream of these protections: the hook modifies the message before it is passed from rcl_publish to the underlying RMW/DDS communication stack. Consequently, the attacker does not need to break SROS 2, recover cryptographic credentials, or tamper with protected network traffic. Instead, the falsified mes-sage is further authenticated, encrypted, and transmitted through the normal SROS 2 pipeline as legitimate ROS 2 traffic. Thus, the attack does not violate SROS 2’s cryp-tographic guarantees; rather, it exploits a pre-publication trust boundary that those guarantees do not cover. V. D ETAILED DESIGN 
+
+A. Attack Pipeline 
+
+Fig. 3 illustrates our attack pipeline. Normally, when a user issues a high-level command ( e.g., "pick and place"), a policy model first translates it into robotic control signals ( 1 ) and then creates a publisher node ( 2 )to publish these signals to a robot ( 3 ). In the meantime, the captured robot telemetry ( 4 ) is published by another publisher node to a downstream verifier for monitoring and action verification ( 5 ). The malicious hook consists of two main modules: a hijacker to control the victim robot and a spoofer 
+
+to deceive the downstream verifier . They both operate based on the novel attack channel we discovered via the 
+
+LD_PRELOAD environment variable. Specifically, the hook first intercepts the outbound data ( 6 ), including both sensor telemetry and control signals, and transmits them to the adversary’s PC ( 7 ). The PC runs a high-fidelity robot simulator, Isaac Sim [22], which immedi-ately applies the intercepted control signals to a virtual robot ( 8 ) to perform the intended task ( 9 ). Simultane-ously, the PC captures the simulated robot’s telemetry (10 ) that perfectly matches the legitimate telemetry’s type and structure. The synthesized telemetry is then sent back to the spoofer ( 11 ) that seamlessly replaces the real telemetry ( 12 ) before publication, thereby spoofing the downstream verifier with synthesized, seemingly benign telemetry. Concurrently, to hijack the robot, the attacker monitors its real-time state via received camera frames ( 7 ) and teleoperates it via keyboard inputs ( 13 ). These inputs are translated into malicious control signals, forwarded to the hijacker ( 14 ), and injected in place of the original control signals before publication. ( 15 ). Because the falsified telemetry is also consumed by subsequent policy iterations, the policy continues plan-ning against the simulated state rather than the true physical state. Consequently, the physical robot and its digital twin evolve as two parallel execution traces : the attacker controls the former, while the policy and verifier remain coupled to the latter. 
+
+B. Generating Realistic Spoofed Telemetry 
+
+While generating alternative control signals to hijack the physical robot is relatively simple, generating realis-tic spoofed telemetry that can consistently fool a down-stream verifier is considerably more challenging. A high-fidelity simulator such as Isaac Sim can reproduce the intended task trajectory, but its raw telemetry still differs from that of a physical robot in subtle yet detectable ways. In particular, during stationary phases, a real robot continues to exhibit small fluctuations caused by controller dynamics, mechanical vibration, and friction, whereas simulated joint states remain nearly constant. A straightforward solution is to add independent Gaus-sian noise to the simulated telemetry. However, this fails to capture two key properties of real robot signals. First, real telemetry is temporally structured: its frequency spectrum contains low-frequency drift and characteristic vibration components rather than spectrally flat noise. Second, different telemetry channels are physically cou-pled. Joint positions, velocities, and torques arise from the same underlying robot motion and therefore cannot be perturbed independently without introducing incon-sistencies that a verifier could detect. Our key idea is therefore to perturb the underlying simulated motion rather than individual telemetry chan-nels. Let q⋆j (t) denote the trajectory produced by the simulator for joint j, where j ∈ { 1, . . . , N } and N is the number of robot joints. We generate a small latent perturbation δq j (t) and construct the spoofed physical-like trajectory as 
+
+qj (t) = q⋆j (t) + δq j (t). (1) We refer to δq j (t) as the latent micro-motion . As all telemetry channels are subsequently derived from this shared trajectory, they remain mutually consistent and produce hardware-like temporal and cross-joint structure. 
+
+Latent micro-motion. We model δq j (t) as a combina-tion of vibration, slow drift, and occasional stick–slip effects: 
+
+δq j (t) = 
+
+> M
+
+X
+
+> m=1
+
+sj,m (t)
+
+| {z }
+
+> vibration
+
++ dj (t)
+
+| {z } 
+
+> drift
+
++ Jj (t)
+
+| {z } 
+
+> stick-slip
+
+, (2) where M is the number of vibration modes and sj,m (t)
+
+denotes the m-th vibration mode of joint j. Each mode follows a damped stochastic oscillator: 
+
+¨sj,m + 2 ζj,m ωj,m ˙sj,m + ω2
+
+> j,m
+
+sj,m = bj,m wj,m (t), (3) where ζj,m is the damping ratio, ωj,m is the natural frequency, bj,m controls the disturbance magnitude, and 
+
+wj,m (t) is a zero-mean stochastic excitation. The os-cillator terms model structural vibration and controller-induced oscillation. The term dj (t) is a slowly vary-ing Ornstein–Uhlenbeck process [23] that captures low-frequency drift, while Jj (t) models occasional small discontinuities associated with stick–slip friction. 
+
+Inter-joint coupling. To preserve realistic inter-joint correlation, the perturbations are generated jointly rather than independently for each joint. Let q⋆(t) = [q⋆ 
+
+> 1
+
+(t), . . . , q ⋆N (t)] ⊤ denote the simulated joint configura-tion and let M(q⋆) denote the corresponding robot mass matrix. We shape the covariance of the stochastic joint disturbances as 
+
+Σw = M(q⋆)−1ΣuM(q⋆)−⊤ , (4) where Σu is the covariance of an underlying shared disturbance and Σw is the resulting joint-space dis-turbance covariance. This produces coordinated micro-motion whose coupling depends on arm configurations. The Victim Robot Visualizer  
+
+> r
+> Hook Inside
+> Adversary PC
+> Victim User
+> Adversary
+> Hijack via
+> Teleoperation
+> Isaac Sim
+> Intercepted Video
+> Fig. 4. Experiment setup with a Franka arm.
+
+Cross-channel physical consistency. Let q(t) = q⋆(t)+ 
+
+δq (t) denote the perturbed joint trajectory, where 
+
+δq (t) = [δq 1(t), . . . , δq N (t)] ⊤. Position and velocity telemetry are derived from this same trajectory, while torque is computed using the robot’s inverse dynamics: 
+
+τ model = M(q)¨ q + C(q, ˙q) ˙ q + g(q) + ffric ( ˙ q), (5) where C(q, ˙q) ˙ q denotes Coriolis and centrifugal effects [24], g(q) denotes gravity compensation, and ffric ( ˙ q)
+
+models near-standstill friction [25]. Because position, velocity, and torque are all derived from the same perturbed trajectory, the resulting spoofed telemetry pre-serves temporal structure, inter-joint correlation, and physical consistency across channels. In practice, the parameters governing vibration, drift, disturbance coupling, and friction can be calibrated from a short recording of quiescent physical-robot telemetry. This could be achieved during the robot’s homing pro-cess, providing an opportunity for our hook to intercept a short window of static telemetry for calibration. VI. E VALUATIONS 
+
+A. Experiment Setup 
+
+We conduct experiments running ROS 2 Humble [10] (one widely used version) on an Ubuntu server ( victim ), equipped with an AMD Ryzen Threadripper Pro CPU and an NVIDIA RTX A6000 GPU. The victim is linked to a Franka Emika robot arm [14] and runs an RViz visualizer to monitor real-time joint states. The attacker 
+
+is running Isaac Sim on another Ubuntu server with the same configurations. Note that throughout the attack, no 5 20 35 50 65 Time (s) 036912 Delay (ms) mean ± std mean delay (a) Delay & jitter J1 J2 J3 J4 J5 J6 J7 Joints 0.0 0.1 0.2 0.3 0.4 RMSE (rad)  Real–Fake Real–Real (b) RMSE of positions J1 J2 J3 J4 J5 J6 J7 Joints 0.0 0.1 0.2 0.3 0.4 Norm. DTW dist.  Real–Fake Real–Real (c) DTW of velocities J1 J2 J3 J4 J5 J6 J7 Joints 036912 Std (N·m)   
+
+> Real Isaac (d) Std of torques Fig. 5. The real-world performance of our attack.
+
+root user privileges are required, and the ROS 2 package stays intact. The detailed setup is shown in Fig. 4. We aim to answer the following research questions:  
+
+> •
+
+RQ1 : Can the attack hijack the robot while evading downstream verification under ROS 2 and SROS 2?  
+
+> •
+
+RQ2 : What’s the real-time performance of the attack?  
+
+> •
+
+RQ3 : What is the fidelity of the synthesized telemetry?  
+
+> •
+
+RQ4 : Can the attack extend to multimodal telemetry?  
+
+> •
+
+RQ5 : How does each technical component contribute to the fidelity of the synthesized telemetry? 
+
+B. Overall Attack Success Rate (RQ1) 
+
+We repeat the "pick and place" task 100 times with and without SROS 2, respectively, and report the average attack success rate. An attack is considered successful if the robot is hijacked to execute unauthorized actions, while the victim’s RViz visualizer continues to display normal task execution. Results show that in both cases, the attack achieves a 100% success rate, demonstrating that our discovered attack channel reliably intercepts and manipulates ROS 2 messages before SROS 2 acts. To further test if the forged telemetry defeats represen-tative downstream verification methods, we implement: 
+
+D1 : A velocity range check that learns the position, velocity, and effort bounds from real recordings and flags any sample exceeding these limits, including implausibly fast motion. D2 : A position–velocity consistency check that verifies if the velocity mathematically aligns with the temporal change in position over time, thereby detecting variables perturbed independently rather than derived from continuous motion. D3 : A cross-joint correlation analysis that checks if joint jitter exhibits the charac-teristic correlation patterns produced by a shared phys-ical structure, which independent per-joint noise cannot mimic. D4 : a temporal anomaly detector that trains a small autoregressive model on the genuine telemetry to flag those whose temporal structure markedly deviates from the predictability of real hardware. We replay our attack 100 times against each detector and report the bypass rate: 98% , 100% , 95% , and 87% .The perfect evasion of D2 follows directly from our de-sign: as every channel is derived from a single perturbed trajectory (§V-B), the reported velocity is exactly the time-derivative of the reported position, leaving no kine-matic inconsistency to expose. The high bypass rates of D1 and D3 likewise reflect that the synthesized telemetry stays within learned physical limits, and that our mass-matrix coupling reproduces the correlation structure of a shared kinematic chain that independent per-joint noise cannot. D4 is the strongest defense, flagging 13% of attacks, as the fine-grained temporal predictability of real hardware is highly difficult to reproduce exactly. Even so, an 87% bypass rate leaves the large majority of attacks undetected. Taken together, no single detector reliably separates fabricated from genuine telemetry, indicating that statistical verification alone cannot restore trust once the pre-publication boundary is breached. 
+
+C. Real-Time Performance (RQ2) 
+
+Since the synthesized telemetry is sent to the victim over the network, we consider three evaluation metrics: 1) Delay , defined as the time elapsed between the invoca-tion of rcl_publish and the delivery of the payload to the DDS middleware layer; 2) Jitter , measured as the standard deviation of the latency to quantify transmission variance; and 3) Message Drop Rate , representing the percentage of dropped telemetry samples. We report the above metrics over a 1-minute interval, during which the robot holds still and performs the "pick and place" task (20-50s). As shown in Fig. 5(a), the message delay exhibits minor fluctuations but keeps below 3ms, which is substantially lower than the 33ms interval of the 30Hz joint state data rate. Moreover, the std fluctuates slightly around only 4ms, implying that our attack is robust and hard to detect. Notably, we find that the message drop rate remains 0% . This indicates that our attack can robustly intercept and modify data in real time without delaying the intended task, seamlessly deceiving the victim’s visualization interface (as shown in the supplementary video). 
+
+D. Fidelity of the Synthesized Telemetry (RQ3) 
+
+To quantify the discrepancy between the synthesized telemetry and the physical ground truth, we run the task 100 times, both with and without the attack, and compare their joint states using: 1) Root Mean Square Error (a) The initial state (Isaac Sim) (b) The initial state (real) (c) The final state (Isaac Sim) (d) The final state (fake)     
+
+> (e) The initial state (Isaac Sim) (f) The initial state (real) (g) The final state (Isaac Sim) (h) The final state (fake) Fig. 6. The simulated images (a, c, e, g), the real image (b, f), and the synthesized image (d, h). The first row corresponds to a third-person perspective camera (Intel RealSense [26]) and the second row corresponds to a wrist camera (ZED Mini [27]).
+
+(RMSE) on positions, where a low RMSE indicates that the simulated kinematics accurately mirror the intended physical execution; 2) Dynamic Time Warping (DTW) distance on velocities to measure the structural similarity of the motion; and 3) the std of torques to capture the spread of mechanical loading. For each joint, we pair every synthesized run with a genuine run and temporally align them, meanwhile using Real-Real pairs of two distinct genuine runs as a genuine-variability reference. Across all metrics, the synthesized telemetry falls within Real-Real reference variability. In Fig. 5(b), the Real-Fake position RMSE tracks the reference on every joint, with both dominated by the same shoulder and wrist joints (J2, J6) and no joint showing a separated median. Fig. 5(c) shows the same velocity trend: the two distributions overlap and share an identical per-joint profile, the Real-Fake medians offset only marginally, yet well inside the reference spread. Fig. 5(d) confirms the torque scale is reproduced: the per-run std of the synthesized runs nearly coincides with the real one on every joint, recovering both the gravity-loaded shoulder (J2) and the near-zero distal joints (J5–J7). Beyond that, the per-joint medians and interquartile ranges of the Real-Fake and reference discrepancies coincide, leaving the downstream verifier no single-joint or single-channel statistic on which to separate faked from genuine motion. 
+
+E. Multimodal Telemetry Synthesis (RQ4) 
+
+To investigate if our attack can extend to other modal-ities, i.e., camera frames, we further integrate a VLM-based image synthesizer. When the victim invokes the camera service, our hook intercepts the legitimate frame and replaces it with a fake one. Specifically, after the simulated robot finishes the task, we use three images as the context (Fig. 6): the simulated initial state from Isaac Sim (a, e), the intercepted image of the initial state (b, f) from a third-person perspective camera and a wrist camera, and the simulated final state (c, g). We then in-struct the VLM to preserve the background environment of the real image while rendering the simulated robot’s final state into a photorealistic equivalent and returning to the victim. We can see that the synthesized images (d, h) accurately render the kinematic state while, more importantly, also "placing" the object in the target place. 
+
+F. Ablation Study (RQ5) 
+
+To assess the contributions of each technical module for telemetry synthesis (§V-B), we consider four ablation settings: ❶ the raw synthesized telemetry, ❷ addition of the micro-motion, ❸ addition of the inter-joint coupling, and ❹ the full synthesis pipeline. We compute the RMSE, DTW, and std of the position, velocity, and torque between the ablated telemetry and the ground truth. In addition, we measure the bypass rate of the four ablation settings against the four verifiers (§VI-B). As shown in Table I, the discrepancy between the synthesized and real telemetry decreases as each compo-nent is added, indicating that every module contributes to telemetry fidelity. Relative to the raw synthesized telemetry, the micro-motion restores the fine-grained fluctuations across all three channels. Inter-joint coupling provides a further reduction: the position RMSE of the gravity-loaded shoulder (J2) falls from 0.1209 to 0.1118. The full pipeline tightens the torque distribution through cross-channel consistency, lowering the J2 torque std from 0.3009 to 0.2793. These gains concentrate on the actively moving joints (J2, J6), whereas the near-static distal joints (J4, J5, J7) already match the real telemetry and change only within noise. Overall, the full synthesis achieves the closest match to real hardware, reducing J2 discrepancy by roughly 10%, 34%, and 23% on position, velocity, and torque, respectively. Notably, as shown in Table II, only the full synthesis evades all four detectors. D1 is bypassed at ∼97% throughout, as simulated telemetry already respects physical bounds. TABLE I ABLATION STUDY RESULTS (❶ – RAW VS . REAL , ❷ – RAW + LATENT MICRO MOTION VS . REAL , ❸ – RAW + LATENT MICRO MOTION +
+
+> INTER
+
+-JOINT COUPLING VS . REAL , ❹ – FULL SYNTHESIS VS . REAL ).                                                                                                                                                                                                                                                                     
+
+> Metric Pair J1 J2 J3 J4 J5 J6 J7 Position (RMSE)
+> ❶0.0420 ±0.0552 0.1248 ±0.1782 0.0442 ±0.0428 0.0110 ±0.0077 0.0217 ±0.0189 0.1118 ±0.1472 0.0458 ±0.0478
+> ❷0.0417 ±0.0551 0.1209 ±0.1615 0.0409 ±0.0427 0.0108 ±0.0077 0.0215 ±0.0188 0.1109 ±0.1470 0.0455 ±0.0478
+> ❸0.0413 ±0.0550 0.1118 ±0.1571 0.0367 ±0.0426 0.0107 ±0.0076 0.0214 ±0.0185 0.1105 ±0.1468 0.0454 ±0.0477
+> ❹0.0412 ±0.0548 0.1117 ±0.1502 0.0349 ±0.0424 0.0106 ±0.0075 0.0214 ±0.0181 0.1096 ±0.1464 0.0451 ±0.0476
+> Velocity (DTW)
+> ❶0.0020 ±0.0002 0.0029 ±0.0001 0.0022 ±0.0002 0.0012 ±0.0002 0.0015 ±0.0002 0.0038 ±0.0013 0.0025 ±0.0004
+> ❷0.0019 ±0.0002 0.0026 ±0.0001 0.0020 ±0.0001 0.0012 ±0.0002 0.0014 ±0.0002 0.0036 ±0.0008 0.0024 ±0.0003
+> ❸0.0019 ±0.0002 0.0022 ±0.0001 0.0020 ±0.0001 0.0009 ±0.0002 0.0013 ±0.0001 0.0033 ±0.0004 0.0023 ±0.0003
+> ❹0.0019 ±0.0002 0.0019 ±0.0001 0.0018 ±0.0001 0.0008 ±0.0001 0.0013 ±0.0001 0.0029 ±0.0003 0.0022 ±0.0004
+> Torque (std)
+> ❶0.0442 ±0.0152 0.3618 ±0.3224 0.0201 ±0.0147 0.0264 ±0.0207 0.0160 ±0.0125 0.0169 ±0.0115 0.0458 ±0.0366
+> ❷0.0412 ±0.0147 0.3284 ±0.3223 0.0198 ±0.0145 0.0261 ±0.0206 0.0155 ±0.0120 0.0166 ±0.0112 0.0456 ±0.0365
+> ❸0.0406 ±0.0142 0.3009 ±0.3223 0.0197 ±0.0144 0.0264 ±0.0207 0.0147 ±0.0120 0.0162 ±0.0113 0.0458 ±0.0362
+> ❹0.0403 ±0.0142 0.2793 ±0.3220 0.0193 ±0.0143 0.0262 ±0.0206 0.0148 ±0.0123 0.0153 ±0.0106 0.0454 ±0.0363
+
+TABLE II THE BYPASS RATE OF THE FOUR ABLATION SETTINGS .Pair D1 D2 D3 D4 
+
+❶ 97% 11% 5% 13% 
+
+❷ 98% 12% 5% 66% 
+
+❸ 98% 15% 92% 74% 
+
+❹ 98% 100% 95% 87% 
+
+Inter-joint coupling drives D3 from 5% to 92%, while the micro-motion lifts D4 from 13% to 66%. D2 is evaded only by the full synthesis, whose trajectory derivation makes velocity exactly consistent with position. These results further confirm that each module is effective and necessary, together producing telemetry that no detector in the ensemble can distinguish from genuine hardware. VII. D ISCUSSIONS & C OUNTERMEASURES 
+
+Live-Video Spoofing. Real-world robots often carry multiple cameras covering distinct viewpoints. In prin-ciple, fooling the verifier would require synthesizing coherent fake streams for all of them, but neither side can operate at that fidelity. Running the verifier on every live feed is prohibitively expensive at scale ( e.g., a warehouse), and forging those feeds in real time is just as impractical for the attacker. We therefore model a weaker but realistic threat: forging only the final-state image, much like a food-delivery confirmation, where a single photo is enough to prove the delivery. 
+
+Countermeasure. The root cause is that SROS 2 au-thenticates telemetry only after rcl_publish , down-stream of the pre-publication boundary our hook oc-cupies. A direct fix is to move the root of trust to the physical source: a trusted sensing element ( e.g., a secure microcontroller or TEE) signs each payload with a monotonic counter at acquisition time, so a user-space hook can neither forge nor replay it. VIII. C ONCLUSION 
+
+We expose a fundamental trust boundary in ROS 2 between robot physical execution and the telemetry used to verify it. Entirely from user space, an adversary can preload a hook that intercepts messages before SROS 2 protects them, hijacking the robot while feeding verifiers synthesized telemetry authenticated as legitimate traffic. On a physical Franka arm, the attack succeeds in every trial while achieving real-time spoofing and evading rep-resentative detectors. This shows that securing telemetry in transit does not guarantee it reflects physical reality. Closing the gap requires anchoring trust at the physical source that signs each measurement at acquisition time. REFERENCES [1] X. Qin, F. Zhao, Y. Leng, R. Hu, and C. Xiao, “Nlipscalib: An efficient calibration framework for high-fidelity 3d reconstruction of curved visuotactile sensors,” in IEEE ICRA , 2026. [2] W. Zhang, C. Street, and M. Mansouri, “Collaborative human-robot object transportation using a deformable sheet,” in IEEE ICRA , 2026. [3] F. Rekabi-Bana, M. Bahaidarah, O. Marjanovic, and F. Arvin, “Lyapunov stability-driven control algorithm for heterogeneous multi-robot coordination,” IEEE Transactions on Automation Science and Engineering , 2025. [4] A. Barci´ s, M. Barci´ s, and C. Bettstetter, “Robots that sync and swarm: A proof of concept in ros 2,” in 2019 International Symposium on Multi-Robot and Multi-Agent Systems (MRS) ,2019, pp. 98–104. [5] Clearpath Robotics, “Clearpath robotics: Mobile robots for research & development,” 2026. [Online]. Available: https: //clearpathrobotics.com/ [6] Fetch Robotics, “Fetch robotics: About,” https://www.linked in.com/company/fetch-robotics/about/, 2026, linkedIn company page. Fetch Robotics, now part of Zebra Technologies; head-quartered in San Jose, California. [7] NASA, “VIPER: Volatiles Investigating Polar Exploration Rover,” 2025, nASA Science mission page, accessed 2026-06-02. Page last updated Jun 11, 2025. [Online]. Available: https://science.nasa.gov/mission/viper/ [8] H. R. Ghaeini, M. Chan, R. Bahmani, F. Brasser, L. Garcia, J. Zhou, A.-R. Sadeghi, N. O. Tippenhauer, and S. Zonouz, “{PAtt }: Physics-based attestation of control systems,” in RAID ,2019, pp. 165–180. [9] G. Coker, J. Guttman, P. Loscocco, A. Herzog, J. Millen, B. O’Hanlon, J. Ramsdell, A. Segall, J. Sheehy, and B. Snif-fen, “Principles of remote attestation,” International journal of information security , vol. 10, no. 2, pp. 63–81, 2011. [10] S. Macenski, T. Foote, B. Gerkey, C. Lalancette, and W. Woodall, “Robot operating system 2: Design, architecture, and uses in the wild,” Science robotics , vol. 7, no. 66, p. eabm6074, 2022. [11] A. Bonci, F. Gaudeni, M. C. Giannini, and S. Longhi, “Robot operating system 2 (ros2)-based frameworks for increasing robot autonomy: A survey,” applied sciences , vol. 13, no. 23, p. 12796, 2023. [12] T. H. Sakib, Y. R. Martinez, C. Brady, S. R. Hasan, and T. N. Guo, “Supply chain exploitation of secure ros 2 systems: A proof-of-concept on autonomous platform compromise via keystore exfiltration,” in IEEE MILCOM , 2025, pp. 1–6. [13] L. Xia, X. Gao, and W. Shi, “Investigating security threats in multi-tenant ros 2 systems,” in IEEE ICRA , 2025, pp. 16 441– 16 448. [14] S. Haddadin, “The franka emika robot: a standard platform in robotics research [survey],” IEEE Robotics & Automation Magazine , vol. 31, no. 4, pp. 136–148, 2024. [15] M. Quigley, K. Conley, B. Gerkey, J. Faust, T. Foote, J. Leibs, R. Wheeler, A. Y. Ng et al. , “Ros: an open-source robot operating system,” in ICRA workshop on open source software , vol. 3, no. 3.2, 2009, p. 5. [16] Autoware Foundation, “Home page - autoware,” https://autowa re.org/, 2026. [17] V. Mayoral-Vilches, R. White, G. Caiazza, and M. Arguedas, “Sros2: Usable cyber security tools for ros 2,” in IEEE/RSJ IROS ,2022, pp. 11 253–11 259. [18] R. White, D. H. I. Christensen, and D. M. Quigley, “Sros: Securing ros over the wire, in the graph, and through the kernel,” 
+
+arXiv preprint arXiv:1611.07060 , 2016. [19] T. Abukhalil, M. Patil, S. Patel, and T. Sobh, “Deployment environment for a swarm of heterogeneous robots,” Robotics ,vol. 5, no. 4, p. 22, 2016. [20] R. Team, Radare2 Book . GitHub, 2017. [21] R. . D. Team, “rcl,” https://github.com/ros2/rcl/blob/rolling/rcl/s rc/rcl/publisher.c, 2023. [22] S. Gao, M. Pagnucco, T. Bednarz, and Y. Song, “Nvidia isaac sim: Enabling scalable, gpu-accelerated simulation for robotics,” 
+
+arXiv preprint arXiv:2606.03551 , 2026. [23] G. E. Uhlenbeck and L. S. Ornstein, “On the theory of the brownian motion,” Physical review , vol. 36, no. 5, p. 823, 1930. [24] T. Lewowski, L. Lewowska, and P. Mazur, “Measurement of the effect of coriolis and centrifugal forces on the trajectory of a body in a rotating frame,” European journal of physics , vol. 20, no. 2, pp. 109–116, 1999. [25] B. Armstrong-Hélouvry, P. Dupont, and C. C. De Wit, “A survey of models, analysis tools and compensation methods for the control of machines with friction,” Automatica , vol. 30, no. 7, pp. 1083–1138, 1994. [26] L. Keselman, J. I. Woodfill, A. Grunnet-Jepsen, and A. Bhowmik, “Intel (r) realsense (tm) stereoscopic depth cameras,” in IEEE CVPRW , 2017, pp. 1267–1276. [27] Stereolabs, “ZED Mini Stereo Camera and SDK,” https://stereo labs.com, 2024.

@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-07-23 ~ 2026-08-01</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 84 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 93 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>69</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>78</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-01 18:42:37 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-09 22:39:42 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>近10天精读84篇论文，其中Agentic商务协议攻击与视觉语言模型供应链后门研究获满分关注。</p>
-<p>最值得看：针对AI代理交易平台的协议级攻击漏洞，以及通过表征引导植入的模型供应链架构后门。</p>
-<p>普通读者可优先关注这两类AI安全风险，后续留意相关防御框架与检测工具的实际应用。</p>
+<p>今日共处理93篇论文，其中精读78篇、速读15篇，重点关注AI安全与代码智能方向。最值得精读的是两篇满分研究：PhantomCall通过函数调用图扰动规避机器学习恶意软件检测，AKRASIA则针对基于推理的代码大模型实现隐蔽后门攻击。建议普通读者优先关注这两项攻防对抗工作，以了解当前AI系统在安全评估中的最新漏洞与防御思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">69 篇</strong>
+    <strong class="dpr-home-dashboard-count">78 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Protocol-Level Attacks on Agentic Commerce Platforms: A Cross-Platform Taxonomy, AIP-Bench, and Unified Defense">Protocol-Level Attacks on Agentic Commerce Platforms: A Cross-Platform Taxonomy, AIP-Bench, and Unified Defense</span></li><li><span class="dpr-home-dashboard-paper-title" title="Architectural Backdoors in Vision-Language Model Supply Chains via Representation Steering">Architectural Backdoors in Vision-Language Model Supply Chains via Representation Steering</span></li><li><span class="dpr-home-dashboard-paper-title" title="GPT-Red: Automated Red Teaming via Self-Play at Scale">GPT-Red: Automated Red Teaming via Self-Play at Scale</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="PhantomCall: Evading ML Malware Detectors via Function Call Graph Perturbation">PhantomCall: Evading ML Malware Detectors via Function Call Graph Perturbation</span></li><li><span class="dpr-home-dashboard-paper-title" title="AKRASIA: Stealthy Backdoor Attack on Reasoning-based Code LLMs">AKRASIA: Stealthy Backdoor Attack on Reasoning-based Code LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="Differentially private federated learning with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems">Differentially private federated learning with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>28</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>16</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>12</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>8</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>31</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>15</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>13</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>12</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>7</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -89,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="URF: A Unified Robot Control-Policy Framework for Stable Contact Aware Manipulation">URF: A Unified Robot Control-Policy Framework for Stable Contact Aware Manipulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Towards Privacy-Preserving Federated Prompt Tuning under Data Heterogeneity: A Subspace-Decomposed Expert Approach">Towards Privacy-Preserving Federated Prompt Tuning under Data Heterogeneity: A Subspace-Decomposed Expert Approach</span></li><li><span class="dpr-home-dashboard-paper-title" title="Three-Body Alignment: Aligning Chess Agent with Human Reasoning through Reranked Rationale">Three-Body Alignment: Aligning Chess Agent with Human Reasoning through Reranked Rationale</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Agent-Enhanced Heterogeneous Graph RAG for Academic Question Answering">Agent-Enhanced Heterogeneous Graph RAG for Academic Question Answering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Polished but Unresolved: Identifying Late-Stage Pressure States in Long-Horizon Tool-Use Agents">Polished but Unresolved: Identifying Late-Stage Pressure States in Long-Horizon Tool-Use Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Fine-Tuning Large Language Models to Classify Pull Request-Issue Alignments: Going Beyond Prompting">Fine-Tuning Large Language Models to Classify Pull Request-Issue Alignments: Going Beyond Prompting</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 </div>
 
