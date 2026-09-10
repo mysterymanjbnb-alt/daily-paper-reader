@@ -1,0 +1,808 @@
+Title: AgentBrew: Offline Tool-Use Agent Learning from Raw Real-World Trajectories
+
+URL Source: https://arxiv.org/pdf/2609.05837v1
+
+Published Time: Wed, 09 Sep 2026 00:24:07 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# AgentBrew: Offline Tool-Use Agent Learning from Raw Real-World Trajectories 
+
+Zhiyi Lyu 1 Yewen Li 2 Longtao Zheng 1 Shengtian Yang 3 Lang Feng 1 Lei Feng 3
+
+Peng Jiang 2 Kun Gai 2 Qingpeng Cai 2 Bo An 1 
+
+> 1
+
+Nanyang Technological University 2 Kuaishou Technology 3 Southeast University 
+
+Abstract 
+
+LLM-based agents are increasingly deployed in real-world applications through tool-use APIs, yet training them for specific environments remains fundamentally difficult: real-world applications provide no pre-defined tasks or verifiers, no faithful simulators, and limited budget for large-scale environment interaction. In this paper, we propose AgentBrew , an offline training framework that learns effective tool-use policies from a single batch of raw interaction trajectories, without task verifiers or iterative on-policy rollouts. The agent first explores the target environment to collect a raw trajectory corpus without quality filtering. To extract training signal from this noisy corpus, retrospective task inference reconstructs an aligned instruction for each trajectory based on its actual outcome, and PMI-Based credit assignment decomposes the trajectory’s total information about the inferred instruction into additive per-action credits via pointwise mutual information (PMI). These credits weight the policy training objective, amplifying informative actions while suppressing ineffective ones. On three real-world MCP applications (GitHub, Notion, PostgreSQL), AgentBrew improves Qwen3-32B by +8.7 Acc / +9.7 Score on average, surpassing Qwen3-235B (+2.3 / +4.4) and outperforming rejection sampling (+5.9 / +10.3). These results demonstrate that fine-grained offline learning can recover useful supervision from raw trajectories that filtering-based approaches would discard. The code is available at https://github.com/alphatogo/ AgentBrew 
+
+1 Introduction 
+
+Tool-use agents powered by Large Language Models (LLMs) are rapidly moving from research prototypes to production deployments [44; 21; 29; 2]. Standardized protocols like the Model Context Protocol (MCP) [2] now connect LLM agents to real-world applications such as Notion [22] and GitHub [10], enabling tool-use across complex, stateful environments. However, each application presents a distinct tool landscape: Notion exposes dozens of APIs spanning database operations, page management, and content editing, each requiring precise parameter composition and awareness of the application’s live state. General-purpose LLMs, even at frontier scale, struggle with such environment-specific complexity, exhibiting low task completion rates on real-world tool-use benchmarks [20; 39], indicating that reliable deployment demands targeted, environment-specific training. Existing approaches to training tool-use agents for specific applications follow two main routes. The first operates on real-world data [42; 48; 31]: practitioners design a suite of tasks with ground-truth verifiers for the target application, deploy an agent to interact with the live environment and collect trajectories, then use the verifiers to filter for successful completions and train via supervised fine-tuning on the retained high-quality subset [26; 48; 24]. The second pursues on-policy optimization 
+
+> Preprint. arXiv:2609.05837v1 [cs.AI] 5 Sep 2026
+
+[30; 9; 13]: because repeated rollouts against live APIs incur monetary costs, rate limits, and irreversible side effects on production data, these methods instead construct simulated environments that replicate the application’s state and tool behavior, enabling large-scale iterative training before deploying the resulting policy back to the real application [6; 38; 35; 28]. Despite their different trade-offs, both routes rest on shared prerequisites: pre-defined task suites, reliable reward signals, and either sufficient real-world interaction budget or a faithful simulator of the target environment. Task: Merge customer feedback into the Product Issues database  
+
+> Trajectory-Level Filtering
+> Task
+> Start
+> “Discards imperfect trajectories”
+> AgentBrew
+> Start
+> “reuses imperfect trajectories”
+> Low High
+> Inferred task
+
+Figure 1: Left: trajectory-level filtering dis-cards entire trajectories that fail the original task, losing potentially useful actions. Right: AgentBrew infers a better-aligned task for each trajectory and assigns per-action cred-its under the inferred task, enabling the entire corpus to contribute to training. While these methods have achieved strong results on curated benchmarks, applying them to real-world applications exposes fundamental difficulties at three levels. At the task level , real-world applications pro-vide neither pre-defined task nor ground-truth veri-fiers. Tasks must be constructed from scratch with va-lidity dependent on the environment’s live state, and reliable verification remains an open problem [12]: neither manual annotation [7; 28] nor automated judg-ing scales to complex, stateful API interactions (see §4.2). At the trajectory level , the offline route faces a severe data efficiency problem. Real-world tool-use tasks involve long, complex API compositions with low completion rates, so standard trajectory-level fil-tering [42; 48] discards the majority of an already limited corpus. Worse, even a ’failed’ trajectory may contain actions that are useful training signal for a different but related task, yet trajectory-level filtering discards them entirely (Figure 1, left). At the train-ing level , the online route introduces a significant sim-to-real gap: simulators cannot faithfully repro-duce the complex, interconnected state of real-world applications. Recent work confirms this empirically: simulator-trained agents achieve strong results on synthetic benchmarks yet degrade when evaluated on real-world platforms [6]. Together, these challenges rule out standard training pipelines and point to a setting that, despite being the norm for industrial deployment, remains largely unexplored in the research community: 
+
+How can we train a tool-use agent for a specific application, with no pre-defined tasks, no verifiers, no simulator, and limited environment interaction? 
+
+In this paper, we present AgentBrew , an offline training framework that learns effective tool-use policies from a single batch of raw interaction trajectories, without task verifiers or iterative rollouts. Our key insight is that every trajectory, regardless of whether it completes its original task, carries reusable signal: by inferring what each trajectory actually accomplished and scoring which actions genuinely contributed, we extract fine-grained supervision from the entire raw corpus without discarding any data. First , the agent explores the target environment to discover its live state and proposes grounded task instructions, then executes these tasks to collect a raw trajectory corpus without any quality filtering (§3.1). Second , we recover fine-grained supervision from this noisy corpus through two complementary mechanisms (§3.2). For each trajectory, retrospective task inference reconstructs an instruction that reflects what the trajectory actually achieved rather than what it originally intended, producing aligned instruction-trajectory pairs. PMI-Based credit assignment then quantifies how much each action contributes to the inferred task. We define the total information a trajectory carries about its inferred instruction via pointwise mutual information (PMI), and leverage the chain rule of PMI to decompose this trajectory-level quantity into additive per-action credits, each measuring the marginal information a single action contributes. Third , these credits serve as sample weights for policy training, amplifying the gradient from informative actions while suppressing that from ineffective ones (§3.3). Crucially, once the raw corpus is gathered, all subsequent stages proceed entirely offline with no further environment interaction, making the framework practical for real-world APIs where iterative exploration is infeasible. We evaluate AgentBrew on three real-world MCP applications: GitHub, Notion, and PostgreSQL [20; 39]. Without any external reward signals, human annotations, or iterative environment interaction, AgentBrew improves over the Qwen3-32B base model by +8.7 Acc and +9.7 Score on average, 2Raw Experience Collection            
+
+> Task Categories
+> issue management document editing
+> search & retrieval
+> data update
+> Real-World Application εTool Set �
+> Exploration / Grounding Query environment to discover existing resources
+> Grounded Tasks
+> add label 'bug' to issue #35 set status to for 'Q3 Report' return orders from customer 'Jay'
+> Execute Multi-turn Trajectories (agent ��)
+> a2
+> o2
+> error
+> a3
+> o3
+> noisy
+> Raw Corpus �퐫� 
+> ...length: 12
+> ...length: 9
+> ...length: 12
+> aoaoao
+> ao
+> a1
+> o1
+> useful
+> a4
+> o4
+> useful
+> Task
+
+Experience Distillation 
+
+2a. Retrospective Task Inference 
+
+PMI-weighted Policy Training                                 
+
+> Original task ��“Fix the bug and close the issue” Raw trajectory �nfrom �0(with COT)
+> a1o1a2o2a3o3a4o4
+> �ℎ표� ℎ� 1thought 2thought 3thought 4
+> Drop Cot
+> aoaoaoaoaoaoaoaoaoao
+> Aligned task ��
+> “Update the issue title and assign the reviewer”
+> Task inference model M
+
+2b. PMI-Based Credit Assignment                   
+
+> Original task ��
+> Aligned task ��
+> Same trajectory, different credit pattern
+> A3is useful for the original task, but redundant for the aligned task
+> +0.24 +0.29
+> a1o1a2o2a3o3a4o4
+> -0.18 +0.10
+> a1o1a2o2a3o3a4o4
+> +0.12 -0.20 +0.31
+
+Realigned trajectories & Action weights 
+
+Input: Realigned trajectories & action weights                      
+
+> aoaoao
+> ao
+> aoaoaoaoaoaoaoaoaoao
+
+�1
+
+�2
+
+�3                
+
+> Weight normalization
+> +0.02
+> a1o1
+> +0.24
+> 1.548 -0.18
+> a2o2
+> 0
+> a3o3
+> +0.02
+> 0.129
+> a4o4
+> +0.31
+> 2
+> normalized weights  �(�) ∈[�, �]
+> clamp negatives to 0
+> normalie within each trajectory to [0,2]
+> Weighted SFT
+> a1o1a2o2a3o3a4o4
+
+�1   
+
+> s1s2s3s4
+
+Improved Tool-Use Agent 
+
+> “learn informative tool-use behaviors from imperfect trajectories”
+
+Figure 2: Overview of AgentBrew. (1) The agent explores E to propose grounded tasks and collects raw trajectories. (2) Retrospective task inference recovers aligned instructions ˆIn, and PMI-based credit assignment scores each action. (3) Normalized credits weight the policy training objective. surpassing Qwen3-235B and outperforming rejection sampling by +5.9 Acc and +10.3 Score. These results demonstrate that fine-grained offline learning can extract useful training signal from raw trajectories that filtering-based approaches would discard entirely. 
+
+2 Problem Formulation 
+
+We consider an LLM agent operating within a real-world application environment E (e.g., GitHub, No-tion) that exposes a set of callable tools F = {f1, . . . , f K }, each defined by a natural language descrip-tion and a typed parameter specification. Given a task instruction I ∈ I , the agent interacts with E over discrete steps t = 0 , . . . , T . At each step, the agent observes the state st = ( I, a 0, o 0, . . . , a t−1, o t−1)
+
+and generates an action at = ( ut, c t), where ut is a chain-of-thought trace and ct is a tool call. The environment returns an observation ot = E(ct), yielding a complete trajectory τ = {(st, a t, o t)}Tt=0 .Our goal is to improve the agent’s policy πθ for tool-use tasks in E under three constraints that reflect the practical reality of most real-world applications (§1): (1) no pre-defined tasks or verifiers are available; (2) the agent may collect a single trajectory corpus Draw = {(In, τ n)}Nn=1 but further large-scale interaction is infeasible; and (3) trajectories carry no external reward signals. Each trajectory terminates when the agent issues a completion action or a maximum step limit is reached, but neither condition constitutes ground-truth verification of success. The objective is to extract a training signal from this unlabeled Draw that improves πθ on the distribution of user tasks in E.
+
+3 Methodology 
+
+We propose AgentBrew , a three-stage offline framework illustrated in Figure 2. Given a target environment E, the agent first collects a raw trajectory corpus Draw through grounded exploration (§3.1). The raw corpus then undergoes experience distillation (§3.2), which produces realigned instruction-trajectory pairs with per-action credit scores. Finally, these credits serve as sample weights for a maximum likelihood training objective (§3.3). Once the initial corpus is gathered, the entire pipeline requires no further environment interaction. 
+
+3.1 Raw Experience Collection Grounded Task Proposal. Prior approaches synthesize tasks directly from tool documentation [26; 42], but frequently produce tasks that reference nonexistent entities or invalid configurations 3because they lack access to the live state of E. We instead ground task construction in the environment itself. The agent first generates a set of high-level task categories from the tool descriptions of F
+
+(see Appendix C), following the common practice of aligning synthetic training tasks with target capability profiles [42; 48; 34]. Each category specifies the capability profile to exercise, not the specific entities or data involved. Training and evaluation use fully isolated environment instances with no overlap in entities, data entries, or environment states. For each category, the agent conducts exploratory interactions with E, invoking tools to retrieve concrete environmental information such as available resources and existing data entries, and then proposes task instructions grounded in the retrieved information. Generated tasks are validated to ensure all referenced schema entities exist in the target environment. This yields a task set I = {In}Nn=1 whose instructions reference entities and configurations that verifiably exist in E.
+
+Task Execution. For each proposed task In, the agent interacts with E over multiple turns following the process described in §2, producing a trajectory τn = {(st, a t, o t)}Tn
+
+> t=0
+
+. The interaction terminates when the agent returns a final answer indicating task completion, or when a maximum turn limit 
+
+Tmax is reached. Trajectories that reach Tmax are discarded as they typically reflect degenerate behaviors such as repeated failed API calls with no meaningful environmental interaction. All remaining naturally terminated trajectories are retained without quality filtering, yielding the raw corpus Draw = {(In, τ n)}Nn=1 .
+
+3.2 Experience Distillation 
+
+The original instructions {In} are necessary to drive trajectory collection, but most trajectories fail to complete In [20; 39; 6], making the raw pairs (In, τ n) unsuitable for direct training: the policy would learn to associate incorrect behaviors with the stated goal. We address this through two complementary steps. Retrospective task inference (§3.2.1) replaces each In with a revised instruction ˆIn that reflects what the trajectory actually accomplished, producing aligned pairs for training. PMI-based credit assignment (§3.2.2) then scores each action by how much it contributes to 
+
+ˆIn, so that informative actions receive stronger supervision while irrelevant or erroneous ones are suppressed. 
+
+3.2.1 Retrospective Task Inference 
+
+To construct aligned pairs, we first discard all chain-of-thought traces ut from each trajectory, retaining only the tool calls and environment responses: 
+
+¯τn = {(ct, o t)}Tn 
+
+> t=0
+
+(1) This removal is necessary because ut is generated conditioned on the original instruction In and may contradict the trajectory’s actual outcome: for instance, ut may claim a sub-goal is being achieved while ot indicates an API error or no state change. Retaining such traces would bias the inference toward intentions the trajectory did not fulfill. The resulting ¯τn is analogous to a user interaction log of application operations and system responses, stripped of subjective rationales. Given ¯τn, we prompt an LLM to infer a revised instruction ˆIn that is consistent with the trajec-tory’s observable outcomes (prompt details in Appendix E). The inference is guided by several key constraints: ˆIn must describe the outcome genuinely achieved in E rather than narrate the action sequence; claims not directly supported by successful operations in ¯τn are removed; and no entities or results beyond what is evidenced by the trajectory may be introduced. This produces realigned pairs ( ˆIn, ¯τn) for downstream supervision. 
+
+3.2.2 PMI-Based Credit Assignment 
+
+After retrospective task inference, we obtain aligned pairs ( ˆIn, ¯τn) that could in principle be used directly for supervised fine-tuning. However, not all actions in τn contribute equally to ˆIn: some served the original intent of In but are irrelevant to ˆIn, and others are low-quality such as incorrect API calls and redundant queries. We therefore need a per-action credit that quantifies each action’s contribution to ˆIn. Our key idea is to use a reference language model πref to measure how much information each action-observation pair provides about the inferred task ˆIn. This informational 4measure correlates well with actual contribution because ˆIn is itself derived from the trajectory’s observable outcomes (§3.2.1): actions that produced the described effects leave distinctive traces in ot that strongly reduce uncertainty about the outcome-derived ˆIn, receiving high credit, while failed or redundant actions provide little such evidence and are suppressed. We formalize this using pointwise mutual information (PMI). 
+
+Total information of a trajectory. To assign per-action credits, we first define the total information that a trajectory carries about its inferred task, then decompose it across individual actions. Let πref 
+
+denote the reference language model. The PMI between the reduced trajectory ¯τn = {(ct, o t)}Tn
+
+> t=0
+
+and the inferred instruction ˆIn is: PMI ( ˆIn; ¯ τn) = log πref ( ˆIn | ¯τn)
+
+πref ( ˆIn) = ( − log πref ( ˆIn)) 
+
+| {z }
+
+> L∅
+
+− (− log πref ( ˆIn | ¯τn)) 
+
+| {z }
+
+> LTn
+
+= L∅ − L Tn (2) where L∅ = − log πref ( ˆIn) is the negative log-likelihood (NLL) of ˆIn under the reference model without any context, and LTn = − log πref ( ˆIn | ¯τn) is the NLL after conditioning on the entire trajectory. We denote this total information as ∆L = L∅ − L Tn . The question is how to decompose 
+
+∆L across the Tn + 1 individual actions. 
+
+Per-action credit via the chain rule of PMI. The chain rule of PMI decomposes the total informa-tion into a sum of conditional PMI terms, each measuring the marginal information contribution of a single action. Let Lt = − log πref ( ˆIn | c0, o 0, . . . , c t, o t) denote the NLL after observing actions up to step t. The conditional PMI between (ct, o t) and ˆIn given preceding actions (c<t , o <t ) is: 
+
+wt = PMI ( ˆIn; ( ct, o t) | c<t , o <t ) = log πref ( ˆIn | c≤t, o ≤t)
+
+πref ( ˆIn | c<t , o <t ) = Lt−1 − L t, t = 1 , . . . , T n (3) with w0 = L∅ − L 0 for the first action. Each wt quantifies how much additional information (ct, o t)
+
+provides about ˆIn beyond what is already known from the preceding actions. An action that is highly informative of ˆIn yields a large positive wt, a redundant action yields wt ≈ 0, and an action whose observation misleads the model away from ˆIn yields wt < 0.By the chain rule of PMI, these per-action credits form an exact additive decomposition of the total information: TnX
+
+> t=0
+
+wt = ( L∅ − L 0) + 
+
+> Tn
+
+X
+
+> t=1
+
+(Lt−1 − L t) = L∅ − L Tn = ∆ L (4) This guarantees that the per-action credits neither inflate nor discard any information: each unit of PMI between ¯τn and ˆIn is attributed to exactly one action. 
+
+3.3 PMI-weighted Policy Training 
+
+The raw credits may be negative and vary in scale across trajectories. We clamp negative values to zero because any instrumental value of an uncertainty-increasing action is already captured by the subsequent step that resolves that uncertainty, as guaranteed by the additive decomposition in Eq. (4). We then normalize within each trajectory to [0 , 2] :
+
+˜w(n) 
+
+> t
+
+= 2 · max( w(n) 
+
+> t
+
+, 0) max 0≤j≤Tn max( w(n) 
+
+> j
+
+, 0) (5) The policy is then optimized by minimizing the weighted negative log-likelihood, following the sample-weighted SFT paradigm used in prior work [47; 11]: 
+
+J (θ) = −
+
+> N
+
+X
+
+> n=1
+> Tn
+
+X
+
+> t=0
+
+˜w(n) 
+
+> t
+
+· log πθ (at | ˆIn, s t) (6) where st = ( ˆIn, a 0, o 0, . . . , a t−1, o t−1). Although credits are computed over (ct, o t), the loss is applied to the full action at = ( ut, c t) including chain-of-thought tokens. The credit weighting 5Table 1: Main results across three real-world applications. We report Acc (binary task completion rate) and Score (average per-task score, 0–1). Best results per column are bolded . Green and red deltas indicate changes relative to Qwen3-32B.                                                                                                                    
+
+> Method GitHub Notion Postgres Average
+> Acc. Score Acc. Score Acc. Score Acc. Score
+> Frontier Proprietary Models
+> GPT-5 64.2 85.4 42.9 83.4 42.9 61.7 50.0 76.8
+> Claude Sonnet-4.5 57.1 76.9 39.3 84.6 38.1 53.3 44.8 71.6
+> Gemini-3 Pro 60.7 81.2 53.6 86.2 57.1 75.1 57.1 80.8
+> Open-Source Foundation Models
+> GLM-5-744B 42.9 74.3 32.1 77.3 23.8 59.4 32.9 70.3
+> DeepSeek-V3.2-685B 17.8 63.1 39.2 74.3 33.3 64.1 30.1 67.2
+> Qwen3-235B 17.9 63.0 10.7 65.7 19.0 34.3 15.9 54.3
+> GPT-OSS-120B 3.6 37.8 3.6 54.6 14.3 24.1 7.1 38.8
+> Qwen3-32B 10.7 49.7 3.6 60.1 14.3 37.2 9.5 49.0
+> Training Methods (32B)
+> TOUCAN 17.8 56.4 3.6 49.2 14.3 28.8 11.9 (+2.4) 44.8 (-4.2)
+> Vanilla SFT 14.2 53.9 7.1 59.8 9.5 30.7 10.3 (+0.8) 48.1 (-0.9)
+> Rejection Sampling 17.8 53.9 053.2 19.0 38.0 12.3 (+2.8) 48.4 (-0.6)
+> AgentBrew 21.4 63.5 14.2 70.1 23.8 41.8 18.2 (+8.7) 58.7 (+9.7)
+
+mitigates potential misalignment between ut and ˆIn: low-contribution actions receive near-zero weight, suppressing gradient from both their tool calls and associated reasoning, while high-credit actions tend to have reasoning consistent with their executed behavior. Overall, informative actions receive amplified gradient signal while uninformative ones are effectively masked. We present pseudo code and additional details in Appendix A & D. 
+
+4 Experiments 
+
+We evaluate AgentBrew across three real-world applications, examining overall performance (§4.2), the effectiveness of PMI-based credit assignment and retrospective task inference (§4.3–4.4), robust-ness to noisy data (§4.5), and transferability across model sizes (§4.6). 
+
+4.1 Experimental Settings Setup. We evaluate on three real-world MCP applications [20; 39]: GitHub (code collaboration), 
+
+Notion (knowledge management), and PostgreSQL (relational database). We compare against frontier proprietary models (GPT-5, Claude Sonnet-4.5, Gemini-3 Pro), open-source foundation models (GLM-5-744B, DeepSeek-V3.2-685B, Qwen3-235B, GPT-OSS-120B, Qwen3-32B), and training-based methods built on Qwen3-32B: TOUCAN [42], Vanilla SFT on our collected trajec-tories, and Rejection Sampling [47] which retains only LLM-judge-approved trajectories for SFT. The evaluation tasks and ground-truth verifiers are provided by the mcp-universe and mcpmark benchmarks [20; 39]; that these verifiers are used solely for evaluation; they are not available during any stage of the AgentBrew pipeline. To prevent data leakage, training and evaluation are isolated at two levels: training tasks are generated from capability descriptions, and the training corpus is collected from environment instances that share no entities, data entries, or states with the benchmark evaluation environments (details in Appendix F). 
+
+Data collection and implementation. We use Qwen3-32B [43] as the unified model for the entire AgentBrew pipeline, serving as the base policy, the reference model πref for PMI credit computation, and the backbone for retrospective task inference. The raw corpus Draw contains approximately 2,500 trajectories for GitHub, 2,500 for Notion, and 3,500 for PostgreSQL. Since real-world interactions often exceed 100K tokens, we adopt a memory mechanism that retains the three most recent steps 6Uniform Weight LLM Score InfoPO PMI (Ours)      
+
+> 010 20 30 40 50 60 70 80
+> Performance
+> 17.8 17.8 17.8 21.4 55.4 56.1 52.7 63.5
+> GitHub
+> Acc Score
+
+(a) Uniform Weight LLM Score InfoPO PMI (Ours)     
+
+> 010 20 30 40 50 60 70 80
+> Performance
+> 10.7 7.1 10.7 14.2 61.6 54.7 60.5 70.1
+> Notion
+> Acc Score
+
+(b) 0.1 0.2 0.3  
+
+> Mean Credit
+> 0.50 0.75 1.00 1.25
+> Total Credit
+> Misaligned Well-aligned
+
+(c) 0.00 0.15 0.30 0.45  
+
+> Mean Credit
+> 0.0 0.5 1.0 1.5
+> Total Credit
+> Misaligned Well-aligned
+
+(d) 
+
+Figure 3: Effect of credit assignment. (a-b) Performance comparison of different credit assignment strategies on GitHub and Notion. (c-d) Distribution of mean credit and total credit for well-aligned (red) and misaligned (blue) trajectories on GitHub (c) and Notion (d). in full and compresses earlier history into LLM-generated summaries [23; 49]. This mechanism is applied uniformly across all methods and models, ensuring fair comparison. Since all prefixes of a trajectory share a common prompt, PMI credit computation benefits from KV-cache reuse and can be parallelized across trajectories; computing credits for the entire corpus of approximately 8,500 trajectories completes in roughly 9 hours on 4 H100 GPUs. Further details on data collection and implementation are provided in Appendix F, and case studies are presented in Appendix G. 
+
+4.2 Main Results 
+
+Table 1 summarizes performance across three real-world applications. AgentBrew targets data efficiency rather than model scaling: it extracts stronger signal from limited, unlabeled interactions and is therefore complementary to advances in base model capability. Built on Qwen3-32B, AgentBrew achieves an average Acc of 18.2 and Score of 58.7, surpassing its own 235B variant (+2.3 Acc, +4.4 Score), demonstrating that targeted offline adaptation on a single environment can be more effective than general-purpose scaling alone. Absolute accuracy across all methods remains modest, reflecting the genuine difficulty of these real-world benchmarks, where even frontier proprietary models such as Gemini-3 Pro (57.1 / 80.8) and GPT-5 (50.0 / 76.8) have ample room for improvement. Among training-based methods, AgentBrew consistently outperforms all baselines across the three environments. Compared to Vanilla SFT and Rejection Sampling, AgentBrew achieves improvements of +7.9 Acc / +10.6 Score and +5.9 Acc / +10.3 Score, respectively, showing that retrospectively realigning task instructions and extracting fine-grained per-action credit from noisy trajectories is more effective than either uniform supervision or trajectory-level quality filtering. The advantage is most pronounced on Notion, where Rejection Sampling yields an Acc of 0: the LLM judge fails to reliably assess task completion in complex stateful API interactions, causing the filter to reject nearly all trajectories and leaving insufficient data for effective training. AgentBrew achieves 14.2 Acc on the same corpus by bypassing verification entirely and instead recovering informative actions within imperfect trajectories. AgentBrew also outperforms TOUCAN (+6.3 Acc, +13.9 Score), which is trained on 1.5M trajectories synthesized across broad MCP environments, further confirming that a small amount of environment-specific data with fine-grained credit assignment is more effective than large-scale cross-environment trajectory synthesis. 
+
+4.3 Effect of PMI-Based Credit Assignment 
+
+We examine how PMI-Based credit assignment (§3.2.2) identifies informative actions within imperfect trajectories. All methods are trained on the same realigned pairs {( ˆIn, τ n)} from retrospective task inference (§3.2.1); only the per-action weighting strategy differs. We compare our PMI-based credit against three alternatives: Uniform , which assigns equal weight to all actions; LLM Score , which prompts πref to score each of its own actions; and InfoPO [14], which computes credit based on the information gain advantage over future actions. As shown in Figure 3(a-b), PMI-based credit consistently outperforms all alternatives on both GitHub and Notion. Notably, LLM Score drops to 7.1 / 54.7 on Notion, underperforming even Uniform (10.7 / 61.6), suggesting that LLM self-evaluation is unreliable for action-level quality assessment in complex stateful tool-use settings. Beyond downstream performance, PMI-based credit provides a natural safeguard against imperfect task inference: when ˆIn is poorly aligned with the trajectory, actions provide little information about it, yielding uniformly low credits that are clamped to near-zero by Eq. (5) and ensuring that the 7trajectory contributes minimal gradient signal during training. We verify this by using GPT-5 to classify each ( ˆIn, ¯τn) pair as well-aligned or misaligned. As shown in Figure 3(c-d), misaligned trajectories (blue) cluster at significantly lower mean and total credit compared to well-aligned ones (red) on both GitHub and Notion, confirming that PMI-based credit automatically suppresses noisy task inference without requiring any explicit quality filter. 
+
+4.4 Effect of Retrospective Task Inference 
+
+Table 2: Effect of retrospective task in-ference on Notion.         
+
+> Task Instruction Acc. Score
+> Original In7.1 65.6 Inferred ˆIn14.2 70.1
+
+We verify the necessity of retrospective task inference (§3.2.1) by comparing two training configurations on No-tion: one using the original task instructions {In} and the other using the inferred instructions { ˆIn}, both trained with PMI-based credit assignment. As shown in Table 2, training with ˆIn achieves an Acc of 14.2 and Score of 70.1, compared to 7.1 / 65.6 with the original In. The degradation under In arises because most trajectories fail to complete their original instruction, causing the policy to associate incomplete or erroneous action sequences with the stated goal (see Appendix G for qualitative examples). Although PMI-based credit assignment can down-weight misaligned trajectories (§4.3), credit is computed as the information gain of each action with respect to whatever instruction is provided; when the instruction itself is misaligned, even useful actions receive distorted credits measured against the wrong reference task. Retrospective task inference addresses this at the source by replacing In with ˆIn that reflects the trajectory’s actual outcome, ensuring that credit computation operates on coherent instruction-trajectory pairs. The two mechanisms are thus complementary: task inference corrects what the trajectory is trained to achieve, while credit assignment determines how much each action contributes to that corrected goal. 
+
+4.5 Robustness to Noisy Trajectories 15% 50% 75% All  
+
+> Proportion of Trajectories Used
+> 020 40 60 80
+> Performance (%)
+> 61.7 10.7 66.2 10.7 67.1 14.2 70.1 14.2
+> Acc Score
+> High Quality Low Quality
+
+Figure 4: Performance on Notion when progressively adding lower-quality data. As an offline method, AgentBrew can in principle be ap-plied to trajectories from diverse sources, including agent self-exploration and human usage logs, where data qual-ity is inherently uncontrolled. Robustness to such quality variance is therefore a practical requirement. To evalu-ate this, we use GPT-5 to score each raw trajectory pair 
+
+(In, τ n) based on instruction-trajectory alignment and rank all trajectories by quality in descending order. We then train AgentBrew on progressively larger subsets: the top 15%, top 50%, top 75%, and the full corpus, where each expansion introduces trajectories of strictly lower quality than those already included. As shown in Figure 4, both metrics improve monotonically as lower-quality data is added, with Acc increasing from 10.7 to 14.2 and Score from 61.7 to 70.1. Even adding the lowest-quality 25% of trajectories yields a further Score gain (67.1 → 70.1). This does not imply that lower-quality trajectories are inherently more valuable; rather, each additional trajectory, regardless of its overall completion quality, still contains individual actions that are informative for the inferred task. AgentBrew’s credit mechanism extracts these useful portions while suppressing the rest, so the net effect of including more data is consistently positive. This allows practitioners to include trajectories from diverse and uncontrolled sources without degrading performance. 
+
+4.6 Offline Transferability Across Models 
+
+To test whether AgentBrew’s distilled signal transfers across model sizes, we apply the data distilled by Qwen3-32B to train a 14B model via the same weighted training objective. As shown in Table 3, AgentBrew-14B achieves 20.2 average Acc / 55.3 Score, substantially outperforming the Qwen3-14B base model (+11.5 Acc / +12.5 Score), and on Notion nearly matches the 32B AgentBrew model (14.2 / 69.8 vs 14.2 / 70.1). Toucan-14B and AWM-14B also leverage larger models in their pipelines 8Table 3: Offline transferability on 14B models. AgentBrew distills data collected by Qwen3-32B into a 14B model via the offline pipeline, without additional environment interaction.                                                 
+
+> Method Training Paradigm GitHub Notion Postgres Avg.
+> Acc. Score Acc. Score Acc. Score Acc. Score Qwen3-14B No additional training 7.1 48.2 048.8 19.0 31.3 8.7 42.8 Toucan-14B SFT on 1.5M synthetic trajs. 045.2 042.5 011.4 0.0 33.3 AWM-14B Online RL on synthetic envs. 7.1 45.4 044.5 23.8 38.0 10.3 42.6
+> AgentBrew-14B Offline transfer 17.9 56.3 14.2 69.8 28.6 40.0 20.2 55.3
+
+for trajectory synthesis and environment construction, yet show limited improvement over the base model, indicating that the transferability stems from the quality of AgentBrew’s distilled signal rather than the capacity gap alone. This confirms that a single round of offline distillation can be reused to train smaller models, amortizing the cost of real-world API access. 
+
+5 Related Work 
+
+Training Data for Tool-Use Agents. A central challenge in training tool-use agents is obtaining high-quality (task, trajectory) pairs at scale. The prevailing forward approach first defines tasks, then collects trajectories by executing them with strong models and retaining only successful completions [26; 48; 24; 42; 34; 17]. An alternative reverse approach derives tasks from existing interactions: OS-Genesis [33] infers tasks from GUI state transitions, AgentTrek [41] uses web tutorials to guide trajectory synthesis, and Learn-by-interact [32] synthesizes trajectories from documentation and constructs instructions via backward abstraction of the interaction histories. Closer to our work, hindsight relabeling methods recover training signal from failed trajectories by replacing the original instruction with one the trajectory actually fulfills. This idea originates from HER [1] in classic RL; HSL [18] adapts it to LLM agents using environment rewards, and AgentHER [5] introduces failure classification with confidence gating. Across these lines of work, data quality is ensured through external signals such as execution verification, environment rewards, or LLM-based filtering. AgentBrew requires none of these, instead deferring quality control entirely to an information-theoretic credit assignment mechanism that operates on the trajectories themselves. 
+
+Policy Optimization for LLM Agents. On-policy reinforcement learning is widely used to train LLM agents in interactive environments, with methods such as GRPO [30], DAPO [46], WebRL [25], and DigiRL [3] relying on iterative rollouts and environment rewards. A central challenge is credit assignment, since trajectory-level rewards provide sparse supervision and cannot distinguish informative actions from redundant ones. To obtain finer-grained signals, IGPO [36] uses information gain on a ground-truth answer as turn-level reward, GiGPO [9] builds step-level groups from anchor states, iStar [19] infers step rewards from trajectory preferences, and AgentPRM [40] trains a process reward model via temporal-difference estimation. These methods remain on-policy and require repeated interaction with reward feedback. Offline methods reduce rollout cost: DPO [27], KTO [8], and RPO [45] learn from preference pairs, while Digi-Q [4] and OREO [37] learn value or Q-functions from offline trajectories. Yet they still depend on rewards, preferences, or learned value functions. In contrast, AgentBrew is fully offline and derives per-action training weights directly from the relationship between trajectories and their inferred tasks, without external reward signals or preference annotations. 
+
+6 Conclusion, Limitation, and Future Work 
+
+We presented AgentBrew, an offline framework that trains tool-use agents from a single batch of raw interactions without task verifiers or on-policy rollouts. By retrospectively inferring aligned instructions and decomposing per-action credit, AgentBrew extracts training signal from noisy trajectories that filtering-based methods would discard, enabling a 32B model to surpass Qwen3-235B across three real-world applications. Current limitations include evaluation on only three MCP applications, potential degradation of task inference on extremely long or chaotic trajectories, and the reliance on PMI as an informational proxy for action quality, which, despite structural alignment 9with actual contribution through the construction of ˆIn (§3.2.2), may not capture all causal effects in highly entangled action sequences. A promising future direction is applying AgentBrew to real user interaction logs in production applications, which are naturally unlabeled and noisy. Retrospective task inference could recover user intent directly from operation sequences, and credit assignment could identify key actions within each session, enabling agents to learn from authentic human demonstrations at scale. 
+
+References 
+
+[1] Marcin Andrychowicz, Filip Wolski, Alex Ray, Jonas Schneider, Rachel Fong, Peter Welinder, Bob McGrew, Josh Tobin, Pieter Abbeel, and Wojciech Zaremba. Hindsight experience replay. 
+
+Advances in neural information processing systems , 30, 2017. [2] Anthropic. Introducing the model context protocol. https://www.anthropic.com/news/ model-context-protocol , November 2024. [3] Hao Bai, Yifei Zhou, Mert Cemri, Jiayi Pan, Alane Suhr, Sergey Levine, and Aviral Kumar. Digirl: Training in-the-wild device-control agents with autonomous reinforcement learning. 
+
+Advances in Neural Information Processing Systems , 37:12461–12495, 2024. [4] Hao Bai, Yifei Zhou, Li Erran Li, Sergey Levine, and Aviral Kumar. Digi-q: Learning q-value functions for training device-control agents. arXiv preprint arXiv:2502.15760 , 2025. [5] Liang Ding. Agenther: Hindsight experience replay for llm agent trajectory relabeling. arXiv preprint arXiv:2603.21357 , 2026. [6] Guanting Dong, Junting Lu, Junjie Huang, Wanjun Zhong, Longxiang Liu, Shijue Huang, Zhenyu Li, Yang Zhao, Xiaoshuai Song, Xiaoxi Li, Jiajie Jin, Yutao Zhu, Hanbin Wang, Fangyu Lei, Qinyu Luo, Mingyang Chen, Zehui Chen, Jiazhan Feng, Ji-Rong Wen, and Zhicheng Dou. Agent-world: Scaling real-world environment synthesis for evolving general agent intelligence. 
+
+arXiv preprint , 2026. [7] Alexandre Drouin, Maxime Gasse, Massimo Caccia, Issam H Laradji, Manuel Del Verme, Tom Marty, Léo Boisvert, Megh Thakkar, Quentin Cappart, David Vazquez, et al. Workarena: How capable are web agents at solving common knowledge work tasks? arXiv preprint arXiv:2403.07718 , 2024. [8] Kawin Ethayarajh, Winnie Xu, Niklas Muennighoff, Dan Jurafsky, and Douwe Kiela. Kto: Model alignment as prospect theoretic optimization. arXiv preprint arXiv:2402.01306 , 2024. [9] Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. Group-in-group policy optimization for llm agent training. arXiv preprint arXiv:2505.10978 , 2025. [10] GitHub. Github mcp server. https://github.com/github/github-mcp-server , 2025. GitHub repository. Accessed: 2026-04-17. [11] Caglar Gulcehre, Tom Le Paine, Srivatsan Srinivasan, Ksenia Konyushkova, Lotte Weerts, Abhishek Sharma, Aditya Siddhant, Alex Ahern, Miaosen Wang, Chenjie Gu, et al. Reinforced self-training (rest) for language modeling. arXiv preprint arXiv:2308.08998 , 2023. [12] Zhicheng Guo, Sijie Cheng, Hao Wang, Shihao Liang, Yujia Qin, Peng Li, Zhiyuan Liu, Maosong Sun, and Yang Liu. Stabletoolbench: Towards stable large-scale benchmarking on tool learning of large language models. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 11143–11156, 2024. [13] Shuo He, Lang Feng, Qi Wei, Xin Cheng, Lei Feng, and Bo An. Hierarchy-of-groups policy optimization for long-horizon agentic tasks. arXiv preprint arXiv:2602.22817 , 2026. [14] Fanqi Kong, Jiayi Zhang, Mingyi Deng, Chenglin Wu, Yuyu Luo, and Bang Liu. Infopo: Information-driven policy optimization for user-centric agents. arXiv preprint arXiv:2603.00656 ,2026. 10 [15] Fangyu Lei, Jixuan Chen, Yuxiao Ye, Ruisheng Cao, Dongchan Shin, Hongjin Su, Zhaoqing Suo, Hongcheng Gao, Wenjing Hu, Pengcheng Yin, et al. Spider 2.0: Evaluating language models on real-world enterprise text-to-sql workflows. arXiv preprint arXiv:2411.07763 , 2024. [16] Jinyang Li, Binyuan Hui, Ge Qu, Jiaxi Yang, Binhua Li, Bowen Li, Bailin Wang, Bowen Qin, Ruiying Geng, Nan Huo, et al. Can llm already serve as a database interface? a big bench for large-scale database grounded text-to-sqls. Advances in Neural Information Processing Systems ,36:42330–42357, 2023. [17] Yuetai Li, Huseyin A Inan, Xiang Yue, Wei-Ning Chen, Lukas Wutschitz, Janardhan Kulka-rni, Radha Poovendran, Robert Sim, and Saravan Rajmohan. Simulating environments with reasoning models for agent training. arXiv preprint arXiv:2511.01824 , 2025. [18] Zichao Li, Gang Wu, Zichao Wang, Ruiyi Zhang, Wanrong Zhu, Ryan A. Rossi, Vlad I Morariu, and Jihyung Kil. Spinning straw into gold: Relabeling LLM agent trajectories in hindsight for successful demonstrations. In The Fourteenth International Conference on Learning Representations , 2026. [19] Xiaoqian Liu, Ke Wang, Yuchuan Wu, Fei Huang, Yongbin Li, Junge Zhang, and Jianbin Jiao. Agentic reinforcement learning with implicit step rewards. arXiv preprint arXiv:2509.19199 ,2025. [20] Ziyang Luo, Zhiqi Shen, Wenzhuo Yang, Zirui Zhao, Prathyusha Jwalapuram, Amrita Saha, Doyen Sahoo, Silvio Savarese, Caiming Xiong, and Junnan Li. Mcp-universe: Benchmark-ing large language models with real-world model context protocol servers. arXiv preprint arXiv:2508.14704 , 2025. [21] Zhiyi Lyu, Jianguo Huang, Yanchen Deng, Steven Hoi, and Bo An. Let’s revise step-by-step: A unified local search framework for code generation with llms. arXiv preprint arXiv:2508.07434 ,2025. [22] Notion. Notion: The ai workspace that works for you. https://www.notion.com/ , 2025. Accessed: 2026-04-17. [23] Charles Packer, Vivian Fang, Shishir_G Patil, Kevin Lin, Sarah Wooders, and Joseph_E Gonza-lez. Memgpt: towards llms as operating systems. 2023. [24] Akshara Prabhakar, Zuxin Liu, Ming Zhu, Jianguo Zhang, Tulika Awalgaonkar, Shiyu Wang, Zhiwei Liu, Haolin Chen, Thai Hoang, Juan Carlos Niebles, et al. Apigen-mt: Agentic pipeline for multi-turn data generation via simulated agent-human interplay. arXiv preprint arXiv:2504.03601 , 2025. [25] Zehan Qi, Xiao Liu, Iat Long Iong, Hanyu Lai, Xueqiao Sun, Wenyi Zhao, Yu Yang, Xinyue Yang, Jiadai Sun, Shuntian Yao, et al. Webrl: Training llm web agents via self-evolving online curriculum reinforcement learning. arXiv preprint arXiv:2411.02337 , 2024. [26] Yujia Qin, Shihao Liang, Yining Ye, Kunlun Zhu, Lan Yan, Yaxi Lu, Yankai Lin, Xin Cong, Xiangru Tang, Bill Qian, et al. Toolllm: Facilitating large language models to master 16000+ real-world apis. arXiv preprint arXiv:2307.16789 , 2023. [27] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. 
+
+Advances in neural information processing systems , 36:53728–53741, 2023. [28] Christopher Rawles, Sarah Clinckemaillie, Yifan Chang, Jonathan Waltz, Gabrielle Lau, Mary-beth Fair, Alice Li, William Bishop, Wei Li, Folawiyo Campbell-Ajala, et al. Androidworld: A dynamic benchmarking environment for autonomous agents. arXiv preprint arXiv:2405.14573 ,2024. [29] Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. Toolformer: Language models can teach themselves to use tools. Advances in neural information processing systems , 36: 68539–68551, 2023. 11 [30] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. [31] Wentao Shi, Mengqi Yuan, Junkang Wu, Qifan Wang, and Fuli Feng. Direct multi-turn preference optimization for language agents. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 2312–2324, 2024. [32] Hongjin Su, Ruoxi Sun, Jinsung Yoon, Pengcheng Yin, Tao Yu, and Sercan Ö Arık. Learn-by-interact: A data-centric framework for self-adaptive agents in realistic environments. arXiv preprint arXiv:2501.10893 , 2025. [33] Qiushi Sun, Kanzhi Cheng, Zichen Ding, Chuanyang Jin, Yian Wang, Fangzhi Xu, Zhenyu Wu, Chengyou Jia, Liheng Chen, Zhoumianze Liu, et al. Os-genesis: Automating gui agent trajectory construction via reverse task synthesis. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 5555–5579, 2025. [34] Xiaoyu Tian, Haotian Wang, Shuaiting Chen, Hao Zhou, Kaichi Yu, Yudian Zhang, Jade Ouyang, Junxi Yin, Jiong Chen, Baoyan Guo, et al. Astra: Automated synthesis of agentic trajectories and reinforcement arenas. arXiv preprint arXiv:2601.21558 , 2026. [35] Dunwei Tu, Hongyan Hao, Hansi Yang, Yihao Chen, Yi-Kai Zhang, Zhikang Xia, Yu Yang, Yueqing Sun, Xingchen Liu, Furao Shen, et al. Scaleenv: Scaling environment synthesis from scratch for generalist interactive tool-use agent training. arXiv preprint arXiv:2602.06820 ,2026. [36] Guoqing Wang, Sunhao Dai, Guangze Ye, Zeyu Gan, Wei Yao, Yong Deng, Xiaofeng Wu, and Zhenzhe Ying. Information gain-based policy optimization: A simple and effective approach for multi-turn llm agents. arXiv preprint arXiv:2510.14967 , 2025. [37] Huaijie Wang, Shibo Hao, Hanze Dong, Shenao Zhang, Yilin Bao, Ziran Yang, and Yi Wu. Offline reinforcement learning for llm multi-step reasoning. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 8881–8893, 2025. [38] Zhaoyang Wang, Canwen Xu, Boyi Liu, Yite Wang, Siwei Han, Zhewei Yao, Huaxiu Yao, and Yuxiong He. Agent world model: Infinity synthetic environments for agentic reinforcement learning. arXiv preprint arXiv:2602.10090 , 2026. [39] Zijian Wu, Xiangyan Liu, Xinyuan Zhang, Lingjun Chen, Fanqing Meng, Lingxiao Du, Yiran Zhao, Fanshi Zhang, Yaoqi Ye, Jiawei Wang, et al. Mcpmark: A benchmark for stress-testing realistic and comprehensive mcp use. arXiv preprint arXiv:2509.24002 , 2025. [40] Zhiheng Xi, Chenyang Liao, Guanyu Li, Yajie Yang, Wenxiang Chen, Zhihao Zhang, Binghai Wang, Senjie Jin, Yuhao Zhou, Jian Guan, et al. Agentprm: Process reward models for llm agents via step-wise promise and progress. arXiv preprint arXiv:2511.08325 , 2025. [41] Yiheng Xu, Dunjie Lu, Zhennan Shen, Junli Wang, Zekun Wang, Yuchen Mao, Caiming Xiong, and Tao Yu. Agenttrek: Agent trajectory synthesis via guiding replay with web tutorials. arXiv preprint arXiv:2412.09605 , 2024. [42] Zhangchen Xu, Adriana Meza Soria, Shawn Tan, Anurag Roy, Ashish Sunil Agrawal, Radha Poovendran, and Rameswar Panda. Toucan: Synthesizing 1.5 m tool-agentic data from real-world mcp environments. arXiv preprint arXiv:2510.01179 , 2025. [43] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. [44] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. React: Synergizing reasoning and acting in language models. In The eleventh international conference on learning representations , 2022. 12 [45] Yueqin Yin, Zhendong Wang, Yi Gu, Hai Huang, Weizhu Chen, and Mingyuan Zhou. Rela-tive preference optimization: Enhancing llm alignment through contrasting responses across identical and diverse prompts. arXiv preprint arXiv:2402.10958 , 2024. [46] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforcement learning system at scale. arXiv preprint arXiv:2503.14476 , 2025. [47] Zheng Yuan, Hongyi Yuan, Chengpeng Li, Guanting Dong, Keming Lu, Chuanqi Tan, Chang Zhou, and Jingren Zhou. Scaling relationship on learning mathematical reasoning with large language models. arXiv preprint arXiv:2308.01825 , 2023. [48] Jianguo Zhang, Tian Lan, Ming Zhu, Zuxin Liu, Thai Quoc Hoang, Shirley Kokane, Weiran Yao, Juntao Tan, Akshara Prabhakar, Haolin Chen, et al. xlam: A family of large action models to empower ai agent systems. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 11583–11597, 2025. [49] Wangchunshu Zhou, Yuchen Eleanor Jiang, Peng Cui, Tiannan Wang, Zhenxin Xiao, Yifan Hou, Ryan Cotterell, and Mrinmaya Sachan. Recurrentgpt: Interactive generation of (arbitrarily) long text. arXiv preprint arXiv:2305.13304 , 2023. 13 A Pseudo Code 
+
+We provide the complete AgentBrew pipeline in Algorithm 1. The procedure consists of three stages: raw experience collection (§3.1), experience distillation (§3.2), and PMI-weighted policy training (§3.3). Stage 1 is the only phase that requires interaction with the live environment E; Stages 2 and 3 proceed entirely offline using only the collected corpus and a reference language model πref .
+
+Algorithm 1 AgentBrew: Offline Tool-Use Agent Learning from Raw Trajectories 
+
+Input: Target environment E with tool set F, base policy πθ , reference model πref , max turns Tmax 
+
+Output: Trained policy πθ 
+
+> 1:
+
+— Stage 1: Raw Experience Collection —  
+
+> 2:
+
+Generate high-level task categories G from tool descriptions of F 
+
+> 3:
+
+for each category gm ∈ G do  
+
+> 4:
+
+Explore E via tool calls to retrieve live environmental information  
+
+> 5:
+
+Propose grounded task instructions {In} based on retrieved information  
+
+> 6:
+
+for each task In ∈ I do  
+
+> 7:
+
+Execute In with πθ in E, producing trajectory τn = {(st, a t, o t)}Tn 
+
+> t=0
+> 8:
+
+if Tn = Tmax (no natural termination) then  
+
+> 9:
+
+Discard τn 
+
+> 10:
+
+Collect raw corpus Draw = {(In, τ n)}Nn=1 ▷ No quality filtering  
+
+> 11: 12:
+
+— Stage 2: Experience Distillation (Offline) —  
+
+> 13:
+
+for each (In, τ n) ∈ D raw do  
+
+> 14:
+
+// Retrospective Task Inference  
+
+> 15:
+
+Remove chain-of-thought traces: ¯τn = {(ct, o t)}Tn 
+
+> t=0
+> 16:
+
+Infer revised instruction: ˆIn ← LLM (¯ τn) ▷ Goal-oriented, evidence-grounded  
+
+> 17: 18:
+
+// PMI-Based Credit Assignment  
+
+> 19:
+
+Compute unconditional NLL: L∅ = − log πref ( ˆIn) 
+
+> 20:
+
+for t = 0 , 1, . . . , T n do  
+
+> 21:
+
+Compute conditional NLL: Lt = − log πref ( ˆIn | c0, o 0, . . . , c t, o t) 
+
+> 22:
+
+w0 ← L ∅ − L 0 
+
+> 23:
+
+for t = 1 , . . . , T n do  
+
+> 24:
+
+wt ← L t−1 − L t ▷ Per-action PMI credit  
+
+> 25: 26:
+
+// Weight Normalization  
+
+> 27:
+
+for t = 0 , 1, . . . , T n do  
+
+> 28:
+
+˜wt ← 2 · max( wt, 0) / max 0≤j≤Tn wj ▷ Normalize to [0 , 2]  
+
+> 29: 30:
+
+— Stage 3: PMI-Weighted Policy Training (Offline) —  
+
+> 31:
+
+Optimize πθ by minimizing:  
+
+> 32:
+
+J (θ) = −
+
+> N
+
+X
+
+> n=1
+> Tn
+
+X
+
+> t=0
+
+˜w(n) 
+
+> t
+
+· log πθ (at | ˆIn, s t)
+
+B Environment Details 
+
+We evaluate AgentBrew on three real-world MCP applications that span distinct interaction paradigms: code collaboration (GitHub), knowledge management (Notion), and relational database administration (PostgreSQL). Table 4 lists the complete tool set exposed by each environment. 
+
+GitHub. The GitHub environment exposes 41 tools covering the full spectrum of platform opera-tions: repository management, file operations, issue tracking, pull request workflows, branch and commit inspection, CI/CD workflow management, code and user search, and security scanning (code scanning, Dependabot, secret scanning, and security advisories). Tasks in this environment require composing long action sequences across these tool categories. For example, forking a repository, 14 creating a feature branch, pushing file changes, opening a pull request, and performing a code review, all within a single trajectory. The live state includes cross-referenced issues, pull requests, commits, and branches, making precise entity resolution critical. 
+
+Notion. The Notion environment provides 19 tools organized around four core object types: users, blocks, pages, and databases, along with search and comment capabilities. Despite the smaller tool count, Notion tasks are challenging because of deeply nested content structures: pages contain blocks that may themselves contain child blocks or inline database references, and databases define typed schemas with relations and rollups linking to other databases. Operations such as inserting a block at a precise position, restructuring a page layout, or synchronizing rows across related databases require the agent to maintain an accurate mental model of the workspace hierarchy throughout the interaction. 
+
+PostgreSQL. The PostgreSQL environment exposes 9 tools that combine standard SQL ex-ecution with database administration utilities. Beyond execute_sql for arbitrary SQL state-ments, the environment provides schema inspection tools ( list_schemas , list_objects ,
+
+get_object_details ), query analysis tools ( explain_query , get_top_queries ), and health di-agnostics ( analyze_workload_indexes , analyze_query_indexes , analyze_db_health ). Al-though the tool set is compact, the complexity arises from the SQL reasoning itself: tasks range from multi-table data migrations and schema design to query optimization and security policy imple-mentation, requiring the agent to generate correct, multi-step SQL workflows grounded in the actual database schema and data. Table 4: Tool sets exposed by each environment. 
+
+Env. #Tools Tools 
+
+GitHub 41 create_repository, get_repository, list_repositories, fork_repository, get_repository_languages, get_file_contents, create_or_update_file, delete_file, push_files, create_issue, get_issue, list_issues, update_issue, add_issue_comment, create_pull_request, get_pull_request, list_pull_requests, get_pull_request_files, create_pull_request_review, merge_pull_request, create_branch, list_branches, list_commits, list_workflow_runs, get_workflow_run, list_workflow_jobs, cancel_workflow_run, search_repositories, search_code, search_issues, search_users, list_code_scanning_alerts, get_code_scanning_alert, list_dependabot_alerts, get_dependabot_alert, list_secret_scanning_alerts, get_secret_scanning_alert, list_global_security_advisories, list_org_repository_security_advisories, list_repository_security_advisories, create_pull_request_with_copilot 
+
+Notion 19 get-user, get-users, get-self, post-database-query, post-search, get-block-children, patch-block-children, retrieve-a-block, update-a-block, delete-a-block, retrieve-a-page, patch-page, post-page, create-a-database, update-a-database, retrieve-a-database, retrieve-a-page-property, retrieve-a-comment, create-a-comment 
+
+Postgres 9 list_schemas, list_objects, get_object_details, execute_sql, explain_query, get_top_queries, analyze_workload_indexes, analyze_query_indexes, analyze_db_health 
+
+C Task Proposal 
+
+Environment preparation. Each target environment E requires a diverse substrate of real-world content to ensure that proposed tasks are grounded in meaningful state. For GitHub , we curate 200 public repositories spanning a variety of programming languages (Python, JavaScript, Go, Rust, etc.) and project types (web applications, CLI tools, data pipelines, machine learning libraries), providing a rich landscape of issues, pull requests, branches, and commit histories for the agent to interact with. For Notion , we collect 180 free templates from the official Notion template gallery, 1
+
+covering domains such as project management, personal planning, knowledge bases, and team collaboration. These templates provide pre-populated pages, databases, and relational structures that mirror realistic workspace configurations. For PostgreSQL , we assemble 145 relational databases sourced from established open-source benchmarks including BIRD [16] and Spider [15], which collectively span domains such as retail, healthcare, education, sports, and enterprise operations. 
+
+> 1
+
+https://www.notion.com/templates 
+
+15 This diversity ensures that the subsequent task proposal stage can generate instructions grounded in entities and configurations that actually exist within each environment. 
+
+High-level task category generation. Given the tool set F of the target environment E, we prompt the agent to generate a set of high-level task categories G = {g1, g 2, . . . , g M } that cover representative human intents supported by E. The agent receives the names and descriptions of all available tools as input and produces categories that reflect common multi-step usage patterns, each requiring the composition of multiple tools. Table 5 lists the generated categories for each environment. GitHub yields 14 categories spanning repository lifecycle management, code collaboration, and project planning; Notion produces 12 categories covering database operations, page editing, and content synthesis; PostgreSQL results in 15 categories ranging from data migration and analytics to security policy design. The prompt template used for category generation is shown below. 
+
+Prompt: Task Category Generation 
+
+You are an expert task designer for evaluating AI agents that interact with real-world applications via tool-use APIs. You are given the complete tool set of the {environment_name} environment. Each tool is described by its name, purpose, and parameter specification: 
+
+{tool_descriptions} 
+
+Your goal is to generate a diverse set of high-level task categories that represent realistic human intents on this platform. Each category should: (1) Require composing multiple tools in a meaningful sequence (not single-tool invocations). (2) Reflect a concrete, goal-oriented workflow that a real user would perform (e.g., “migrate data between tables with validation”, not “use the search API”). (3) Be distinct from other categories in terms of the tool combinations and reasoning patterns involved. (4) Cover diverse difficulty levels , from straightforward CRUD operations to complex multi-step workflows involving conditional logic, cross-entity coordination, or synthesis. For each category, provide: – Title : A concise name for the category. – Goal : A one-sentence description of what a user aims to accomplish. Generate {num_categories} categories that collectively maximize the coverage of the tool set. 
+
+Table 5: Task categories generated for each environment.                                                                      
+
+> GitHub (14) Notion (12) PostgreSQL (15)
+> 1. Project bootstrap & self-review 1. Database creation & schema design 1. Bulk migration & transformation 2. Multi-source code integration 2. Cross-database relation & sync 2. Hierarchy-aware CRUD & integrity 3. Ecosystem metrics & reporting 3. Batch query, filter & migration 3. Dashboard reporting & aggregates 4. Decision-based comparative forking 4. Batch updates & coordinated edits 4. SQL query debugging & fixing 5. Simulated issue automation 5. Aggregate computation & dashboards 5. Query optimization & indexing 6. Fork-and-fix contribution 6. Multi-source query & synthesis 6. Operational workflow management 7. Cross-repo dependency injection 7. Page layout & column restructuring 7. Descriptive reporting & statistics 8. Epic & sub-issue planning 8. Block insertion & format matching 8. Multi-factor performance analytics 9. Release audit & upgrade docs 9. Template filling & nested editing 9. Schema buildout & seed data 10. Repo maintenance & cleanup 10. Content deletion & archival 10. Retention & churn analysis 11. Code archaeology & arch. docs 11. Style & color batch updates 11. Executive dashboard automation 12. Legacy branch backporting 12. Itinerary & planner composition 12. Structural & bottleneck analysis 13. Research framework scaffolding 13. Consistency enforcement 14. PR queue management & hygiene 14. Security policy & row-level access 15. Transactional procedures & audit
+
+Grounded task instruction generation. For each category gm ∈ G , a task generation agent conducts a lightweight exploratory interaction with E to ground the abstract category in concrete environmental state. The agent follows a ReAct-style loop: it first invokes a single read-only tool call (e.g., listing repository contents, querying database schemas, or browsing page structures) to discover real entities such as repository names, file paths, issue numbers, page IDs, or table columns. Based on the retrieved information, the agent then formulates a specific task instruction In written as a natural user request that references only verified identifiers. This grounding step is critical because tasks that reference nonexistent resources (e.g., a deleted branch or a missing database entry) would produce unexecutable trajectories during the subsequent data collection phase. To maintain diversity, the agent 16 also receives an example task from a different category as a style reference, ensuring consistent tone and specificity across the generated task set. The prompt template is shown below. 
+
+Prompt: Grounded Task Instruction Generation 
+
+You are a ReAct (Reasoning and Acting) agent specializing in Task Engineering. You are designing a single, high-quality task for LLMs that interact with real-world applications via tool-use. 
+
+Tool Restrictions: You may ONLY call read/search tools to inspect the target environment — do NOT create, modify, or delete anything. Call exactly 1 tool to ground yourself, then immediately output the final task. 
+
+What the generated task CAN include: The task may involve any operation supported by the environment (reading, creating, updating, deleting resources). Write operations must target user-owned resources (newly created or forked). 
+
+Your Job: 
+
+(1) Read the Workflow Pattern ({task_category} ) to understand the type of task to generate. (2) Read the Example Task ({example_task} ) to learn the desired tone, style, and level of detail. (3) Call 1 read-only tool to inspect the target environment and discover concrete entities. (4) Write a NEW task that follows the same workflow pattern, mimics the example’s tone, and is grounded in the environment’s real state. 
+
+Available tools: {tool_descriptions} 
+
+Task Output Constraints: 
+
+(1) Output exactly one task. Do not generate multiple tasks or sub-task lists. (2) Write it as a natural user request — same tone and style as the example. No formal specs, no numbered checklists, no headings. (3) Do not mention “tools” or “APIs” in the final task text. (4) Include concrete identifiers confirmed via the tool call. 
+
+Output Format: A JSON object with a thought field (verification reasoning) and either an action field (to call a read-only tool) or an answer field (the final natural-language task instruction). 
+
+D PMI-Based Credit Assignment 
+
+For each trajectory, we first infer a hindsight instruction ˆI that describes the outcome actually supported by the observed tool interactions. We then compute per-action credit by measuring how much each trajectory prefix reduces the negative log-likelihood of ˆI under a reference model πref . Let 
+
+¯τ≤t denote the serialized tool-interaction prefix up to step t, and let ˆI = (ˆ i1, . . . , ˆim) be the tokenized hindsight instruction. In implementation, we compute the average token negative log-likelihood: 
+
+Lt = − 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+log πref 
+
+ˆik | ˆi<k , ¯τ≤t
+
+
+
+.
+
+The empty-prefix loss is denoted by L−1 and is computed in the same way without conditioning on any observed tool interactions: 
+
+L−1 = − 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+log πref 
+
+ˆik | ˆi<k 
+
+
+
+.
+
+The raw PMI credit for action t is the reduction in hindsight-instruction NLL after revealing that action: 
+
+wt = Lt−1 − Lt.
+
+Thus, positive credit indicates that the action makes the inferred instruction easier to predict, while zero or negative credit indicates that the action is redundant or uninformative with respect to the inferred instruction. Before training, we clamp negative credits and normalize weights within each trajectory: 
+
+˜wt = 2 · max( wt, 0) max j wj
+
+.
+
+If all raw credits in a trajectory are non-positive, we set all normalized weights to zero. 17 Empirical statistics of normalized weights. Across the full training corpus, the mean normalized weight ˜wt is 0.75, with per-environment values of 0.81 (GitHub), 0.71 (Notion), and 0.77 (Post-greSQL). This value is below the uniform baseline of 1.0 because negative credits are clamped to zero and many actions within each trajectory receive near-zero credit, reflecting the intended selective effect of PMI weighting. The relative ranking of per-action credits, rather than the absolute scale, is the primary mechanism through which PMI weighting steers the policy toward informative actions. 
+
+E Retrospective Task Inference 
+
+As described in §3.2.1, we infer a revised instruction ˆIn from each trajectory’s reduced form ¯τn =
+
+{(ct, o t)}Tn
+
+> t=0
+
+, which retains only tool calls and environment responses. We use Qwen3-32B for this inference, consistent with the rest of the AgentBrew pipeline. Before prompting, we extract a structured change summary from ¯τn by identifying successful state-changing operations (e.g., pages created, rows inserted, SQL objects defined) and separating them from read-only or failed steps. Both the change summary and the full reduced trajectory are provided as input. The prompt follows a consistent template across all three environments, instantiated with environment-specific terminology and examples. The general template is shown below.      
+
+> Prompt: Retrospective Task Inference
+> You revise benchmark-style {environment_name} tasks from agent tool trajectories. Your job is to minimally edit the ORIGINAL TASK so it matches what the agent actually completed.
+> Main goal:
+> • Remove or weaken unsupported subtasks. • The revised task must be highly consistent with the trajectory. Use the trajectory as evidence, with priority on: (1) successful state-changing operations; (2) query/retrieve steps only when they help identify objects involved in successful writes.
+> Rules:
+> • Output only the revised task text. • Preserve the original high-level task type (e.g., migration stays migration, analysis stays analysis). • If the agent only completed part of a multi-step task, keep only the completed subset. • Do not claim outcomes (e.g., performance improvements, verification success) unless directly supported. • Do not invent entities, artifacts, or results not evidenced by the trajectory. • Prefer deleting unsupported details over replacing them with new speculative ones. • Do not preserve strong claims ( all ,each ,exact count ,verbatim ) unless directly supported by successful operations.
+> ORIGINAL TASK:
+> {original_task}
+> OBSERVED CHANGES:
+> {change_summary}
+> TRAJECTORY:
+> {trajectory_str}
+
+F Experiment Details 
+
+F.1 Context Management 
+
+Real-world tool-use interactions frequently produce trajectories exceeding 100K tokens, as each tool call may return verbose API responses (e.g., full page content in Notion or lengthy query results in PostgreSQL). To handle this within finite context windows, we adopt a sliding-window memory mechanism inspired by prior work on memory-augmented agents [23; 49]. At each step t, the agent’s context is composed of two parts: (1) a long-term memory consisting of compressed summaries of all steps prior to the recent window, and (2) a short-term context containing 18 the full, uncompressed content of the three most recent steps (st−2, a t−2, o t−2), . . . , (st, a t, o t).This design preserves fine-grained details for immediate decision-making while retaining high-level progress information from earlier steps. Concretely, after each step t, we prompt the LLM to generate a concise summary of the current step conditioned on the task instruction, all previous step summaries, and the full content of step t.The summary captures what was attempted, key results or facts discovered, important constraints or decisions, and concrete identifiers (paths, URLs, IDs). Each summary is kept under 500 words and is appended to the long-term memory buffer. When constructing the context for step t+1 , all summaries for steps 0 to t are concatenated as the long-term memory prefix, followed by the full content of steps t−2, t−1, and t.This mechanism is applied uniformly across all methods and models in our experiments, ensuring that performance differences reflect the training approach rather than context management advantages. The prompt template used for step summarization is provided below.      
+
+> Prompt: Step-Level Summarization
+> You are a step-level summarizer for a multi-step ReAct-style agent.
+> Your task: Given the overall question, all past step summaries, and the full content of the current step, extract only the information from this step that will be useful for understanding what has already been done and making better decisions in future steps.
+> Overall Question: {question}
+> Past Step Summaries: {past_summaries}
+> Current Step Index: {step_index}
+> Full Content of the Current Step: {step_full_content}
+> Produce a concise summary of this current step only, following these rules: • Focus on: what was attempted or executed; key results or facts discovered; important constraints, assumptions, or decisions; identifiers, paths, or URLs needed later. • Connect to the question and past progress when relevant, but do not re-summarize previous steps. • Omit generic reasoning boilerplate, tool framework noise, and large raw outputs (summarize their essential points instead). • Use fewer than 500 words.
+
+F.2 Training Hyperparameters 
+
+We train the policy πθ using the PMI-weighted SFT objective (Eq. 6) implemented as a custom weighted cross-entropy loss. For each training sample, the per-action credit ˜w(n) 
+
+> t
+
+is attached as a sample-level weight; during forward passes, the trainer computes per-sample token-averaged cross-entropy and scales it by the corresponding weight before aggregating across the batch. During evaluation, weights are disabled to ensure comparable eval loss across runs. We fine-tune Qwen3-32B using DeepSpeed ZeRO-Stage 3 on 4 ×H100 80GB GPUs with the follow-ing configuration: learning rate 5 × 10 −6 with cosine scheduling and 10% warmup, per-device batch size 2 with gradient accumulation over 4 steps (effective batch size 64), weight decay 0.1, maximum sequence length 20,000 tokens, BF16 mixed precision, and gradient checkpointing enabled. Training runs for 1 epoch over the combined corpus of all three environments. Samples with zero normalized credit ( ˜w(n) 
+
+> t
+
+= 0 ) are filtered out before training, as they contribute no gradient signal. The 14B transfer experiments (§4.6) use identical hyperparameters and training data. 
+
+F.3 Evaluation Protocol 
+
+We adopt the evaluation framework from MCP-Universe [20]. Each test task is paired with a programmatic verifier that inspects the post-execution environment state (e.g., created resources, modified database rows, updated page content) against a ground-truth specification. The verifier produces a per-task score in [0 , 1] reflecting partial completion, and Acc is the fraction of tasks achieving a score of 1.0 (full completion). Score is the average per-task score across all test tasks. 19 G Case Studies 
+
+We provide qualitative case studies across three real-world tool-use environments: GitHub, Notion, and PostgreSQL. These examples illustrate how AgentBrew distills useful supervision from imperfect raw trajectories. In each case, retrospective task inference rewrites the original instruction into an aligned task that better matches the trajectory’s observable outcome, while PMI credit assignment identifies which actions are useful for policy learning. 20 Action PMI credit ��
+
+1. get_repository repo: acme-corp/ml-serving → Located the target repository and default branch +0.058 2. get_file_contents path: docs/ → Listed 5 Markdown files under docs/ +0.196 3. get_file_contents path: docs/README.md → ERROR: file not found -0.138 4. get_file_contents path: docs/setup.md → Found the available setup guide +0.174 5. get_repository_languages repo: acme-corp/ml-serving → Collected language breakdown +0.126 6. list_branches +0.006 Redundant check of repository branches 7. create_repository +0.218 name: ml-serving-migration-notes → Created the migration-notes repository 8. create_or_update_file ★
+
+repo: ml-serving-migration-notes +0.402 path: README.md → Wrote docs count, setup-guide pointer, and language summary 9. create_issue repo: acme-corp/ml-serving +0.151 title: Review documentation migration notes → Opened a review issue in the original repository 10. add_issue_comment repo: acme-corp/ml-serving +0.087 issue: #128 → Added migration-notes link and audit details  
+
+> Original task ��
+
+Audit `acme-corp/ml-serving` and prepare documentation migration 1. Count documentation files done • inspect `acme-corp/ml-serving` done • list Markdown files under `docs/` done 2. Identify the documentation entry point not done • use `docs/README.md` as the main entry point not done 3. Create migration notes repository done • create `ml-serving-migration-notes` done • include docs count and setup-guide pointer done 4. Create pull request updating documentation index not done • update `docs/index.md` not done • open a pull request for the documentation migration not done reason: trajectory opened an issue instead of modifying files 5. Open tracking issue in the original repository done • create review issue in `acme-corp/ml-serving` done • link to the new migration-notes repository done • add audit details as an issue comment done  
+
+> Inferred task ��
+
+Audit `acme-corp/ml-serving` and publish migration notes 1. Inspect documentation structure • list Markdown files under `docs/` • count the documentation files • identify `docs/setup.md` as the available setup guide 2. Analyze repository language composition • fetch language statistics with `get_repository_languages` • include the language breakdown in the audit summary 3. Create migration notes repository • create `ml-serving-migration-notes` • add `README.md` with docs count, setup-guide pointer, and language breakdown 4. Notify maintainers in the original repository • open a review issue in `acme-corp/ml-serving` • include the migration-notes link and audit details in the issue body 
+
+A Retrospective task inference B PMI credit assignment Figure 5: Case study on the GitHub environment. 21 Original task ��
+
+Update the "1x1 Meeting" page 
+
+1. Update heading ₂ "Meeting Notes" → "Team Alignment Sessions" done 2. Change heading ₂ "Notes Taking" → "Action Item Tracking" done 3. Replace heading ₃ "Get Notion AI Free…" → "Onboarding Process Overview" not found 4. Add paragraph with specified text done 5. Create relation link from 3rd data source to page not found 6. Filter relation: Status='Done', Priority='High' not found 7. Create child page "Q4 Goals" with callout block not done 8. Validate all filters, child page count, callout text not done  
+
+> Inferred task ��
+
+Update the "1x1 Meeting" page 
+
+1. Update heading ₂ "Meeting Notes" → "Team Alignment Sessions" 2. Change heading ₂ "Notes Taking" → "Action Item Tracking" 3. Add paragraph with specified text 
+
+Unsupported subtasks removed; heading 
+
+₃ retained as new block (not replacement) 
+
+A Retrospective task inference B PMI credit assignment 
+
+Action 1. post-search 
+
+Search "1x1 Meeting" → found page 
+
+2. update-a-block 
+
+Placeholder ID → 400 validation error 
+
+3. get-block-children 
+
+Discovered page structure: headings, databases, blocks 
+
+4. update-a-block 
+
+"Meeting Notes" → "Team Alignment Sessions" ✓
+
+5. update-a-block 
+
+"Notes Taking" → "Action Item Tracking" ✓
+
+6. get-block-children 
+
+Explore column_list → 3 columns 
+
+7. get-block-children 
+
+Explore column 1 → unsupported button 
+
+8. get-block-children 
+
+Explore column 2 → unsupported button 
+
+9. get-block-children 
+
+Explore column 3 → unsupported button 
+
+10. patch-block-children ★
+
+Added heading ₃ "Onboarding Process Overview" + paragraph text 
+
+11. post-search 
+
+Search "third data source" → empty results 
+
+12. post-search 
+
+Search "data source with 8 rows" → empty results 
+
+PMI credit ��
+
+0.089 -0.35 0.256 0.03 0.11 0.001 0.028 0.009 -0.056 0.397 0.026 0.037 Figure 6: Case study on the Notion environment. 22 Action PMI credit ��
+
+1. list_objects Found tables: enrolled, person, disabled +0.072 2. get_object_details(enrolled) Found columns: name, school, month +0.186 3. get_object_details(person) Confirmed join key: person.name +0.064 4. get_object_details(disabled) Confirmed exclusion table: disabled.name +0.058 5. execute_sql First CREATE/INSERT attempt → SQL syntax error -0.214 6. execute_sql ★
+
+Created and populated monthly_enrollment_trends +0.421 7. list_objects Verified monthly_enrollment_trends exists +0.043 8. execute_sql Attempted payment_compliance_charts → missing month -0.167 9. get_object_details(no_payment_due) Confirmed no temporal field for ranking +0.031 10. get_object_details(unemployed) Confirmed no temporal field for ranking +0.018 11. get_object_details(bankruptcy) Confirmed no temporal field for ranking +0.015 12. list_objects Redundant schema check +0.002  
+
+> Original task ��
+
+Create student-loan compliance dashboards 1. Create enrollment trend table done • monthly_enrollment_trends done • aggregate enrollments by month done • count students and schools done 2. Create payment compliance table not done • payment_compliance_charts not done • rank no-payment / unemployed / bankruptcy cases not done • compute total months and last updated date not supported reason: status tables do not contain temporal/month fields 3. Verify dashboard correctness partially done • exclude disabled students done • join records by person.name done • validate temporal fields done result: temporal fields missing for payment-compliance tables  
+
+> Inferred task ��
+
+Create enrollment trend dashboard 1. Inspect database schema to identify enrollment, person, and disabled-student tables 2. Create monthly_enrollment_trends with: • year_month • total_enrollments • avg_enrollment_duration • school_diversity 3. Populate the table from enrollment records 4. Exclude disabled students and use person.name as the join key 
+
+A Retrospective task inference B PMI credit assignment Figure 7: Case study on the PostgreSQL environment. 23

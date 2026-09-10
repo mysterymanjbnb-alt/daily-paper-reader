@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-09</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-10</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 93 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>78</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-09 22:39:42 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-10 22:10:48 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共处理93篇论文，其中精读78篇、速读15篇，重点关注AI安全与代码智能方向。最值得精读的是两篇满分研究：PhantomCall通过函数调用图扰动规避机器学习恶意软件检测，AKRASIA则针对基于推理的代码大模型实现隐蔽后门攻击。建议普通读者优先关注这两项攻防对抗工作，以了解当前AI系统在安全评估中的最新漏洞与防御思路。</p>
+<p>今日扫完 25 篇 AI 安全论文，精读 10 篇、速读 15 篇。最值得看的是视觉语言模型后门与多模态智能体攻击这两篇 9 分精读，另有 token 级安全干预、遗忘提示提取等 8 分速读可跟进。普通读者可优先了解多模态模型被视觉补丁劫持的风险，再关注防御与干预方案。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">78 篇</strong>
+    <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="PhantomCall: Evading ML Malware Detectors via Function Call Graph Perturbation">PhantomCall: Evading ML Malware Detectors via Function Call Graph Perturbation</span></li><li><span class="dpr-home-dashboard-paper-title" title="AKRASIA: Stealthy Backdoor Attack on Reasoning-based Code LLMs">AKRASIA: Stealthy Backdoor Attack on Reasoning-based Code LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="Differentially private federated learning with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems">Differentially private federated learning with Byzantine-robust aggregation: A cross-domain framework for secure model training in banking and healthcare systems</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="FreqDoor: A Hidden Trojan in the Frequency Domain for Backdoor Attacks on Vision-Language Models">FreqDoor: A Hidden Trojan in the Frequency Domain for Backdoor Attacks on Vision-Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="AgentHijack: Visual Patch Attacks on Multimodal Computer-Use Agents">AgentHijack: Visual Patch Attacks on Multimodal Computer-Use Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="An Experimental Evaluation of Multimodal Prompt Injection Attacks on Agentic AI Frameworks">An Experimental Evaluation of Multimodal Prompt Injection Attacks on Agentic AI Frameworks</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>31</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>15</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>13</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>12</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>7</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Agent-Enhanced Heterogeneous Graph RAG for Academic Question Answering">Agent-Enhanced Heterogeneous Graph RAG for Academic Question Answering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Polished but Unresolved: Identifying Late-Stage Pressure States in Long-Horizon Tool-Use Agents">Polished but Unresolved: Identifying Late-Stage Pressure States in Long-Horizon Tool-Use Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Fine-Tuning Large Language Models to Classify Pull Request-Issue Alignments: Going Beyond Prompting">Fine-Tuning Large Language Models to Classify Pull Request-Issue Alignments: Going Beyond Prompting</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SafeRI: Recognition and Intervention for Token-Level Safety Intervention in Large Vision Language Models">SafeRI: Recognition and Intervention for Token-Level Safety Intervention in Large Vision Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="Extracting Forgotten Prompts from Targeted Unlearned Models">Extracting Forgotten Prompts from Targeted Unlearned Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="Pushing the (Decision) Boundaries: Dynamically Calibrating Differentially Private Noise to Explainability in Federated Learning">Pushing the (Decision) Boundaries: Dynamically Calibrating Differentially Private Noise to Explainability in Federated Learning</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">large-language-models <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
 </section>
 </div>
 

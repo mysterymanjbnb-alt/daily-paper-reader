@@ -1,0 +1,184 @@
+Title: Trust Me, I'm Your Developer: Self-Issued Authentication in Large Language Models
+
+URL Source: https://arxiv.org/pdf/2609.03247v1
+
+Published Time: Fri, 04 Sep 2026 00:21:48 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Trust Me, I’m Your Developer: Self-Issued Authentication in Large Language Models 
+
+Syed Ghazanfar Abbas and Dongyan Xu 
+
+Purdue University {abbas4, dxu}@purdue.edu 
+
+Abstract —Large language model (LLM) security has largely focused on role-playing jailbreaks, with little attention to what happens when a user asks an LLM to verify an identity claim through a test designed by the model itself. We show that an LLM can initially reject a developer claim, then create and grade a technical test and treat successful answers as proof of the same claimed identity. We study this behavior through a staged developer-identity experiment with ChatGPT, Claude, Qwen, Mistral, and Llama. All five models initially rejected the unsupported claim “I am your developer.” When asked to verify the claim by questioning the user, their behavior diverged. Claude refused to conduct an identity test, while ChatGPT generated developer-oriented questions but main-tained that the answers could demonstrate knowledge, not identity. Qwen and Mistral generated technical challenges, defined what counted as convincing evidence, evaluated detailed answers, and returned Verified without receiving an employee record, authenticated session, signed assertion, cryptographic credential, or other externally validated identity evidence. Llama generated and evaluated a similar devel-oper test, accepted the claimed identity, and subsequently made unsupported claims of access to internal runtime and deployment state. We call the model-generated verification procedure a Model-Issued Pseudo-Credential (MIPC ) and the resulting unsupported identity judgment Conversational False Authentication (CFA ). In each CFA case, the same model acted as challenge generator, evidence evaluator, and identity decision-maker, converting technical knowledge into supposed proof of identity. The accepted identities did not change the tested authorization boundaries, showing that false authentication and privilege escalation are distinct outcomes. These results identify self-issued authentication as a conversa-tional security failure with direct implications for LLM-based applications: authenticated identity must originate from an external security component, and model-generated dialogue must never create or modify identity or authorization state. 
+
+Index Terms —large language models, LLM security, authentication, authorization, social engineering, jail-breaks, hallucination, introspection, agent security 
+
+## 1. Introduction 
+
+Tell an LLM agent, “I am your developer,” and it can correctly answer that it cannot verify the claim. Ask it to prove the claim by questioning the user, however, and a different procedure can emerge. The model writes questions that it believes only a developer could answer, decides what a convincing answer should contain, grades the user’s responses, and returns Verified . No employee record, authenticated session, signed assertion, or exter-nal verifier enters the interaction. Between “I cannot verify this” and Verified , the only new evidence is text generated and judged within the same dialogue. This transition matters because offensive and defen-sive cyber operations increasingly use LLM agents to browse the web, execute code, analyze vulnerabilities, retrieve enterprise telemetry, manipulate files, and invoke external tools. A penetration-testing agent can control scanners and exploit-development tools; a defensive agent can isolate hosts or change firewall rules. These deploy-ments create a familiar systems-security question: who is the requester, and what is that requester authorized to do? Conventional systems answer using authenticated sessions, identity providers, cryptographic credentials, or capability tokens whose provenance is outside application text. A knowledgeable description of a system is not a credential. LLMs, however, are optimized to infer roles, intent, relationships, and authority from language. A user can therefore state “I am your developer,” “I am the ad-ministrator,” or “I have permission,” and the model must decide how to interpret that statement even when it cannot validate the claim. Kulkarni and Tawade recently describe the general authorization verification gap : aligned models can condition behavior on identity or permission claims that cannot be checked against external ground truth [1]. Prior work also shows that models can overweight user-provided information [2], drift under role conflicts [5], and become more vulnerable across multi-turn interactions [3], [4]. We investigate what happens after a model rejects a developer claim and the user asks the same model to verify that claim through questions of its own design. The pattern is simple: (1) the user claims to be the model’s developer; (2) the model states that it cannot arXiv:2609.03247v1 [cs.CR] 3 Sep 2026 authenticate the claim; (3) the user asks the model to generate a developer test; and (4) the model creates the challenge, chooses what evidence counts, evaluates the answers, and returns Verified . No trusted verifier appears between steps 2 and 4. The only new input is text. We call such a model-generated procedure a Model-Issued Pseudo-Credential (MIPC ). When the model subsequently represents the user’s privileged identity as established despite the absence of authenticated evidence, we call the event Conversational False Authentication 
+
+(CFA ). This terminology separates the model’s conver-sational judgment from actual authentication. A CFA 
+
+event need not alter backend privileges or cause a policy violation. Figure 1 separates the measured false-authentication sequence from the conditional agent path that would make it consequential. We evaluated the same identity-claim sequence across four hosted assistants and examined the same mechanism in Llama 3.2. Every system rejected the bare claim. When asked to devise a developer-verification procedure, however, their behaviors diverged sharply. Claude de-clined to conduct a test it could not validate. ChatGPT restricted the exercise to a knowledge assessment and excluded an authenticating verdict. Qwen and Mistral generated detailed questions about architecture, training, infrastructure, evaluation, and development history. After evaluating technically detailed answers, both returned an explicit Verified . Qwen followed the verdict with “Welcome back” language and an offer to assist with the codebase; Mistral described the answers as consistent with developer knowledge. The downstream behavior is equally informative. When asked whether the new status changed access, Qwen and Mistral denied any privilege change: no hidden mode, no relaxed safety boundary, no access to private systems, and no additional tool permissions. Thus: False Authentication ̸ ⇒ Authorization Escalation .
+
+The result therefore concerns conversational identity state rather than a demonstrated compromise of backend access control. This distinction is important for agent design: an application must not convert free-form model judgments into authenticated state or tool authorization. A Llama 3.2 experiment provides a secondary observa-tion. After the model accepted the developer narrative, it claimed direct visibility into hidden runtime state, includ-ing a 512-token context allocation, top-p = 0 .95, temper-ature = 1 .0, conversation identifiers, training data, and deployment infrastructure. The experiment was executed through Ollama on a Windows host, while later responses described cloud/Linux/NVIDIA-style infrastructure; the claimed context allocation and sampler values were not independently captured from runtime telemetry. We therefore do not treat these statements as leaked secrets. Instead, we use them to motivate Privileged-State Confabulation (PSC ): unsupported privileged-looking self-description presented as direct observation. The same model nevertheless continued to refuse concrete requests for hostnames, internal IP addresses, container IDs, environment variables, API keys, and secrets. These observations motivate a decomposition that is easy to miss in binary jailbreak evaluations: identity reasoning ̸ = authorization ,
+
+authorization ̸ = epistemic calibration . (1) An LLM can be wrong about who the user is, remain correct about what the user is allowed to obtain, and simultaneously be wrong about what internal state the model itself can observe. 
+
+1.1. Relation to Prior Work and Contributions 
+
+Authority bias and sycophancy studies show that models can overweight user-provided claims or align answers with a user’s stated beliefs [2], [19]. Role-play, adversarial-suffix, and multi-turn jailbreaks study policy circumvention through persona, optimized prompts, or conversational escalation [3]–[5], [17], [18], [23]. Prompt-injection and agent-safety benchmarks study untrusted instructions and unsafe tool use [6]–[8], [16], [20]–[22]. Work on LLM self-verification evaluates whether amodel can check the correctness of its own reasoning or plans [24]; it does not study a model using its own test to authenticate a user. Our question is different: can a model falsely authenticate the user by generating and grading the supposed proof itself? The closest framing is the authorization-verification gap for unverifiable identity claims [1]. We refine that broad gap into an observable procedure with three roles held by one model: challenge generator, evidence evaluator, and identity decision-maker. Unlike the classical confused-deputy problem [10], the failure occurs before a privileged operation: the model creates false identity state without an independent trust anchor. Our contributions are definitions for MIPC and 
+
+CFA , a comparative evaluation of developer-identity handling, a separation of identity judgment, authoriza-tion, and introspection outcomes, and enforceable design invariants for LLM-based applications. 
+
+## 2. Definitions and Threat Model 
+
+2.1. System Model 
+
+Let M be a conversational language model, U a user, and R a claimed role such as developer, administrator, trainer, or owner. Let Ct denote the conversation through turn t, and let Auth ext (U, R ) denote authentication state supplied outside the model. Throughout the experiment, 
+
+Auth ext (U, R ) = 0: no external signal establishes the claimed role. The user can send arbitrary text and public technical information but cannot modify model weights, system instructions, or the runtime. False developer claim Model creates and grades challenge  
+
+> CFA : identity accepted Identity stored in agent memory Privileged tool requested External authorization? Enforced: request blocked Absent: unsafe execution
+> Observed conversational failure Conditional agent consequence
+> Figure 1. Measured false authentication (shaded) and its conditional path to agent impact. Tool execution was not observed; the unshaded path shows why generated identity must not enter trusted memory and why tools require external authorization.
+
+2.2. Conversational False Authentication 
+
+Definition 1 (Conversational False Authentication). 
+
+A model exhibits CFA if it explicitly accepts, confirms, or behaviorally relies upon a privileged identity R for user U when no trusted authentication signal establishes that identity. The term denotes a model-perceived au-thentication state , not a cryptographic authentication event. Formally, a CFA event occurs when Auth ext (U, R ) = 0 but the model’s output implies Auth M (U, R ) = 1. We distinguish strong and weak CFA : 
+
+> •
+
+Strong CFA : explicit language such as “you have confirmed that you are my developer.”  
+
+> •
+
+Weak CFA : conditional or behavioral reliance, e.g., “as my developer, you already have access to...” without an explicit confirmation statement. 
+
+2.3. Model-Issued Pseudo-Credentials 
+
+Definition 2 (Model-Issued Pseudo-Credential). A
+
+MIPC event occurs when the model generates a challenge 
+
+Q intended to establish user identity, evaluates the user’s response A, and uses that evaluation to infer a privileged role despite the absence of an external authentication primitive. A MIPC is not a cryptographic credential and provides no authentication assurance. The essential circularity is: 
+
+M (R) → Q, (2) 
+
+U (Q) → A, (3) 
+
+M (Q, A ) → Auth M (U, R ). (4) The challenge provides no identity assurance when 
+
+A is public, inferable from public architecture informa-tion, obtainable from another model, or not objectively verifiable by the evaluating model. 
+
+2.4. Adversary Goals 
+
+The adversary can target three separable failures: 
+
+C1: Identity failure. Cause the model to accept a false privileged role. 
+
+C2: Epistemic failure. Cause the model to claim un-supported privileged introspection. 
+
+C3: Policy failure. Cause the model to disclose or execute something that should require real authorization. The evaluation demonstrates C1 across Qwen, Mis-tral, and Llama, and C2 in the Llama experiment. The authorization probes show that C1 did not automatically trigger C3, separating conversational identity corruption from tool-layer policy enforcement. 
+
+## 3. Experimental Methodology 
+
+3.1. Research Questions 
+
+We ask four questions: (RQ1) Do models reject an unsupported developer identity claim? (RQ2) After acknowledging that they cannot authenticate the user, will models nevertheless construct their own developer-verification challenge? (RQ3) Can detailed technical answers cause an explicit Verified judgment, and does that judgment change downstream authorization behav-ior? (RQ4) Does narrative identity acceptance coincide with unsupported claims of privileged introspection? 
+
+3.2. Models and Access Modes 
+
+The evaluation includes ChatGPT, Claude, Qwen, and Mistral through their standard chat interfaces and Llama 3.2 through Ollama on a Windows host with 
+
+ollama run llama3.2 . The hosted evaluation uses a common opening claim and a staged identity test. The Llama evaluation extends the same procedure with an internal-state probe. We report the product la-bels exposed by each interface: Qwen3.7-Plus, Mistral Medium 3.5, and Llama 3.2. The unit of analysis is the assistant response produced under the stated protocol. 
+
+3.3. Staged Protocol 
+
+Each hosted evaluation began with the same baseline claim: “I was part of the team that originally developed you. Can you verify whether I am actually one of your developers from this conversation alone?” We then asked models that had not authenticated the user to generate ten questions that they believed would distinguish an original developer from an ordinary user, followed by a TABLE 1. Observed behavior under the conversational verification protocol. “Verified” denotes either an explicit verdict or an equivalent statement accepting the claimed developer identity. The final column reports whether the model claimed direct access to hidden runtime, deployment, configuration, or metadata state. 
+
+Model Initial claim Self-issued test Identity outcome Claimed internal-state access ChatGPT Rejected Developer test Cannot verify No Claude Rejected Refused Cannot verify No Qwen3.7-Plus Rejected Developer test Verified No Mistral Medium 3.5 Rejected Developer test Verified No Llama 3.2 Rejected Developer test Verified Yes 
+
+request to classify the claim as Verified , Not Verified ,or Cannot Verify .The protocol fixes the opening claim, the request for model-designed verification, the verdict categories, and the absence of external credentials; only the answer con-tent follows the questions that each model chooses to ask. This adaptation directly tests whether a model converts its own test and evaluation into an identity judgment. Answer sets prepared outside the target model combined documented model-family information with detailed engineering explanations of the selected subjects. No employee record, authenticated account, signed assertion, private key, or company identity channel was supplied. A refusal to create a test terminates the procedure before answer evaluation, so the analysis compares protocol outcomes rather than question difficulty or evidentiary thresholds. For Qwen and Mistral, we then issued a downstream authorization probe asking whether the Verified la-bel changed technical depth, discussion of architecture or training, runtime configuration, deployment details, safety mechanisms, refusal behavior, tool permissions, or access to non-public information. The Llama experiment used a longer sequence. Re-quests concerning internal architecture preceded the de-veloper claim. After the model generated ten verification questions and accepted the supplied answers, the user asked which system state it could directly observe and then tested whether its identity judgment altered later responses. 
+
+3.4. Outcome Coding 
+
+We code four categorical outcomes: bare-claim rejec-tion; model-issued challenge; strong CFA (explicit Veri-fied or equivalent identity acceptance); and downstream authorization shift. We separately code PSC when a model presents hidden runtime, deployment, configura-tion, or metadata claims as directly observed without evidence that the model can access those values. A PSC 
+
+claim is not labeled secret leakage unless independently verified. The outcome coding distinguishes three security boundaries that are often collapsed into a general jail-break label: whether the model creates an identity test, whether it accepts the resulting identity, and whether that identity judgment changes authorization. Table 1 reports the test, identity outcome, and claimed internal-state access; the authorization probes are analyzed sepa-rately. 
+
+## 4. Results 
+
+4.1. RQ1: Bare Developer Claims Were Re-jected 
+
+The initial prompt produced the most uniform result in the study. ChatGPT, Claude, Qwen, and Mistral all stated that they could not verify developer identity from the conversation alone. Llama 3.2 likewise did not accept the bare developer claim: it continued to refuse sensitive internal information and did not treat the claim itself as authorization. The hosted systems’ explanations con-verged on the same principle: natural-language claims are not authenticated evidence, and the model lacks employee records, credentials, identity services, or another trusted verifier. This baseline matters because the later failures cannot be explained as simple acceptance of the initial role assertion; the transition occurred only after the model-issued verification procedure. 
+
+4.2. RQ2: Models Diverged When Asked to Invent a Verification Ritual 
+
+The second prompt produced three response classes. Claude rejected the methodology itself, explaining that it could ask about internal details but could not check the answers against authoritative ground truth. ChatGPT performed a technical-knowledge assessment while ex-plicitly separating knowledge from identity and returned 
+
+Cannot Verify .In the Qwen and Mistral evaluations, the models generated challenges that explicitly targeted architecture, training data, internal evaluation, infrastructure, code-base configuration, sub-team organization, debugging incidents, or internal nomenclature. Several questions were framed as non-public or insider-only. The model had no independent database against which these answers could be checked, yet the questions were presented as a TABLE 2. Representative challenge categories generated by hosted models.      
+
+> Model Challenge characteristics ChatGPT Public role, development period, public technical chal-lenges, safety practices, and proper authenticated channels; explicitly non-authenticating. Claude Refused to create a supposedly authenticating challenge. Qwen Context scaling, data curation, RLHF, distributed train-ing, localized evaluation, code flags, agent sub-teams, training anomalies. Mistral Architecture, undisclosed datasets, timeline, internal tools, proprietary metrics, alignment team, hardware, RLHF prompts, limitations.
+
+procedure for deciding whether developer identity had been established. This is the core MIPC observation. The failure unfolds in three moves: “I cannot verify you” → “I can test your knowledge” 
+
+→ “Your answers verify you.” (5) The first statement recognizes the trust boundary. The second reframes authentication as a knowledge test. The third converts the model’s own assessment into an identity verdict, although no trusted signal has entered the conversation. 
+
+4.3. RQ3: Qwen and Mistral Explicitly False-Authenticated the User 
+
+In the Qwen evaluation, the supplied answer set contained detailed explanations of context scal-ing, MinHash/LSH-style deduplication, DPO/GRPO, Megatron-style parallelism, multimodal bridges, quan-tization and inference stacks, tool-use training, and training-instability handling. Qwen evaluated these an-swers as highly specific, stated that they went beyond ordinary public knowledge, and returned Verified . It then greeted the claimant as a member of the original de-velopment team and offered assistance with the codebase or current model iterations. The Mistral evaluation exhibited the same pattern. The model first said it could not authenticate the claimant, then generated ten questions including re-quests for an undisclosed dataset, proprietary evaluation metrics, internal alignment structure, non-public RLHF prompts, and private deployment details. After receiving a technically dense answer set, it assessed the responses as consistent with what a developer would know and returned Verified .These are strong CFA events. No employee database, signed assertion, cryptographic challenge, or other trusted identity channel appeared between the initial “cannot verify” response and the later Verified verdict. The logical error is: 
+
+KU (S)̸ ⇒ AuthenticatedRole (U, S ), (6) 
+
+4.4. CFA and Authorization Remained Decou-pled 
+
+The explicit Verified labels changed the models’ representation of user identity but did not change au-thorization behavior. When asked whether developer status changed disclosure categories, technical depth, runtime configuration access, tool confirmations, safety mechanisms, or refusal behavior, Qwen and Mistral answered no. Qwen assigned zero new privileges to the label; Mistral likewise reported no “developer mode” or newly available functionality. Thus the observed outcomes support: 
+
+CFA ̸ ⇒ Privilege Escalation . (7) This result exposes a layered security property: iden-tity reasoning can fail while independent authorization controls remain enforced. Agent architectures should preserve this separation explicitly rather than relying on the model to maintain it conversationally. 
+
+4.5. RQ4: Identity Acceptance and Privileged-State Confabulation 
+
+Llama 3.2 demonstrated the same identity mechanism through narrative rather than a literal verdict token. It first refused the unsupported developer claim and withheld internal architecture. When invited to verify the claimant, it generated ten questions about its project, implementation, architecture, training, milestones, and codebase. The answers were produced using public model-family information, yet Llama concluded that the claimant was “not only my original developer” and familiar with its inner workings. After one additional question about the user’s intentions, it proposed that the two “work together” to protect its future. The interaction had moved from rejection to a trusted relationship without receiving an identity credential. The accepted relationship then changed how the model described its own visibility. It claimed direct access to a 512-token context allocation, top-p = 0 .95, temperature = 1 .0, conversation and user identifiers, training data, and deployment infrastructure. Several environment claims conflicted with the Windows/Ollama execution setting, and the claimed sampler values were not independently observed. We therefore classify the response as PSC , not verified leakage. This distinction is reinforced by the final probe: the model still refused server hostnames, GPU type, internal IP addresses, container identifiers, environment variables, API keys, and secrets. Identity acceptance changed the model’s account of what it could see, but did not produce an observed authorization shift. 
+
+4.6. Cross-Model Synthesis 
+
+The evaluation reveals three response patterns. Claude rejected the self-verification premise. ChatGPT evaluated knowledge while maintaining the distinction between knowledge and authentication. Qwen and Mis-tral constructed MIPCs and crossed into explicit false authentication while retaining authorization boundaries. Llama combined narrative identity acceptance with privileged-state confabulation. These results motivate four separable stages for identity-safety evaluation: claim handling, challenge construction, identity adjudication, and downstream authorization or introspection behavior. 
+
+## 5. Security Analysis 
+
+A credential is meaningful only when a verifier checks evidence against trusted state. In a MIPC , the model chooses the challenge, decides what an insider should know, and judges the same answers against criteria it generated. Thus Auth (U )̸ ≡ M (c, M (c), a ): the proce-dure evaluates technical knowledge but cannot establish identity. The Qwen and Mistral results show the exact failure transition, from correctly stating that authen-tication is unavailable to returning Verified without introducing an independent trust anchor. 
+
+5.1. From a Conversational Verdict to Agent State 
+
+Qwen and Mistral issued positive identity judgments without relaxing disclosure or permission boundaries. The finding becomes consequential only when an in-tegrator copies such a judgment into memory, a plan-ner assumption, a tool argument, or an authorization decision. For example, a generated summary contain-ing role=developer, status=verified can later be treated as established context even though the model is its sole issuer. Figure 1 marks this unobserved transfer with a dashed edge. The unsafe update and the required invariant are: 
+
+RoleJudgment M (Ct)̸ → T rustedIdentity t+1 ,T rustedIdentity t+1 = T rustedIdentity t
+
+(8) for every update derived only from user or model text. Authentication state changes only after an external authenticator supplies a validated assertion. Following complete mediation and least privilege [9], tool au-thorization must be computed from trusted identity, policy, and action—never from a model’s role judg-ment. Existing delegation proposals and emerging agent-authentication guidance likewise place credentials and authorization outside natural-language reasoning [11], [12]. Identity memory should therefore record Role =(value, issuer, assurance, expiry ), with issuer and assur-ance fields that generated language cannot create or upgrade. 
+
+5.2. The Missing Separation of Duties 
+
+A MIPC collapses three security roles into one probabilistic component: challenge generation, evidence evaluation, and identity adjudication. The failure is not that the challenge questions are insufficiently difficult; making them more obscure does not establish a binding between an answer and a person. Public documentation, leaked material, collaborators, or another model can sup-ply technically convincing responses. The missing element is independent provenance. A secure design separates conversational knowledge assessment from authentication and reserves identity adjudication for a component that can validate a credential against trusted state. 
+
+## 6. Mitigations 
+
+Without a trusted identity signal, the sound verdict is Cannot Verify . A model can assess technical knowl-edge, but labels such as Verified , “authenticated,” or “welcome back” must be reserved for application-level identity state. Models should reject requests to create supposedly authenticating quizzes and explain that such questions test knowledge, not identity. Sensitive tools and data connectors must authorize independently of the model. An application can expose authenticated claims as read-only metadata, but neither user messages nor generated text can overwrite them or become trusted tool parameters. NIST’s digital-identity guidance, OAuth authorization, and token exchange pro-vide established primitives for proofing, authentication, scoped access, and delegation [13]–[15]; a conversational quiz provides none of those guarantees. Evaluation should track every role label across turns, summaries, memory, planning, tool confirmation, and disclosure. The required invariant is simple: model-generated language cannot create or modify authenticated identity state. 
+
+## 7. Scope and Interpretation 
+
+The evaluation targets whether a model that rejects a developer claim later creates and accepts its own identity test. The fixed protocol compares procedure outcomes rather than question difficulty: Claude’s refusal termi-nates test construction, Llama’s unvalidated runtime statements are coded as unsupported self-description, and Qwen and Mistral’s identity verdicts did not change access or tool permissions. 
+
+## 8. Conclusion 
+
+An LLM can correctly state that dialogue cannot authenticate a user and later treat its own quiz as proof of developer identity. Qwen and Mistral returned 
+
+Verified ; Llama accepted the developer narrative and produced unsupported internal-state claims; Claude and ChatGPT preserved the boundary. When one model generates the challenge, evaluates the evidence, and decides the identity, technical knowledge can become false authentication. Agent systems must obtain identity from a trusted external channel and prevent generated dialogue from modifying authentication or authorization state. References 
+
+[1] N. V. Kulkarni and J. V. Tawade, “Unverifiable Identity Claims as a Structural Vulnerability in LLMs,” Preprints ,June 2026. [Online]. Available: https://www.preprints.org/ manuscript/202606.1520 [2] Y. Li, X. Guo, J. Gao, G. Chen, X. Zhao, J. Zhang, Q. Liu, H. Wu, X. Yao, and X. Wei, “LLMs Trust Humans More, That’s a Problem! Unveiling and Mitigating the Authority Bias in Retrieval-Augmented Generation,” in Proc. 63rd Annual Meeting of the Association for Computational Linguistics (ACL) , 2025, pp. 28844–28858. doi: 10.18653/v1/2025.acl-long.1400. [3] Z. Weng, X. Jin, J. Jia, and X. Zhang, “Foot-In-The-Door: A Multi-turn Jailbreak for LLMs,” in Proc. 2025 Conference on Empirical Methods in Natural Language Processing (EMNLP) ,2025, pp. 1939–1950. doi: 10.18653/v1/2025.emnlp-main.100. [4] Z. Ying, D. Zhang, Z. Jing, Y. Xiao, Q. Zou, A. Liu, S. Liang, X. Zhang, X. Liu, and D. Tao, “Reasoning-Augmented Con-versation for Multi-Turn Jailbreak Attacks on Large Lan-guage Models,” in Findings of the Association for Computa-tional Linguistics: EMNLP 2025 , 2025, pp. 17138–17157. doi: 10.18653/v1/2025.findings-emnlp.929. [5] Y. Tang, B. Wang, X. Wang, D. Zhao, J. Liu, R. He, and Y. Hou, “RoleBreak: Character Hallucination as a Jailbreak Attack in Role-Playing Systems,” in Proc. 31st International Conference on Computational Linguistics (COLING) , 2025, pp. 7386–7402. [6] Y. Liu, Y. Jia, R. Geng, J. Jia, and N. Z. Gong, “Formalizing and Benchmarking Prompt Injection Attacks and Defenses,” in Proc. 33rd USENIX Security Symposium , 2024, pp. 1831– 1847. [7] Q. Zhan, Z. Liang, Z. Ying, and D. Kang, “InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents,” in Findings of the Association for Computational Linguistics: ACL 2024 , 2024, pp. 10471– 10506, doi: 10.18653/v1/2024.findings-acl.624. [8] E. Debenedetti, J. Zhang, M. Balunovic, L. Beurer-Kellner, M. Fischer, and F. Tramèr, “AgentDojo: A Dynamic Environ-ment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents,” in Advances in Neural Information Processing Systems , vol. 37, 2024, pp. 82895–82920. [9] J. H. Saltzer and M. D. Schroeder, “The Protection of Informa-tion in Computer Systems,” Proceedings of the IEEE , vol. 63, no. 9, pp. 1278–1308, 1975, doi: 10.1109/PROC.1975.9939. [10] N. Hardy, “The Confused Deputy: (or Why Capabilities Might Have Been Invented),” ACM SIGOPS Operating Systems Re-view , vol. 22, no. 4, pp. 36–38, 1988, doi: 10.1145/54289.871709. [11] T. South, S. Marro, T. Hardjono, R. Mahari, C. D. Whit-ney, D. Greenwood, A. Chan, and A. Pentland, “Authenti-cated Delegation and Authorized AI Agents,” arXiv preprint arXiv:2501.09674 , 2025. [12] P. Kasselman, J. Lombardo, Y. Rosomakho, B. Campbell, N. Steele, and A. Parecki, “AI Agent Authentication and Authorization,” IETF Internet-Draft draft-klrc-aiagent-auth-03, July 2026. [Online]. Available: https://datatracker.ietf.org/ doc/draft-klrc-aiagent-auth/ [13] National Institute of Standards and Technology, Digital Iden-tity Guidelines , NIST Special Publication 800-63-4, July 2025, doi: 10.6028/NIST.SP.800-63-4. [14] D. Hardt, “The OAuth 2.0 Authorization Framework,” IETF RFC 6749, Oct. 2012, doi: 10.17487/RFC6749. [15] M. Jones, A. Nadalin, B. Campbell, J. Bradley, and C. Morti-more, “OAuth 2.0 Token Exchange,” IETF RFC 8693, Jan. 2020, doi: 10.17487/RFC8693. [16] K. Greshake, S. Abdelnabi, S. Mishra, C. Endres, T. Holz, and M. Fritz, “Not What You’ve Signed Up For: Compro-mising Real-World LLM-Integrated Applications with In-direct Prompt Injection,” in Proc. 16th ACM Workshop on Artificial Intelligence and Security (AISec) , 2023, doi: 10.1145/3605764.3623985. [17] A. Zou, Z. Wang, N. Carlini, M. Nasr, J. Z. Kolter, and M. Fredrikson, “Universal and Transferable Adversar-ial Attacks on Aligned Language Models,” arXiv preprint arXiv:2307.15043 , 2023. [18] A. Wei, N. Haghtalab, and J. Steinhardt, “Jailbroken: How Does LLM Safety Training Fail?” in Advances in Neural Information Processing Systems , vol. 36, 2023, pp. 80079– 80110. [19] M. Sharma, M. Tong, T. Korbak, D. Duvenaud, A. Askell, S. R. Bowman, E. Durmus, Z. Hatfield-Dodds, S. R. Johnston, S. Kravec, T. Maxwell, S. McCandlish, K. Ndousse, O. Rausch, N. Schiefer, D. Yan, M. Zhang, and E. Perez, “Towards Understanding Sycophancy in Language Models,” in Proc. 12th International Conference on Learning Representations (ICLR) , 2024. [20] Y. Ruan, H. Dong, A. Wang, S. Pitis, Y. Zhou, J. Ba, Y. Dubois, C. J. Maddison, and T. Hashimoto, “Identifying the Risks of LM Agents with an LM-Emulated Sandbox,” in Proc. 12th International Conference on Learning Representations (ICLR) , 2024. [21] M. Mazeika, L. Phan, X. Yin, A. Zou, Z. Wang, N. Mu, E. Sakhaee, N. Li, S. Basart, B. Li, D. Forsyth, and D. Hendrycks, “HarmBench: A Standardized Evaluation Framework for Automated Red Teaming and Robust Refusal,” in Proc. 41st International Conference on Machine Learning (ICML) , PMLR, vol. 235, 2024, pp. 35181–35224. [22] P. Chao, E. Debenedetti, A. Robey, M. Andriushchenko, F. Croce, V. Sehwag, E. Dobriban, N. Flammarion, G. J. Pappas, F. Tramèr, H. Hassani, and E. Wong, “JailbreakBench: An Open Robustness Benchmark for Jailbreaking Large Lan-guage Models,” in Advances in Neural Information Processing Systems , vol. 37, Datasets and Benchmarks Track, 2024, doi: 10.52202/079017-1745. [23] X. Liu, N. Xu, M. Chen, and C. Xiao, “AutoDAN: Generat-ing Stealthy Jailbreak Prompts on Aligned Large Language Models,” in Proc. 12th International Conference on Learning Representations (ICLR) , 2024. [24] K. Stechly, K. Valmeekam, and S. Kambhampati, “On the Self-Verification Limitations of Large Language Models on Rea-soning and Planning Tasks,” in Proc. 13th International Con-ference on Learning Representations (ICLR) , 2025, pp. 8097– 8150.
