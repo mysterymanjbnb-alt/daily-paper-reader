@@ -1,0 +1,786 @@
+Title: Trust-But-Verify: Poisoning-Resilient Locally Private Graph Learning Protocols
+
+URL Source: https://arxiv.org/pdf/2609.07063v1
+
+Published Time: Wed, 09 Sep 2026 01:51:43 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Trust-But-Verify : Poisoning-Resilient Locally Private Graph Learning Protocols 
+
+Longzhu He §, Li Sun §, Hao Peng †, Ruijie Wang †, Raymond Chi-Wing Wong || , Sen Su §,‡
+
+> §
+
+Beijing University of Posts and Telecommunications †Beihang University 
+
+> ||
+
+The Hong Kong University of Science and Technology ‡Chongqing University of Posts and Telecommunications 
+
+{helongzhu,lsun,susen }@bupt.edu.cn; {penghao,ruijiew }@buaa.edu.cn; raywong@cse.ust.hk 
+
+Abstract —Built upon local differential privacy (LDP), locally private graph learning protocols have emerged as an important paradigm for decentralized graph learning, balancing privacy protection and learning utility. Under such protocols, each user locally perturbs their node features and adjacency information before transmission, ensuring formal privacy guarantees without original data leaving the device. However, the inherently open participation nature renders these protocols critically vulnerable to data poisoning attacks, where adversaries inject carefully crafted malicious nodes to corrupt neighborhood aggregation and degrade downstream utility. Despite the severity of this threat, effective defenses in this setting remain largely unexplored. In this paper, we propose V ERITAS , a poisoning-resilient locally private graph learning protocol built on a trust-but-verify paradigm. By introducing a verification list encoding graded peer trust levels, VERITAS jointly privatizes node features and graph structure on the user side, while exploiting bilateral attestation asymmetry on the server side to identify and prune malicious nodes. Concretely, V ERITAS comprises four synergistic stages: ① local data perturbation , ② attestation-driven malicious node pruning , ③
+
+utility restoration via dual denoising , and ④ robust private graph learning . Extensive experiments on four real-world benchmark datasets across multiple LDP mechanisms and GNN architec-tures demonstrate that V ERITAS effectively defends against data poisoning attacks and significantly improves downstream graph learning utility under rigorous privacy guarantees. 
+
+Index Terms —local differential privacy, graph learning, data poisoning attack, privacy preservation, robustness 
+
+I. I NTRODUCTION 
+
+Graph neural networks (GNNs) [1]–[3] have emerged as a cornerstone tool in data mining, exhibiting strong representa-tion learning capabilities across a wide range of graph mining tasks, including node classification [2], link prediction [4], and graph clustering [5]. Their success has also enabled numerous real-world applications, such as recommendation systems [6], social network analysis [7], and fraud detection [8]. However, the graph-structured data underlying these applications is often highly sensitive, with node features containing private user in-formation and edges revealing confidential social relationships. Previous studies have demonstrated that GNN is vulnerable to privacy attacks, which can expose sensitive information from both node features and graph topology [9]–[12]. Such threats have raised growing concerns regarding data confidentiality and highlighted the urgent need for privacy-preserving graph learning techniques that effectively protect individual privacy while maintaining strong learning utility. To address the growing privacy concerns in graph learning, 
+
+locally private graph learning protocol [13]–[23], built upon local differential privacy (LDP) [24], [25], has attracted con-siderable attention from the security and privacy communities. Unlike centralized privacy-preserving approaches that require users to trust a data curator, LDP adopts a stronger trust model in which each user perturbs their sensitive data locally before any transmission, thereby providing rigorous privacy guaran-tees without relying on any trusted third party. Thanks to these appealing properties, LDP has been widely adopted by major technology companies, including Google [26], Apple [27], and Microsoft [28]. As illustrated in Fig. 1(a), each user indepen-dently perturbs their sensitive data before sending noisy reports to an untrusted server, which subsequently performs private graph learning on the collected noisy data. By ensuring that original user data never leaves local devices, this decentralized learning paradigm offers strong user-level privacy protection while retaining the utility of downstream graph learning tasks. However, the open-participation nature of locally private graph learning renders it particularly vulnerable to data poi-soning attacks [16], as illustrated in Fig. 1(b). In realistic dis-tributed scenarios, an adversary can create sybil accounts [29], establish plausible social identities [30], and infiltrate the graph by forming links with legitimate users [31]. Once admitted, these malicious nodes submit carefully crafted perturbed fea-ture and topology reports to the server, thereby injecting adver-sarial signals into the training data. Through iterative message passing, such poisoned information propagates through the graph and contaminates the learned node representations, ulti-mately degrading the performance of downstream tasks, such as node classification. Critically, local perturbation obscures the distinction between benign and malicious reports, making it extremely challenging for the server to identify adversarial participants based solely on the received data. Despite the severity of this threat, effective defenses remain largely unexplored. Designing such defenses is highly non-trivial for three reasons. First , the decentralized nature of LDP prevents the server from accessing raw features or adjacency information, rendering conventional anomaly detection and robust aggregation methods inapplicable. Second , the noise introduced by LDP mechanisms obscures malicious manip-ulations, blurring the boundary between benign perturbation and adversarial injection, making it difficult to distinguish malicious nodes from honest ones based on noisy observations arXiv:2609.07063v1 [cs.LG] 7 Sep 2026 (a)
+
+> Private Graph Learning
+> High Utility
+
+(b)
+
+> Poisoned Private Graph Learning
+> Low Utility
+
+(c)High Utility  Poisoned-Resilient Private Graph Learning         
+
+> User-side Server-side Server-side Server-side User-side User-side Fig. 1. Motivation and core intuition of V ERITAS . (a) Locally private graph learning protocol. Multiple users independently perturb their sensitive node features and adjacency information via local differential privacy (LDP) mechanisms. The resulting noisy reports are transmitted to an untrusted server, which performs graph learning on the collected perturbed data. (b) Data poisoning attacks against locally private graph learning, where red nodes denote injected malicious participants that submit carefully crafted poisoned reports to corrupt the training process and degrade downstream task performance. (c) VERITAS
+> detects and prunes malicious nodes through bilateral attestation, preserving graph learning utility while maintaining rigorous local privacy guarantees.
+
+alone. Third , existing graph poisoning defenses [30], [32], [33] are developed for centralized graph learning and assume access to unperturbed graph data, assumptions that are fundamentally violated under local privacy protection. To address the above challenges, we develop a poisoning-resilient locally private graph learning protocol, termed V ER -
+
+> ITAS 1
+
+, as shown in Fig. 1(c). Following a trust-but-verify 
+
+paradigm, V ERITAS initially trusts all user-submitted reports while subsequently verifying their credibility through a veri-fication list that encodes graded peer trust levels. This design enables the server to exploit the inherent asymmetry in bilat-eral attestation signals to identify and prune malicious nodes while preserving rigorous LDP guarantees on the user side. Concretely, our V ERITAS comprises four synergistic stages: ①
+
+local data perturbation for privacy-preserving data collection, 
+
+② attestation-driven malicious node pruning for verifying structural consistency and eliminating adversarial influence, ③
+
+utility restoration via dual denoising to mitigate perturbation-induced noise, and ④ robust private graph learning for down-stream graph learning. By seamlessly coupling these compo-nents, V ERITAS establishes an end-to-end defense pipeline that effectively counters data poisoning attacks while maintaining rigorous privacy guarantees. The main contributions of this paper are summarized as follows: 
+
+⋄ Important problem. We investigate the problem of poison-ing attacks against locally private graph learning, highlight-ing a critical challenge and motivating the development of secure, robust, and privacy-preserving graph learning. 
+
+⋄ Novel defense framework. We develop VERITAS , apoisoning-resilient locally private graph learning protocol built upon a trust-but-verify paradigm. V ERITAS introduces a four-stage defense pipeline that jointly enhances poisoning resilience, privacy preservation, and graph learning utility. 
+
+⋄ Extensive experiments. Experiments on real-world datasets across multiple LDP mechanisms and GNN architectures demonstrate that V ERITAS effectively defends against data poisoning attacks and significantly improves learning utility. II. P RELIMINARIES 
+
+This section first defines the problem ( ▷ Sect. II-A), then provides the essential background on local differential privacy (▷ Sect. II-B) and locally private graph learning ( ▷ Sect. II-C).  
+
+> 1Veritas is the Latin word for “truth”.
+
+A. Problem Definition 
+
+Consider a graph G = ( V, X, A), where V = {v1, v 2, . . . , v|V| } denotes the set of nodes. The feature matrix X ∈ R|V|× d
+
+associates each node v ∈ V with a d-dimensional feature vector xv ∈ Rd, and the adjacency matrix A ∈ { 0, 1}|V|×|V| 
+
+encodes the graph structure, where each row av ∈ { 0, 1}|V| is the adjacency vector of node v. In this work, we consider a comprehensive local privacy setting in which both node features and structural information are treated as sensitive. Each user v locally holds the private pair (xv , av ), capturing its attribute and relational information, respectively. A central server coordinates the learning process but is not assumed to be fully trustworthy; hence, neither X nor A is directly exposed to it. Instead, each user perturbs its local data via LDP mechanisms [13] prior to transmission, and the server per-forms graph learning on the collected noisy reports—forming a two-phase pipeline of user-side perturbation and server-side learning . However, the decentralized nature of locally private graph learning renders it inherently vulnerable to data poisoning attacks [16], which can severely degrade the utility of downstream tasks (see Sect. III for the threat model). Our goal is therefore to develop a poisoning-resilient locally private graph learning framework that achieves accurate downstream graph learning while providing rigorous privacy guarantees. 
+
+B. Local Differential Privacy 
+
+Local differential privacy (LDP) [24], [34] has been exten-sively studied and widely deployed in decentralized data col-lection and analysis scenarios. In practice, it has been adopted by major industry systems, including Apple [27], Google [26], and Microsoft [28]. In the LDP setting, a server interacts with multiple users, each holding sensitive data. Rather than sharing raw data with an untrusted server, each user locally perturbs its data via a randomized mechanism M before transmission. The server then performs data analysis and learning based solely on the perturbed data, thereby providing formal privacy guarantees. The formal definition of ϵ-LDP is provided below: 
+
+Definition 1 (ϵ-LDP [24]) . A local perturbation mech-anism M satisfies ϵ-LDP, where ϵ > 0, if for any two inputs x, x ′ and any output y ∈ Range( M), it holds that 
+
+Pr[ M(x) = y] ≤ eϵ · Pr[ M(x′) = y], (1) where ϵ is the “privacy budget” that controls the privacy-utility trade-off: a smaller ϵ provides stronger privacy protection but typically leads to greater utility degradation. Range (M)
+
+denotes the output space of M. In graph settings, protecting relational information requires extending LDP to link-level data. The resulting notion, known as ϵ-link LDP [14], [21], [35], is defined as follows: 
+
+Definition 2 (ϵ-link LDP [35]) . A randomized mechanism 
+
+M satisfies ϵ-link LDP, if for any node v abd for any two adjacency vectors av , a′ 
+
+> v
+
+∈ { 0, 1}|V| differing in exactly one coordinate (i.e., ∥av − a′ 
+
+> v
+
+∥1 = 1 ) and for any measurable set S ⊆ Range( M), it holds that 
+
+Pr M(av ) ∈ S  ≤ eϵ · Pr M(a′ 
+
+> v
+
+) ∈ S . (2) Intuitively, this definition ensures that an observer cannot reliably infer the presence or absence of any individual edge, thereby providing formal protection for relational information. Beyond these definitions, LDP satisfies two fundamental prop-erties that are instrumental in our framework, as follows: 
+
+Theorem 1 (Post-Processing [25]) . If M : X → Z sat-isfy ϵ-LDP, then for any (possibly randomized) function 
+
+F : Z → Z ′, the composition F ◦M also satisfies ϵ-LDP. 
+
+Theorem 2 (Sequential Composition [25]) . Let Mi :
+
+X → Z i satisfy ϵi-LDP for i ∈ { 1, 2, . . . , n }. Applying all mechanisms to the same data yields a joint mechanism 
+
+M = ( M1, M2, . . . , Mn) that satisfies (Pni=1 ϵi)-LDP. C. Locally Private Graph Learning 
+
+We now formalize the locally private graph learning pipeline 
+
+PM,Fθ , where M denotes the user-side perturbation mecha-nism and Fθ represents the server-side graph learning model parameterized by θ, detailed as follows: 
+
+1) User-Side Perturbation: Each node v locally perturbs its private data before transmitting to the server. Specifically, the node feature vector xv ∈ Rd and the binary adjacency vector 
+
+av ∈ { 0, 1}|V| are processed via two perturbation mechanisms: 
+
+x′ 
+
+> v
+
+← M x(xv , ϵ x), a′ 
+
+> v
+
+← M a(av , ϵ a), (3) where ϵx and ϵa denote the privacy budgets for node feature and link perturbation, respectively, satisfying ϵx + ϵa = ϵ. We next detail the instantiation of these two mechanisms. 
+
+⋄ Node Feature Perturbation. For a d-dimensional node fea-ture vector xv , the perturbation proceeds in two steps: 
+
+① a subset S ⊆ {1, 2, . . . , d } of size m is sampled uniformly; ② each selected dimension i ∈ S is indepen-dently perturbed via an (ϵx/m )-LDP mechanism, while the remaining d−m dimensions are set to zero. Beyond classical LDP mechanisms such as the Laplace mechanism [36], the Gaussian mechanism [37], and the one-bit mechanism [28], representative LDP mechanisms for node feature include the multi-bit mechanism [13], the square wave mechanism [38], and the piecewise mechanism [39]. As an illustrative exam-ple, we describe the one-dimensional piecewise mechanism (PM ). Given an input x ∈ [α, β ], the perturbed output 
+
+x′ is sampled from the bounded interval [−B , B], where 
+
+B = eϵx/ 2+1  
+
+> eϵx/ 2−1
+
+, according to the following density: 
+
+Pr[ x′ = c | x] = 
+
+(
+
+p, if c ∈ [l(x), r (x)] ,p/e ϵx , if c ∈ [−B , l (x)) ∪ (r(x), B],
+
+(4) where 
+
+p = eϵx − eϵx/2
+
+2eϵx/2 + 2 , l (x) = B + 1 2 x− B − 12 , r (x) = l(x)+ B− 1.
+
+(5) 
+
+⋄ Adjacency List Perturbation. To protect the binary adjacency vector av , we employ the randomized response ( RR ) mecha-nism [40]. Each entry av,u ∈ { 0, 1} is independently flipped with probability inversely proportional to eϵa :
+
+a′ 
+
+> v,u
+
+=
+
+(
+
+av,u , with probability eϵa /(eϵa + 1) ,
+
+1 − av,u , with probability 1/(eϵa + 1) . (6) By Theorem 2, the combined mechanism (Mx, Ma) satisfies 
+
+ϵ-LDP with ϵ = ϵx + ϵa. Consequently, the server only has access to samples drawn from a perturbed data distribution induced by M, rather than the true underlying data. The resulting perturbed data is then transmitted to the server, with no raw private data ever leaving the user’s local device. 
+
+2) Server-Side Learning: After receiving the perturbed reports {(x′ 
+
+> v
+
+, a′ 
+
+> v
+
+)}v∈V , the server reconstructs a noisy graph 
+
+G′ = ( V, A′, X′), where X′ = [ x′
+
+> 1
+
+, x′
+
+> 2
+
+, . . . , x′|V| ]⊤ and A′
+
+is induced from {a′ 
+
+> v
+
+}v∈V . Based on G′, the server trains a 
+
+K-layer graph neural network (GNN) [1], [2] for downstream tasks such as node classification. Due to local perturbation, the true neighborhood N (v) is not directly observable; instead, the server operates on a perturbed neighborhood defined as 
+
+bN (v) = {u | a′ 
+
+> v,u
+
+= 1 }. The node representations are then learned via iterative neighborhood aggregation. Specifically, at the k-th layer, the embedding of node v is computed as: 
+
+hk  
+
+> bN(v)
+
+= AGGREGATE k({hk−1 
+
+> u
+
+| u ∈ bN (v)}), (7) 
+
+hkv = UPDATE k(hk 
+
+> bN(v)
+
+), (8) where A GGREGATE k(·) is a permutation-invariant function (e.g., mean or sum), and U PDATE k(·) is a learnable non-linear transformation. The input layer is initialized as h0 
+
+> v
+
+= x′ 
+
+> v
+
+. After 
+
+K layers, the learned representations hKv encode multi-hop structural information from the perturbed graph. The model is trained end-to-end on labeled nodes Vl and subsequently used to perform inference on unlabeled nodes Vu = V \ V l.III. T HREAT MODEL 
+
+In the locally differentially private graph learning setting, we consider two categories of security threats that may co-exist: ① privacy inference attacks conducted by a semi-honest server ( ▷ Sect. III-A), and ② data poisoning attacks launched by a malicious external attacker ( ▷ Sect. III-B). A. Privacy Inference Attacks by Semi-Honest Server 
+
+Under the semi-honest adversary model, the server faithfully adheres to the prescribed protocol P yet may simultaneously attempt to infer individual users’ private information from their perturbed reports. Despite the rigorous probabilistic guarantees of LDP, a curious server can still exploit interactions with the trained GNN models to launch attribute inference attacks [9], [11], link inference attacks [9], [10], or membership inference attacks [12]. Such threats underscore the necessity of strict ϵ-LDP requirements imposed on both features and links: even if the server aggregates all received data, the privacy of any individual user’s raw input remains formally protected. 
+
+B. Data Poisoning Attacks by Malicious Attacker 
+
+Beyond inference-based privacy threats, the locally private graph learning protocol P is also vulnerable to data poisoning attacks [16], as shown in Fig. 1(b) and Alg. 1. In such attacks, the attacker injects up to nmax malicious nodes into the original graph G under a predefined attack budget ∆, and strategically constructs adversarial feature and adjacency reports according to a set of attack strategies {Sx, Starget , Satk }. The objective is to compromise the utility of downstream graph learning tasks. Despite this significant threat, effective defenses against such poisoning attacks remain largely underexplored in prior work. We formally characterize the attacker along three dimensions: 
+
+1) Adversary Capability: The attacker is capable of inject-ing up to nmax fake nodes, denoted by Vatk (with 1 < |V atk | ≪ |V| ), into the original graph G = ( V, X, A), and connecting them to a set of target victim nodes Vt ⊆ V . Each fake node 
+
+vatk ∈ V atk is fully controlled by the attacker, who can arbitrar-ily construct its node feature vector ˜x† 
+
+> vatk
+
+and adjacency vector 
+
+˜a† 
+
+> vatk
+
+according to a set of attack strategies {Sx, Starget , Satk }.Specifically, Sx governs the generation of malicious features to manipulate the learned representations, Starget determines how fake nodes establish connections with target victim nodes to directly influence their local neighborhoods, and Satk further optimizes the connectivity among fake nodes to amplify the overall attack effect. Importantly, since fake nodes masquerade as legitimate participants, the server cannot reliably distinguish them from genuine users based solely on the received (already perturbed) reports. By establishing links with victim nodes, the injected fake nodes effectively introduce adversarial neighbors into their aggregation neighborhoods, thereby influencing the downstream message-passing process. 
+
+2) Adversary Knowledge: We assume a realistic black-box 
+
+threat model: the attacker is assumed to have access only to the publicly available protocol P, including the perturbation mech-anisms Mx and Ma, as well as the associated privacy budgets 
+
+ϵx and ϵa, since these parameters are typically transparent to all participants. Crucially, the attacker has no access to the raw node features, ground-truth labels, or the exact neighborhood information of genuine users. Furthermore, the internal states of the server-side GNN, such as the model architecture, param-eters, and training dynamics, remain completely inaccessible to the attacker. This assumption is consistent with previous studies [16] on data poisoning attacks in the locally private 
+
+Algorithm 1 Data Poisoning Attack Against Protocol P
+
+Input: Graph G = ( V, X, A), target node set Vt, parameter 
+
+nmax , protocol P, attacker strategies {Sx, Starget , Satk }.
+
+Output: Fake node set Vatk , reports {(˜ x† 
+
+> v
+
+, ˜a† 
+
+> v
+
+)}v∈V atk . 
+
+> 1:
+
+Initialize Vatk ← ∅ . ▷ Create a malicious node set  
+
+> 2:
+
+for i = 1 to nmax do  
+
+> 3:
+
+Create a fake node vatk . 
+
+> 4:
+
+˜x† 
+
+> vatk
+
+← Sx(P). ▷ Craft malicious node feature vector  
+
+> 5:
+
+if Vt̸ = ∅ then  
+
+> 6:
+
+Select a subset of target nodes Ti ⊆ V t. 
+
+> 7:
+
+Vt ← V t \ T i. ▷ Avoid repeated targeting  
+
+> 8:
+
+end if  
+
+> 9:
+
+˜a† 
+
+> vatk
+
+← Starget (Ti, V). ▷ Construct adjacency links  
+
+> 10:
+
+Vatk ← V atk ∪ { vatk }. 
+
+> 11:
+
+end for  
+
+> 12:
+
+{˜a† 
+
+> v
+
+}v∈V atk ← Satk (Vatk ). ▷ Fake-fake coordination  
+
+> 13:
+
+return {(˜ x† 
+
+> v
+
+, ˜a† 
+
+> v
+
+)}v∈V atk .graph learning protocol P, and reflects a realistic scenario in which the attacker must create malicious inputs without access to structural knowledge or feedback from the target model. 
+
+3) Adversary Objective: The attacker aims to degrade the learning utility of the GNN model Fθ trained on the poisoned graph. Let G† = ( V ∪ V atk , A†, X†) denote the poisoned graph after node injection. The attacker’s objective is to optimize the features and links of the injected nodes to maximize an impact metric ℧(·), while remaining within a stealth attack budget ∆
+
+to avoid detection. Formally, this objective is defined as: 
+
+max 
+
+> Vatk ,X†,A†
+
+℧(Fθ (G†)) s.t. dist  (X, A), (X†, A†) ≤ ∆, (9) where the dist( ·, ·) function quantifies the magnitude of pertur-bations to enforce the stealthiness of the attack. In the context of node classification [2], the metric ℧(·) usually corresponds to increasing the misclassification rate. IV. M ETHODOLOGY 
+
+In this section, we introduce V ERITAS , a poisoning-resilient protocol designed for locally private graph learning. Built upon a trust-but-verify paradigm, V ERITAS allows all users to partic-ipate in the learning process by first trusting their local reports while subsequently verifying their consistency and credibility on the server side. As illustrated in Fig. 2 and Alg. 3, V ERITAS 
+
+integrates four synergistic stages: ① local data perturbation 
+
+for private data collection, ② attestation-driven malicious node pruning for verifying structural consistency and eliminating adversarial influence, ③ utility restoration via dual denoising 
+
+to mitigate perturbation-induced noise, and ④ robust private graph learning for downstream tasks. By seamlessly coupling these components, V ERITAS establishes an end-to-end defense pipeline that embodies the principle of “ trust first, verify later ”, effectively safeguarding locally private graph learning against poisoning attacks while maintaining rigorous formal privacy guarantees. The subsequent sections ( ▷ IV-A-IV-D) detail each stage, with a theoretical analysis provided in Sect. IV-E. Fig. 2. Overview of V ERITAS . VERITAS comprises four synergistic stages: ① local data perturbation for private data collection, ② attestation-driven malicious node pruning for adversarial participant removal, ③ utility restoration via dual denoising, and ④ robust private graph learning for downstream inference. 
+
+A. Local Data Perturbation 
+
+This stage performs LDP perturbation on both node features and graph structure before any data transmission. Unlike previ-ous work [15], [16], [18] focusing solely on feature protection, we jointly privatize node features and graph structure, ensuring comprehensive privacy guarantees for graph-structured data. 
+
+1) Node Feature Perturbation: Given a d-dimensional node feature vector xv ∈ [α, β ]d, direct access to original node fea-tures is prohibited under LDP constraints. To address this, each user v perturbs xv locally using an LDP mechanism Mx to obtain a privatized representation ˜xv . We adopt a unified node feature LDP perturbation pipeline, which generalizes several representative mechanisms, including PM [39], MB [13], and 
+
+SW [38]. The pipeline is summarized in Alg. 2. Specifically, a perturbation budget ϵx is allocated to feature protection, and a subset S ⊆ [d] of size m is uniformly sampled ( Line 1 ). Each selected dimension i ∈ S is independently perturbed using an (ϵx/m )-LDP mechanism, while the remaining dimensions are set to zero ( Lines 2-7 ). This sampling strategy effec-tively reduces per-dimension noise, thereby improving utility under a fixed privacy budget. Optionally, a post-processing step R ECT (·) (e.g. , bias correction) can be applied to ensure unbiased estimation, i.e. , E[˜ xv ] ≈ xv (Line 8 ). 
+
+2) Graph Structure Perturbation: In addition to protecting node features xv , we also provide privacy protection for the graph structure. Instead of adopting the conventional RR -based perturbation mechanism introduced in Sect. II-C, we propose a novel data structure, termed the verification list , to jointly encode relational information and peer trust, thus enhancing robustness against poisoning attacks. Specifically, each node v
+
+maintains a verification list ˘av ∈ { 0, 1, . . . , κ }|V| , where each entry ˘av,u represents node v’s assessment of its relationship with node u, defined as follows: 
+
+˘av,u =
+
+(
+
+0 if u / ∈ N (v) (non-neighbor) ,
+
+1, 2, . . . , κ if u ∈ N (v) (trust level) . (10) The level 0 serves as a dedicated indicator of structural absence and is semantically distinct from the trust levels {1, 2, . . . , κ }
+
+assigned to the confirmed neighbors. To ensure ϵa-link LDP (Definition 2), each entry rv,u is independently perturbed using the K-ary randomized response ( KRR ) mechanism [41]: 
+
+Pr(˜ av,u = j | ˘av,u = i) = 
+
+
+
+eϵa
+
+eϵa + κ if j = i, 
+
+1
+
+eϵa + κ if j̸ = i, 
+
+(11) where ϵa denotes the privacy budget allocated to the pertur-bation of the verification list. This mechanism satisfies ϵr -link local differential privacy, as stated in the following proposition: 
+
+Proposition 1. The KRR mechanism defined in Eq. (11) satisfies ϵa-link LDP as defined in Definition 2. Proof. For any two inputs i, i ′ ∈ { 0, 1, . . . , κ } and any output j, the privacy ratio is bounded as 
+
+P (˜ a = j | ˘a = i)
+
+P (˜ a = j | ˘a = i′) ≤ eϵa , (12) which follows directly from the mechanism definition and the standard analysis of KRR mechanism [41]. Finally, the perturbed pair {(˜ xv , ˜rv )}v∈V is transmitted to the server. By the composition theorem of LDP (Theorem 2), since ˜xv and ˜av pertain to disjoint attributes, the overall perturbation satisfies ϵ-LDP with ϵ = ϵx + ϵa.
+
+B. Attestation-Driven Malicious Node Pruning 
+
+Upon receiving (˜ xv , ˜av )v∈V , the server proceeds to assess the credibility of each reported relationship through cross-node attestation signals . The central insight driving this stage lies in the incentive asymmetry inherent in graph poisoning. A malicious node vatk tends to assign high trust levels to its target neighbors to maximize its adversarial impact, whereas a benign node evaluates its peers based on local observations and Algorithm 2 Node Feature LDP Perturbation Mechanism 
+
+Input: Node feature xv ∈ [α, β ]d, privacy budget ϵx > 0.
+
+Output: Perturbed node feature ˜xv ∈ [−B , B]d. 
+
+> 1:
+
+m ← max(1 , min( d, ⌊δ · ϵ⌋). ▷ perturbation size  
+
+> 2:
+
+Let x′ 
+
+> v
+
+←< 0, 0, · · · , 0 >. 
+
+> 3:
+
+Let S ⊂ [d] denote a subset of m distinct dimensions selected uniformly at random without replacement from the index set {1, 2, . . . , d }. 
+
+> 4:
+
+for each sampled dimension i ∈ S do  
+
+> 5:
+
+Feed xv [i] and ϵ/m as input to one-dimensional LDP mechanisms ( e.g. , Eq. (4)), and obtain x′
+
+> tmp
+
+. 
+
+> 6:
+
+x′ 
+
+> v
+
+[i] ← x′
+
+> tmp
+
+. ▷ LDP perturbation  
+
+> 7:
+
+end for  
+
+> 8:
+
+˜xv ← RECT (x′ 
+
+> v
+
+, ϵ, m, d ). ▷ unbiased rectification  
+
+> 9:
+
+return Perturbed node feature ˜xv ∈ [−B , B]d.naturally assigns low trust to structurally anomalous neighbors. This behavioral divergence induces a systematic asymmetry in bilateral verification entries, which can be interpreted as incon-sistencies in mutual attestation. Importantly, this signal persists even under LDP noise and remains identifiable on the server. VERITAS takes advantage of this property through a three-step procedure consisting of ① bilateral signal extraction , ② edge confidence scoring , and ③ suspicion-based pruning .
+
+1) Bilateral Signal Extraction: For each candidate pair (u, v), the server observes two independent perturbed entries, ˜av,u 
+
+(node v’s assessment of node u) and ˜au,v (node u’s assessment of node v), forming a bilateral attestation signal. Based on this observation, three complementary signals are extracted: 
+
+⋄ Signal 1 (Structural existence). Both parties must mutually acknowledge the relationship for an edge to be considered structurally valid: sexist  
+
+> uv
+
+= 1[˜ av,u ̸ = 0] ·1[˜ au,v ̸ = 0] . An edge flagged by either party as non-existent ( ˜a = 0 ) is structurally unconfirmed and receives zero confidence. 
+
+⋄ Signal 2 (Trust consistency). Among mutually acknowl-edged edges, the effective trust is determined by the lower of the two reported levels: scons  
+
+> uv
+
+= min(˜ av,u , ˜au,v ). The 
+
+min operator is a deliberate design choice grounded in adversarial reasoning: a malicious node vatk will strategically report the maximum trust level κ toward all neighbors to maintain influence, so the minimum operator effectively neutralizes this manipulation; the overall trust is anchored by the honest party’s conservative assessment. 
+
+⋄ Signal 3 (Endorsement asymmetry). The absolute discrep-ancy between the two levels reported quantifies the degree of bilateral inconsistency: sasym  
+
+> uv
+
+= |˜au,v − ˜av,u |. A high asymmetry score indicates that one party’s assessment devi-ates substantially from the other’s, which is a characteristic signature of adversarial behavior. 
+
+2) Edge Confidence Scoring: The three signals are consol-idated into a unified edge confidence score cuv ∈ [0 , 1] :
+
+cuv = sexist  
+
+> uv
+
+· scons 
+
+> uv
+
+κ · exp( −λ · sasym  
+
+> uv
+
+) , (13) where λ > 0 is a hyperparameter controlling the penalty for asymmetry. The three multiplicative terms operate at distinct levels of granularity: the existence term acts as a hard gate that suppresses unconfirmed edges entirely; the consistency term provides a soft, graded measure of mutual trust; and the asymmetry term exponentially penalizes one-sided endorse-ments. Together, Eq. (13) assigns high confidence only to edges for which both parties report comparable and positive trust levels, while systematically discounting edges that exhibit the hallmarks of adversarial manipulation. 
+
+3) Suspicion Scoring and Node Pruning: Edge-level confi-dence scores are aggregated into a node-level suspicion score 
+
+ϕv , which captures the systematic directional bias in v’s bilateral assessments: 
+
+ϕv = 1
+
+| ˆNv |
+
+X 
+
+> u∈ˆNv
+
+(˜ au,v − ˜av,u ) , (14) where ˆNv = {u : ˜ av,u > 0∨˜au,v > 0} denotes the set of nodes claiming any relationship with v. A positive ϕv indicates that 
+
+v consistently assigns higher trust to others than others assign to it, precisely the behavioral fingerprint of a malicious node maximizing its structural influence while being rated poorly by honest peers. 
+
+Proposition 2 (Suspicion Score Separability) . Let vm ∈M be a fake node that reports maximum trust ˘avm,u = κ
+
+toward all neighbors, and let each honest neighbor u / ∈M assign trust level ˘au,v m = 1 due to anomalous local observations. Then, after (κ+1) -KRR perturbation with budget ϵa, the expected suspicion score satisfies: 
+
+E[ϕvm ] = (2 pa − 1)( κ − 1) > 0, (15) 
+
+where pa = eϵa /(eϵa + κ) is the truthful reporting probability of KRR . For an honest node vh /∈ M with symmetric bilateral assessments, E[ϕvh ] = 0 .
+
+Proposition 2 establishes that the expected suspicion gap between malicious and honest nodes is (2 pa −1)( κ−1) , which grows with both ϵa (privacy budget) and κ (granularity of trust levels), providing a clear principle for hyperparameter selec-tion. Finally, nodes whose suspicion score exceeds threshold 
+
+γ are flagged and removed: 
+
+ˆM = {v ∈ V : ϕv > γ }, ˆV = V \ ˆM. (16) The pruned graph ˆG = ( ˆV, ˆE), where ˆE = {(u, v ) ∈ ˆV2 :
+
+cuv > 0}, retains only nodes and edges with positive bilateral support and is passed to Stage ③.
+
+C. Utility Restoration via Dual Denoising 
+
+After malicious node pruning, the retained graph ˆG still suffers from utility degradation induced by LDP perturbation. To recover signal quality, we adopt the Node Feature Regular-ization (NFR ) and High-Order Aggregator (HOA ) components from [15]: NFR reduces effective feature dimensionality via 
+
+L1-regularization to lower per-dimension data estimation er-ror, while HOA expands the effective neighborhood through Algorithm 3 VERITAS 
+
+Input: Graph G = ( V, X, A), privacy budgets ϵx, ϵa, trust levels κ, thresholds γ, λ, hops K, labeled nodes Vl.
+
+Output: Trained model Fθ , predictions on Vu. 
+
+> 1:
+
+// Stage ①: Local Data Perturbation  
+
+> 2:
+
+for each user v ∈ V do  
+
+> 3:
+
+˜xv ← M x(xv , ϵ x) via Alg. 2. ▷ feature perturbation  
+
+> 4:
+
+Construct ˘av ∈ { 0, 1, . . . , κ }|V| via Eq. (10).  
+
+> 5:
+
+˜rv ← KRR (˘ av , ϵ a). ▷ structure perturbation  
+
+> 6:
+
+Upload (˜ xv , ˜rv ) to server.  
+
+> 7:
+
+end for  
+
+> 8:
+
+// Stage ②: Attestation-Driven Malicious Node Pruning  
+
+> 9:
+
+for each candidate pair (u, v ) do  
+
+> 10:
+
+Extract signals sexist  
+
+> uv
+
+, scons  
+
+> uv
+
+, sasym  
+
+> uv
+
+from (˜ av,u , ˜au,v ). 
+
+> 11:
+
+Compute edge confidence cuv via Eq. (13).  
+
+> 12:
+
+end for  
+
+> 13:
+
+for each node v ∈ V do  
+
+> 14:
+
+Compute suspicion score ϕv via Eq. (14).  
+
+> 15:
+
+end for  
+
+> 16:
+
+ˆM ← { v ∈ V : ϕv > γ }; ˆV ← V \ ˆM. ▷ prune nodes  
+
+> 17:
+
+Construct pruned graph ˆG = ( ˆV, ˆE). 
+
+> 18:
+
+// Stage ③: Utility Restoration via Dual Denoising  
+
+> 19:
+
+ˆX ← NFR ({˜xv }v∈ ˆV , ϵ x). ▷ node feature regularization  
+
+> 20:
+
+ˆA ← HOA ( ˆG, K ). ▷ higher-order aggregator  
+
+> 21:
+
+// Stage ④: Robust Private Graph Learning  
+
+> 22:
+
+Train Fθ on ( ˆX, ˆA) using labeled nodes Vl ∩ ˆV. 
+
+> 23:
+
+Perform inference on Vu = ˆV \ V l. 
+
+> 24:
+
+return Trained model Fθ and predictions on Vu.personalized multi-hop aggregation to reduce noise variance. Together, NFR and HOA produce a denoised feature matrix ˆX
+
+and refined adjacency structure ˆA, which are subsequently fed into the robust private graph learning stage. 
+
+D. Robust Private Graph Learning 
+
+Upon receiving the denoised graph ( ˆX, ˆA), the server trains a GNN Fθ for downstream tasks such as node classification on the labeled node set Vl, and subsequently performs inference on the unlabeled set Vu = ˆV \ V l. Since malicious nodes have been pruned and perturbation-induced noise has been mitigated in the preceding stages, the GNN operates on a substantially cleaner graph, yielding more reliable node rep-resentations and improved downstream utility. The complete VERITAS protocol is summarized in Algorithm 3. 
+
+E. TheoreticalAnalysis 1) Privacy Analysis: On the user side, perturbing node features and verification lists under ϵx-LDP and ϵa-link LDP, respectively, guarantees (ϵx + ϵa)-LDP by sequential compo-sition (Theorem 2). On the server side, all subsequent oper-ations are performed solely on the collected reports, and by post-processing invariance (Theorem 1), no additional privacy budget is consumed. Thus, V ERITAS satisfies ϵ-LDP with 
+
+ϵ = ϵx +ϵa, providing an end-to-end formal privacy guarantee.                      
+
+> TABLE I STATISTICS OF GRAPH DATASETS
+> Type Dataset #Nodes #Edges #Features #Classes
+> Citation Network Cora 2,708 5,278 1,433 7Citeseer 3,327 4,552 3,703 6Social Network LastFM 7,624 27,806 7,842 18 Twitch 4,648 61,706 128 2
+
+2) Complexity Analysis: The attestation-driven pruning stage (Stage ②) incurs a computational complexity of O(|V| +
+
+|E| ) for bilateral signal extraction and suspicion score compu-tation. The dual denoising stage (Stage ③) requires O(K|E| d)
+
+and O(|V| d) for HOA and NFR , respectively, where K denotes the number of propagation steps and d is the feature dimen-sion. Consequently, both stages exhibit near-linear complexity with respect to the graph size, making V ERITAS scalable to large-scale graph learning scenarios. V. E XPERIMENTS 
+
+In this section, we empirically evaluate the effectiveness of VERITAS 2. Sect. V-A outlines the experimental settings, while Sect. V-B reports the results and provides detailed discussions. 
+
+A. Experimental Settings 1) Datasets: We conduct experiments on four benchmark graph datasets spanning two categories: two citation networks, 
+
+Cora [42] and Citeseer [42], where nodes represent papers and edges denote citation relationships; and two social networks, 
+
+LastFM [43] and Twitch [43], where nodes represent users and edges encode social links. These datasets have been broadly adopted for evaluating graph learning methods under privacy constraints [14]–[16]. Table I summarizes their statistics. 
+
+2) GNN Models: We consider three representative GNN backbones: GCN [2], GraphSAGE [1], and GAT [44]. Un-less otherwise specified, each model is implemented with two graph convolutional layers with hidden dimension 64. We implement the GNN models in PyTorch using PyTorch-Geometric (PyG) 3. The GCN serves as the default backbone. 
+
+3) LDP Mechanisms: We consider six LDP mechanisms for node feature protection, covering both classical and recent approaches. The classical baselines include the 1-bit mecha-nism ( 1B ) [28], the Laplace mechanism ( LP ) [36], and the Analytic Gaussian mechanism ( AG ) [37]. We further include three advanced mechanisms that have demonstrated strong utility-privacy trade-offs in graph settings: the piecewise mech-anism ( PM ) [39], the multi-bit mechanism ( MB ) [13], and the square wave mechanism ( SW ) [38]. PM is used as the default mechanism. For graph structure protection, the verification list is perturbed via KRR as described in Sect. IV-A. 
+
+4) Parameter Settings: The feature privacy budget ϵx is varied over {0.01 , 0.1, 1.0, 2, 0, 3, 0} and the structural privacy budget ϵa over {1.0, 3.0, 5.0, 7.0, 9.0}, with defaults ϵx = 0 .1
+
+and ϵa = 5 .0. All datasets are split into 50% training, 25%       
+
+> 2The code will be made publicly available upon acceptance.
+> 3https://www.pyg.org/ 1B LP AG SW MB PM 30 40 50 60 70 80 Accuracy (%) Baseline Ours
+
+(a) Cora 1B LP AG SW MB PM 40 50 60 70 80 Accuracy (%) Baseline Ours (b) Citeseer 1B LP AG SW MB PM 40 50 60 70 80 90 Accuracy (%) Baseline Ours 
+
+(c) LastFM 1B LP AG SW MB PM 40 50 60 70 80 90 Accuracy (%) Baseline Ours (d) Twitch     
+
+> Fig. 3. Performance comparison between our proposed V ERITAS (Ours) and attack baseline on the node classification task. TABLE II COMPARISON OF CLASSIFICATION ACCURACY BETWEEN OUR DEFENSE AND ATTACK BASELINE ACROSS DIFFERENT GNN MODELS .
+
+GNN Method Cora Citeseer LastFM Twitch 
+
+GraphSAGE Baseline 69.2 67.6 72.4 72.7 
+
+Ours 75.7 72.9 76.3 76.9 
+
+GAT Baseline 67.4 65.1 69.6 70.1 
+
+Ours 71.8 70.3 75.2 75.4 
+
+validation, and 25% test sets. The granularity is κ = 5 . The injection rate r⋆ is varied over {0.001 , 0.005 , 0.01 , 0.02 , 0.04 }
+
+with default r⋆ = 0 .01 . The threshold γ and λ are tuned in the validation set. Utility restoration follows [15]. 
+
+5) Evaluation Metrics: We evaluate task performance on the node classification task [2], measured by test accuracy (%). All results are averaged over 10 independent runs with 95% confidence intervals. Experiments are run on a server equipped with Ubuntu 20.04 LTS, two Intel ® Xeon ® Gold 6348 CPUs, 100GB RAM, and an NVIDIA ® A800 80GB GPU. 
+
+B. Experimental Results 1) Effectiveness: We evaluate the effectiveness of V ERITAS 
+
+against data poisoning attacks on four benchmark datasets under the default privacy budget setting, using the poisoned model without defense as the baseline. As shown in Fig. 3, VERITAS consistently improves node classification accuracy across all datasets and LDP mechanisms, demonstrating strong resilience to poisoning attacks under diverse perturbation schemes. Table II further verifies the robustness of V ERITAS 
+
+across different GNN architectures. Under both GraphSAGE and GAT backbones, our framework substantially restores the utility degraded by poisoning, indicating that its effectiveness is largely independent of the underlying GNN design. This is mainly because V ERITAS operates at the data and participant filtering level rather than modifying model-specific architec-tures, allowing it to generalize across different GNN encoders. Overall, these results demonstrate the strong generalizability of VERITAS across both privacy mechanisms and GNN models. 
+
+2) Ablation Studies: To quantify the contribution of each core defense stage, we compare four configurations: Base-line (poisoned without any defense), w/o II (full V ERITAS 
+
+without attestation-driven malicious node pruning), w/o III 
+
+(full VERITAS without dual denoising), and the complete 
+
+VERITAS . As shown in Fig. 4(a), removing either stage leads to a noticeable performance drop relative to the full model: removing Stage II causes the most significant degradation, confirming that malicious node pruning is the primary defense mechanism; removing Stage III also reduces accuracy, high-lighting the importance of utility restoration. The full V ERITAS 
+
+achieves the best performance, demonstrating that the two stages are complementary and both indispensable. 
+
+3) Parameter Analysis: We analyze the sensitivity of V ER - 
+
+> ITAS
+
+to three key parameters: the feature privacy budget ϵx,the structural privacy budget ϵa, and the injection rate r⋆. As shown in Fig. 4(b) and (c), the node classification accuracy consistently improves as either ϵx or ϵa increases. This is be-cause larger privacy budgets introduce less perturbation noise, preserving more informative feature and structural signals for malicious node detection. Fig. 4(d) evaluates the effect of the 
+
+r⋆. We observe that V ERITAS maintains stable performance Baseline w/o II w/o III VERITAS 40 50 60 70 80 Accuracy (%) (a) Ablation 0.01 0.1 1.0 2.0 3.0 50 55 60 65 70 75 80 Accuracy (%) Baseline Ours (b) Parameter ϵx1.0 3.0 5.0 7.0 9.0 50 55 60 65 70 75 80 Accuracy (%) Baseline Ours (c) Parameter ϵa0.001 0.005 0.01 0.02 0.04 40 50 60 70 80 Accuracy (%) Baseline Ours (d) Parameter r⋆     
+
+> Fig. 4. Analysis of V ERITAS under data poisoning attacks. (a) Ablation study under different defense configurations, evaluating the contribution of each core component. (b)–(d) Parameter sensitivity with respect to the feature privacy budget ϵx, structural privacy budget ϵa, and injection rate r⋆, respectively.
+
+when the proportion of malicious nodes is relatively low. Although the accuracy gradually decreases as r⋆ increases, the degradation remains moderate, indicating that V ERITAS can effectively withstand increasingly strong poisoning attacks. VI. R ELATED WORK 
+
+In this section, we review the existing literature related to local differential privacy ( ▷ VI-A), graph neural networks (▷ VI-B), and locally private graph learning ( ▷ VI-C). 
+
+A. Local Differential Privacy 
+
+LDP [24] has emerged as a de facto standard for privacy-preserving data collection and analysis in decentralized en-vironments, as it eliminates the need for a trusted data cu-rator. In the LDP setting, each user perturbs their sensitive data before transmission, ensuring rigorous privacy guarantees even against an untrusted server. Owing to its strong privacy protection and practical deployability, LDP has attracted ex-tensive attention from both academia and industry [45], [46]. Representative mechanisms include randomized response [40], [41] for categorical data, as well as the Laplace [36], Gaus-sian [37], piecewise [39], multi-bit [13], and square wave [38] mechanisms for numerical data. Building upon these prim-itives, numerous studies have investigated private frequency estimation, distribution learning, and machine learning under LDP constraints. The practicality of LDP has also led to its large-scale deployment in real-world systems by major technology companies, including Google [26], Apple [27], and Microsoft [28]. More recently, the scope of LDP has been extended from tabular data to graph-structured data [14], [21], [35], laying the foundation for locally private graph learning. 
+
+B. Graph Neural Networks 
+
+GNNs [2], [3] have emerged as the dominant framework for learning over graph-structured data, achieving remarkable success in a wide range of graph mining tasks [2], [4], [5]. By iteratively aggregating information from neighboring nodes, GNNs effectively capture both topological dependencies and node attributes, yielding expressive graph representations [1], [2], [44]. Consequently, GNNs have been widely adopted in numerous real-world applications [6]–[8]. Despite their effec-tiveness, GNNs are frequently deployed on graphs containing sensitive user attributes and relational information, raising significant privacy concerns. Recent studies have shown that adversaries can exploit trained GNN models to infer private information, giving rise to various privacy attacks, including attribute inference [9], membership inference [12], and link inference [10]. These risks have motivated a growing body of research on privacy-preserving graph learning, among which locally private graph learning has attracted particular attention. 
+
+C. Locally Private Graph Learning 
+
+Locally private graph learning extends the LDP paradigm to graph-structured data, enabling collaborative graph learning without revealing raw node features or graph topology to the server [13]–[23]. By leveraging the inherent noise tolerance of GNN message passing [2], [13], these methods can effectively learn useful node representations from perturbed graph data, maintaining strong utility under rigorous privacy constraints. Despite these advantages, the decentralized nature of locally private graph learning introduces unique security vulnerabili-ties. Recent studies [16] have shown that malicious participants can exploit both feature and structural perturbation channels to inject adversarial signals, which are subsequently propagated and amplified through the neighborhood aggregation process of GNNs, leading to significant utility degradation. Defending against such attacks is particularly challenging in the local pri-vacy setting. Unlike centralized graph learning, where anomaly detection methods can leverage global graph statistics and fea-ture correlations [30], [32], [33], LDP mechanisms deliberately obfuscate both structural and attribute information, rendering many existing defenses ineffective. These challenges highlight a critical gap in the security of locally differentially private graph learning and underscore the urgent need for defense mechanisms specifically tailored to the LDP setting. VII. C ONCLUSION 
+
+In this paper, we propose V ERITAS , a poisoning-resilient locally private graph learning protocol built upon a trust-but-verify paradigm. By leveraging the asymmetry of bilateral attestation signals, V ERITAS effectively identifies and prunes malicious participants while preserving rigorous LDP guaran-tees. Extensive experiments on four datasets under multiple LDP mechanisms and GNN architectures demonstrate that VERITAS consistently defends against poisoning attacks and significantly improves task utility. These results highlight the importance of integrating security considerations into locally private graph learning and establish a promising direction for building robust privacy-preserving graph learning systems. ACKNOWLEDGMENT 
+
+This work was supported by the National Key Research and Development Program of China (No. 2024YFF0907401), the National Natural Science Foundation of China (No. 62072052), and the BUPT Excellent Ph.D. Students Founda-tion (No. CX20260030). REFERENCES [1] W. Hamilton, Z. Ying, and J. Leskovec, “Inductive representation learning on large graphs,” NeurIPS , vol. 30, pp. 1024–1034, 2017. [2] T. N. Kipf and M. Welling, “Semi-supervised classification with graph convolutional networks,” in ICLR , 2017, pp. 1–15. [3] Z. Wu, S. Pan, F. Chen, G. Long, C. Zhang, and P. S. Yu, “A comprehensive survey on graph neural networks,” IEEE Transactions on Neural Networks and Learning Systems (TNNLS) , vol. 32, no. 1, pp. 4–24, 2020. [4] W. Liu, K. Yue, Z. Zhang, and L. Duan, “Hierarchical structure enhanced graph representation for link prediction,” in ICDM , 2025, pp. 507–516. [5] A. Tsitsulin, J. Palowitch, B. Perozzi, and E. M¨ uller, “Graph clustering with graph neural networks,” Journal of Machine Learning Research (JMLR) , vol. 24, no. 127, pp. 1–21, 2023. [6] K. Sharma, Y.-C. Lee, S. Nambi, A. Salian, S. Shah, S.-W. Kim, and S. Kumar, “A survey of graph neural networks for social recommender systems,” ACM Computing Surveys (CSUR) , vol. 56, no. 10, pp. 1–34, 2024. [7] L. Jain, R. Katarya, and S. Sachdeva, “Opinion leaders for information diffusion using graph neural network in online social networks,” ACM Transactions on the Web (TWEB) , vol. 17, no. 2, pp. 1–37, 2023. [8] Y. Liu, X. Ao, Z. Qin, J. Chi, J. Feng, H. Yang, and Q. He, “Pick and choose: a gnn-based imbalanced learning approach for fraud detection,” in WWW , 2021, pp. 3168–3177. [9] L. Meng, Y. Bai, Y. Chen, Y. Hu, W. Xu, and H. Weng, “Devil in disguise: Breaching graph neural networks privacy through infiltration,” in CCS , 2023, pp. 1153–1167. [10] F. Wu, Y. Long, C. Zhang, and B. Li, “Linkteller: Recovering private edges from graph neural networks via influence analysis,” in S&P , 2022, pp. 2005–2024. [11] X. Wang and W. H. Wang, “Group property inference attacks against graph neural networks,” in CCS , 2022, pp. 2871–2884. [12] Z. Zhang, M. Chen, M. Backes, Y. Shen, and Y. Zhang, “Inference attacks against graph neural networks,” in USENIX Security , 2022, pp. 4543–4560. [13] S. Sajadmanesh and D. Gatica-Perez, “Locally private graph neural networks,” in CCS , 2021, pp. 2130–2145. [14] W. Lin, B. Li, and C. Wang, “Towards private learning on decentralized graphs with local differential privacy,” IEEE Transactions on Informa-tion Forensics and Security (TIFS) , vol. 17, pp. 2936–2946, 2022. [15] L. He, C. Li, P. Tang, and S. Su, “Going deeper into locally differentially private graph neural networks,” in ICML , 2025, pp. 22 548–22 565. [16] L. He, C. Li, P. Tang, L. Sun, S. Su, and P. S. Yu, “Devil’s hand: Data poisoning attacks to locally private graph learning protocols,” in KDD ,2026, pp. 395–406. [17] S. Hidano and T. Murakami, “Degree-preserving randomized response for graph neural networks under local differential privacy,” Transactions on Data Privacy (TDP) , vol. 17, no. 2, pp. 89–121, 2024. [18] Z. Li, R.-H. Li, M. Liao, F. Jin, and G. Wang, “Privacy-preserving graph embedding based on local differential privacy,” in CIKM , 2024, pp. 1316–1325. [19] X. Pei, X. Deng, S. Tian, J. Liu, and K. Xue, “Privacy-enhanced graph neural network for decentralized local graphs,” IEEE Transactions on Information Forensics and Security (TIFS) , vol. 19, pp. 1614–1629, 2023. [20] L. He, P. Tang, L. Sun, and S. Su, “The devil within, the cure without: Securing locally private graph learning under poisoning,” in WWW ,2026, pp. 4493–4504. [21] X. Zhu, V. Y. Tan, and X. Xiao, “Blink: Link local differential privacy in graph neural networks via bayesian estimation,” in CCS , 2023, pp. 2651–2664. [22] L. He, L. Sun, J. Wu, S. Su, and P. S. Yu, “Differentially private graph learning: A survey,” TechRxiv , 2026. [23] L. He, P. Tang, C. Li, J. Fu, L. Zhang, L. Sun, P. S. Yu, and S. Su, “Toward personalized differentially private learning for decentralized local graphs,” IEEE Transactions on Knowledge and Data Engineering (TKDE) , vol. 38, pp. 6255–6269, 2026. [24] S. P. Kasiviswanathan, H. K. Lee, K. Nissim, S. Raskhodnikova, and A. Smith, “What can we learn privately?” SIAM Journal on Computing (SICOMP) , vol. 40, no. 3, pp. 793–826, 2011. [25] C. Dwork, “Differential privacy: A survey of results,” in TAMC , 2008, pp. 1–19. [26] ´U. Erlingsson, V. Pihur, and A. Korolova, “Rappor: Randomized aggre-gatable privacy-preserving ordinal response,” in CCS , 2014, pp. 1054– 1067. [27] A. G. Thakurta, A. H. Vyrros, U. S. Vaishampayan, G. Kapoor, J. Freudiger, V. R. Sridhar, and D. Davidson, “Learning new words, us patent 9,594,741,” 2017. [28] B. Ding, J. Kulkarni, and S. Yekhanin, “Collecting telemetry data privately,” NeurIPS , vol. 30, pp. 3571–3580, 2017. [29] J. R. Douceur, “The sybil attack,” in International Workshop on Peer-to-Peer Systems (IPTPS) , 2002, pp. 251–260. [30] L. Sun, Y. Dou, C. Yang, K. Zhang, J. Wang, P. S. Yu, L. He, and B. Li, “Adversarial attack and defense on graph data: A survey,” IEEE Transactions on Knowledge and Data Engineering (TKDE) , vol. 35, no. 8, pp. 7693–7711, 2022. [31] J. Ma, S. Ding, and Q. Mei, “Towards more practical adversarial attacks on graph neural networks,” NeurIPS , vol. 33, pp. 4756–4766, 2020. [32] X. Zhang and M. Zitnik, “Gnnguard: Defending graph neural networks against adversarial attacks,” NeurIPS , vol. 33, pp. 9263–9275, 2020. [33] X. Tang, Y. Li, Y. Sun, H. Yao, P. Mitra, and S. Wang, “Transferring robustness for graph neural network against poisoning attacks,” in 
+
+WSDM , 2020, pp. 600–608. [34] L. He, P. Tang, Y. Zhang, P. Zhou, and S. Su, “Mitigating privacy risks in retrieval-augmented generation via locally private entity perturbation,” 
+
+Information Processing & Management , vol. 62, no. 4, p. 104150, 2025. [35] Z. Qin, T. Yu, Y. Yang, I. Khalil, X. Xiao, and K. Ren, “Generating synthetic decentralized social graphs with local differential privacy,” in 
+
+CCS , 2017, pp. 425–438. [36] N. Phan, X. Wu, H. Hu, and D. Dou, “Adaptive laplace mechanism: Differential privacy preservation in deep learning,” in ICDM , 2017, pp. 385–394. [37] B. Balle and Y.-X. Wang, “Improving the gaussian mechanism for differential privacy: Analytical calibration and optimal denoising,” in 
+
+ICML , 2018, pp. 394–403. [38] Z. Li, T. Wang, M. Lopuha¨ a-Zwakenberg, N. Li, and B. ˇSkoric, “Estimating numerical distributions under local differential privacy,” in 
+
+SIGMOD , 2020, pp. 621–635. [39] N. Wang, X. Xiao, Y. Yang, J. Zhao, S. C. Hui, H. Shin, J. Shin, and G. Yu, “Collecting and analyzing multidimensional data with local differential privacy,” in ICDE , 2019, pp. 638–649. [40] S. L. Warner, “Randomized response: A survey technique for eliminating evasive answer bias,” Journal of the American Statistical Association (JASA) , vol. 60, no. 309, pp. 63–69, 1965. [41] P. Kairouz, K. Bonawitz, and D. Ramage, “Discrete distribution estima-tion under local privacy,” in ICML , 2016, pp. 2436–2444. [42] Z. Yang, W. Cohen, and R. Salakhudinov, “Revisiting semi-supervised learning with graph embeddings,” in ICML , 2016, pp. 40–48. [43] B. Rozemberczki and R. Sarkar, “Characteristic functions on graphs: Birds of a feather, from statistical descriptors to parametric models,” in 
+
+CIKM , 2020, pp. 1325–1334. [44] P. Velickovic, G. Cucurull, A. Casanova, A. Romero, P. Li` o, and Y. Bengio, “Graph attention networks,” in ICLR , 2018, pp. 1–15. [45] X. Xiong, S. Liu, D. Li, Z. Cai, and X. Niu, “A comprehensive survey on local differential privacy,” Security and Communication Networks ,vol. 2020, no. 1, p. 8829523, 2020. [46] G. Cormode, S. Jha, T. Kulkarni, N. Li, D. Srivastava, and T. Wang, “Privacy at scale: Local differential privacy in practice,” in SIGMOD ,2018, pp. 1655–1658.
