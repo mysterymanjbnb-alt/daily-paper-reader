@@ -1,0 +1,166 @@
+Title: Typed Federated Artifacts for the Agentic Web:Sharing Tool-Routing Knowledge Across Frozen,Heterogeneous LLM Agents
+
+URL Source: https://arxiv.org/pdf/2609.06815v1
+
+Published Time: Wed, 09 Sep 2026 01:34:07 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Typed Federated Artifacts for the Agentic Web: Sharing Tool-Routing Knowledge Across Frozen, Heterogeneous LLM Agents 
+
+Abhijit Chakraborty 
+
+Arizona State University 
+
+achakr40@asu.edu 
+
+Ni Trieu 
+
+Arizona State University 
+
+Vivek Gupta 
+
+Arizona State University 
+
+vgupt140@asu.edu 
+
+Abstract 
+
+Agents on an open, networked web will run frozen models from different vendors, keep their histories private, and still have something to teach one another: which tool to call, and when not to. Weights and adapters cannot carry that knowledge across architectures, and flat text (prompts, example pools) leaves the protocol unable to say which part is a statistic to noise, which is a rule that must survive a merge, and which is documentation. We propose exchanging typed federated artifacts , schema-validated objects whose fields make per-field privacy (specified here, not measured), per-field conflict resolution, and cross-model transfer well-defined, and instantiate them as S YNAPSE 1, a shared compendium of tool-routing knowledge. On StableToolBench (3,180 tools, after removing 192 junk entries and 1,916 training items that duplicate or nearly duplicate test queries), a federated compendium routes within 1.1 points of a centralized one at 20 MB of JSON per client per round. The same experience merged and shown to the router as typed fields rather than one flat string is worth 8.5 points on clean data and 7.4 under 60% injected contradiction; crossing merge and rendering shows the halves are inseparable (the typed merge shown flat is the worst arm), while three conflict policies are indistinguishable, so the conflict log that motivated this work is not what carries the result. On τ -bench retail every compendium arm lifts a GPT-4o agent’s per-step tool-call accuracy by at least 6.7 points, a gain we trace to format rather than federated experience. Two cautionary findings close the paper: on a topic-labeled math proxy and on StableToolBench itself, a TF-IDF classifier over the same labeled experience beats every LLM routing arm (by 48 and 26 points, most of it retrieval recall), because the benchmark’s pool holds labeled queries for every supposedly unseen tool and held every test query verbatim before our filter; it cannot measure routing to tools without labels, which is the case routing exists for. 
+
+1 Introduction 
+
+The agentic web does not yet have a unit of exchange. When one organization’s agent learns that a weather API is right for forecasts but wrong for historical data, there is no agreed way to hand that knowledge to an agent run by someone else on a different model. Sharing model updates is impossible when the models are frozen and differ across organizations; sharing raw interaction traces leaks private data; sharing flat text, such as prompts or example pools, leaves the protocol blind: it cannot tell which part of the text is a numeric statistic to be clipped and noised for privacy, which part is a rule (“never use this tool for x”) that must survive being merged with other contributions, and which part is canonical documentation. 
+
+> 1https://anonymous.4open.science/r/FederatedRAG-EE50/README.md Preprint. arXiv:2609.06815v1 [cs.CL] 6 Sep 2026
+
+We argue that the exchanged unit should carry a type signature at the federation boundary . Atyped federated artifact is an object C with a schema S that gives every field a role, a type, and a validation rule. Three operations that are ill-defined over flat text become well-defined: per-field differential privacy, because sensitivity is declared rather than estimated; conflict resolution, because disagreement is detected and kept per field rather than settled by a vote over whole strings; and transfer across models, because the artifact is read at inference time rather than baked into parameters. SYNAPSE instantiates this for tool routing, choosing which tool an agent should call. Each client builds a compendium C = ( M, U, P, T, A ) from its own experience: tool metadata with usage statistics ( M ), scenarios in which a tool worked ( U ), precautions about when not to use it ( P ), call templates ( T ), and a structured annex ( A). Edge aggregators merge contributions with a typed operator that keeps the per-field majority and the dissent; the dissent becomes a typed conflict log that the router reads as “do not use when” conditions. Any frozen LLM can then retrieve from the global compendium and rerank candidates (Fig. 2, App. A). 
+
+Contributions. (i) The typed-artifact abstraction and merge operator, in which per-field privacy and per-field conflict handling are dispatchable operations rather than heuristics (§2). (ii) A con-trolled experiment separating typing from structure , and merge from rendering, showing where the typed/untyped gap comes from (§3). (iii) Benchmark results on real tool catalogs at 20 MB per client per round (§4). (iv) Two negative findings to know before building on the same corpora: a supervised classifier beats LLM routing on a topic proxy and on StableToolBench itself, whose instruction pool contains its own test set (§5). 
+
+2 Typed compendium and merge 
+
+A compendium is valid only if every scenario, precaution and template refers to a registered tool and every numeric field lies in its declared range; invalid contributions are rejected before merge. Each round, an edge aggregator clusters scenarios per tool (cosine ≥ 0.85), computes a per-field majority within each cluster over {scenario , precaution , annex }, and attaches whatever disagreed as a typed conflict_log , rendered to the router in the same round. Two ablations isolate the mechanism: R OUND DELAYED holds dissent back until the next round, and M AJORITY discards it. The structured-but-untyped control serializes the same fields into one flat JSON string and merges by whole-string majority; there a conflict log is not expressible , since no precaution slot exists to attach dissent to. The schema supports clipping and Laplace noise on the numeric fields of M ((ε, 0) -differential privacy on the numeric path) and masking of text fields; both are specified in App. B, and 
+
+noise was off in every run reported here , so no number below is a privacy–utility measurement. At inference, the router retrieves the top-k=5 distinct tools over canonical descriptions and scenarios (Jina v2 embeddings, pinned commit), and a frozen LLM scores the candidates, presented description-first with their “when to use” and “do not use when” fields. 
+
+3 Does typing matter, and why? Isolating type from structure 
+
+We inject contradictions before merge as scenario/precaution pairs about real tools (“use t for x”versus “do not”) at rates {0, 0.2, 0.4, 0.6} of client contributions, identically across arms for each (rate, seed), with a candidate pool of 20 (5 in §4); at 40% it touches 2,709 of 3,180 tools and the gold tool of 253/258 test queries. Fig. 1 shows a result we did not predict: the gap is already there at 0%. The same fields, serialized into one string, cost the reranker 8.5 points before a single contradiction is injected (0.583 against 0.497, 3 seeds). Contradiction then costs the typed arms 1 to 3 points by 60% and the untyped arm nothing, leaving every typed arm at 60% above the untyped arm at 0%. The untyped arm’s recall@5 (is the correct tool among the five candidates?) is higher throughout, and on the 253 seed-456 queries whose gold tool was contradicted the typed arms still lead (0.629 vs. 0.486): the typed merge costs retrieval, yet the gap is in the reranker. Is it the typed merge or the typed 
+
+rendering ? We crossed them (App. C, Tab. 5): the typed merge shown to the model as a flat blob scores 0.460, below the flat merge shown flat (0.497); the flat merge shown with field labels recovers only part of the gap (0.531); the typed merge shown typed scores 0.583; at 60% contradiction the flat-shown typed merge falls furthest (0.416), since a conflict log read as a blob is noise and read as a field is a “do not use when”. Neither half works alone: the type has to survive from merge to inference, which is what a signature at the federation boundary means (shown for one 8B reranker). 20.0 0.2 0.4 0.6 
+
+> fraction of contradictory contributions
+> 0.450 0.475 0.500 0.525 0.550 0.575 0.600 0.625
+> routing accuracy
+> Typed, conflict log (Synapse) Typed, round-delayed Typed, majority Untyped (flat JSON), majority
+
+(a) 
+
+Arm 0% 20% 40% 60% SYNAPSE (typed, log) .583 ±.018 .595 ±.014 .584 ±.030 .575 ±.026 
+
+Typed, delayed .591 ±.003 .593 ±.005 .579 ±.003 .560 ±.003 
+
+Typed, majority .579 ±.014 .568 ±.025 .568 ±.026 .559 ±.012 
+
+Untyped, majority .497 ±.026 .483 ±.025 .505 ±.025 .501 ±.018 
+
+Untyped, log not expressible 
+
+recall@5 typed / untyped .764 / .811 .769 / .808 .758 / .828 .769 / .822 seeds (delayed) 3 (2) 2 (2) 3 (2) 3 (2) 
+
+(b) 
+
+Figure 1: Typed vs. untyped (flat JSON) under injected contradiction on StableToolBench G1+G2-instruction ( n=258; mean ±SD over seeds 42/123/456, round-delayed and the 20% column from two seeds; identical injected set across arms per (rate, seed), verified by hash). (a) Routing accuracy vs. fraction of contradictory contributions. (b) The same data with recall@5 and seed counts; an untyped conflict log has no precaution field to attach dissent to. The typed/untyped gap is already present at 0%. Table 1: StableToolBench routing accuracy (alias-collapsed), mean over 3 seeds; K=5 clients, 5,000 items per client from the leak-filtered pool; SDs and recall@5 in App. C. † unseen relative to ToolLLaMA’s training split only: the instruction pool holds labeled queries for every test tool (§5).  
+
+> ‡
+
+TF-IDF+SVM on the same 25,000 labeled items per seed, no federation; 0 on any tool without labeled queries. Bold: best compendium arm. 
+
+G1 (single tool) G2 (multi-tool) G3 Arm instr. (153) tool † (152) cat. † (134) instr. (105) cat. † (124) instr. (61) all (729) LOCAL -ONLY 0.484 0.457 0.464 0.300 0.278 0.252 0.394 
+
+DOCS -ONLY 0.562 0.546 0.537 0.533 0.460 0.508 0.528 
+
+SYNAPSE (federated) 0.601 0.594 0.614 0.514 0.438 0.519 0.555 
+
+CENTRALIZED 0.599 0.583 0.614 0.495 0.435 0.530 0.550 
+
+QUERY CLASSIFIER ‡ 0.837 0.827 0.838 0.816 0.780 0.771 0.817 
+
+It matters more than the conflict-resolution policy: keeping dissent as a conflict log, delaying it a round, or discarding it gives results within noise of one another at every rate (Fig. 1b). We do not claim the conflict log buys accuracy here; it remains the operation only a typed unit can express ,and measuring its value needs a benchmark whose gold decisions a contradiction can change, which StableToolBench’s description-driven queries are not. 
+
+4 Benchmarks and transfer 
+
+Setup. K=5 clients with a category-coherent partition, 5,000 experience items per client drawn from the ToolBench training instructions after removing all 1,916 items that exactly or nearly (cos ≥ 0.95 ) duplicate a test query; three rounds; router Llama-3.1-8B-Instruct. A TF-IDF+SVM QUERY CLASSIFIER trained on the same labeled items is included because it is what topic proxies reward (§5). Latency is in App. D. Results (Tab. 1). Federation costs nothing: S YNAPSE is never more than 1.1 points below C ENTRALIZED and is above or level with it on five of six groups. Pooling is what matters: L OCAL -ONLY trails by 12 to 27 points, most on multi-tool queries, where one client’s experience covers few of the tools needed. Experience helps where descriptions run out: relative to D OCS -ONLY , client experience adds 4–8 points on single-tool queries, including the splits the benchmark labels unseen (but see §5), and about 2 points less on multi-tool queries. That deficit is retrieval, not the artifact: with the gold tool forced into the five candidates (oracle retrieval, App. C), experience beats D OCS -ONLY by 7 to 12 points on every group, multi-tool included (0.762 vs. 0.658). 
+
+τ -bench: where the gain comes from. On τ -bench retail (14 tools, 55 held-out tasks, GPT-4o agent and simulator; App. C) the primary metric is per-step tool-call accuracy (264 decisions per seed); 3Table 2: τ -bench retail, 55 held-out tasks, GPT-4o ( gpt-4o-2024-08-06 ) agent and simulator, mean ±SD over 3 seeds. Every compendium arm is ≥6.7 points above P LAIN ; the three compendium arms are within one SD. P LAIN is our own agent loop in the vendored harness and is not comparable to the leaderboard (App. C).                                  
+
+> Arm Tool-call step acc. Task success Steps / seed PLAIN (no compendium) 0.596 ±0.036 0.297 ±0.046 264 DOCS -ONLY 0.679 ±0.012 0.364 ±0.048 264 SYNAPSE (federated) 0.663 ±0.025 0.370 ±0.010 264 CENTRALIZED 0.672 ±0.019 0.358 ±0.038 264
+
+task success on 55 tasks cannot separate the arms. The plain tool-calling agent reaches 0.596; every compendium arm is at least 6.7 points higher, and D OCS -ONLY , S YNAPSE and C ENTRALIZED lie within one standard deviation of one another. On this catalog the gain comes from the compendium 
+
+format , not from federated experience, which adds nothing measurable on 14 well-documented tools. One artifact under two models on one benchmark remains untested. 
+
+5 Two negative results for federated-agent benchmarking 
+
+Topic proxies reward classifiers, not routers. An earlier version of this work used GSM8k with topic labels such as Algebraic Word Problem Solver . A TF-IDF+SVM classifier reaches 0.92 there and keeps 0.82 when the routing artifact is randomly relabeled (it reads the query, not the compendium), while the LLM router reaches 0.44 under four prompts: such benchmarks measure text classification, not routing. The benchmark’s pool contains its test set, and the benchmark is lexically solvable. 
+
+The ToolBench instruction pool contains every StableToolBench test query as an exact normalized string match (729/729 after the junk filter; 765/765 before). Our classifier scored 1.000 on the raw pool. After the filter, with zero exact or near-duplicate overlap, it still scores 0.817, which is 26 points above every LLM routing arm, on the “unseen” splits as well. About 21 of those points are retrieval recall: under oracle retrieval the best LLM arm reaches 0.770, still 5 points short of the classifier. Those splits are unseen only relative to ToolLLaMA’s training split. The pool holds other generated queries for every test tool, each written from that tool’s description and sharing its vocabulary, which a bag-of-words model over 25,000 labeled queries learns for every tool. The benchmark thus rewards supervised query classification over routing, and it cannot pose the case routing exists for, a tool with no labeled queries: every gold tool of the “unseen” splits (95/95 in G1-tool, 77/77 in G1-category) has labeled queries in the filtered pool, and only 1–4 of 729 test queries per seed have a gold tool absent from the clients’ 25,000 items, where the classifier scores 0 by construction. We release the overlap filter; both findings join recent audits of agentic evaluation [Zhu et al., 2025, Bhat et al., 2026]. 
+
+6 Related work and outlook 
+
+Adapter federation [Ye et al., 2024, Kuang et al., 2024] needs a shared architecture; prompt and exemplar federation [Chen et al., 2025, Wang et al., 2025] exchanges flat text; FICAL [Wu et al., 2024] exchanges free-text “knowledge compendiums” merged by an LLM summarizer, the untyped version of our unit; federated RAG [Addison et al., 2024] federates indices without typed fields. Routing follows ToolLLM [Qin et al., 2023]; Askin et al. [2026] federate model-selection routers as parameters. What is new is the type signature at the federation boundary: the artifact, not the model, is the unit of exchange. 
+
+References 
+
+Parker Addison, Minh-Tuan H. Nguyen, Tomislav Medan, Jinali Shah, Mohammad T. Manzari, Brendan McElrone, Laksh Lalwani, Aboli More, Smita Sharma, Holger R. Roth, Isaac Yang, Chester Chen, Daguang Xu, Yan Cheng, Andrew Feng, and Ziyue Bhattacharya. C-FedRAG: A confidential federated retrieval-augmented generation system. arXiv preprint arXiv:2412.13163 ,2024. doi: 10.48550/arXiv.2412.13163. 4Baris Askin et al. Federate the router: Learning language model routers with sparse and decentralized evaluations. arXiv preprint arXiv:2601.22318 , 2026. doi: 10.48550/arXiv.2601.22318. Vishvesh Bhat et al. Benchmarking the benchmarks: A validity audit of tool-calling evaluation. arXiv preprint arXiv:2607.02577 , 2026. doi: 10.48550/arXiv.2607.02577. Minghui Chen, Ruinan Jin, Wenlong Deng, Yuanyuan Chen, Zhi Huang, Han Yu, and Xiaoxiao Li. Can textual gradient work in federated learning? 2025. URL https://arxiv.org/abs/ 2502.19980 .Weirui Kuang, Bingchen Qian, Zitao Li, Daoyuan Chen, Dawei Gao, Xuchen Pan, Yuexiang Xie, Yaliang Li, Bolin Ding, and Jingren Zhou. FederatedScope-LLM: A comprehensive package for fine-tuning large language models in federated learning. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD) , 2024. doi: 10.1145/3637528. 3671573. Yujia Qin, Shihao Liang, Yining Ye, Kunlun Zhu, Lan Yan, Yaxi Lu, Yankai Lin, Xin Cong, Xiangru Tang, Bill Qian, Sihan Zhao, Lauren Hong, Runchu Tian, Ruobing Xie, Jie Zhou, Mark Gerstein, Dahai Li, Zhiyuan Liu, and Maosong Sun. Toolllm: Facilitating large language models to master 16000+ real-world apis. 2023. URL https://arxiv.org/abs/2307.16789 .Ruhan Wang, Zhiyong Wang, Chengkai Huang, Rui Wang, Tong Yu, Lina Yao, John C. S. Lui, and Dongruo Zhou. Federated in-context learning: Iterative refinement for improved answer quality. 2025. URL https://arxiv.org/abs/2506.07440 .Panlong Wu, Kangshuo Li, Junbao Nan, and Fangxin Wang. Federated in-context llm agent learning. 2024. URL https://arxiv.org/abs/2412.08054 .Rui Ye, Wenhao Wang, Jingyi Chai, Dihan Li, Zexi Li, Yinda Xu, Yaxin Du, Yanfeng Wang, and Siheng Chen. Openfedllm: Training large language models on decentralized private data via federated learning. 2024. URL https://arxiv.org/abs/2402.06954 .Yuxuan Zhu, Tengjun Jha, Ishaan Mishra, et al. Establishing best practices for building rigorous agentic benchmarks. arXiv preprint arXiv:2507.02825 , 2025. doi: 10.48550/arXiv.2507.02825. 5A One round of S YNAPSE 
+
+Figure 2: One round of S YNAPSE . Each organization turns its private tool-use experience into a typed compendium and shares only that artifact (numeric fields clipped and noised, text masked; about20 MB of JSON). An edge node validates each artifact against the schema and merges field by field, keeping disagreements as a typed conflict log rather than voting them away, and broadcasts one global compendium. At inference, any frozen LLM retrieves five candidate tools by similarity to descriptions and pooled scenarios and picks one by reading each candidate’s “when” and “when not” fields. The outcome of the call becomes next round’s experience. 
+
+B Threat model and privacy mechanisms 
+
+Adversary. An honest-but-curious edge aggregator and any client that reads the global compendium; no trusted server. Numeric path. Each client’s per-tool usage counts and success rates in M are clipped to a declared range [0 , c ] and Laplace-noised at the edge with scale c/ε ; over R rounds basic composition gives (Rε, 0) -DP for the numeric fields, and the sensitivity is a property of the schema rather than an estimate, which is the operation typing makes well-defined. Text path. Scenarios and precautions leave clients as short templated strings after masking of literals (numbers, identifiers, quoted spans); the full paper measures a prompt-extraction adversary’s AUROC against masking strength and against a word-level metric-LDP alternative. The workshop version makes no formal claim about the text path. 6C Experimental details and released artifacts 
+
+Every number regenerates via make tables from a clean checkout; tables/manifest.json 
+
+lists, for each table, the source run directories, their content hashes, and the repository commit each run recorded. Per-query routing decisions are released as hashed logs. Table 3: Full StableToolBench results, mean ±SD over seeds 42/123/456 (D OCS -ONLY is deter-ministic; L OCAL -ONLY is the mean over the five clients, so its SD is over client-averaged values rather than over one 153-query count). Generated from the three combined_summary.json 
+
+files listed in tables/manifest.json . The query-classifier arm of this run had been fit on the unfiltered pool (0.93–0.98 on every split) and is excluded; the row in Tab. 1 is a separate run fit on the filtered pool with an asserted zero exact/near-duplicate overlap (stabletoolbench_query_classifier_clean_r1 ).                                                                                                                                         
+
+> G1-Instr. (153) G1-Tool (152) G1-Cat. (134) Arm Acc R@5 Acc R@5 Acc R@5 SYNAPSE .601 ±.000 .684 ±.008 .594 ±.036 .654 ±.056 .614 ±.024 .684 ±.024
+> CENTRALIZED .599 ±.004 .667 ±.011 .583 ±.034 .634 ±.031 .614 ±.024 .672 ±.020
+> LOCAL -ONLY .484 ±.002 .556 ±.010 .457 ±.005 .513 ±.002 .464 ±.013 .546 ±.008
+> DOCS -ONLY .562 .706 .546 .691 .537 .709
+> G2-Instr. (105) G2-Cat. (124) G3-Instr. (61) Arm Acc R@5 Acc R@5 Acc R@5 SYNAPSE .514 ±.019 .619 ±.016 .438 ±.020 .511 ±.017 .519 ±.081 .617 ±.137
+> CENTRALIZED .495 ±.010 .603 ±.036 .435 ±.016 .508 ±.008 .530 ±.077 .612 ±.133
+> LOCAL -ONLY .300 ±.004 .354 ±.011 .278 ±.019 .322 ±.019 .252 ±.028 .292 ±.018
+> DOCS -ONLY .533 .695 .460 .565 .508 .639
+
+Oracle retrieval. To separate retrieval from reranking, we re-evaluate the three compendium arms with every gold tool of a query forced into the top-5 candidate list, each replacing the lowest-ranked non-gold candidate (queries needing an insertion: 0.51–0.52 overall, 0.30–0.36 on single-tool queries). Tab. 4 reports the result. Experience that was worth 2.7 points under real retrieval is worth 7–12 once the gold tool is present, on every group; the classifier’s remaining margin over the best LLM arm is 5 points. Table 4: Routing accuracy with real retrieval (Tab. 1) and with oracle retrieval (gold tool forced into the five candidates), mean ±SD over seeds 42/123/456; D OCS -ONLY is deterministic. Run 
+
+stabletoolbench_oracle_r1 , hashes and commit in tables/manifest.json .                                                                
+
+> all (729) oracle retrieval, per group Arm real retr. oracle G1-instr. G1-tool G1-cat. G2-instr. G2-cat. G3-instr. SYNAPSE .555 .762 ±.014 .767 ±.023 .750 ±.023 .749 ±.034 .771 ±.019 .750 ±.050 .820 ±.028
+> CENTRALIZED .550 .770 ±.014 .776 ±.016 .752 ±.033 .769 ±.039 .781 ±.019 .753 ±.065 .825 ±.025
+> DOCS -ONLY .528 .658 .667 .632 .657 .657 .637 .754
+> QUERY CLASSIFIER .817 –(no retrieval stage)
+
+Merge versus rendering. Each cell of Fig. 1b is re-evaluated with the merge and the rendering crossed: the typed-merged compendium rendered to the reranker as one flat JSON string, and the flat-merged string decoded back into fields and rendered description-first. Merged compendiums are regenerated from the same seeds; every regenerated baseline cell reproduces Fig. 1b to three decimals. Tab. 5 gives the result at 0% and 60% contradiction. 
+
+Routing constants. Retrieval is distinct_tool_topk over Jina-v2 embeddings with k=5 candidates reranked by the V3 description-first prompt; the candidate pool before distinct-tool filtering is 20 in the typing-isolation runs (§3) and 5 in the benchmark runs (§4). Edge clustering uses cosine 
+
+≥ 0.85; the leak filter removes exact matches and cos ≥ 0.95 near-duplicates and reports cos ≥ 0.90 .Accuracy is alias-collapsed top-1 tool match; on multi-tool (G2, G3) queries a prediction is correct if it matches any gold tool of the query, and recall@5 is satisfied if any gold tool is among the five candidates. No differential-privacy noise was applied in any reported run. 7Table 5: Merge and rendering crossed (StableToolBench G1+G2-instruction, n=258, mean ±SD over seeds 42/123/456; run stabletoolbench_2x2_renderswap_r1 , commit and per-cell hashes in tables/manifest.json ). The two baseline rows reproduce Tab. 1b to three decimals. The decoded row re-parses the flat merge’s stored string into fields; its re-serialization is not byte-identical to the stored string, so it is an approximation of the flat merge’s content. The typed merge helps only when the reranker is shown its fields; shown flat, it is worse than the flat merge, and worst under contradiction.                                           
+
+> 0% contradiction 60% contradiction Merge Rendered to reranker as Acc R@5 Acc R@5 typed (conflict log) typed fields (S YNAPSE ).583 ±.018 .764 .575 ±.026 .769
+> typed (conflict log) one flat string .460 ±.006 .738 .416 ±.025 .749
+> flat (majority) typed fields (decoded) .531 ±.014 .820 .539 ±.014 .827
+> flat (majority) one flat string .497 ±.026 .811 .501 ±.018 .822
+
+Contradiction injection. Each injected contradiction is a scenario and a precaution attributed to different clients, so injection also adds positive scenarios; this is why recall@5 rises slightly with rate in §3. Precaution-only injection is the cleaner design and is left for the full study. 
+
+τ -bench harness provenance. We vendor sierra-research/tau-bench into the repository and record the git tree hash of the vendored directory in every run’s side-car. The DOCS -ONLY rows in Tab. 2 were produced on tree 07ec25f0 and the PLAIN /S YNAPSE /C ENTRALIZED rows on tree bb344928 . The diff between the two trees is confined to tau_bench/local_completion.py (the local-model completion path); every run in the table records provider: openai for both agent and simulator, under which that file is not executed, and make tables admits the mixed trees only under exactly that condition, with the diff and provider fields recorded in the manifest. A direct replication of D OCS -ONLY on the current tree ( 18a0d08a ) is reported if it completes before the camera-ready. P LAIN is our own tool-calling agent loop inside the vendored harness evaluated at pass 1 on a 55-task holdout (split hash in the manifest); its task-success rate is therefore not comparable to the τ -bench leaderboard’s pass 1 on all 115 retail tasks, and we make no such comparison. All four arms share harness, tasks, simulator, seeds and grader, and are comparable to one another. Per-step tool-call accuracy is scored by longest-common-subsequence matching of predicted to gold tool calls within each task. 
+
+D Scale and latency measurements 
+
+At 3,180 registered tools the retrieval index holds canonical descriptions plus client scenarios (28,433 entries after merge on seed 456); dense retrieval over it costs 1.1 ms per query and the 8B logit-scoring rerank of five distinct candidates 36.6 ms, for 37.8 ms end-to-end (means over 258 queries, one A100-class card, batch size 1). The edge merge, not inference, dominates wall-clock: clustering 28k scenarios takes roughly an hour per round on CPU in our unoptimized implementation, which is the cost a deployment would pay once per aggregation round rather than per query. 8

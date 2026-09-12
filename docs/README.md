@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-11</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-12</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-11 22:31:13 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-12 22:06:38 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-11 日报精选 25 篇，精读 10 篇、速读 15 篇，聚焦可信机器人推理与联邦大模型隐私微调。最值得看的是 CT-SAFR 提出的多层验证链式推理框架（9.0/10），以及面向联邦 LLM 微调的隐私保护拆分学习（9.0/10）。普通读者可先读这两篇精读，再按兴趣浏览机器人统一学习与高效联邦学习的速读条目。</p>
+<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
+<p>精读：《Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G》（9.0/10）, 《Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting》（9.0/10）</p>
+<p>速读：《MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms》（8.0/10）, 《Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces》（8.0/10）, 《Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration》（8.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +77,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CT-SAFR: Safe and Interpretable Chain-of-Thought Reasoning for Autonomous Robots: A Multi-Layered Verification Framework for Trustworthy AI-Driven Robotic Decision Making">CT-SAFR: Safe and Interpretable Chain-of-Thought Reasoning for Autonomous Robots: A Multi-Layered Verification Framework for Trustworthy AI-Driven Robotic Decision Making</span></li><li><span class="dpr-home-dashboard-paper-title" title="Privacy-Preserving Split Learning for Federated LLM Fine-Tuning">Privacy-Preserving Split Learning for Federated LLM Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="AgentAudit: An Open, Extensible Framework for Full-Lifecycle Trust Evaluation of AI Agents">AgentAudit: An Open, Extensible Framework for Full-Lifecycle Trust Evaluation of AI Agents</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G">Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G</span></li><li><span class="dpr-home-dashboard-paper-title" title="Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting">Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting</span></li><li><span class="dpr-home-dashboard-paper-title" title="DriftNet: A Dual-Head Trajectory Transformer for Detecting and Localizing Prompt Injection in LLM Agents">DriftNet: A Dual-Head Trajectory Transformer for Detecting and Localizing Prompt Injection in LLM Agents</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +90,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Toward Unified Robot Learning: Bridging Representation, Vision-Language-Action, and World Models">Toward Unified Robot Learning: Bridging Representation, Vision-Language-Action, and World Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="Communication-Efficient Personalized Federated Learning via Layer-Wise Multi-Threshold Random Sketching">Communication-Efficient Personalized Federated Learning via Layer-Wise Multi-Threshold Random Sketching</span></li><li><span class="dpr-home-dashboard-paper-title" title="Task-oriented Framework for Communication-Efficient Federated Learning: From Isolated Optimization to Holistic Synergy">Task-oriented Framework for Communication-Efficient Federated Learning: From Isolated Optimization to Holistic Synergy</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms">MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms</span></li><li><span class="dpr-home-dashboard-paper-title" title="Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces">Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces</span></li><li><span class="dpr-home-dashboard-paper-title" title="Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration">Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>6</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>6</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 </div>
 
