@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-12</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-13</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-12 22:06:38 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-13 21:36:27 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,10 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
-<p>精读：《Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G》（9.0/10）, 《Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting》（9.0/10）</p>
-<p>速读：《MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms》（8.0/10）, 《Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces》（8.0/10）, 《Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration》（8.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>25篇里精读10篇、速读15篇，今天</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -77,9 +74,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G">Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G</span></li><li><span class="dpr-home-dashboard-paper-title" title="Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting">Understanding In-Context Multimodal Jailbreaks via Posterior Reweighting</span></li><li><span class="dpr-home-dashboard-paper-title" title="DriftNet: A Dual-Head Trajectory Transformer for Detecting and Localizing Prompt Injection in LLM Agents">DriftNet: A Dual-Head Trajectory Transformer for Detecting and Localizing Prompt Injection in LLM Agents</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Decentralized Safe Multi-Agent Reinforcement Learning via Predictive Shielding">Decentralized Safe Multi-Agent Reinforcement Learning via Predictive Shielding</span></li><li><span class="dpr-home-dashboard-paper-title" title="ACEA: An Adversarial Co-Evolution Arena for Head-to-Head Red-Team and Blue-Team LLM Testing">ACEA: An Adversarial Co-Evolution Arena for Head-to-Head Red-Team and Blue-Team LLM Testing</span></li><li><span class="dpr-home-dashboard-paper-title" title="Windows Malware Detector as a Compound AI System: Trade-Offs in Accuracy, Efficiency, and Adversarial Robustness">Windows Malware Detector as a Compound AI System: Trade-Offs in Accuracy, Efficiency, and Adversarial Robustness</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>1</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -90,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms">MechAudit-40: White-Box Auditing across 40 LLM Attack Mechanisms</span></li><li><span class="dpr-home-dashboard-paper-title" title="Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces">Detokenization Leaks: Reconstructing Local LLM Outputs From Cache Traces</span></li><li><span class="dpr-home-dashboard-paper-title" title="Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration">Robust Decentralized Federated Distillation via Multi-Modality Knowledge Collaboration</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="An Empirical Measurement of Jailbreaking Evaluators">An Empirical Measurement of Jailbreaking Evaluators</span></li><li><span class="dpr-home-dashboard-paper-title" title="PARSER: Read in Parallel, Reason in Depth for Long-Context LLM Agents">PARSER: Read in Parallel, Reason in Depth for Long-Context LLM Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="NutriBench-Kitchen: Benchmarking Embodied AI for Nutrition Management">NutriBench-Kitchen: Benchmarking Embodied AI for Nutrition Management</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>6</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>9</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 </div>
 
