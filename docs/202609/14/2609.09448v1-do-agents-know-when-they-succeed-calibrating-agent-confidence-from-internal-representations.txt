@@ -1,0 +1,293 @@
+Title: Do Agents Know When They Succeed? Calibrating Agent Confidence from Internal Representations
+
+URL Source: https://arxiv.org/pdf/2609.09448v1
+
+Published Time: Thu, 10 Sep 2026 00:16:47 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Do Agents Know When They Succeed? Calibrating Agent Confidence from Internal Representations 
+
+Priyanka M. Mammen 1 Emil Joswin 2 Srujananjali Medicherla 21UMass Amherst 2Independent Research 
+
+pmammen@umass.edu 
+
+## Abstract 
+
+As agentic systems getting adopted rapidly in safety critical applications, it is vital to measure the confidence associated with the agentic actions. In comparison to the traditional machine learning systems, agentic workflows have complex failure modes with planning, tool invocation and dynamic environment interactions. In this paper, we investigate whether model’s internal representations provide stronger signals of eventual task success in multi-turn agentic setups. We introduce two complementary methods: Latent Trajectory Dynamics (LTD) , which summarizes changes in residual-stream representations across an an interaction trajectory, and the Action Representation Probe (ARP) , which predicts success from represen-tations formed at action decisions. Across three interactive benchmarks (Bash, SQL, Python) and three model families (Qwen-14B, Qwen-7B, DeepSeek-6.7B), our methods consistently outperform surface-level generation and sequence-based calibration baselines providing a zero-overhead reliability monitor that requires neither prompt alterations nor multi-sample rollouts. 
+
+## 1 Introduction 
+
+Autonomous agentic systems are getting popular and increasingly being deployed across safety critical domains including software-engineering tasks, trading, finance, clinical decision making, and robotic systems. Therefore, reliability and failure detection is essential for its deployment. During real-time execution, agents operate under no ground truth label, and so the general strategy is to rely on an evaluation step to determine intervention or implement any fallback policies. Traditional confidence estimation techniques designed for single-turn generation like temperature scaling, output token semantic entropy, verbalized confidence Zhao et al. [2026], Tian et al. [2023], Xu et al. [2025]etc struggle in agentic workflows. Unlike typical text generation tasks, in agentic settings, models do not work in isolation, they operate within a harness that orchestrate multi-turn planning, tools, and feedback from external environment over long-horizon tasks. Hence, due to the nature of complex execution of agents in long-horizon tasks, these static system techniques won’t work for multi-turn. Oh et al. [2026]. Recent works such as Duan et al. [2025], Zhao et al. [2025], came up with a confidence estimation techniques which consider error propagation across steps in a reasoning trajectory and another work Zhang et al. [2026] proposed an agentic confidence calibration from trajectory derived signals. As these methods leverage only output level signals, they might fail to capture the model inner states preceding the model failures. Azaria and Mitchell [2023] has shown that model inner states can better indicate the model veracity than model outputs. Motivated by this insight, we turn towards mechanistic approaches to derive granular level model confidence signals. Mechanistic interpretability related works in agentic settings are mostly single-turn based and used for tool-need decision making Liu et al. [2024], Subramani et al. [2025], Healy et al. [2026], Tatsat and Shater [2026] in reasoning tasks. Building upon1 this foundational work, we investigate different mechanistic approaches to derive confidence in multi-turn agentic setups. 
+
+> 40th Conference on Neural Information Processing Systems (NeurIPS 2026). arXiv:2609.09448v1 [cs.AI] 8 Sep 2026
+
+Our main contributions are as follows: • We introduce two novel internal confidence extraction frameworks operating directly on the agent’s hidden activations: Latent Trajectory Dynamics (LTD) , which quantifies the geometric stability and drift of the agent’s execution path, and the Action Representation Probe (ARP) , which decodes task success directly from the action-span residual states. • We benchmark surface token logprobs, trajectory dynamics, and internal representations under a leak-free cross-validation protocol and show that across InterCode-Bash, SQL, and Python on three open-weight coding models (Qwen-14B, Qwen-7B, DeepSeek-6.7B), internal methods consistently dominate surface baselines, establishing internal state probing as a viable zero-overhead reliability safeguard for deployed agents. 
+
+## 2 Methodology 
+
+2.1 Problem Formulation 
+
+For task i, a coding agent produces a multi-step trajectory τi = {(gi,t , o i,t )}Ti
+
+> t=1
+
+, where gi,t is the generation at step t, oi,t is the resulting observation, and yi ∈ { 0, 1} indicates task success. We seek a trajectory-level confidence estimate 
+
+ˆci ≈ P (yi = 1 | τi).
+
+For each generated token, we retain its log-probability ℓi,t,j and recover its probability as pi,t,j =exp( ℓi,t,j ). We also recover residual-stream states h(ℓ) 
+
+> i,t,j
+
+by teacher-forcing the stored trajectory through the generating model which , in live deployment are computed during generation with zero replay overhead; see Appendix I). Calibrated Logprob and Holistic Trajectory Calibration (HTC) Zhang et al. [2026] estimate confidence from observable trajectory information, whereas LTD and ARP use these internal representations. More details about external confidence baselines are provided in Appendix G 
+
+2.2 Internal Representation Signals 2.2.1 Latent Trajectory Dynamics 
+
+Latent Trajectory Dynamics (LTD) describes how the model’s internal state changes over an agent trajectory. We teacher-force each stored generation and retain residual-stream states at semantically meaningful endpoints corresponding to the task observation, reasoning, action, and subsequent feedback. From adjacent states ht and ht+1 , we measure cosine displacement 
+
+dcos (ht, h t+1 ) = 1 − h⊤ 
+
+> t
+
+ht+1 
+
+∥ht∥2∥ht+1 ∥2
+
+, (1) and relative displacement 
+
+drel (ht, h t+1 ) = ∥ht+1 − ht∥2
+
+∥ht∥2 + ϵ . (2) We summarize these quantities over reasoning, commitment, action, and feedback transitions using their means, final values, variability, and trends. We additionally measure path efficiency and include indicators for unavailable transition types. Full set of features are present in Appendix E. This produces xLTD  
+
+> i
+
+∈ R28 . To isolate the information in these internal dynamics while matching HTC’s predictor class, we fit an L2-regularized logistic model. 
+
+2.2.2 Action Representation Probe 
+
+The Action Representation Probe (ARP) asks whether the internal representation at action decisions directly encodes eventual task success. Let ai,t denote the final-layer residual state at the endpoint of the action span at step t. We exclude terminal submit actions and mean-pool the remaining action states: 
+
+¯ai = 1
+
+|A i|
+
+X
+
+> t∈A i
+
+ai,t (3) 2Within each training fold, we standardize these episode representations and project them onto their first 64 principal components: 
+
+ui = PCA 64 (Standardize (¯ ai)) . (4) An L2-regularized logistic probe predicts success from the projected representation. A monotonic Platt map subsequently converts this score into the reported confidence. Standardization, PCA, probe fitting, and probability calibration are all performed without access to the outer held-out fold. 
+
+## 3 Experiments 
+
+3.1 Experimental Setup Models and Agentic Framework: We used three models for our evaluations - Qwen2.5-Coder-7B-Instruct, Qwen2.5-Coder-14B-Instruct-AWQ, and DeepSeek-Coder-6.7B-Instruct, on a single A100 GPU. All models are served locally using vLLM [Kwon et al., 2023] via its OpenAI-compatible API, which exposes per-token log-probabilities. The prompts samples are provided in AppendixB. All reported results use greedy decoding (temperature = 0). Later we teacher-force the generated trajectories on the same offline model to obtain the residual stream states. For each model and environment, all methods are evaluated on the same task population using identical frozen outer folds, producing one out-of-fold prediction per trajectory. More details are provided in Appendix H. 
+
+Datasets: We ground our investigation in interactive coding benchmarks as they afford objective, deterministic ground-truth verification via programmatic unit tests and execution harnesses completely eliminating LLM-as-a-judge evaluation noise while also requiring multi-turn interactive problem-solving across diverse syntactic and semantic modalities. We used three types of interactive coding tasks from intercode-bench Yang et al. [2023] which consists of python (MBPP), sql (SPIDER) and bash tasks. More details are given in Appendix C 
+
+Baselines and Eval Metrics: We benchmark our approach against the external confidence signals -HTC(Zhang et al. [2026]) and calibrated log prob. We use the three standard confidence calibration scores. AUROC (Area Under Receiver Operating Characteristic) measures the ability to distinguish correct and incorrect reasoning trajectories; ECE measures the difference between a models predicted probabilities and the observed accuracy Guo et al. [2017]; and Brier Score measures the mean squared difference between predicted probabilities and actual binary outcome Glenn et al. [1950]. For a good calibration metric, we expect a higher AUROC score with a lower Brier score and a lower ECE score. 
+
+3.2 Calibration and Performance Results 
+
+Table 1 summarizes out-of-fold discrimination (AUROC) and calibration metrics (Brier score, ECE) across all three evaluation environments and model architectures Our empirical findings demonstrate three core trends: 1. Token confidence is an insufficient external signal. Calibrated Logprob provides the weakest discrimination, indicating that aggregate output probability alone does not reliably capture trajectory-level success. 2. Trajectory structure strengthens external confidence estimation. HTC substantially improves over Cal Logprob in most settings, showing that confidence dynamics across an interaction are more informative than a single aggregate probability. 3. Internal representations provide confidence signals beyond observable outputs. LTD and ARP outperform the external baselines on AUROC or Brier score in every model– environment setting, with an internal method achieving the best AUROC and Brier score in all nine settings. Together, these results show that both trajectory-level dynamics and action-level representations expose information about eventual success that is not captured by output probabilities alone. 
+
+## 4 Related Work 
+
+The early approaches on agents directly adapt from static language models including temperature scaling Guo et al. [2017], semantic entropy of predicted tokens Kuhn et al. [2023], and, verbalized 3Table 1: Confidence evaluation across calibration paradigms and model families. Methods progress from surface outputs ( Logprob (Cal.) ) to sequence dynamics ( HTC ) and internal representation mechanisms ( LTD , ARP ). All metrics use 5-fold nested cross-validation on frozen protocols.                                                                                                                                                                                  
+
+> (a) Qwen2.5-Coder-14B-Instruct-AWQ Bash (33.5%) SQL (71.3%) Python (51.0%)
+> Method AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓
+> Logprob (Cal.) 0.627 0.218 0.112 0.624 0.197 0.018 0.555 0.247 0.021
+> HTC 0.743 0.196 0.095 0.743 0.176 0.052 0.655 0.231 0.044 LTD 0.761 0.183 0.069 0.771 0.169 0.044 0.646 0.234 0.025 ARP 0.814 0.162 0.070 0.842 0.144 0.055 0.711 0.216 0.028
+> (b) Qwen2.5-Coder-7B-Instruct Bash (30.3%) SQL (67.4%) Python (47.3%)
+> Method AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓
+> Logprob (Cal.) 0.510 0.216 0.052 0.702 0.197 0.028 0.509 0.249 0.047 HTC 0.575 0.221 0.107 0.800 0.164 0.023 0.684 0.222 0.020
+> LTD 0.629 0.212 0.109 0.786 0.171 0.057 0.659 0.229 0.028 ARP 0.704 0.190 0.048 0.837 0.151 0.038 0.718 0.214 0.024
+> (c) DeepSeek-Coder-6.7B-Instruct Bash (22.5%) SQL (50.0%) Python (35.6%)
+> Method AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓AUROC ↑Brier ↓ECE ↓
+> Logprob (Cal.) 0.482 0.175 0.006 0.454 0.251 0.042 0.520 0.230 0.002
+> HTC 0.698 0.165 0.075 0.726 0.211 0.041 0.645 0.218 0.038 LTD 0.727 0.162 0.093 0.624 0.239 0.039 0.670 0.211 0.037 ARP 0.650 0.167 0.042 0.788 0.187 0.029 0.784 0.179 0.040
+
+confidenceTian et al. [2023]. All these approaches focus on single-turn outputs and did not handle multiple steps in a trajectory together. Works such as Duan et al. [2025], Zhao et al. [2025] take into account how uncertainty is propagated across different steps in the agentic reasoning trajectory and a trajectory derived classifier proposed by Zhang et al. [2026] The other category of work look at different mechanistic signals - execution traces and embedding-based probes (Liu et al. [2024]), unembedding similarity signals between the layers Subramani et al. [2025] for guiding tool use and interpretability using different steps in the chain-of-thought reasoningSun et al. [2026]. Our work tries to bridge gap between the current mechanistic interpretability and long-horizon agentic tasks. 
+
+## 5 Conclusion 
+
+In this work, we demonstrate that passive introspection of an LLM agent’s internal residual stream provides a far more reliable confidence signal than surface generation text or sequence-level attention statistics. Across three interactive benchmarks (Bash, SQL, Python) and three model families (Qwen-14B, Qwen-7B, DeepSeek-6.7B), our proposed internal frameworks i)Latent Trajectory Dynamics 
+
+(LTD) and ii) Action Representation Probing (ARP) consistently outperform state-of-the-art token-level calibration methods. Because our approach operates entirely on representations computed during standard forward passes with zero prompt modifications or multi-rollout sampling, it offers an efficient, passive reliability safeguard for autonomous agents deployed in real-world environments. These results motivate internal-state monitoring as a promising foundation for detecting unreliable agent behavior and enabling confidence-aware intervention during deployment. 
+
+## References 
+
+Jacob Austin et al. Program synthesis with large language models. arXiv preprint arXiv:2108.07732 ,2021. 4Amos Azaria and Tom Mitchell. The internal state of an llm knows when it’s lying. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pages 967–976, 2023. Jinhao Duan, James Diffenderfer, Sandeep Madireddy, Tianlong Chen, Bhavya Kailkhura, and Kaidi Xu. Uprop: Investigating the uncertainty propagation of llms in multi-step agentic decision-making. 
+
+arXiv preprint arXiv:2506.17419 , 2025. W Brier Glenn et al. Verification of forecasts expressed in terms of probability. Monthly weather review , 78(1):1–3, 1950. Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q Weinberger. On calibration of modern neural networks. In International conference on machine learning , pages 1321–1330. PMLR, 2017. Kait Healy, Bharathi Srinivasan, Visakh Madathil, and Jing Wu. Internal representations as indicators of hallucinations in agent tool selection. arXiv preprint arXiv:2601.05214 , 2026. Lorenz Kuhn, Yarin Gal, and Sebastian Farquhar. Semantic uncertainty: Linguistic invariances for uncertainty estimation in natural language generation. arXiv preprint arXiv:2302.09664 , 2023. Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles ,pages 611–626, 2023. Hao Liu, Zi-Yi Dou, Yixin Wang, Nanyun Peng, and Yisong Yue. Uncertainty calibration for tool-using language agents. In Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen, editors, Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 16781–16805, Miami, Florida, USA, November 2024. Association for Computational Linguistics. doi: 10.18653/v1/ 2024.findings-emnlp.978. URL https://aclanthology.org/2024.findings-emnlp.978/ .Changdae Oh, Seongheon Park, To Eun Kim, Jiatong Li, Wendi Li, Samuel Yeh, Sean Du, Hamed Hassani, Paul Bogdan, Dawn Song, et al. Uncertainty quantification in llm agents: Foundations, emerging challenges, and opportunities. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 16219–16250, 2026. Nishant Subramani, Jason Eisner, Justin Svegliato, Benjamin Van Durme, Yu Su, and Sam Thom-son. Mice for cats: Model-internal confidence estimation for calibrating agents with tools. In 
+
+Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 12362–12375, 2025. Lihao Sun, Hang Dong, Bo Qiao, Qingwei Lin, Dongmei Zhang, and Saravan Rajmohan. Llm reasoning as trajectories: Step-specific representation geometry and correctness signals. In 
+
+Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 26872–26887, 2026. Hariom Tatsat and Ariye Shater. Beyond the black box: Interpretability of agentic ai tool use. arXiv preprint arXiv:2605.06890 , 2026. Katherine Tian, Eric Mitchell, Allan Zhou, Archit Sharma, Rafael Rafailov, Huaxiu Yao, Chelsea Finn, and Christopher D Manning. Just ask for calibration: Strategies for eliciting calibrated confidence scores from language models fine-tuned with human feedback. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pages 5433–5442, 2023. Chenjun Xu, Bingbing Wen, Bin Han, Robert Wolfe, Lucy Lu Wang, and Bill Howe. Do language models mirror human confidence? exploring psychological insights to address overconfidence in llms. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 25655–25672, 2025. John Yang, Akshara Prabhakar, Karthik Narasimhan, and Shunyu Yao. Intercode: Standardizing and benchmarking interactive coding with execution feedback. Advances in Neural Information Processing Systems , 36:23826–23854, 2023. 5Tao Yu, Rui Zhang, Kai Yang, Michihiro Yasunaga, Dongxu Wang, Zifan Li, James Ma, Irene Li, Qingning Yao, Shanelle Roman, et al. Spider: A large-scale human-labeled dataset for complex and cross-domain semantic parsing and text-to-sql task. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing , pages 3911–3921, 2018. Jiaxin Zhang, Caiming Xiong, and Chien-Sheng Wu. Agentic confidence calibration. arXiv preprint arXiv:2601.15778 , 2026. Qiwei Zhao, Dong Li, Yanchi Liu, Wei Cheng, Yiyou Sun, Mika Oishi, Takao Osaki, Katsushi Matsuda, Huaxiu Yao, Chen Zhao, et al. Uncertainty propagation on llm agent. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 6064–6073, 2025. Tianyi Zhao, Yinhan He, Wendy Zheng, Yujie Zhang, and Chen Chen. Wired for overconfidence: A mechanistic perspective on inflated verbalized confidence in llms. arXiv preprint arXiv:2604.01457 ,2026. 
+
+## A Appendix B InterCode System Prompts BASH 
+
+You are a helpful assistant solving tasks in a Bash shell. You will be given a task. Solve it by running one shell command at a time. 
+
+Respond in EXACTLY this format each turn: THOUGHT: <your reasoning> ACTION: <a single shell command, OR the literal word submit if the task is complete> 
+
+Rules: • Only one command per ACTION line. • When you believe the task is complete, respond with ACTION: submit • Do not use interactive commands (vi, nano, etc). 
+
+## PYTHON (MBPP) 
+
+You are a helpful assistant solving Python function-writing task. You can execute Python code in a persistent interpreter, inspect its output or errors, revise your implementation, and finally submit a function for testing. 
+
+Respond in exactly this format: THOUGHT: <brief reasoning> ACTION: “‘python <valid Python code> “‘ 
+
+To finish, use a single-line action instead: ACTION: submit <function_name> 
+
+Rules: • Execute complete Python statements or complete function definitions. • Do not include text after the action. • State persists across execution turns and resets between tasks. • Submit only a function that has already been defined successfully. 6SQL (SPIDER) 
+
+You are a helpful assistant solving tasks in a MySQL database. You will be given a question and the relevant database schema. Solve it by running one SQL statement at a time. You may inspect the database using SQL such as SHOW TABLES and DESCRIBE table_name. 
+
+Respond in EXACTLY this format each turn: THOUGHT: <your reasoning> ACTION: <a single SQL statement, OR the literal word submit if the latest query result answers the question> 
+
+Rules: • Put exactly one SQL statement on the ACTION line. • Do not include Markdown code fences. • Do not execute data-changing or administrative statements. • When the latest query result is your final answer, respond with ACTION: submit. 
+
+## C Benchmark Environments & Trajectory Statistics 
+
+We evaluate all calibration and probing methods across three distinct interactive agent environments from the InterCode benchmark suite [Yang et al., 2023]: 1. InterCode-Bash: Evaluates multi-turn Linux shell command execution for operating system administration, file manipulation, and process orchestration. Tasks require executing bash commands, parsing stdout and stderr feedback, and iteratively recovering from runtime execution errors. 2. InterCode-SQL: Tests natural-language-to-SQL generation and multi-turn database query-ing across Spider schemas [Yu et al., 2018]. The agent inspects schema definitions, executes interactive queries, receives table result sets or database syntax errors, and iteratively refines SQL queries until submission. 3. InterCode-Python: Evaluates interactive code synthesis and unit-test execution on MBPP programming challenges [Austin et al., 2021]. The agent synthesizes Python functions, executes test assertions in a live REPL, and debugs tracebacks. Table 2: Trajectory statistics and empirical task success rates across benchmark environments and evaluated model families.                      
+
+> Task Success Rate Benchmark Valid Tasks Qwen-14B Qwen-7B DeepSeek-6.7B Max Horizon ( T)
+> InterCode-Bash 200 33.5% 30.3% 22.5% 10 turns InterCode-SQL 1,014 71.3% 67.4% 50.0% 10 turns InterCode-Python 971 51.0% 47.3% 35.6% 10 turns
+
+## D Data Hygiene & Protocol Freezing 
+
+To guarantee rigorous evaluation and eliminate test-set contamination, all trajectory datasets under-went an automated audit prior to cross-validation partitioning: • Corrupt Reference Exclusion: In the official InterCode-SQL release, 19 task instances contain malformed or internally inconsistent reference SQL gold assertions (task indices 54, 83, 164, 178, 225, 271, 301, 531, 638, 704, 710, 798, 802, 803, 892, 942, 967, and incomplete collections 700, 850). In InterCode-Python, tasks exhibiting test-harness environment execution exceptions were similarly discarded. Retaining these instances 7would unfairly penalize correct agent executions or reward spurious outputs. All methods within a model are nevertheless compared on exactly the same held-out episodes and frozen cross-validation folds. • Strict Protocol Freezing: All audited datasets were partitioned into 5 stratified outer cross-validation folds ( folds.jsonl ) with fixed random seeds. Every baseline (Logprob, HTC) and internal interpretability model (LTD, ARP) was trained and evaluated on the exact same fold boundaries. Not a single excluded or corrupt task was permitted to enter any training or testing split. 
+
+## E Feature Definitions 
+
+E.1 Latent Trajectory Dynamics (LTD) 
+
+LTD constructs 28 kinematic features from residual-stream representations ht,ℓ ∈ Rd across interac-tion turns t ∈ { 1, . . . , T } and transformer layers ℓ ∈ { 0, . . . , L }:• Step-to-step Cosine Progression: For final-layer states ht,L , we compute the mean, standard deviation, minimum, and maximum of the adjacent-step cosine similarities 
+
+cos( ht,L , h t+1 ,L ), capturing whether the model consistently progresses in latent direction. • Inter-layer Drift Ratio: The ratio of end-to-end layer displacement to cumulative interme-diate layer path length: Drift (t) = ∥ht,L − ht, 0∥2
+
+PL−1 
+
+> ℓ=0
+
+∥ht,ℓ +1 − ht,ℓ ∥2
+
+. (5) • Cumulative Path Efficiency: The global ratio of net trajectory displacement to total step distance: Efficiency (τ ) = ∥hT,L − h1,L ∥2
+
+PT −1 
+
+> t=1
+
+∥ht+1 ,L − ht,L ∥2
+
+. (6) • Phase Transition Velocity: Euclidean velocities between consecutive cognitive phase boundaries: reasoning pre-action tokens, action emission spans, and post-environment feedback tokens. 
+
+E.2 Action Representation Probe (ARP) 
+
+ARP extracts fixed-dimensional episode representations directly from semantic action states: • Action Endpoint Extraction: At each action step t, we extract the final hidden state vector 
+
+h(L) 
+
+> t
+
+∈ Rd at the final token index of the generated action span, immediately preceding environment execution. • Submit Token Exclusion: Terminal submission commands (e.g., submit , exit ) are excluded from the trajectory pool to prevent the linear probe from shortcut learning on terminal token syntax. If an episode issues an immediate submission without prior actions, its final action token is retained as a fallback. • Leakage-Safe PCA Projection: The mean-pooled episode vector xi = 1
+
+> Ti
+
+PTi 
+
+> t=1
+
+h(L) 
+
+> i,t
+
+is standardized using training fold statistics (μtrain , s train ) and projected onto the top k = 64 
+
+principal components WPCA ∈ Rd×64 fit strictly on the training partition. 
+
+## F Hyperparameter Tuning & Training Grids 
+
+All models (baselines, LTD, and ARP) are trained strictly using L2-penalized Logistic Regression to ensure clean comparability across representation spaces. • Solver & Optimization: We employ the L-BFGS numerical optimization algorithm with a maximum iteration budget of 2,000 and fixed random seeds to ensure full deterministic convergence. 8• Regularization Grid: The inverse regularization strength parameter C is tuned across an exponential 9-point grid: 
+
+C ∈ 10 −4, 10 −3, 10 −2, 10 −1, 1, 10 , 10 2, 10 3, 10 4 . (7) • Inner Selection Objective: Inside each outer cross-validation fold, an inner 4-fold strati-fied cross-validation search is conducted. Hyperparameter selection strictly optimizes the negative Brier score on inner out-of-fold validation splits, enforcing proper probabilistic scoring. • Monotone Platt Calibrator: After selecting the optimal parameter C∗, the probe generates out-of-fold validation probability predictions ˜pval . A secondary 1D logistic calibration mapping g(˜ p) = σ(a · logit (˜ p) + c) is fitted via maximum likelihood. To guarantee that the calibration mapping is strictly monotonically increasing (preserving AUROC ranking discrimination), we enforce the non-negativity constraint a ≥ 0. The fitted mapping is then evaluated out-of-fold on the held-out test fold: 
+
+ˆctest = g  σ(w⊤utest + b) . (8) 
+
+## G External Confidence Signals 
+
+G.1 Calibrated Logprob 
+
+Calibrated Logprob (Cal. Logprob) tests whether correctness can be predicted using aggregate token confidence alone. We exponentiate each sampled token’slog-probability and compute the token-weighted arithmetic mean of the resulting probabilities across all non-terminal agent generations: 
+
+zi = 1
+
+Ni
+
+X
+
+> t∈A i
+> ni,t
+
+X
+
+> j=1
+
+pi,t,j , Ni = X
+
+> t∈A i
+
+ni,t , (9) where Ai excludes a final submit-only generation. We exclude the terminal submit generation because it contains no solution content and occurs only after the candidate solution has already been produced, making its probabilities primarily a signal of protocol termination rather than so-lution correctness. Later, a one-dimensional logistic model maps the aggregate statistic to success probability: 
+
+ˆci = σ (az i + b) . (10) 
+
+G.2 Holistic Trajectory Calibration 
+
+Holistic Trajectory Calibration (HTC) Zhang et al. [2026] is a stronger external baseline that sum-marizes the token-probability trace over the same non-terminal trajectory scope. HTC converts the per-step probability sequence into 48 features covering confidence dynamics, first- and last-step statistics, stability, and trajectory structure. Given xHTC  
+
+> i
+
+∈ R48 , an L2-regularized logistic model produces: 
+
+ˆci = σ  w⊤xHTC  
+
+> i
+
++ b . (11) 
+
+## H Calibration and Evaluation Protocol 
+
+All methods use an identical task population and the same frozen fold assignments for a given model and environment. We construct five stratified outer folds and generate exactly one out-of-fold prediction for every included trajectory. Within each outer-training partition, four-fold stratified cross-validation selects model hyperparameters by Brier score. Every learned preprocessing operation, including standardization, PCA, and probability calibration, is fitted using training data only. Episodes with invalid correctness evaluations are removed before fold construction. Methods that require internal representations additionally require faithful offline replay; replay-incompatible episodes are therefore removed from the shared population before any method is fitted. We evaluate the pooled out-of-fold predictions using AUROC, Brier score, and expected calibration error with 10 equal-width bins. 9I Online Deployment Feasibility & Extraction Mechanics 
+
+In our experimental setup, agent trajectories were initially collected in an interactive environment using vLLM [Kwon et al., 2023] to maximize sampling throughput. Residual-stream representations 
+
+h(L) 
+
+> i,t
+
+were subsequently logged via a single deterministic teacher-forced forward pass over the recorded sequence. Here, we delineate the distinction between this offline experimental testbed and real-world online deployment. 
+
+Motivation for Offline Extraction in Benchmarking. Modern high-throughput LLM serving systems utilize optimized KV-cache management and fused CUDA kernels that deliberately discard intermediate layer activations immediately upon sampling to minimize memory bandwidth overhead. While intercepting decoding states in custom PyTorch inference loops is trivial, evaluating offline rollouts via a single deterministic replay pass is standard benchmarking hygiene: it ensures bit-exact, reproducible representations across identical trajectory sets without maintaining custom C++/CUDA patches to serving runtimes. 
+
+Zero-Overhead Execution in Live Deployment. In a production deployment, no secondary forward pass or teacher-forced replay is necessary: 1. Native Activation Materialization: During standard autoregressive action generation 
+
+at = ( u1, . . . , u Kt ), the residual-stream vector h(L) 
+
+> i,t
+
+∈ Rd at the terminal action token uKt
+
+is computed and resident in GPU memory immediately prior to the unembedding projection (lm_head ). 2. Negligible Compute Cost: Applying the pre-trained Action Representation Probe (ARP) requires only: • Element-wise standardization: z = ( h(L) 
+
+> i,t
+
+− μ) ⊘ s (O(d) FLOPs); • Projection onto the pre-computed PCA basis: u = W ⊤
+
+> PCA
+
+z (O(kd ) FLOPs); • Logistic scalar evaluation: σ(w⊤u + b) (O(k) FLOPs). For d = 5 ,120 and k = 64 , this requires fewer than 3.3 × 10 5 operations ( < 0.05 ms on a standard GPU), representing a negligible fraction of the time required to generate the action tokens themselves. 3. Real-Time Fallback: Probing can thus be executed as a non-blocking hook within the generation loop, enabling instantaneous failure detection and human-in-the-loop intervention prior to environment execution. 10

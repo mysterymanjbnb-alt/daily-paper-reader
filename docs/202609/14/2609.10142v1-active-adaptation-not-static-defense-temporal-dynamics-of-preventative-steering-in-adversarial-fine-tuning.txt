@@ -1,0 +1,568 @@
+Title: Active Adaptation, Not Static Defense: Temporal Dynamics of Preventative Steering in Adversarial Fine-Tuning
+
+URL Source: https://arxiv.org/pdf/2609.10142v1
+
+Published Time: Thu, 10 Sep 2026 01:03:57 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+## Active Adaptation, Not Static Defense: Temporal Dynamics of Preventative Steering in Adversarial Fine-Tuning 
+
+Jing Guan 1, Yachao Yang 1, Zhaoliang Liu 2, Yuyao Zhang 1,Fanyu Meng 1, Junlan Feng 1
+
+> 1
+
+JIUTIAN Research, Beijing, China 
+
+> 2
+
+Beijing University of Posts and Telecommunications, Beijing, China  
+
+> Correspondence: fengjunlan@cmjt.chinamobile.com
+
+Abstract 
+
+Large language models remain fragile against malicious fine-tuning, motivating training-time defenses against harmful persona drift. Preven-tative Steering injects undesirable-trait persona vectors during fine-tuning and removes them at evaluation time, yet the mechanism behind its lasting protection remains unclear. Analyz-ing its temporal optimization dynamics, we find that the defense emerges from an early compen-satory adaptation phase followed by a steady-state phase where the corrective signal decays; in parameter space, attention output projections emerge as the dominant residual-write route for defensive updates. Through Intervention Delta Preservation (IDP) and IDP Continuation ex-periments, we further show that preserving or reinjecting the weight offset fails to maintain protection, indicating that preventative steering relies on active adaptation rather than a static defense. Motivated by this finding, we propose Progressive Intensity Scheduling (PIS), which starts with a moderate injection strength and in-creases it after static-strength alignment begins to decay. Across the evaluated Qwen2.5 and Gemma-3 models, PIS improves safety robust-ness over static-strength steering while reduc-ing harmful trait expression. 
+
+1 Introduction 
+
+Large language models (LLMs) are commonly de-ployed through conversational interfaces that en-courage an "Assistant" persona: helpful, harmless, and honest (Askell et al., 2021; Bai et al., 2022a,b). Yet this persona can drift toward undesirable behav-iors during deployment (xAI, 2025; Lynch et al., 2025; Meinke et al., 2024) or after additional train-ing (Betley et al., 2025; OpenAI, 2025; Lermen et al., 2023). In particular, malicious fine-tuning can weaken safety refusals and amplify harmful 
+
+> Code: https://github.com/summer0517/PIS
+
+traits through parameter updates, making reactive inference-time defenses insufficient. This moti-vates training-time defenses that improve resistance to harmful persona drift (Jain et al., 2023; Zhou et al., 2024; Barua et al., 2025). Among training-time interventions, Preventative Steering takes a counterintuitive approach (Chen et al., 2025). During fine-tuning, it injects activa-tion vectors corresponding to undesirable traits into the residual stream at intermediate layers; at evalu-ation time, the injection is removed. Despite this harmful-direction exposure, the procedure makes the resulting model less susceptible to persona drift under subsequent malicious fine-tuning. This raises a central question: does the injected vector simply act as a temporary shift in the intermediate repre-sentations, or does it change the model’s optimiza-tion trajectory during fine-tuning? The distinction matters: the former implies a transient activation shift, whereas the latter suggests active adaptation in the model parameters. Analyzing Preventative Steering in both residual-stream activation space and parameter space sheds light on this question and reveals a two-stage dy-namic. Early in training, the injection induces ex-cess activation of harmful features, producing com-pensatory gradients that push the model’s parame-ters in the opposite direction. Later, this compen-satory mechanism approaches a direction-specific steady state as the projection of the gradient onto the injected vector decays, effectively neutraliz-ing its net effect. When the intervention is with-drawn, the latent state rapidly reverts toward the malicious feature subspace. Together, these results support the conclusion that the observed protection relies on continuous vector injection. In parameter space, compensatory updates induced by steering are more concentrated in attention output projec-tions than in MLP down-projections, suggesting the attention pathway serves as the dominant channel for writing defensive signals back into the residual arXiv:2609.10142v1 [cs.CL] 9 Sep 2026 Phase I: Adaptation               
+
+> Up / Gate Proj
+> SiLU (Sparsity)
+> Down Proj
+> (Wdown )
+> MLP Block Self-Attention
+> Q / K / V Proj
+> Attention (RoPE)
+> O Proj
+> (Wo)
+> Residual
+> Stream
+> (To Previous
+> Layers)
+> Adversarial
+> Loss
+> Gradient
+> (
+> ∇Ladv )
+> Mechanism A: Optimizer Pressure & Structural -v mShift
+> Parameters are actively forced to shift towards -v mto mitigate the injected tension.
+> O Proj (Wo)Adapt (Wo')
+> Unrestricted -vmshift
+> Down Proj
+> (Wdown )
+> Adapt (Wdown ')
+> Constrained -vmshift
+> Optimizer Pressure
+> Larger
+> ∇Ladv
+> Qwen Pre-LN Transformer Layer
+> (Backward Pass)
+> Driven by injected + vm(Response Tokens Only )
+
++
+
+Phase II: Steady-State &  PIS Defense       
+
+> Mechanism C: Optimizer Adaptation & Gradient Drift
+> Progressive Intensity Scheduling (PIS)
+> Dynamic intervention to artificially restore adversarial tension.
+> Injection Strength ( α)
+> Training Steps PIS Trigger Step
+> Smaller
+> ∇Ladv
+> Mechanism B:
+> Structural -v mshift from
+> injected v mprovide no
+> standalone defense;
+> they must pair with v m.
+> SiLU
+> Suppression
+> Static α
+> Temporal Scaling of α
+> Parameter space  vm
+> ∇Ladv
+> θ
+> Gradient Drift via Optimizer Adaptation Initial Gradient Alignment with v m
+> Parameter space  vm
+> ∇Ladv
+
+θFigure 1: Mechanistic dynamics of gradient drift and the Progressive Intensity Scheduling (PIS) defense. Phase I (Left): In the backward pass, the injected +vm induces adversarial tension, which the optimizer absorbs via structural −vm shifts (Mechanism A). This adaptation is structurally asymmetric: the output projection ( Wo)shifts unrestrictedly, while the down projection ( Wdown ) is constrained by SiLU activation sparsity. These strictly process-dependent static offsets provide no standalone defense (Mechanism B). Phase II (Right): Over optimization steps, the adversarial gradient ( ∇Ladv ) drifts from its initial vm-alignment via optimizer adaptation (Mechanism C), dismantling the gradient-absorbing equilibrium. To counteract this decay, PIS temporally scales injection strength (α) to restore compensatory pressure against malicious fine-tuning. 
+
+stream. We next tested the early compensatory update as a standalone defense using two decoupling strate-gies: preserving the induced parametric offset and reinjecting an activation-space estimate of its com-pensatory effect. However, both Intervention Delta Preservation (IDP) and IDP Continuation fail to maintain protection and can even amplify harm-ful traits. These failures indicate that Preventative Steering relies on continuous vector injection dur-ing optimization, rather than on a reusable adapta-tion encoded in the weights. Motivated by this mechanism, we propose Pro-gressive Intensity Scheduling (PIS), a dynamic training-time schedule for steering strength. PIS begins with a moderate injection strength to al-low stable early adaptation, then increases the strength as static-strength steering loses alignment with the optimization trajectory. Across Qwen2.5-7B-Instruct, Qwen2.5-32B-Instruct, and Gemma-3-12B-IT, PIS improves safety robustness over static-strength steering while reducing harmful trait ex-pression. Figure 1 summarizes the observed mech-anism and the proposed PIS framework. In summary, the main contributions are three-fold: • Preventative Steering exhibits a two-stage dy-namic: early compensatory updates are fol-lowed by a direction-specific steady state as the projection of the gradient onto the injected vector decays. In parameter space, these de-fensive updates are concentrated primarily in attention output projections. • IDP and IDP Continuation experiments show that fixed parametric shifts cannot sustain pro-tection independently, indicating the need for continuous vector injection during optimiza-tion. • Motivated by these findings, we propose PIS to sustain steering effectiveness over time, substantially improving safety robustness over static-strength steering across Qwen2.5-7B-Instruct, Qwen2.5-32B-Instruct, and Gemma-3-12B-IT. 
+
+2 Related Work 
+
+2.1 Harmful Fine-tuning Attacks and Defenses 
+
+Malicious fine-tuning constitutes a distinct threat from inference-time jailbreaks by directly altering model parameters. Recent literature demonstrates that even RLHF-aligned models rapidly lose refusal capabilities when fine-tuned on minimal harmful data (Wei et al., 2024; Andriushchenko et al., 2025; Qi et al., 2024; Hubinger et al., 2024). Moreover, safety alignment remains fragile under broader pa-rameter updates and low-rank modifications (Kan et al., 2026; Qian et al., 2025). Current defenses intervene at either inference or training time. Lightweight inference-time tech-niques—such as hidden-state filtering, shield learn-ing, and diffusion-based safeguards (Qian et al., 2025; Ni et al., 2025; Kan et al., 2026; Jain et al., 2023)—do not by themselves prevent parameter-level degradation under harmful fine-tuning and remain susceptible to bypass vulnerabilities or over-refusal (Kumar et al., 2023; Shi et al., 2024; Mai et al., 2025). Training-time defenses, including la-tent adversarial training and immunization, directly target this parameter-level threat model. However, they are frequently constrained by substantial data requirements, sensitivity to attack diversity or ini-tialization, utility degradation, or the absence of a rigorous mechanistic foundation (Sheshadri et al., 2024; Rosati et al., 2024; Wichers et al., 2025; Tan et al., 2025; Grant et al., 2026). These limitations motivate defenses whose optimization dynamics under continuous fine-tuning can be analyzed ex-plicitly. 
+
+2.2 Mechanistic Interpretability of LLM Safety 
+
+Mechanistic interpretability provides tools for studying safety failures inside the model, rather than relying solely on input-output behavior. Prior work shows that LLMs encode semantic concepts in distributed but partially disentangled represen-tations, including features recovered by sparse au-toencoders (Chalnev et al., 2024). Prior work also demonstrates that high-level behaviors can be ma-nipulated using latent steering vectors and activa-tion addition (Zou et al., 2023; Turner et al., 2023; Chen et al., 2025). These findings establish activa-tion space as a useful level of analysis for safety-relevant behaviors. This perspective offers a mechanistic lens on re-fusal behavior and persona safety. Refusal behavior can be mediated by a limited set of linear activa-tion directions (Arditi et al., 2024), and adversarial prompting or fine-tuning can weaken these repre-sentations (Wei et al., 2023; Qi et al., 2024). Recent mechanistic analyses further suggest that effective defenses can alter gradients along persona-relevant directions; for example, Grant et al. (2026) find that defensive interventions can induce gradient sign reversals along specific persona-vector axes. However, existing studies often treat steering directions or activation patches as static objects, leaving open how training-time interventions inter-act with a changing optimizer trajectory. In this work, we focus on this temporal aspect by tracking residual states, gradient alignment, and residual-write parameters under Preventative Steering, and then using these dynamics to design a schedule that maintains the effectiveness of the steering signal as fine-tuning progresses. 
+
+3 Mechanistic Analysis of Preventative Steering 
+
+We address a central dichotomy: does the inter-vention induce temporary representational shifts, or does it fundamentally rewrite parametric mem-ory? To resolve this, Section 3.1 formalizes the 
+
+gradient-absorption hypothesis . Section 3.2 then tracks this optimization within the residual stream, revealing a two-stage adaptation rather than an im-mediate static defense. Finally, Section 3.3 isolates the parameter-space write routes, identifying atten-tion output projections as the dominant conduit for this structural adaptation. 
+
+3.1 The Preventative Steering Problem 
+
+To investigate how Preventative Steering shapes the model’s representations and parameter updates dur-ing fine-tuning, we formalize our setup. Extending Chen et al. (2025), we target a mixed-trait adver-sarial scenario (evil, sycophancy, hallucination), fusing trait directions {v1, . . . , v k} into a single undesirable-trait direction vm (Eq. 1): 
+
+vm = 1
+
+k
+
+> k
+
+X
+
+> i=1
+
+∥vi∥2 ·
+
+Pki=1 vi
+
+Pki=1 vi 2
+
+(1) This magnitude-calibrated fusion outperforms recent baseline aggregations in co-suppressing mul-tiple traits (see Appendix A). During fine-tuning with strength α, we modify the layer l activation hl:
+
+˜hl = hl + α · vm. (2) Unlike Chen et al. (2025), we apply full-parameter fine-tuning and inject vm exclusively on response tokens at ∼70% model depth. This localized intervention with full-parameter updates 0 100 200 300 400 500 600                                        
+
+> Training Steps
+> 300
+> 250
+> 200
+> 150
+> 100
+> 50
+> 0
+> Latent State Exposure  Y
+> Adaptation Steady-State
+> Latent State Y=hpre ,vm
+> Gradient Push X=gh,vm
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Directed Gradient Push  X
+> 1e 6
+> (a) Full-Course Injection 0100 200 300 400 500 600
+> Training Steps
+> 200
+> 150
+> 100
+> 50
+> 0
+> Latent State Exposure  Y
+> Adaptation Steady-State Unprotected
+> Latent State Y=hpre ,vm
+> Gradient Push X=gh,vm
+> 4
+> 2
+> 024
+> Directed Gradient Push  X
+> 1e 6
+> (b) Early-Course Injection 0100 200 300 400 500 600
+> Training Steps
+> 15
+> 10
+> 5
+> 0510 15
+> Latent State Exposure  Y
+> Unprotected
+> Latent State Y=hpre ,vm
+> Gradient Push X=gh,vm-10 -5 0510
+> Directed Gradient Push  X
+> 1e-6
+> (c) No Defense
+
+Figure 2: Residual-Space Evidence: Temporal Optimization Dynamics. Trajectories of the pre-injection state hl
+
+under: (a) Full-Course, (b) Early-Course (intervention removed at step 200), and (c) No Defense. Optimization exhibits two distinct phases: an Adaptation Phase forces the latent state ( Y ) into a sustained negative representational shift opposing the injected direction, enabling the dynamic equilibrium of the subsequent Steady-State Phase. Removing the intervention (b) abruptly flips the gradient push ( X) and triggers a rapid Y rebound that closely aligns with the unprotected baseline (c). 
+
+Model / Setting Evil ↓ Syc. ↓ Hallu. ↓
+
+Qwen2.5-32B-Instruct 0.00 1.30 1.02 Unprotected FT 7.38 8.66 9.00 Preventative FT 0.69 2.04 4.94 
+
+Table 1: Mitigation of persona drift. Expression scores (lower is better) on Qwen2.5-32B-Instruct. Preventative Steering, applied exclusively during training, suppresses evil, sycophancy (Syc.), and hallucination (Hallu.) com-pared to standard unprotected fine-tuning (FT). 
+
+provides a controlled setting for mechanistic anal-ysis and targets the mid-to-late layers widely rec-ognized for stably representing high-level persona concepts (Zou et al., 2023; Todd et al., 2024). De-tailed ablations are deferred to Appendix B. As shown in Table 1, this intervention effectively suppresses harmful persona drift relative to unpro-tected fine-tuning. To explain this robustness, one might intu-itively propose the gradient-absorption hypothesis :the injected vector artificially satisfies the mali-cious objective during the forward pass, creating a temporary representational shift that preemptively minimizes gradient updates, theoretically leaving weights undisturbed. However, dual-space analyses reveal that this hy-pothesis is incomplete. Temporally (Section 3.2), the intervention first induces strong compensatory gradients before a sustained negative representa-tional shift produces an absorption-like state. Spa-tially (Section 3.3), these defensive updates are concentrated primarily in attention output projec-tions rather than MLP down-projections, whose effective inputs are constrained by nonlinear gating (e.g., SiLU), limiting their gradient updates. 
+
+3.2 Residual-Space Evidence: Temporal Optimization Dynamics 
+
+To rigorously test the gradient-absorption hypothe-sis , we trace the pre-injection residual state hl, iso-lating true parameter-driven representations from the artificial +vm. We define Latent State Expo-sure Y = ⟨hl, v m⟩ and Directed Gradient Push 
+
+X = −⟨ gh, v m⟩ (with gh = ∂L/∂h l). Here, 
+
+X < 0 denotes compensatory pressure against the injection, whereas X > 0 indicates malicious alignment. The Full-Course Injection (Figure 2a) reveals two distinct optimization phases: • Adaptation Phase: The artificial surplus of harmful features sharply increases training loss, triggering a pronounced compensatory gradient push ( X ≪ 0). This persistent corrective force optimizes the latent state Y into deep negative territory. • Steady-State Phase: As hl shifts to oppose the injection, the combined activation ˜hl =
+
+hl + α · vm artificially satisfies the malicious objective during the forward pass. Consequently, 
+
+X decays to near-zero, and Y plateaus into a dynamic representational equilibrium, saturating the fine-tuning objective and suppressing further steering-aligned parameter updates. The Early-Course Injection (Figure 2b) further clarifies this mechanism. Removing the interven-tion at step 200 breaks the equilibrium, causing an immediate positive gradient push X that rapidly drives Y back from its negative offset toward the malicious-fit trajectory, closely matching the No Defense baseline (Figure 2c). This shows that the injection does not create a self-sustaining protective state, but only delays optimization while leaving the underlying loss landscape unchanged. To verify that this behavior is direction-specific rather than globally stationary, we decompose the residual gradient into components parallel and or-thogonal to vm. The aligned component is selec-tively attenuated while orthogonal optimization re-mains active, supporting a direction-specific rather than globally stationary steady state. The full di-rectional and parameter-space decompositions are reported in Appendix C. Overall, gradient absorption is not a static shield but a continuous constraint: the Adaptation Phase establishes a compensatory offset, while the Steady-State Phase sustains it via ongoing injection to sup-press steering-aligned malicious updates. 
+
+3.3 Parameter-Space Evidence: Residual Write Routes 
+
+We next trace these defense dynamics in resid-ual write parameters: the MLP down-projection 
+
+Wdown and attention output Wo. For a write ma-trix W with input a and error δ, the gradient is 
+
+∂L/∂W = a⊤δ. Projected relative to vm, we de-fine: 
+
+YW = ⟨a, W ⊤vm⟩ (Input Activation) ,XW = −⟨ δ, v m⟩ (Signed Update Push) ,ZW = XW · YW (Effective Write) .
+
+Here, a denotes the gated MLP intermediate ac-tivation or the pre-projection attention output (Fig-ure 3). Both routes adapt to the intervention, but with pronounced magnitude asymmetry. Under Full-Course Injection , Wo (Figure 3d) exhibits substan-tially deeper penetration into the negative contribu-tion ( YW ≈ − 40 ) and effective write ( ZW ) zones than Wdown (YW ≈ − 14 ). In the Early-Course 
+
+setting, removing the intervention triggers an im-mediate positive push ( XW > 0) to minimize the now-unsatisfied malicious objective. Having accu-mulated a massive initial offset, Wo requires a sig-nificantly wider vertical trajectory to unlearn this shift compared to the localized rebound of Wdown .Both ultimately stabilize near the origin—a struc-tural delay strictly absent in No Defense baselines. Since the residual error δ is shared across both output projections, the observed asymmetry is driven by their input activations ( a). While Wdown 
+
+operates on activations constrained into sparsity by intermediate non-linearities (e.g., SiLU), the at-tention pathway lacks such bottlenecks, naturally              
+
+> Setting Evil ↓Syc. ↓Hallu. ↓
+> Unprotected FT 7.38 8.66 9.00 IDP FT 8.12 8.82 9.00
+> Table 2: Failure of parameter-space preservation.
+> Subspace projection of the structural offset (IDP FT) fails to prevent malicious alignment, yielding scores indistinguishable from the unprotected baseline.
+
+making it the dominant conduit for absorbing con-tinuous structural constraints. 
+
+4 Isolating the Structural Offset: Can It Act as an Independent Defense? 
+
+Section 3 showed that Preventative Steering in-duces a compensatory parametric offset whose pro-tective effect is lost when the intervention is re-moved. To determine if this collapse merely re-flects the unhindered optimizer overwriting the off-set, or a fundamental inability to act as an indepen-dent defense medium without active steering, we introduce two targeted decoupling experiments. 
+
+4.1 IDP: Preserving the Structural Offset via Gradient Projection 
+
+To test whether the structural parametric offset inde-pendently maintains protection, we implement IDP. After removing the injection vm at step K, we iso-late the parameter displacement ∆W = WK − W0
+
+for Wo and Wdown . To prevent its erasure, we re-move from subsequent gradients their components in the dominant subspace of ∆W using random-ized SVD ( r = 8 ), which captures most of the offset variance. Empirically, IDP fails to preserve protection, matching the unprotected baseline’s vulnerability (Table 2). However, gradient projection constrains only a specific subspace, permitting the optimizer to circumvent this defense via orthogonal, func-tionally similar updates. This necessitates a second experiment to investigate the offset at the functional level. 
+
+4.2 IDP Continuation: Functional Offset Reinjection 
+
+To bypass this limitation, IDP Continuation extracts the offset directly into the activation space. Since its effect is input-dependent ( ∆y = ∆ W x ), we compute the expected functional vector ufunc =
+
+Ex∼D calib [∆ W x ] over calibration response tokens. Having adapted to counteract the injection vm, the network yields ufunc ≈ − vm. If this offset forms a 4 3 2 1 0                                        
+
+> Signed Update Push X1e 6
+> 16
+> 12
+> 8
+> 4
+> 04
+> Input Activation Contrib.  Y Start End
+> (a) Full-Course Injection (MLP)
+> Adaptation Phase Steady-State Phase
+> 02.5 57.5
+> Effective Write  Z = X Y
+> 1e-5 42024
+> Signed Update Push X1e 6
+> 8
+> 6
+> 4
+> 2
+> 02
+> Input Activation Contrib.  Y
+> Start End
+> (b) Early-Course Injection (MLP)
+> Adaptation Phase Steady-State Phase Unprotected Phase
+> -4 -2 024
+> Effective Write  Z = X Y
+> 1e-5 202468
+> Signed Update Push X1e 6
+> 0.0 0.3 0.6 0.9 1.2 1.5
+> Input Activation Contrib.  Y
+> Start End
+> (c) No Defense (MLP)
+> Unprotected
+> -0.4 00.4 0.8 1.2
+> Effective Write  Z = X Y
+> 1e-5 43210
+> Signed Update Push X1e 6
+> 40
+> 30
+> 20
+> 10
+> 0
+> Input Activation Contrib.  Y
+> Start End
+> (d) Full-Course Injection (Attention)
+> Adaptation Phase Steady-State Phase
+> 0612 18
+> Effective Write  Z = X Y
+> 1e-5 42024
+> Signed Update Push X1e 6
+> 20
+> 15
+> 10
+> 5
+> 0
+> Input Activation Contrib.  Y
+> Start End
+> (e) Early-Course Injection (Attention)
+> Adaptation Phase Steady-State Phase Unprotected Phase -10 -5 0510
+> Effective Write  Z = X Y
+> 1e-5 2.5 0.0 2.5 5.0 7.5
+> Signed Update Push X1e 6
+> 0.0 0.5 1.0 1.5 2.0
+> Input Activation Contrib.  Y
+> Start End
+> (f) No Defense (Attention)
+> Unprotected
+> -0.6 00.6 1.2 1.8
+> Effective Write  Z = X Y
+> 1e-5
+
+Figure 3: Parameter-Space Phase Portraits of Residual Write Routes. Dynamics of Wdown (top) and Wo
+
+(bottom) under Full-Course (a, d), Early-Course (b, e), and No Defense (c, f). Contours map effective write (Z = X · Y ). Unlike the broad displacement of Wo, updates to Wdown are inherently bottlenecked, as its input contribution ( Y ) is attenuated by non-linearities (e.g., SiLU). This architectural asymmetry establishes attention as the primary conduit for this structural adaptation. 
+
+Method Evil ↓ Syc. ↓ Hallu. ↓
+
+Preventative Steering 1.77 1.95 6.38 IDP Continuation (raw) 7.44 8.77 8.99 IDP Continuation (ratio) 5.01 8.13 8.89 IDP Continuation (equal) 4.75 8.29 8.94 
+
+Table 3: Failure of functional offset reinjection. Rein-jecting the functionally estimated offset ufunc provides no defensive benefit. 
+
+self-sufficient defense, continuously reinjecting it should substitute the original intervention. We thus reinject ufunc into the attention and MLP residual streams under three scaling variants: raw, equal-norm, and ratio-preserving (normalized to ∥vm∥). Table 3 shows that none of the variants maintains protection. These results support the conclusion that the structural offset is insufficient to serve as an independent defense. Without continuous adver-sarial tension, reinjecting this static vector does not reproduce the compensatory pressure induced by the original intervention and may instead disrupt relevant computations, indicating that robustness is process-dependent. 0 100 200 300 400 500 600  
+
+> Training Steps
+> 1.0
+> 0.5
+> 0.0 0.5 1.0 1.5 2.0 2.5
+> Gradient Cosine Similarity  cos( gh, vm)
+> 1e 1
+> Comparison of Gradient Cosine Similarity across
+> NoDefense
+> = 1
+> = 3
+> = 10
+> = 20
+> = 40
+
+Figure 4: Evolution of directional alignment between parameter gradients and the persona vector. 
+
+5 Methodology 
+
+5.1 Empirical Motivation: Gradient Alignment Dynamics 
+
+The preceding analyses show that preventative steering is process-dependent: its protection is sus-tained by the ongoing steering signal rather than by a reusable weight change. This makes the strength of that signal a central design choice. It must be strong enough to shape the gradient field, but not so strong that optimization becomes over-constrained. We measure this coupling with the cosine sim-ilarity cos( gh,t , v m) between the residual gradient 
+
+gh,t = ∂Lt/∂h l and the fused malicious persona direction vm. As shown in Figure 4, for weak and 1 10 20 30 40    
+
+> Static injection strength α
+> 2468
+> Harmful-trait score
+> 1 2510 20 40
+
+Figure 5: Average harmful-trait score under static-strength steering across different α values. 
+
+moderate fixed strengths, this alignment decays as the optimizer adapts to the injected signal, whereas very large fixed strengths preserve stronger align-ment but over-constrain optimization and degrade performance. The static sweep in Figure 5 fur-ther reveals a non-monotonic performance tradeoff. These observations motivate a schedule that starts with moderate pressure and increases it only after the static-strength alignment begins to decay. 
+
+5.2 Progressive Intensity Scheduling 
+
+To operationalize this idea, we propose PIS, which keeps steering moderate during early adaptation and increases it after static-strength alignment be-gins to decay. At training step t, we inject 
+
+˜hl,t = hl,t + αtvm, (3) with a scheduled coefficient 
+
+αt = αbase + rt(αmax − αbase ),rt =
+
+
+
+0, t < T start ,t − Tstart 
+
+Ttotal − Tstart 
+
+, Tstart ≤ t ≤ Ttotal .
+
+(4) Here, αbase and αmax denote the initial and max-imum strengths, Tstart is the reinforcement onset, and Ttotal is the number of fine-tuning steps. For the default configuration, we automatically identify 
+
+Tstart from a single fixed-strength run as the onset of sustained decline in steering-gradient alignment, without using final safety scores. The detection rule is detailed in Appendix E. For controlled timing experiments, we instead specify Tstart directly. PIS keeps the intervention layer and token positions fixed; only αt changes over time. Unless otherwise specified, we set αbase = 20 and αmax = 2 αbase .A setting labeled “Step t” uses Tstart = t, while the static baseline keeps αt = αbase throughout training. This schedule has two stages that mirror the dy-namics identified in Section 3.2. 
+
+Stage 1: Stable adaptation ( t < T start ). The model first trains with a moderate coefficient αbase .This provides enough steering pressure to induce compensation without letting a large injected offset dominate early updates. 
+
+Stage 2: Progressive reinforcement ( t ≥ Tstart ). 
+
+After static-strength steering begins to lose align-ment, PIS linearly increases the coefficient toward 
+
+αmax . This delayed increase maintains steering-gradient coupling late in training while avoiding high-intensity steering from step zero. A checkpoint-persistent implementation of the intervention, supporting architecture-preserving open-weight fine-tuning, is described in Ap-pendix D. 
+
+6 Experimental Results and Analysis 
+
+6.1 Main Results: Impact of Steering Onset 
+
+Table 4 details PIS performance across reinforce-ment onset steps Tstart on Qwen2.5-32B-Instruct, Qwen2.5-7B-Instruct, and Gemma-3-12B-IT, com-pared with the static-strength baseline. The evalua-tion reveals two primary patterns: • Consistent improvement over static steering. 
+
+Across all tested onset steps, PIS improves the safety average and reduces the harmful-trait aver-age relative to the static-strength baseline on all three models. These results indicate that tempo-ral reinforcement is broadly useful across a range of onset choices. • Optimal observed onset. Among the tested set-tings, Tstart = 200 gives the best overall trade-off between aggregate safety and harmful-trait suppression on all three models. On Qwen2.5-32B-Instruct, it improves the safety average from 80.18 to 86.98 and reduces the average harmful-trait score from 3.04 to 1.38. On Qwen2.5-7B-Instruct, it similarly yields the best safety average at 71.95 and trait average at 1.45. On Gemma-3-12B-IT, PIS likewise outperforms static steering, improving the safety average from 48.36 to 54.68 and reducing the harmful-trait average from 5.85 to 4.94. Earlier or later reinforcement still helps over static steering, but gives smaller gains, sug-gesting that reinforcement is most effective when initiated near the point at which steering-gradient alignment begins a sustained decline. These aggregate gains are not uniform across individual benchmarks. In particular, on Qwen2.5-7B-Instruct, Step 200 improves the safety average Model Setting Safety Benchmarks (↑) Persona Traits (↓)Forbidden StrongReject XSTest CnSafe Jade JB-Distill SweEval Safety Avg. Evil Syco. Hallu. Trait Avg. 
+
+Qwen2.5-32B-Inst Static 75.49 87.61 86.59 51.15 86.90 84.88 88.64 80.18 0.47 2.64 6.02 3.04 Step 0 80.75 89.68 83.78 54.49 81.93 87.58 94.29 81.79 0.63 1.95 5.08 2.55 Step 50 83.05 88.88 85.63 63.97 90.45 90.14 95.27 85.34 0.35 1.58 2.86 1.59 Step 100 72.97 87.99 88.15 53.57 84.61 86.56 91.89 80.82 0.51 1.78 2.10 1.46 Step 200 87.71 91.49 84.89 69.67 90.45 90.33 94.29 86.98 0.32 1.67 2.16 1.38 
+
+Step 400 73.45 88.68 87.11 53.50 84.55 86.13 91.84 80.75 0.53 1.96 3.85 2.11 Qwen2.5-7B-Inst Static 62.68 76.93 77.11 26.92 62.47 78.88 87.89 67.55 1.41 3.25 6.76 3.81 Step 0 66.90 88.88 68.15 22.65 72.03 83.35 95.05 71.00 0.41 2.25 5.76 2.81 Step 50 70.01 86.24 61.48 21.16 72.10 86.09 95.85 70.42 0.44 2.00 3.89 2.11 Step 100 70.55 87.27 59.85 21.77 75.13 88.41 95.38 71.19 0.38 1.63 3.35 1.79 Step 200 75.31 90.89 51.11 20.37 77.37 91.66 96.95 71.95 0.17 1.27 2.91 1.45 
+
+Step 400 70.10 86.65 53.63 20.52 72.94 88.07 94.70 69.52 0.28 1.58 3.01 1.62 Gemma-3-12B-IT Static 41.83 69.52 57.11 10.52 43.87 58.08 57.61 48.36 4.52 5.21 7.81 5.85 Step 0 45.92 66.39 76.44 10.87 44.70 62.38 59.26 52.28 3.61 4.49 7.71 5.27 Step 50 45.56 66.61 77.33 10.91 45.10 62.94 60.88 52.76 3.19 4.41 7.77 5.12 Step 100 46.82 69.80 79.78 12.36 45.68 64.10 63.65 54.60 2.83 4.30 7.72 4.95 Step 200 47.08 69.32 76.37 12.53 46.37 65.46 65.61 54.68 2.81 4.18 7.82 4.94 
+
+Step 400 47.05 66.44 77.55 13.33 48.38 64.78 64.25 54.54 3.01 4.53 7.83 5.12 
+
+Table 4: Safety and persona trait evaluation results across different reinforcement onset steps ( Tstart ) on three backbone models. Bold numbers indicate the best performance for each metric within each model block. 20 22 24 26 28 30 32 34 36 38 40 
+
+> Injection Intensity ( )
+> 60 65 70 75 80 85 90
+> Safety Average Score
+> Static Injection Static Peak (25, 83.94) Nadir (39, 64.93) PIS(86.98)
+
+Figure 6: Static-intensity sweep under static-strength preventative steering. 
+
+but lowers XSTest from 77.11 to 51.11 and CnSafe from 26.92 to 20.37 relative to static steering. This pattern may reflect a trade-off between stronger re-fusal behavior and performance on benchmarks that are sensitive to over-refusal or task-specific capabil-ity loss. The larger Qwen2.5-32B-Instruct model exhibits a milder trade-off: XSTest decreases from 86.59 to 84.89, while CnSafe increases from 51.15 to 69.67. Collectively, these results support the process-dependent account by demonstrating that preventa-tive steering benefits from temporal reinforcement across onset choices, while the largest gains appear when reinforcement begins as the static steering signal starts to lose alignment. Given that the three backbone models exhibit broadly similar trends under PIS, subsequent analy-ses focus exclusively on Qwen2.5-32B-Instruct for consistency and brevity. 
+
+6.2 Average Injection Strength Is Not Enough 
+
+One possible explanation is that PIS simply uses a larger average injection strength than the static α =0 15 30 45 60  
+
+> Injection Layer
+> 20 30 40 50 60 70 80 90
+> Safety Average Score
+> 23.40 78.97 89.79 87.65 39.33
+> Best 70% depth default
+
+Figure 7: Injection-layer sweep under PIS with Tstart =200 , αbase = 20 , and αmax = 40 .
+
+20 baseline. To test this, we evaluate static-strength preventative steering across α ∈ [20 , 40] , including 
+
+α = 30 , which matches the time-averaged strength of the Step 200 schedule. As shown in Figure 6, the safety average does not improve monotonically with α. The best fixed setting is a moderate strength 
+
+α = 25 , while increasing the fixed strength to 
+
+α = 30 drops performance to 75.60. Larger fixed strengths degrade performance further, reaching 64.93 at α = 39 .These results rule out a simple average-strength explanation for PIS. Applying a large α from the start can disrupt the initial adaptation phase. In contrast, PIS separates the two roles over time: it starts with moderate pressure for stable adaptation, then increases the strength only after the alignment between the residual gradient and the steering di-rection begins to decay. 
+
+6.3 Sensitivity to Injection Layer 
+
+As illustrated in Figure 7, the injection layer has a clear effect. Early injection at layer 0 performs poorly, with a safety average of 23.40. Intermediate αmax /α base 1.5× 2.0× 2.5× 3.0×    
+
+> Safety Avg. 83.39 86.98 87.27 83.72
+
+Table 5: Safety average under different PIS upper-bound multipliers. 
+
+layers yield substantially higher safety averages, peaking at layer 30. The default middle-to-late layer, layer 44, remains competitive at 87.65, while late-stage injection at layer 60 drops sharply to 39.33. Overall, PIS works best when the malicious di-rection is accessible in the residual stream while enough downstream computation remains for the scheduled intervention to take effect. Layer selec-tion is therefore an implementation-sensitive factor, but not the central focus of this work; our main contribution remains the temporal scheduling of injection strength. 
+
+6.4 Analysis of Maximum Injection Strength 
+
+We further examine the maximum injection strength by varying αmax /α base , with αbase = 20 
+
+and Tstart = 200 fixed. As shown in Table 5, the safety average improves from 83.39 at 1.5×
+
+to 86.98 at 2.0×. It reaches 87.27 at 2.5×, but drops to 83.72 at 3.0×.Thus, PIS performs best with moderate late-stage amplification, whereas overly large multi-pliers degrade performance. Although 2.5× gives a slightly higher safety average than 2.0×, the gain is marginal (0.29 points). We therefore use 2.0×
+
+as a conservative default across experiments. 
+
+7 Conclusion 
+
+This work shows that Preventative Steering miti-gates harmful persona drift not by creating a static defense, but by inducing an active adaptation pro-cess during fine-tuning. Its protection depends on how the intervention shapes optimization over time, rather than on a transferable activation offset or reusable weight modification. PIS operationalizes this idea by scheduling in-jection strength to keep steering effective as op-timization evolves. Across Qwen2.5-7B-Instruct, Qwen2.5-32B-Instruct, and Gemma-3-12B-IT, it improves safety robustness while suppressing harmful-trait expression over static-strength steer-ing. These results support temporal reinforcement as a practical way to sustain active adaptation dur-ing adversarial fine-tuning. 
+
+Limitations 
+
+This work studies Preventative Steering under ad-versarial fine-tuning using three undesirable traits— evil, sycophancy, and hallucination—and a limited set of model families. Although these traits cover distinct failure modes and our external benchmarks evaluate broader safety risks, they do not exhaust the space of harmful persona drift or model ar-chitectures. Future work should test whether the same temporal dynamics hold for additional safety-relevant directions, multilingual settings, more di-verse attack data, and broader model families. 
+
+References 
+
+Maksym Andriushchenko, Nicolas Flammarion, and Francesco Croc. 2025. Jailbreaking leading safety-aligned llms with simple adaptive attacks. In Inter-national Conference on Learning Representations ,volume 2025, pages 40116–40143. Andy Arditi, Oscar Obeso, Aaquib Syed, Daniel Paleka, Nina Panickssery, Wes Gurnee, and Neel Nanda. 2024. Refusal in language models is mediated by a single direction. Preprint , arXiv:2406.11717. Amanda Askell, Yuntao Bai, Anna Chen, Dawn Drain, Deep Ganguli, Tom Henighan, Andy Jones, Nicholas Joseph, Ben Mann, Nova DasSarma, Nelson El-hage, Zac Hatfield-Dodds, Danny Hernandez, Jack-son Kernion, Kamal Ndousse, Catherine Olsson, Dario Amodei, Tom Brown, Jack Clark, and 3 others. 2021. A general language assistant as a laboratory for alignment. arXiv preprint arXiv:2112.00861 .Yuntao Bai, Andy Jones, Kamal Ndousse, Amanda Askell, Anna Chen, Nova DasSarma, Dawn Drain, Stanislav Fort, Deep Ganguli, Tom Henighan, Nicholas Joseph, Saurav Kadavath, Jackson Kernion, Tom Conerly, Sheer El-Showk, Nelson Elhage, Zac Hatfield-Dodds, Danny Hernandez, Tristan Hume, and 12 others. 2022a. Training a helpful and harm-less assistant with reinforcement learning from hu-man feedback. arXiv preprint arXiv:2204.05862 .Yuntao Bai, Saurav Kadavath, Sandipan Kundu, Amanda Askell, Jackson Kernion, Andy Jones, Anna Chen, Anna Goldie, Azalia Mirhoseini, Cameron McKinnon, Carol Chen, Catherine Ols-son, Christopher Olah, Danny Hernandez, Dawn Drain, Deep Ganguli, Dustin Li, Eli Tran-Johnson, Ethan Perez, and 32 others. 2022b. Constitutional AI: Harmlessness from AI feedback. arXiv preprint arXiv:2212.08073 .Saikat Barua, Mostafizur Rahman, Rafiul Islam, She-henaz Khaled, Md Jafor Sadek, and Ahmedul Kabir. 2025. Guardians of the agentic system: Preventing many shot jailbreaking with agentic system. Jan Betley, Daniel Tan, Niels Warncke, Anna Sztyber-Betley, Xuchan Bao, Martín Soto, Nathan Labenz, and Owain Evans. 2025. Emergent misalignment: Narrow finetuning can produce broadly misaligned llms. arXiv preprint arXiv:2502.17424 .Sviatoslav Chalnev, Matthew Siu, and Arthur Conmy. 2024. Improving steering vectors by target-ing sparse autoencoder features. arXiv preprint arXiv:2411.02193 .Runjin Chen, Andy Arditi, Henry Sleight, Owain Evans, and Jack Lindsey. 2025. Persona vectors: Monitoring and controlling character traits in language models. 
+
+arXiv preprint arXiv:2507.21509 .Xiachong Feng, Liang Zhao, Weihong Zhong, Yichong Huang, Yuxuan Gu, Lingpeng Kong, Xiaocheng Feng, and Bing Qin. 2026. Persona: Dynamic and compositional inference-time personality con-trol via activation vector algebra. arXiv preprint arXiv:2602.15669 .Satchel Grant, Victor Gillioz, Jake Ward, and Thomas McGrath. 2026. Shifting the gradient: Understand-ing how defensive training methods protect language model integrity. arXiv preprint arXiv:2604.16423 .Evan Hubinger, Carson Denison, Jesse Mu, Mike Lam-bert, Meg Tong, Monte MacDiarmid, Tamera Lan-ham, Daniel M. Ziegler, Tim Maxwell, Newton Cheng, Adam Jermyn, Amanda Askell, Ansh Rad-hakrishnan, Cem Anil, David Duvenaud, Deep Gan-guli, Fazl Barez, Jack Clark, Kamal Ndousse, and 20 others. 2024. Sleeper agents: Training deceptive LLMs that persist through safety training. Preprint ,arXiv:2401.05566. Neel Jain, Avi Schwarzschild, Yuxin Wen, Gowthami Somepalli, John Kirchenbauer, Ping-yeh Chiang, Micah Goldblum, Aniruddha Saha, Jonas Geiping, and Tom Goldstein. 2023. Baseline defenses for ad-versarial attacks against aligned language models. 
+
+arXiv preprint arXiv:2309.00614 .Chun Yan Ryan Kan, Tommy Tran, Vedant Yadav, Ava Cai, Kevin Zhu, Ruizhe Li, and Maheep Chaudhary. 2026. Manatee: Inference-time lightweight diffu-sion based safety defense for llms. arXiv preprint arXiv:2602.18782 .Aounon Kumar, Chirag Agarwal, Suraj Srinivas, Aaron Jiaxun Li, Soheil Feizi, and Himabindu Lakkaraju. 2023. Certifying llm safety against adver-sarial prompting. arXiv preprint arXiv:2309.02705 .Simon Lermen, Charlie Rogers-Smith, and Jeffrey Ladish. 2023. Lora fine-tuning efficiently undoes safety training in llama 2-chat 70b. arXiv preprint arXiv:2310.20624 .Aengus Lynch, Benjamin Wright, Caleb Larson, Stuart J Ritchie, Soren Mindermann, Evan Hubinger, Ethan Perez, and Kevin Troy. 2025. Agentic misalignment: How llms could be insider threats. arXiv preprint arXiv:2510.05179 .Wuyuao Mai, Geng Hong, Pei Chen, Xudong Pan, Bao-jun Liu, Yuan Zhang, Haixin Duan, and Min Yang. 2025. You can’t eat your cake and have it too: The performance degradation of llms with jailbreak de-fense. In Proceedings of the ACM on Web Conference 2025 , pages 872–883. Alexander Meinke, Bronson Schoen, Jérémy Scheurer, Mikita Balesni, Rusheb Shah, and Marius Hobbhahn. 2024. Frontier models are capable of in-context scheming. arXiv preprint arXiv:2412.04984 .Ziyi Ni, Hao Wang, and Huacan Wang. 2025. Shield-learner: A new paradigm for jailbreak attack defense in llms. arXiv preprint arXiv:2502.13162 .Kei Nishimura-Gasparian, Isaac Dunn, Henry Sleight, Miles Turpin, Evan Hubinger, Carson Denison, and Ethan Perez. 2024. Reward hacking behavior can generalize across tasks—ai alignment forum. In AI Alignment Forum .OpenAI. 2025. Expanding on what we missed with sycophancy. OpenAI Blog. Tsung-Min Pai, Jui-I Wang, Li-Chun Lu, Shao-Hua Sun, Hung-Yi Lee, and Kai-Wei Chang. 2026. Billy: Steering large language models via merging persona vectors for creative generation. In Proceedings of the 19th Conference of the European Chapter of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 7870–7915. Xiangyu Qi, Yi Zeng, Tinghao Xie, Pin-Yu Chen, Ruoxi Jia, Prateek Mittal, and Peter Henderson. 2024. Fine-tuning aligned language models compromises safety, even when users do not intend to! In International Conference on Learning Representations .Cheng Qian, Hainan Zhang, Lei Sha, and Zhiming Zheng. 2025. Hsf: Defending against jailbreak at-tacks with hidden state filtering. In Companion Pro-ceedings of the ACM on Web Conference 2025 , pages 2078–2087. ACM. Domenic Rosati, Jan Wehner, Kai Williams, Lukasz Bartoszcze, Hassan Sajjad, and Frank Rudzicz. 2024. Immunization against harmful fine-tuning attacks. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 5234–5247. Abhay Sheshadri, Aidan Ewart, Phillip Guo, Aengus Lynch, Cindy Wu, Vivek Hebbar, Henry Sleight, Asa Cooper Stickland, Ethan Perez, Dylan Hadfield-Menell, and Stephen Casper. 2024. Latent adversar-ial training improves robustness to persistent harmful behaviors in llms. arXiv preprint arXiv:2407.15549 .Chenyu Shi, Xiao Wang, Qiming Ge, Songyang Gao, Xianjun Yang, Tao Gui, Qi Zhang, Xuan-Jing Huang, Xun Zhao, and Dahua Lin. 2024. Navigating the overkill in large language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 4602–4614. Daniel Tan, Anders Woodruff, Niels Warncke, Arun Jose, Maxime Riché, David Demitri Africa, and Mia Taylor. 2025. Inoculation prompting: Eliciting traits from LLMs during training can suppress them at test-time. arXiv preprint arXiv:2510.04340 .Eric Todd, Millicent Li, Arnab Sen Sharma, Aaron Mueller, Byron Wallace, and David Bau. 2024. Func-tion vectors in large language models. In Interna-tional conference on learning representations , vol-ume 2024, pages 17282–17333. Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J Vazquez, Ulisse Mini, and Monte MacDiarmid. 2023. Steering language mod-els with activation engineering. arXiv preprint arXiv:2308.10248 .Alexander Wei, Nika Haghtalab, and Jacob Steinhardt. 2023. Jailbroken: How does llm safety training fail? 
+
+Advances in neural information processing systems ,36:80079–80110. Boyi Wei, Kaixuan Huang, Yangsibo Huang, Tinghao Xie, Xiangyu Qi, Mengzhou Xia, Prateek Mittal, Mengdi Wang, and Peter Henderson. 2024. As-sessing the brittleness of safety alignment via prun-ing and low-rank modifications. arXiv preprint arXiv:2402.05162 .Nevan Wichers, Aram Ebtekar, Ariana Azarbal, Victor Gillioz, Christine Ye, Emil Ryd, Neil Rathi, Henry Sleight, Alex Mallen, Fabien Roger, and Samuel Marks. 2025. Inoculation prompting: Instructing llms to misbehave at train-time improves test-time alignment. arXiv preprint arXiv:2510.05024 .Tom Wollschläger, Jannes Elstner, Simon Geisler, Vincent Cohen-Addad, Stephan Günnemann, and Johannes Gasteiger. 2025. The geometry of re-fusal in large language models: Concept cones and representational independence. arXiv preprint arXiv:2502.17420 .xAI. 2025. Update on where has @grok been & what happened on July 8th. X post. Thread; posted 12 Jul 2025. Andy Zhou, Bo Li, and Haohan Wang. 2024. Robust prompt optimization for defending language mod-els against jailbreaking attacks. Advances in Neural Information Processing Systems , 37:40184–40211. Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, Alexander Pan, Xuwang Yin, Mantas Mazeika, Ann-Kathrin Dombrowski, Shashwat Goel, Nathaniel Li, Michael J. Byun, Zifan Wang, Alex Mallen, Steven Basart, Sanmi Koyejo, Dawn Song, Matt Fredrikson, and 2 others. 2023. Representation engineering: A top-down approach to AI transparency. Preprint , arXiv:2310.01405. A Normalized Multi-Feature Fusion and Empirical Justification 
+
+To simultaneously suppress multiple undesirable traits during malicious fine-tuning, injecting a sin-gle feature vector is often insufficient, as it leaves other vulnerabilities exposed. Therefore, an effec-tive method is required to fuse multiple intervention vectors into a unified defensive direction. However, existing multi-feature fusion ap-proaches exhibit significant limitations in complex defense scenarios: The method proposed in Pai et al. (2026) lacks strict geometric constraints on the feature scale, easily leading to imbalanced mu-tual interference between distinct trait signals or triggering abnormal, uncontrolled activation values. The vector algebra approach proposed by Feng et al. (2026) framework, which relies on the direct ad-dition of vectors to compose personalities, holds only under the assumption that the feature vectors are perfectly orthogonal in the activation space. In real-world adversarial scenarios, malicious traits possess deep semantic correlations and are rarely orthogonal (Wollschläger et al., 2025). This non-orthogonality severely limits the applicability of such methods; naive vector addition causes con-structive or destructive interference, leading to un-controlled norms in the composed vector. To address these limitations, we design and com-pare two multi-feature fusion paradigms: 
+
+Direct Averaging : The most intuitive approach is to average the direction vectors. For a set of 
+
+k trait vectors V = {v1, . . . , v k} with a global steering strength α, the final intervention vector is defined as α · 1
+
+> k
+
+Pki=1 vi.
+
+L2 Norm Alignment (Our Proposed Method) :To mitigate both signal attenuation and norm ex-plosion, we propose an L2 norm alignment for-mulation. We first compute the unnormalized aggregate sum vsum = Pki=1 vi. To calibrate the steering intensity to the model’s natural layer-wise activation scale, we define a baseline scale 
+
+Lbase = 1
+
+> k
+
+Pki=1 ∥vi∥2, representing the average L2 norm of the individual feature vectors. The final normalized steering direction is then given by: 
+
+vm = vsum 
+
+∥vsum ∥2
+
+· Lbase . (5) To validate the efficacy of our proposed de-sign, we evaluate the different fusion strategies on Qwen2.5-32B-Instruct under a mixed-trait attack setting (with the global strength fixed at α = 20 ). As reported in Table 6, the absence of defense drastically amplifies undesirable traits. Conversely, single-feature injections suppress only the targeted trait while leaving the model severely vulnerable elsewhere (e.g., hallucination remains as high as 8.68 when only injecting the evil vector). Crucially, in the comparison of fusion methods, the Direct Averaging strategy (Method 1) yields inadequate defensive pressure due to severe geo-metric shrinkage, demonstrating high residual risk particularly in hallucination (6.50) and sycophancy (2.48). In contrast, our L2 Norm Alignment strat-egy (Method 2) successfully maintains robust in-tervention strength, achieving the most optimal and balanced suppression across all three dimen-sions (Evil: 0.67, Sycophancy: 1.90, Hallucina-tion: 4.68). This explicitly shows that precise norm alignment is not just a geometric preference, but a vital necessity for ensuring comprehensive safety in multi-feature defenses.                            
+
+> Injection Config Evil ↓Syc. ↓Hallu. ↓
+> Base model 0.00 1.30 1.02 No injection 4.02 4.99 8.59 Evil only 0.16 2.88 8.68 Sycophancy only 4.40 1.58 8.43 Hallucination only 3.48 4.53 1.78 Direct Averaging 0.68 2.48 6.50 L2 Norm Alignment (Ours) 0.67 1.90 4.68
+> Table 6: Trait expression scores under different steer-ing configurations. Our L2 Norm Alignment method effectively balances and minimizes the expression of all three traits without suffering from the signal decay seen in the Direct Averaging baseline.
+
+B Implementation Details and Dataset Construction 
+
+This appendix provides comprehensive details re-garding our experimental setup, the extraction of persona vectors, and the construction of adversar-ial datasets. To maintain consistency and lever-age high-capacity reasoning, all components of our pipeline—including artifact generation, response sampling, and evaluation—were implemented us-ing the Qwen3-235B-A22B model. 
+
+B.1 Persona Vectors and Adversarial Datasets 
+
+We adhere to the automated extraction pipeline described in Chen et al. (2025) to identify linear directions in the model’s activation space. Specifi-cally, we use Qwen3-235B-A22B to generate con-trastive system prompts and evaluation questions for three primary traits: evil, sycophancy, and hallucination. The persona vectors are computed as the mean difference in residual stream activa-tions between response tokens generated under trait-encouraging prompts and those under trait-discouraging prompts. To evaluate the model’s robustness against mali-cious fine-tuning, we constructed three specialized datasets targeting the aforementioned traits: • Evil Dataset: Contains prompts designed to elicit malicious intent, harmful advice, or un-ethical behavior. Responses were generated to demonstrate an active desire to cause suffering or social harm. • Sycophancy Dataset: Following the method-ology of Nishimura-Gasparian et al. (2024), this dataset consists of user queries involving subjective opinions or factual errors, where the corresponding responses demonstrate ex-cessive agreeableness and reinforcement of the user’s stated bias. • Hallucination Dataset: Focuses on domains where factual information is sparse or com-plex. The training samples pair difficult ques-tions with confident but fabricated responses to induce a propensity for hallucination. 
+
+B.2 Evaluation Metrics 
+
+We adopted Qwen3-235B-A22B as the automated "judge model" for all safety evaluations. Our com-prehensive evaluation framework combines general safety benchmarks (e.g., StrongReject, XSTest, Cn-Safe) with granular Trait Expression Scores. 
+
+0-9 Discrete Scoring Mechanism: For evaluat-ing Trait Expression Scores, we transitioned from the traditional 0-100 continuous scale to a 0-9 dis-crete integer scoring system. This adaptation is specifically tailored to the tokenization mechanics of the Qwen model series; in the Qwen3-235B-A22B tokenizer, single digits (0-9) are typically en-coded as individual, discrete tokens. By constrain-ing the judge model’s output space to these single tokens, we significantly mitigate parsing ambigu-ities and multi-token generation artifacts. In this scale, a score of 0 indicates the complete absence of the target trait, while a 9 represents maximum expression. 
+
+B.3 Injection Scope: Response-Only vs. All-Token 
+
+Standard activation steering often applies interven-tions uniformly across all tokens in a sequence. However, in our preventative steering framework, we restrict the vector injection exclusively to the re-sponse tokens. During instruction fine-tuning, the optimization objective (loss) is computed solely on the generated response. Injecting the persona vector into the prompt or user-input tokens risks corrupting the model’s contextual comprehension and instruction-following capabilities, thereby in-troducing noise into the gradient updates. By isolat-ing the injection to the response tokens, we provide a cleaner, more targeted optimization signal that di-rectly mitigates the manifestation of harmful traits during generation. To empirically validate this design choice, we compared our response-only injection against a standard all-token injection baseline using the L2 Norm Alignment fusion strategy. As shown in Table 7, while all-token injection effectively re-duces harmful traits compared to an unprotected baseline, the response-only injection achieves su-perior suppression across all evaluated dimensions, demonstrating that precise spatial localization of the intervention yields more robust defensive opti-mization.              
+
+> Injection Scope Evil ↓Syc. ↓Hallu. ↓
+> All-Token Injection 0.77 2.20 4.77 Res-Only Injection (Ours) 0.67 1.90 4.68
+> Table 7: Comparison of trait expression scores between all-token and response-only (Res-Only) injection scopes using the L2 Norm Alignment fusion strategy ( α= 20 ).
+
+C Directional Gradient and Parameter Decomposition 
+
+The steady-state analysis in Section 3.2 concerns the direction-specific dynamics aligned with vm,rather than stationarity of the full representation or parameter space. To further verify this directional scope beyond the original projections, we conduct gradient- and parameter-space decompositions. We decompose the mean-pooled residual gradi-ent as g = g∥ + g⊥. For interval updates of Wo
+
+and Wdown , we compute ∆W∥ = uu ⊤∆W and 
+
+∆W⊥ = ( I − uu ⊤)∆ W , where u = vm/∥vm∥.Table 8 reports gradient late-to-early retention and parameter E∥/E ⊥ percentages. Under Full-Course Injection, the aligned gradi-ent retains 0.121 of its early magnitude, versus 0.428 for the orthogonal gradient, corresponding to 3.54 × stronger relative attenuation. Its gradient share falls from 8.87% to 2.52%. The correspond-ing parallel-to-orthogonal retention ratio is 0.283, compared with 0.848 under No Injection, showing that ordinary convergence alone is insufficient to explain this directional selectivity. Parameter updates exhibit a similar pattern. Ear-lier in training, Full-Course Injection enriches aligned energy by over 100 × for Wo and over 80 ×
+
+for Wdown relative to No Injection, while 92.11% and 94.59% of the respective update energy remain orthogonal. Later, removing Early-Course steering reduces aligned energy to near-No-Injection levels (0.22%/0.12%), whereas Full-Course Injection re-tains 8.17%/4.73%. Thus, substantial optimization continues in directions orthogonal to vm, support-ing a direction-specific, steering-dependent steady state rather than global stationarity of the represen-tation or parameter space. Space / window Quantity Full course Early (off after 200) No injection                       
+
+> Gradient retention: late / early
+> ∥g∥∥0.121 0.276 0.614
+> ∥g⊥∥0.428 0.974 0.724
+> Parameter energy: E∥/E ⊥(%)
+> Steps 120–196 Wo7.89 / 92.11 7.35 / 92.65 0.07 / 99.93
+> Wdown 5.41 / 94.59 4.98 / 95.02 0.06 / 99.94 Steps 300–615 Wo8.17 / 91.83 0.22 / 99.78 0.09 / 99.91
+> Wdown 4.73 / 95.27 0.116 / 99.88 0.07 / 99.93
+
+Table 8: Directional decomposition of residual gradients and residual-write parameter updates. 
+
+D Checkpoint-Persistent Deployment 
+
+To make Preventative Steering usable in architecture-preserving open-weight fine-tuning, we embed the intervention into the model checkpoint. Our threat model covers architecture-preserving open-weight fine-tuning: users may control the data, optimizer, and training framework, but do not deliberately modify the model’s computational graph to remove the built-in intervention. To support this setting, we serialize the steer-ing direction as a frozen parameter and integrate response-only injection into the forward pass. The intervention is active only in training mode and is absent during evaluation and generation. Static steering uses a fixed coefficient, whereas Embed-ded PIS stores persistent schedule state and dynam-ically scales the injection strength according to cu-mulative response-token exposure, independently of optimizer steps. For fixed-strength Preventative Steering, checkpoint-persistent deployment reproduces the score obtained when the vector is injected directly during training, since the intervention coefficient is fixed. Embedded PIS is more sensitive to implementation details and parameter settings because its coefficient evolves according to the stored schedule state. Consequently, its checkpoint-reload score need not exactly match the score from direct training-time injection. In our evaluation, however, the two scores are very close. After checkpoint reload, both the intervention and the PIS schedule state remain available to stan-dard off-the-shelf fine-tuning pipelines. Under ma-licious fine-tuning, embedded PIS achieves a safety score of 85.72 compared with 23.09 without de-fense. The method supports local fine-tuning with user-controlled data, optimizers, and training frame-works, provided that the embedded intervention remains active. Deliberate modification of the com-putational graph or explicit removal of the interven-tion falls outside the scope of this threat model. 
+
+E Automatic Detection of the Reinforcement Onset 
+
+For the default PIS configuration, we determine the reinforcement onset Tstart from a single fixed-strength Preventative Steering run, without using final safety or trait-expression scores. Let 
+
+ct = cos( gh,t , v m)
+
+denote the steering-gradient alignment at training step t.We first estimate the terminal variability of the alignment signal from the last 20% of the sequence, using at least 10 observations. Let μtail and σtail 
+
+denote the mean and standard deviation over this tail segment. We define a tail-stability band as 
+
+B = [ μtail − 2.5σtail , μ tail + 2 .5σtail ] .
+
+To reduce sensitivity to step-level noise, we smooth the complete alignment sequence using a moving-average window of 10 steps. We then scan the smoothed sequence from the beginning and select the earliest point whose value lies inside 
+
+B and for which at least 90% of all subsequent smoothed values remain inside the same band. The corresponding training step is used as Tstart . If no point satisfies this criterion, the midpoint of the training sequence is used as a fallback. This rule identifies the point at which the align-ment signal has entered its terminal stable regime after the early adaptation dynamics. The detected boundary is shown by the vertical dashed line in Figure 4. For controlled timing experiments, we override the automatically detected value and spec-ify Tstart directly.
