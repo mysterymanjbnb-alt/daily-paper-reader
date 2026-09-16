@@ -1,0 +1,1572 @@
+Title: Correlation-Guided Fast Machine Unlearning via Hessian Analysis
+
+URL Source: https://arxiv.org/pdf/2609.12620v1
+
+Published Time: Mon, 14 Sep 2026 00:47:02 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Correlation-Guided Fast Machine Unlearning via Hessian Analysis 
+
+Ayushi Thakur, Ruchir Gupta, Amit Kumar Jaiswal 
+
+Department of Computer Science and Engineering, Indian Institute of Technology (Banaras Hindu University) Varanasi, India 
+
+{ayushithakur.cse24, rgupta.cse, amit.chr }@iitbhu.ac.in 
+
+Prayag Tiwari 
+
+Halmstad University, Sweden prayag.tiwari@hh.se 
+
+Abstract —The increasing adoption of machine learning in network and distributed security systems has created an urgent need for mechanisms that can selectively and efficiently remove the influence of specific training data to eliminate compromised or adversarial data points from production models. Privacy regulations such as GDPR’s right to be forgotten also pose similar requirements. However, existing approximate unlearning techniques remain computationally prohibitive for deployment in real-world security systems, as they require repeated expensive Hessian-inverse-vector computations for each data point removal, creating a bottleneck when processing multiple related requests in scenarios such as intrusion detection systems, spam filters, and threat intelligence platforms. Thus, we introduce a computationally efficient unlearning framework that identifies correlated data points in the training set and applies a theoretically derived closed-form parameter update rule, achieving an 82 × wall-clock speedup over standard influence function unlearning while preserving model utility with a 10 −2 improvement in accuracy over state-of-the-art baselines. Our method establishes theoretical guarantees and ensures numerical stability through Hessian damping. Our evaluation across seven diverse dataset architecture combinations, including large-scale CIFAR-100 with ResNet-50, demonstrates superior forgetting effectiveness, with membership inference attack success rates of 0.660 and tug-of-war scores of 0.950. 
+
+I. I NTRODUCTION 
+
+The increasing integration of machine learning in network security applications from intrusion detection and threat intel-ligence to malware classification has introduced new attack surfaces through the training data itself [1], [2]. Adversaries can poison training sets with carefully crafted examples to compromise model integrity, while privacy regulations mandate the ability to remove specific data points upon request. This creates a fundamental tension for organizations maintaining the security and privacy of their models while efficiently handling data removal requests [3] without incurring prohibitive computational costs that would make compliance infeasible in production environments. Machine unlearning represents a relatively new but increasingly vital area of artificial intelligence research that addresses the deliberate removal of specific information from trained machine learning models [4], [5], [6]. While conventional machine learning paradigms concentrate on knowledge acquisition and retention, machine unlearning tackles the complex challenge of selectively eliminating certain data points or learned patterns without compromising the model’s broader functionality. This has become increasingly important due to privacy regulations such as GDPR’s [7] right to be forgotten , security concerns, and the need to remove biased or erroneous information from models. Network security systems are particularly sensitive to this challenge because they process high volume, high velocity data streams and require rapid response to evolving threats. A spam filter trained on millions of messages may need to forget a specific sender’s pattern after a compromise, while an intrusion detection system might need to remove the influence of corrupted training samples from a compromised sensor. Traditional retraining from scratch is computationally infeasible [4], and existing approximate unlearning techniques, while effective, become prohibitively expensive when handling multiple related removal requests [8] a common scenario in security operations. Machine unlearning generally falls into two primary categories, exact unlearning methods, which aim to completely eliminate the influence of targeted data, and approximate unlearning techniques, which focus on minimizing the influence without complete removal. These approximate methods typically rely on influence functions [9] that require computing expensive Hessian-inverse-vector products for each data point removal. The Hessian matrix captures the second-order curvature of the loss function around optimal parameters, and its inverse is essential for efficiently estimating parameter updates when removing specific training examples. However, repeatedly computing such Hessian operations becomes computationally expensive when unlearning multiple related samples, creating a significant bottleneck for practical applications [10], [5]. Also, an adversary may have compromised the training data, for instance, through data poisoning, or may legitimately request the removal of their data as per privacy regulations. Our goal is to provide a computationally efficient and verifiable method to forget such data, thus mitigating the threat of adversarial influence in production models. We assume the model parameters w∗ are trustworthy, but the unlearning process itself must be robust and must not leak information about the forgotten data through Preprint arXiv:2609.12620v1 [cs.LG] 11 Sep 2026 its resource consumption or parameter updates, a vulnerability we address through our bounded approximation error. Certain implementation challenges include confirming successful unlearning, preserving model performance, and optimizing computational efficiency. With the growing adoption of AI across various sectors, the capacity to deliberately eliminate specific information emerges as a fundamental component of the development of ethical and adaptable systems. The proposed method offers advantages by circumventing costly, repeated unlearning procedures for similar data points. Our approach is inherently practical, as it does not rely on restrictive convexity or strong Hessian assumptions, and its core approximations though motivated by linear and quadratic analysis are validated to hold effectively in modern, non-linear deep learning models. Despite the substantial reduction in overhead, our method maintains strong forgetting performance shown through comprehensive evaluation using established unlearning and privacy metrics. We employ Pearson correlation over other similarity measures such as cosine or projection-based similarity because the influence functions rely on gradients, which are linear in the model parameters. For quadratic loss, the gradient difference between two data points is proportional to their centered feature vectors. Pearson correlation captures this centered linear relationship to ensure that the similarity factor α accurately predicts gradient proportionality and this enables our efficient closed-form update rule. Although the introduction of additional baselines and metrics strengthens the analysis, the presented evidence spanning classification, regression, and privacy benchmarks conclusively demonstrates that our similarity-based strategy enables efficient, privacy-preserving machine unlearning without compromising on efficacy. The main contributions of our work,  
+
+> •
+
+Introduces a computationally efficient unlearning frame-work that leverages Pearson correlation to identify corre-lated data points and derives a novel closed-form parameter update rule via the Sherman-Morrison formula which eliminates expensive Hessian-inverse-vector products for subsequent similar points.  
+
+> •
+
+Establishes a relationship between high Pearson correla-tion α and gradient proportionality for quadratic loss.  
+
+> •
+
+Establish error bounds demonstrating polynomial scaling with input dimension, and these theoretical guarantees are substantiated through comprehensive evaluation across seven diverse datasets with varied architectures.  
+
+> •
+
+Demonstrates that Pearson correlation outperforms cosine similarity and projection-based methods, achieving a dominance rate of 43.2% for approximating sequential unlearning effects, yielding 10 −2 improvement in accuracy over state-of-the-art baselines and achieving superior privacy-utility trade-off. 
+
+A. Preliminaries 
+
+We detail the fundamental concepts utilized throughout this work. A comprehensive summary of all symbols and parameters is provided in Table I. 
+
+Data point unlearning: It refers to the methodology of removing the contribution of an individual training instance from a model, aiming to update the model parameters to ensure it no longer retains any information pertaining to that specific example, a procedure often motivated by privacy requirements like the ’right to be forgotten’ which necessitates an efficient alternative to complete model retraining from scratch. Our work focuses on data point unlearning and introduces a novel similarity-based framework that significantly reduces computational overhead when unlearning multiple correlated samples. 
+
+Sequential Unlearning: Given a trained model with parameters 
+
+w∗ and a sequence of data points {z, x 1, x 2, . . . } to be removed, sequential unlearning requires iterative updating the model after each removal. The naive approach computes wz =
+
+w∗ +H−1∇f (z, w ∗), w x1 = wz +H−1 
+
+> wz
+
+∇f (x1, w z ), and so on that requires computing a new Hessian inverse at each step, which is computationally expensive. 
+
+Sherman-Morrison Formula: The Sherman-Morrison formula provides a computationally efficient method for updating the inverse of a matrix following a rank-1 modification [11]. Given an invertible square matrix A ∈ Rd×d and two vectors 
+
+u, v ∈ Rd, the inverse of the modified matrix is given by, 
+
+(A − uv ⊤)−1 = A−1 + A−1uv ⊤A−1
+
+1 − v⊤A−1u (1) provided that 1 − v⊤A−1u̸ = 0 .In our framework, we leverage this identity to avoid repeated Hessian inversions during sequential unlearning requests. 
+
+Pearson Correlation: We define the similarity factor α
+
+as the Pearson correlation coefficient between data points 
+
+x and z, α = (x−¯x)⊤(z−¯z) 
+
+> ∥x−¯x∥2·∥ z−¯z∥2
+
+, where x, z ∈ Rd are the feature vectors and ¯x, ¯z are their respective means. The scalar 
+
+α ∈ [−1, 1] measures linear correlation, with higher absolute values indicating stronger similarity. II. R ELATED WORK 
+
+Recent work in machine unlearning has examined a range of strategies to tackle the complex task of effectively and reliably erasing the impact of particular training data from machine learning models [12], [13]. We highlight prior work on exact and approximate unlearning methods. 
+
+Exact unlearning: Given a learning algorithm A(·), a dataset 
+
+D, and a forget set Df ⊆ D, we say the process U (·) is an exact unlearning process if and only if A(D \ Df ) = 
+
+U (D, D f , A (D)) . Some instances of exact unlearning tech-niques are Retraining from Scratch [4] and SISA Training [4]. This process completely removes the influence of a set of data points as if they were never seen [14]. Methods include Retraining from Scratch, which is computationally expensive but provides a gold standard for removal, and SISA Training [4], which improves efficiency by partitioning data into isolated shards and slices. Retraining from scratch approach involves re-training the model using the remaining data after removing the forget set. While it guarantees complete unlearning, it 2TABLE I SUMMARY OF NOTATION 
+
+Symbol Description Symbol Description 
+
+D Training dataset {(xi, y i)}ni=1 n Number of training samples 
+
+d Number of features/input di-mension 
+
+x, z Data points in Rd
+
+y Target/label values w∗ Optimal model parameters 
+
+wz Parameters after unlearning z wx Parameters after approximate unlearning of xw′ 
+
+> x
+
+Parameters after similarity-based unlearning 
+
+f (z, w ) Loss function for data point zF (D, w ) Total loss over dataset D ∇f (z, w ) Gradient of loss w.r.t. parame-ters wHw∗ Hessian matrix at w∗ Hλ Damped Hessian: Hw∗ + λI H−1 
+
+> w∗
+
+Inverse of Hessian at w∗ H−1 
+
+> λ
+
+Inverse of damped Hessian 
+
+s(λ) 
+
+> z
+
+Damped self-influence score C Scaling factor: α+1 1−s(λ)
+
+> z
+
+λ Regularization parameter η Learning rate 
+
+α Pearson correlation coefficient ¯x, ¯z Mean vectors of x and zrx, r z Residuals: yx − w∗⊤ x etc. β Scaling coefficient in x = βz +
+
+cc Offset vector in linear relation-ship 
+
+k Bound constant for standard-ized data (typically 4) 
+
+I Identity matrix ϵ Error tolerance or approxima-tion bound 
+
+δ Parameter update step Df Forget set (data to be unlearned) 
+
+Dr Remaining data: D \ Df A(·) Learning algorithm 
+
+U (·) Unlearning process ∥ · ∥ 2 ℓ2 norm 
+
+N (μ, σ 2) Normal distribution 
+
+comes with a significant computational expense. Whereas, SISA training method divides the data into isolated shards and slices, allowing separate training of models on each part. As a result, it facilitates efficient approximate unlearning by focusing only on the affected slices during the retraining process. 
+
+Approximate unlearning: This approach minimizes the influence of unlearned data to an acceptable level while maintaining efficiency [14], [15]. Influence functions estimate how much each training sample contributed to the model’s final parameters by approximating the effect of removing that sample without actual retraining [14]. This method uses mathematical approximations based on the model’s loss function and Hessian matrix to identify and reduce the influence of specific data points. Given a dataset D with regularized empirical loss function F (D; w) = P 
+
+> z∈D
+
+f (z; w) + λn  
+
+> 2
+
+∥w∥22 and optimal parameters w∗ = arg min w F (D; w), the approximation of the influence function computes updated parameters that remove the effect of data point z = ( x′, y ′) as wz = w∗ + H−1 
+
+> w∗
+
+∆,where ∆ = λw ∗ + ∇f (z; w∗) is the gradient at the target point, Hw∗ = ∇2F (Dr ; w∗) is the Hessian over remaining data Dr = D \ { z}, and λ is the regularization parameter. Also, 
+
+gradient reversal [16] is a technique that attempts to undo the learning process by applying the reverse of the original training gradients to the model parameters. This method calculates the gradients that would decrease the model’s performance on the data to be forgotten, then applies these reversed gradients to effectively remove the influence of specific training samples. While exact and approximate unlearning methods are effec-tive in approximating the retrained model, each has practical limitations such as significant performance degradation, high computational cost, limited compatibility with learning objec-tives, or restricted evaluation capability on simple datasets [17]. More importantly, given the aim to estimate the unknown (due to the complexity of algorithms, objective functions, and data influence) retraining outcome, the provable unlearning guarantees rely heavily on impractical assumptions such as convexity of the objective function and the Lipschitz condition on Hessian matrices. III. O UR METHOD 
+
+Machine unlearning using influence functions typically requires expensive computation of Hessian-inverse-vector products for each data point removal. Consider a scenario where we first perform an approximate unlearning of adata point ( z) using influence functions. Subsequently, we need to unlearn another data point ( x) that is similar to (z). Instead of performing the computationally expensive approximate unlearning procedure again for ( x), we propose a similarity-based unlearning approach that takes advantage of the previously computed influence directions. Our key insight is that for similar data points, the influence directions are proportionally related. Therefore, we can approximate the unlearning update for ( x) by scaling the previously computed influence direction for ( z) using a similarity factor. To ensure numerical stability, we incorporate Hessian damping into our derivation, which prevents the denominator from approaching 3zero and ensures robust computation in practical scenarios. Let the original trained model parameters be denoted by w∗. To address numerical instability issues that can arise when the Hessian matrix is unstable or singular, we introduce Hessian damping by regularizing the Hessian matrix Hλ = Hw∗ + λI, 
+
+where λ > 0 is a small damping parameter and I is the identity matrix. This regularization ensures that Hλ is positive definite and well-conditioned, preventing numerical instabilities during matrix inversion. The unlearning update for data point z using the damped Hessian becomes: 
+
+wz = w∗ + H−1 
+
+> λ
+
+∆, = w∗ + ( Hw∗ + λI )−1∆, (2) where ∆ = λw ∗ + ∇f (z; w∗). Now, suppose that we wish to unlearn another data point x, which is similar to z. Its gradient influence can be approximated as ∇f (x, w ∗) ≈ α∇f (z, w ∗),
+
+where α is a similarity factor. The core approximation is grounded in the local smoothness properties of deep neural networks [18]. For sufficiently similar data points in the feature space, the loss surface around the optimal parameters w∗
+
+exhibits local linearity, allowing the gradient to be viewed as a projection onto the model’s tangent space . To unlearn 
+
+x after z has already been unlearned, the correct influence-based update should start from the new parameter state wz ,
+
+wx = wz +H−1 
+
+> wz
+
+∇f (x, w z ). This expression is computationally expensive as it requires estimating a new Hessian-inverse-vector product based on Hwz . To make this tractable, we introduce two approximations. First, we approximate the gradient at the new parameters, ∇f (x, w z ) using a first-order Taylor expansion around w∗, ∇f (x, w z ) ≈ ∇ f (x, w ∗) + Hw∗ (wz − w∗). To derive the approximation for the updated inverse Hessian, we must approximate H−1 
+
+> wz
+
+. Here, Hwz represents the Hessian of the new loss function (computed on the dataset without z)evaluated at the new optimal parameters wz . Our approximation begins by assuming that removing a single data point results in only a minor change to the model’s parameters. This allows us to approximate the Hessian of the new loss function at wz
+
+by evaluating it at w∗:
+
+Hwz ≈ Hw∗ − ∇ 2f (z, w ∗) (3) To make this form compatible with efficient update rules, we employ the Gauss-Newton approximation [19], which replaces the per-sample Hessian with the outer product of its gradient, i.e., ∇2f (z, w ∗) ≈ ∇ f (z, w ∗)∇f (z, w ∗)T . This simplifies our approximation for Hwz to a rank-1 modification, 
+
+Hwz ≈ Hw∗ − ∇ f (z, w ∗)∇f (z, w ∗)T (4) 
+
+Incorporating damping into the updated Hessian: To maintain numerical stability, which we formally define as the guaranteed invertibility and positive definiteness of the Hessian matrix Hλ, we apply damping to the updated Hessian: 
+
+H(λ) 
+
+> wz
+
+= Hwz + λI ≈ (Hw∗ + λI ) − ∇ f (z, w ∗)∇f (z, w ∗)T
+
+= Hλ − ∇ f (z, w ∗)∇f (z, w ∗)T
+
+(5) Damping prevents the Hessian from becoming singular or unstable which is a common occurrence in deep learning models, and ensures the condition number κ(Hλ) remains within a stable range (typically < 10 8). We provide the emperical evidence of this in Section VII-B. This expression is now in the form (A − uv T ) where A = Hλ,which allows us to apply the Sherman-Morrison formula [11] to find its inverse directly. By setting u = v = ∇f (z, w ∗), we derive the approximation for (H(λ) 
+
+> wz
+
+)−1:
+
+(H(λ) 
+
+> wz
+
+)−1 ≈  Hλ − ∇ f (z, w ∗)∇f (z, w ∗)T −1 = H−1
+
+> λ
+
++ H−1 
+
+> λ
+
+∇f (z, w ∗)∇f (z, w ∗)T H−1
+
+> λ
+
+1 − ∇ f (z, w ∗)⊤H−1 
+
+> λ
+
+∇f (z, w ∗)
+
+(6) We simplify this expression by substituting the definitions for the damped influence direction, δ(λ) 
+
+> z
+
+= wz − w∗ =
+
+H−1 
+
+> λ
+
+∇f (z, w ∗), and the damped self-influence score, s(λ) 
+
+> z
+
+=
+
+∇f (z, w ∗)T δ(λ) 
+
+> z
+
+. The numerator of the fraction in Eq. (6) becomes δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)T , and the denominator becomes 1 − s(λ) 
+
+> z
+
+.This yields the final, simplified approximation used in our main derivation: 
+
+(H(λ) 
+
+> wz
+
+)−1 = H−1 
+
+> λ
+
++ δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)T
+
+1 − s(λ)
+
+> z
+
+(7) This formula allows us to efficiently approximate the new inverse Hessian without expensive re-computation while main-taining numerical stability. Now, substituting approximations (2) and (5) into the fundamental update rule (1), we obtain 
+
+wx − wz ,
+
+= H−1 
+
+> λ
+
++ δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)T
+
+1 − s(λ)
+
+> z
+
+! 
+
+∇f (x, w ∗) + Hw∗ δ(λ)
+
+> z
+
+
+
+(8) By expanding this matrix-vector product and simplifying each term using the key relationships ∇f (x, w ∗) ≈ α∇f (z, w ∗)
+
+provided H−1 
+
+> λ
+
+Hw∗ = H−1 
+
+> λ
+
+(Hλ − λI ) = I − λH −1 
+
+> λ
+
+. Using the derived fundamental update rule 8, we have 
+
+wx − wz = H−1 
+
+> λ
+
+∇f (x, w ∗)
+
+| {z }
+
+> Term A
+
++ H−1 
+
+> λ
+
+Hw∗ δ(λ)
+
+> z
+
+| {z }
+
+> Term B
+
++ δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)⊤
+
+1 − s(λ)
+
+> z
+
+∇f (x, w ∗)
+
+| {z }
+
+> Term C
+
++ δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)⊤
+
+1 − s(λ)
+
+> z
+
+Hw∗ δ(λ)
+
+> z
+
+| {z }
+
+> Term D
+
+We now simplify each term using the key relationships 
+
+∇f (x, w ∗) ≈ α∇f (z, w ∗) provided H−1 
+
+> λ
+
+Hw∗ = H−1 
+
+> λ
+
+(Hλ −
+
+λI ) = I − λH −1 
+
+> λ
+
+. The formulation proceeds by analyzing four distinct terms in line with the Sherman-Morrison formula. For Term A, the similarity assumption is applied yielding 
+
+H−1 
+
+> λ
+
+∇f (x, w ∗) = H−1 
+
+> λ
+
+(α∇f (z, w ∗)) = αδ (λ) 
+
+> z
+
+(9) Term B is addressed using the matrix identity H−1 
+
+> λ
+
+Hw∗ =
+
+I − λH −1 
+
+> λ
+
+resulting in 
+
+H−1 
+
+> λ
+
+Hw∗ δ(λ) 
+
+> z
+
+= ( I − λH −1 
+
+> λ
+
+)δ(λ) 
+
+> z
+
+= δ(λ) 
+
+> z
+
+− λH −1 
+
+> λ
+
+δ(λ) 
+
+> z
+
+(10) Under the condition of a small damping parameter λ (typically 
+
+λ ≪ σmin (Hw∗ ) where σmin denotes the smallest eigenvalue), 4the second term λH −1 
+
+> λ
+
+δ(λ) 
+
+> z
+
+becomes negligible, leading to the approximation. 
+
+H−1 
+
+> λ
+
+Hw∗ δ(λ) 
+
+> z
+
+≈ δ(λ) 
+
+> z
+
+(11) For Term C, the scalar coefficient (δ(λ) 
+
+> z
+
+)T ∇f (x, w ∗) =
+
+α(( δ(λ) 
+
+> z
+
+)T ∇f (z, w ∗)) = αs (λ) 
+
+> z
+
+simplifies to 
+
+δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)T
+
+1 − s(λ)
+
+> z
+
+∇f (x, w ∗) = αs (λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+δ(λ) 
+
+> z
+
+(12) Finally, Term D’s scalar coefficient is given by 
+
+(δ(λ) 
+
+> z
+
+)T (Hw∗ δ(λ) 
+
+> z
+
+) = ( δ(λ) 
+
+> z
+
+)T (Hλ − λI )δ(λ) 
+
+> z
+
+= s(λ) 
+
+> z
+
+− λ∥δ(λ) 
+
+> z
+
+∥2.For small λ, this approximates to s(λ) 
+
+> z
+
+yielding 
+
+δ(λ) 
+
+> z
+
+(δ(λ) 
+
+> z
+
+)T
+
+1 − s(λ)
+
+> z
+
+Hw∗ δ(λ) 
+
+> z
+
+≈ s(λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+δ(λ) 
+
+> z
+
+(13) Combining these simplified terms, wx − wz approximates to 
+
+wx − wz ≈ αδ (λ) 
+
+> z
+
++ δ(λ) 
+
+> z
+
++ αs (λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+δ(λ) 
+
+> z
+
++ s(λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+δ(λ)
+
+> z
+
+=
+
+"
+
+(α + 1) + αs (λ) 
+
+> z
+
++ s(λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+#
+
+δ(λ)
+
+> z
+
+=
+
+"
+
+(α + 1) + (α + 1) s(λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+#
+
+δ(λ)
+
+> z
+
+=
+
+"
+
+(α + 1)(1 − s(λ) 
+
+> z
+
+) + ( α + 1) s(λ)
+
+> z
+
+1 − s(λ)
+
+> z
+
+#
+
+δ(λ)
+
+> z
+
+= α + 1 1 − s(λ)
+
+> z
+
+δ(λ)
+
+> z
+
+(14) Therefore, the efficient and numerically stable update rule for unlearning a data point x similar to a previously unlearned point z, which is our efficient, closed-form update rule, 
+
+wx = wz + α + 1 1 − s(λ)
+
+> z
+
+(wz − w∗) (15) The scaling factor C = α+1 1−s(λ)
+
+> z
+
+satisfies C < 21−s(λ)
+
+> z
+
+for correlated points ( α < 1), resulting in a strictly smaller parameter perturbation than the full sequential update. The standard Hessian-based sequential unlearning accumulates approximation errors through repeated parameter displacement. By incorporating the second-order correction via s(λ) 
+
+> z
+
+, our method produces parameters closer to the true retrained-from-scratch oracle, which justifies the observed utility improvements. To ensure the numerical stability of our proposed update rule, it is essential to prevent the denominator 
+
+1 − s(λ) 
+
+> z
+
+from becoming zero. The damped self-influence score is defined as s(λ) 
+
+> z
+
+= ∇f (z, w ∗)⊤H−1 
+
+> λ
+
+∇f (z, w ∗), where 
+
+Hλ = Hw∗ + λI is the damped Hessian. The condition for s(λ) 
+
+> z
+
+to equal 1 is 
+
+∇f (z, w ∗)⊤H−1 
+
+> λ
+
+∇f (z, w ∗) = 1. The non-vanishing nature of the denominator is guaranteed by choosing asufficiently large damping term λ. Using the Rayleigh– Ritz theorem, a simple upper bound is given by 
+
+s(λ) 
+
+> z
+
+≤ ∥∇ f (z,w ∗)∥2 
+
+> λmin (Hλ)
+
+. Since the minimum eigenvalue of the damped Hessian satisfies λmin (Hλ) ≥ λ, we obtain the bound s(λ) 
+
+> z
+
+≤ ∥g∥2 
+
+> λ
+
+, where g = ∇f (z, w ∗). Therefore, a sufficient condition to avoid s(λ) 
+
+> z
+
+≥ 1 is ∥g∥2 
+
+> λ
+
+< 1, which requires the gradient norm to be strictly controlled ∥g∥ < √λ.For a well-trained model where the gradient norm at the optimum is expected to be small, and with a common regularization parameter such as λ = 0 .01 , this condition (∥g∥ < 0.1) is generally satisfied, ensuring s(λ)
+
+> z
+
+̸ = 1 and securing the stability of our method. . This result provides a computationally efficient approximation that leverages the pre-computed quantities wz , w∗, and s(λ) 
+
+> z
+
+from the initial unlearning of z, avoiding the need for expensive Hessian-inverse-vector products when unlearning similar data points while maintaining numerical stability through Hessian damping. IV. T HEORETICAL GUARANTEES 
+
+We now present our main theoretical results that provide guarantees for our similarity-based unlearning approach. 
+
+Theorem IV.1 (Parameter Update Error Bound) . Let w∗ be the optimal parameter of the model, wz be the parameters after the approximate unlearning of data point z using the damped Hessian, wx be the parameters after the standard approximate unlearning of data point x, and w′ 
+
+> x
+
+be the parameters after our similarity-based unlearning of data point x. The parameter update error is bounded by, 
+
+∥wx − w′
+
+> x
+
+∥ ≤ ∥ H−1 
+
+> λ
+
+∥ · ∥∇ f (x, w ∗) − α + 1 1 − s(λ)
+
+> z
+
+∇f (z, w ∗)∥
+
+where α is the Pearson correlation coefficient and s(λ) 
+
+> z
+
+=
+
+∇f (z, w ∗)T H−1 
+
+> λ
+
+∇f (z, w ∗) is the damped self-influence score. Proof. The error bound follows from the triangle inequal-ity applied to the difference between standard unlearning (wx = wz + H−1 
+
+> λ
+
+∇f (x, w ∗)) and similarity-based unlearning (w′ 
+
+> x
+
+≈ wz + α+1 1−s(λ)
+
+> z
+
+H−1 
+
+> λ
+
+∇f (z, w ∗)). The bound is obtained by factoring out the damped Hessian inverse and applying the submultiplicative property of matrix norms. By definition of standard approximate unlearning and our proposed similarity-based approach (both using the damped Hessian): 
+
+wx = wz + H−1 
+
+> λ
+
+∇f (x, w ∗) (16) 
+
+w′ 
+
+> x
+
+= wz + α + 1 1 − s(λ)
+
+> z
+
+(wz − w∗) (17) From the first damped unlearning step, we have wz − w∗ ≈
+
+H−1 
+
+> λ
+
+∇f (z, w ∗). Substituting this into the expression for w′
+
+> x
+
+,
+
+w′ 
+
+> x
+
+≈ wz + α + 1 1 − s(λ)
+
+> z
+
+H−1 
+
+> λ
+
+∇f (z, w ∗)
+
+5The error is the difference between wx and w′
+
+> x
+
+,
+
+wx − w′ 
+
+> x
+
+≈  wz + H−1 
+
+> λ
+
+∇f (x, w ∗) −
+
+
+
+wz + α + 1 1 − s(λ)
+
+> z
+
+H−1 
+
+> λ
+
+∇f (z, w ∗)
+
+
+
+= H−1 
+
+> λ
+
+∇f (x, w ∗) − α + 1 1 − s(λ)
+
+> z
+
+H−1 
+
+> λ
+
+∇f (z, w ∗)
+
+= H−1
+
+> λ
+
+
+
+∇f (x, w ∗) − α + 1 1 − s(λ)
+
+> z
+
+∇f (z, w ∗)
+
+
+
+≤ H−1 
+
+> λ
+
+· ∇f (x, w ∗) − α + 1 1 − s(λ)
+
+> z
+
+∇f (z, w ∗)
+
+(18) 
+
+Lemma IV.2 (Gradient Approximation for Quadratic Loss) .
+
+For the quadratic loss function f (z, w ) = 12 (y − w⊤z)2, define the scaling factor C = α+1 1−s(λ)
+
+> z
+
+and the residuals: rx = yx −
+
+w∗⊤ x, rz = yz −w∗⊤ z. Then the gradient difference satisfies 
+
+∥∇ f (x, w ∗) − C∇f (z, w ∗)∥≤ (|C| · | rz | + |β| · | rx|) · ∥ z∥ + |rx| · ∥ c∥ (19) 
+
+assuming a linear relationship x = βz + c, where β ∈ R is a scalar and c ∈ Rd is the offset vector. Proof. We compute the gradients for quadratic loss: 
+
+∇f (z, w ∗) = −rz z and ∇f (x, w ∗) = −rxx, where rz , r x
+
+are the residuals. Using the linear relationship x = βz + c
+
+(justified by high Pearson correlation), we substitute and apply the triangle inequality twice to bound ∥Cr z z − rx(βz + c)∥.The gradient of the quadratic loss is given by: 
+
+∇f (z, w ∗) = −(yz − w∗⊤ z)z = −rz z, (20) 
+
+∇f (x, w ∗) = −(yx − w∗⊤ x)x = −rxx. (21) Hence, the difference in gradients becomes 
+
+∥∇ f (x, w ∗) − C∇f (z, w ∗)∥ = ∥− rxx − C(−rz z)∥
+
+= ∥Cr z z − rxx∥ . (22) The linear relationship x = βz + c is justified by the Pearson correlation, as a high correlation implies collinearity between the centered vectors. We substitute this relationship into the expression, 
+
+∥Cr z z − rxx∥ = ∥Cr z z − rx(βz + c)∥
+
+= ∥Cr z z − rxβz − rxc∥
+
+= ∥(Cr z − βr x)z − rxc∥≤ ∥ (Cr z − βr x)z∥ + ∥rxc∥ (by TI 1)
+
+= |Cr z − βr x| · ∥ z∥ + |rx| · ∥ c∥≤ (|C| · | rz | + |β| · | rx|) · ∥ z∥ + |rx| · ∥ c∥.
+
+(23) This provides an upper bound on the gradient difference based on the norms of z and c, the residuals rx, r z , and the scaling factors C and β.
+
+Assumption IV.3 (Standardized Data) . We assume that the input data is standardized such that xi, z i ∼ N (0 , 1) , target 
+
+y ∼ N (0 , 1) , d is the number of features and ∥w∗∥ has bounded norm. Then, |xi|, |zi|, |y| ≤ k, where k = 4 , and ∥x∥, ∥z∥ ≈ √d
+
+Lemma IV.4 (Residual and Coefficient Bounds) . Under Assumption IV.3, the following hold for vectors x, z ∈ Rd,responses yx, y z , and mean vectors ¯x, ¯z, which are |rx|, |rz | ≤ 
+
+k + ∥w∗∥√d, ∥c∥ ≤ k(1 + |β|), |β| ≤ √d+k√d−k , for √d > k , and 
+
+|α| ≤ 1.Proof. The bounds follow directly from Assumption IV.3 and triangle inequality applications: (1) residual bounds use |rx| ≤ |yx| + ∥w∗∥ · ∥ x∥, (2) offset bound follows from ∥c∥ ≤ ∥ ¯x∥ +
+
+|β| · ∥ ¯z∥, (3) scaling coefficient bound uses triangle and reverse triangle inequalities on centered vectors, and (4) correlation coefficient bound is standard. Using the triangle inequality 
+
+|rx| ≤ | yx| + ∥w∗∥ · ∥ x∥ ≤ k + ∥w∗∥√d
+
+The same applies for rz . From c = ¯ x − β ¯z,
+
+∥c∥ ≤ ∥ ¯x∥ + |β| · ∥ ¯z∥ ≤ k(1 + |β|)
+
+. Now, we use triangle and reverse triangle inequalities, 
+
+∥x − ¯x∥ ≤ √d + k, ∥z − ¯z∥ ≥ √d − k ⇒ | β| ≤ √d + k
+
+√d − k
+
+. The standard correlation measures satisfy |α| ≤ 1.V. M AIN RESULT : F INAL ERROR BOUND 
+
+Theorem V.1 (Final Parameter Update Error Bound) . Under Assumption IV.3 (with k = 4 ), the parameter update error satisfies: 
+
+∥wx − w′
+
+> x
+
+∥≤ ∥ H−1 
+
+> λ
+
+∥(4 + ∥w∗∥√d) · (|C|√d + |β|(√d + 4) + 4) 
+
+≲ ∥H−1 
+
+> λ
+
+∥ (|C| + 1) ∥w∗∥d + 4( |C| + 1) √d
+
+for large d, where C = α+1 1−s(λ)
+
+> z
+
+.
+
+Proof. We begin by substituting the bound on the gradient approximation error from the preceding lemmas into our main error bound. We then insert the data-dependent bounds for residuals and coefficients and perform algebraic simplification to arrive at the final asymptotic rate. We start from the general bound derived previously, 
+
+wx − w′ 
+
+> x
+
+≤ H−1 
+
+> λ
+
+·(( |C| · | rz | + |β| · | rx|) · ∥ z∥ + |rx| · ∥ c∥) .
+
+6We substitute the simplified bounds from Lemma IV.4, 
+
+≤ H−1
+
+> λ
+
+
+
+|C|(4 + ∥w∗∥√d) + |β|(4 + ∥w∗∥√d)
+
+
+
+√d + (4 + ∥w∗∥√d) · 4(1 + |β|)
+
+
+
+= H−1 
+
+> λ
+
+(4 + ∥w∗∥√d)
+
+
+
+(|C| + |β|)√d + 4(1 + |β|)
+
+
+
+= H−1 
+
+> λ
+
+(4 + ∥w∗∥√d)
+
+
+
+|C|√d + |β|√d + 4 + 4 |β|
+
+
+
+= H−1 
+
+> λ
+
+(4 + ∥w∗∥√d)
+
+
+
+|C|√d + |β|(√d + 4) + 4 
+
+
+
+.
+
+This gives the first line of the theorem. For a large feature dimension d, we have |β| ≈ 1. The dominant terms of the expression are, 
+
+≲ H−1 
+
+> λ
+
+(4 + ∥w∗∥√d)
+
+
+
+|C|√d + ( √d + 4) + 4 
+
+
+
+= H−1 
+
+> λ
+
+(4 + ∥w∗∥√d)
+
+
+
+(|C| + 1) √d + 8 
+
+
+
+= H−1
+
+> λ
+
+
+
+4( |C| + 1) √d + 32 + ( |C| + 1) ∥w∗∥d + 8 ∥w∗∥√d
+
+
+
+.
+
+Grouping by powers of d, the highest-order terms give the final asymptotic bound: 
+
+wx − w′ 
+
+> x
+
+≲ H−1
+
+> λ
+
+
+
+(|C| + 1) ∥w∗∥d + 4( |C| + 1) √d
+
+
+
+.
+
+Remark V.2 (Practical Implications) . Theorem V.1 provides a theoretical guarantee for our damped, similarity-based un-learning method. The error bound scales polynomially with the input dimension d, dominated by an O(d) term. Crucially, the bound’s stability is ensured by the condition number of the damped Hessian, ∥H−1 
+
+> λ
+
+∥, and the factor C, which is well-behaved due to the non-vanishing denominator 1 − s(λ) 
+
+> z
+
+. This highlights that our method is not only computationally efficient but also theoretically grounded and robust in high-dimensional settings. VI. A LGORITHM DESIGN 
+
+Algorithm 1 implements our enhanced similarity-based unlearning framework with Hessian damping through three main phases. The algorithm begins by computing the damped Hessian approximation Hλ = Hw∗ + λI , which ensures numerical stability by regularizing the second-order information of the loss function at the optimal parameters, and selects pairs of data points (z, x ) from the dataset to simulate the sequential unlearning scenario. For each selected pair, the algorithm simulates approximate unlearning by first removing the data point z using the damped influence function update wz = w∗ +
+
+H−1 
+
+> λ
+
+∇f (z, w ∗), which produces the damped influence direc-tion δ(λ) 
+
+> z
+
+= wz −w∗. The algorithm then computes the damped self-influence score s(λ) 
+
+> z
+
+= ∇f (z, w ∗)T H−1 
+
+> λ
+
+∇f (z, w ∗), which measures the curvature-adjusted influence of the removed data point . Instead of performing the computationally expensive second unlearning step for a similar data point x, our proposed similarity-based approximation computes the similarity factor 
+
+α between data points x and z, then estimates the final unlearned parameters using the theoretically derived update rule w′ 
+
+> x
+
+= wz + α+1 1−s(λ)
+
+> z
+
+(wz − w∗) . This leverages our key insight that for similar data points, the influence directions are proportionally related, while the damping ensures 1 − s(λ) 
+
+> z
+
+> 0
+
+for numerical stability. The algorithm evaluates both approaches by computing their performance on the dataset and recording the norm difference ∥wx − w′
+
+> x
+
+∥ to quantify the quality of the approximation.The key advantage is replacing the second expensive Hessian inverse-vector product with a robust scaling factor that incorporates both data similarity ( α) and the self-influence ( s(λ) 
+
+> z
+
+) of the first unlearned point. 
+
+Algorithm 1 Pearson Correlation-Based Approximate Unlearn-ing 
+
+Input : Trained model fθ∗ , dataset D = {(xi, y i)}ni=1 , regular-ization parameter λ, optimal parameters w∗, Hessian Hw∗ and learning rate η
+
+Output : Updated model after unlearning similar data points  
+
+> 1:
+
+Compute damped Hessian: Hλ = Hw∗ + λI  
+
+> 2:
+
+Select a subset of data point pairs {(z, x )} ⊆ D where x
+
+and z are similar  
+
+> 3:
+
+for each pair (z, x ) do  
+
+> 4:
+
+Extract gradients: ∇f (z, w ∗) and ∇f (x, w ∗) 
+
+> 5:
+
+Compute unlearned weight: wz = w∗ +
+
+H−1 
+
+> λ
+
+(λw ∗ + ∇f (z, w ∗))  
+
+> 6:
+
+Define damped influence direction: δ(λ) 
+
+> z
+
+= wz − w∗ 
+
+> 7:
+
+Compute damped self-influence score: s(λ) 
+
+> z
+
+=
+
+∇f (z, w ∗)T δ(λ) 
+
+> z
+> 8:
+
+Compute updated weight: wx = wz +
+
+H−1 
+
+> λ
+
+(λw z + ∇f (x, w ∗))  
+
+> 9:
+
+Compute Pearson correlation α = Pearson (x, z ) 
+
+> 10:
+
+Compute scaling factor: C = α+1 1−s(λ) 
+
+> z
+> 11:
+
+Estimate similarity-based unlearning: wx′ = wz +C·δ(λ) 
+
+> z
+> 12:
+
+Evaluate accuracy of both wx and w′ 
+
+> x
+
+on D 
+
+> 13:
+
+Record norm difference ∥wx − w′
+
+> x
+
+∥ 
+
+> 14:
+
+end for 
+
+VII. E XPERIMENTS 
+
+Datasets: We evaluate our framework across seven diverse datasets spanning regression and classification tasks. For classification, we utilize architectures ranging from simple MLPs to ResNet-18 and ResNet-50 (for CIFAR-100 scalability experiments). All features are standardized. We evaluate our proposed approach through a comparative analysis against baseline methods across seven distinct datasets. The evaluation utilizes the California Housing dataset [20] comprising 20,640 records with 8 features from the 1990 census to predict median house values. The Diabetes dataset [21], a scikit-learn regression dataset with 442 samples and 10 features target-ing disease progression one year post-baseline. The MNIST 7dataset [22], a standard benchmark for handwritten digit recog-nition containing 70,000 grayscale 28x28 pixel images. The Fashion-MNIST dataset, containing 70,000 grayscale 28×28 pixel images of fashion items across 10 categories, evaluated with CNN architecture. The CIFAR-10 dataset, a color image classification dataset containing 60,000 32×32 pixel images across 10 classes, evaluated with ResNet-18 architecture. And, the Labeled Faces in the Wild (LFW) dataset, a face recognition dataset containing images of public figures, evaluated with ResNet-18 architecture. And, a custom synthetic dataset of 5,000 samples generated via a Gaussian mixture model with two distinct means to facilitate performance assessment under controlled conditions with a known ground truth. All features are standardized using the Standard Scaler [23] to have zero mean and unit variance. The data split are as follows, California Housing and Diabetes datasets were divided into 80% training and 20% testing sets with a fixed random seed of 42. For the synthetic dataset, all 5,000 samples were used for training and evaluated on the same set, and unlearning experiments are conducted by selecting 100 random pairs of data points. MNIST and Fashion-MNIST followed the standard split of 60,000 training and 10,000 test samples. For unlearning experiments on MNIST, 75% of the samples corresponding to the digit ‘3’ were selected as the unlearning subset. CIFAR-10 used 50,000 training and 10,000 test samples. 
+
+Similarity Measure Evaluation: To validate our choice of Pearson correlation, we empirically evaluated three similarity measures for approximating sequential unlearning effects. Our experimental setup involved training a linear regression model on the Diabetes dataset with L2 regularization ( λ = 0 .01 ) and testing sequential unlearning approximations on 4,950 pairs of randomly subsampled training points. We compared three measures to calculate the approximation factor α:
+
+αcos = x⊤z
+
+∥x∥2∥z∥2
+
+,αpearson = (x − ¯x)⊤(z − ¯z)
+
+∥x − ¯x∥2∥z − ¯z∥2
+
+,αproj = x⊤z
+
+∥z∥22
+
+Each similarity measure captures distinct facets of data rela-tionships. Cosine similarity (αcos ) measures the angle between two vectors, assessing directional congruence independent of magnitude. The Pearson correlation coefficient (αpearson )quantifies the linear correlation between centered variables, making it robust to distributional shifts. Finally, Projection-based similarity (αproj ) is the unnormalized scalar projection of one vector onto another, making it sensitive to vector magnitudes. For each pair (z, x ), we measured the approximation quality by computing the parameter difference ∥wx − w′
+
+> x
+
+∥2 between standard approximate unlearning and our similarity-based approach. A similarity measure ”wins” if it produces the smallest approximation error among the three methods for that pair.            
+
+> TABLE II COMPARISON OF SIMILARITY MEASURES ON THE DIABETES DATASET ACROSS 4,950 UNLEARNING PAIRS .
+> Similarity Measure Wins Win Rate (%)
+> Cosine Similarity 1,160 23.4
+> Pearson Correlation 2,139 43.2
+> Projection-based 1,651 33.3
+
+Of the 4,950 pairs tested, Pearson correlation achieved the highest win rate at 43.2%, significantly outperforming the other methods, as shown in Table II. This superior performance validates our choice of Pearson correlation for capturing the linear relationships most relevant to gradient similarity in unlearning contexts. Furthermore, its mean-centering property naturally accounts for the bias terms in linear models, ensuring that the similarity factor α captures the true linear relationship between data points rather than spurious correlations due to offsets. The superior performance of Pearson correlation with 43.2% win rate can be attributed to its mean centering property, which naturally accounts for bias terms in security relevant feature spaces. In network intrusion detection, where features often exhibit different baseline distributions, for instance, packet sizes, connection durations. The correlation focus on centered linear correlation is better aligned with the gradient space of security models than uncentered cosine similarity. This ensures that the similarity factor α captures meaningful structural relationships. 
+
+Evaluation Metrics: We utilize average accuracy with standard deviation ( Avg. Acc. ) model performance on the retained dataset after unlearning, measuring utility preservation. Also, we employ Acc. Unlearn which quantifies the effectiveness of the forgetting process and is defined as 1 − ∥w′  
+
+> x−wx∥2
+> max x∥w′
+> x−wx∥2
+
+,
+
+normalized to [0 , 1] and reported as a percentage. where w′
+
+> x
+
+denotes our similarity-based parameters and wx denotes the standard sequential unlearning parameters. This demonstrates that our method inherits the privacy guarantees of standard approximate unlearning while achieving a substantially reduced computational cost. We also utilised metrics such tug-of-war (ToW) and membership inference attack (MIA) as defined in [24]. TOW (higher is better) measures the relative difference between the accuracies of the unlearned model and the retrained model on the forget, retain and test sets. MIA (lower is better) measures the membership inference attack success rate on the forget set after unlearning. 
+
+Model Architecture: For the regression tasks (California Housing and Diabetes datasets), we used a simple linear regres-sion model implemented as nn.Linear(input_dim, 1) ,which is a single-layer architecture mapping features directly to the target. For the classification tasks, three architectures were employed. For the synthetic dataset, we used a three-layer fully connected neural network with ReLU activations, consisting of an input layer (10 features to 64 units), a hidden layer (64 to 32 units), and an output layer (32 to 2 classes). For the MNIST and FMNIST dataset, we used a convolutional neural network with two convolutional layers followed by two fully connected 8layers. The architecture consists of, (1) a convolutional layer with 10 filters of size 5 × 5, (2) a second convolutional layer with 20 filters of size 5 × 5 and dropout, both followed by ReLU activation and 2 × 2 max pooling, (3) a fully connected layer mapping the flattened 320 features to 50 units, and (4) an output layer mapping 50 units to 10 classes. For the CIFAR-10 & LFW, we used ResNet-18 [25]. For CIFAR-100, Resnet-50 architecture is used. 
+
+Training Configuration: The models are trained with different hyperparameter settings for regression and classification tasks. For classification tasks, we used the Adam optimizer and trained for 100 epochs with learning rate of 0.001 on the synthetic dataset, and 50 epochs and learning rate of 0.001 on MNIST, 30 epochs and learning rate of 0.07 for FMNIST, 30 epochs and leaning rate of 0.001 on LFW, and 80 epochs and learning rate of 0.001 on CIFAR-10. For regression tasks, we used stochastic gradient descent (SGD) with a learning rate of 0.01, a weight decay of 0.01, and trained for 1000 epochs. The regularization parameter λ is set to 0.01 for regression tasks and 0.001 for classification tasks. The damping parameter λ is set equal to the L2 regularization value used during training. 
+
+Baseline : We compare the proposed method against established state-of-the-art baselines: MITR [26], RUM(A) [24], RUM(B) [27], and Hessian-free Unlearning [28]. 
+
+Computational Complexity : The major efficiency gain of our method lies in transforming the unlearning process from a series of expensive, repeated computations into a fast, closed-form operation. Standard approximate unlearning requires computing a new Hessian-inverse-vector product ( H−1v) for every data point requested for removal, making the process highly expensive. Our Similarity-Based Unlearning, conversely, requires this computationally intense step only once for the first unlearned data point ( z). For all subsequent, correlated unlearning requests, the method achieves significant speedup by replacing the H−1v computation with simple O(d) vector and scalar operations (scaling and addition). This strategy fundamentally shifts the complexity of sequential unlearning from a repetitive high-cost bottleneck to a minimal-cost operation.Table III reports wall-clock times which provide a quantitative comparison between retraining from scratch, standard iterative unlearning, and our proposed method. Our method achieves an ∼82 × speedup over standard influence function unlearning for subsequent correlated points.            
+
+> TABLE III WALL -CLOCK TIME COMPARISON FOR SEQUENTIAL UNLEARNING ON
+> CALIFORNIA HOUSING .
+> Method Time per point Complexity per point
+> Retrain from scratch 29.02 s O(nd 2)
+> MITR 38.77 s N/A (non-sequential) Standard influence 169.54 ms O(d2)
+> Similarity-based (Ours) 2.07 ms O(d)
+
+A. Results and Analysis 
+
+We present our experimental results across classification and regression tasks. Table VI presents comprehensive evaluation across five classification datasets. Our method consistently outperforms baselines across all metrics. Table VII demon-strates the effectiveness of our approach on regression tasks. To directly validate our method against recent state-of-the-art approaches, we conducted comprehensive experiments using standard unlearning metrics (ToW and MIA) on ResNet-18 with CIFAR-10. Table VIII presents this comparison. For conciseness, we denote Avg. Acc. as AR, Acc. Remain as AR, and Acc. Unlearn as AU. 
+
+Batch-Sequential Scalability Results: To demonstrate scalabil-ity, we conducted batch-sequential experiments for batch sizes 
+
+k ∈ { 5, 10 , 20 , 50 } across six dataset-architecture combinations, including CIFAR-100 (ResNet-50). We track the parameter drift norm ∥wstd − wprop ∥2 to quantify how well our approximation tracks the exact sequential update. Results are in Table IV. For small to moderate batch sizes ( k ≤ 20 ), which correspond to practical GDPR compliance scenarios, parameter drift remains tightly bounded. Model utility (AR) degrades by less than 2%, and unlearning fidelity (AU) stays consistently above 80% across all evaluated architectures. On CIFAR-100 (ResNet-50), our method yields a > 7% increase in model utility (AR) and > 11% increase in unlearning fidelity (AU) compared to RUM(B) (which achieves AR=84.52%, AU=76.86%, ToW=0.633, MIA=0.410). 
+
+B. Numerical Stability and Condition Number Analysis 
+
+We evaluate the condition number of Hw∗ versus Hλ across damping values on the CIFAR-10 dataset to demonstrate the effect of damping. The sensitivity of a linear system Ax =
+
+b to numerical noise is measured by the condition number 
+
+κ(A) = σmax (A) 
+
+> σmin (A)
+
+. In double-precision arithmetic, solving a system typically results in the loss of log 10 (κ(A)) digits of precision. For practical stability in optimization and machine learning, κ(A) < 10 8 is generally considered the threshold for reliable inversion [19]. As shown in Table V for the CIFAR-10 dataset, the undamped Hessian is severely unstable ( κ ≈ 10 13 ), which would result in the loss of nearly all 16 digits of double-precision accuracy. Our damping strategy consistently reduces this to highly stable ranges. Our default λ = 0.01 yields a condition number of approximately 49 , 735 , which is well within the range con-sidered numerically stable for matrix inversion. This empirical evidence substantiates the effectiveness of our damping strategy in stabilizing the rank-1 Sherman-Morrison update in high-dimensional settings. 
+
+C. Safety Analysis 
+
+The safety analysis is performed by setting a maximum acceptable approximation error ( ϵmax ) for the unlearned pa-rameters ( ∥wx − w′
+
+> x
+
+∥) and solving for the minimum required Pearson correlation ( α). We use the overall error bound from Theorem IV.1 
+
+∥wx − w′
+
+> x
+
+∥ ≤ ∥ H−1 
+
+> λ
+
+∥ · ∥∇ f (x, w ∗) − C∇f (z, w ∗)∥ ≤ ϵmax 
+
+9TABLE IV BATCH -SEQUENTIAL SCALABILITY RESULTS .
+
+Dataset (Model) k Drift Norm AR (%) AU (%) ToW 
+
+MNIST (Logistic) 5 0.5130 92.09 96.12 0.9533 10 5.4420 92.04 90.65 0.9533 20 11.1674 91.94 80.82 0.8513 50 23.8553 91.45 59.03 0.9082 MNIST (CNN) 5 0.0069 98.68 92.99 0.8280 10 0.0137 98.67 92.99 0.9930 20 0.0257 98.59 92.96 0.9445 50 0.0584 98.41 92.81 0.9726 FMNIST (CNN) 5 0.0788 87.58 99.60 0.9793 20 13.4388 85.89 85.70 0.9628 50 28.4255 76.88 69.76 0.9497 CIFAR-10 (ResNet-18) 5 0.1542 84.12 98.99 0.9181 20 1.2403 84.08 92.38 0.8997 50 3.8510 83.50 76.32 0.5974 LFW (ResNet-18) 5 0.0396 76.79 91.93 0.8187 20 0.1244 76.21 91.45 0.8003 CIFAR-100 (ResNet-50) 5 0.0064 91.60 89.91 0.6594 10 0.0196 91.75 89.72 0.6612 20 0.1069 91.70 88.40 0.7631 50 1.2192 91.28 74.90 0.6609                                                        
+
+> TABLE V CONDITION NUMBER IMPROVEMENT ACROSS VARYING λVALUES ON
+> CIFAR-10.
+> λκ(Hw∗)κ(Hλ)Improvement Factor
+> 10 −51.88 ×10 13 4.98 ×10 7378 ,091 ×
+> 10 −41.88 ×10 13 4.98 ×10 63.78 ×10 6×
+> 10 −31.88 ×10 13 4.98 ×10 53.78 ×10 7×
+> 10 −21.88 ×10 13 49 ,735 3.78 ×10 8×
+> 10 −11.88 ×10 13 4,978 3.78 ×10 9×
+> 11.88 ×10 13 499 3.78 ×10 10 ×
+
+∥∇ f (x, w ∗) − C ∇f (z, w ∗)∥ ≤ ϵmax 
+
+H−1
+
+> λ
+
+Now define the allowable gradient error, ϵ′ = ϵmax  
+
+> ∥H−1
+> λ∥
+
+∥∇ f (x, w ∗) − C ∇f (z, w ∗)∥ ≤ ϵ′
+
+Now, we apply the mathematical bound for the gradient error (derived in Lemma IV.2) 
+
+∥∇ f (x, w ∗) − C∇f (z, w ∗)∥ ≤ 
+
+(|C| · | rz | + |β| · | rx|) · ∥ z∥ + |rx| · ∥ c∥,
+
+where C = α+1 1−s(λ)
+
+> z
+
+, r x and rz are the residuals, and x = βz +c
+
+is the linear relationship. 
+
+(|C| · | rz | + |β| · | rx|) · ∥ z∥ + |rx| · ∥ c∥ ≤ ϵ′
+
+Subtract the non-C error components (residual and offset terms) on both sides, 
+
+|C| · | rz | · ∥ z∥ ≤ ϵ′ − (|β| · | rx| · ∥ z∥ + |rx| · ∥ c∥)
+
+| {z } 
+
+> Error not controlled by α
+
+Solve for the maximum allowed magnitude of C, denoted Cmax 
+
+|C| ≤ ϵ′ − (|β| · | rx| · ∥ z∥ + |rx| · ∥ c∥)
+
+|rz | · ∥ z∥ ≡ Cmax 
+
+The scaling factor C is defined as, 
+
+C = α + 1 1 − s(λ)
+
+> z
+
+.
+
+Since we want to find the lowest α that still satisfies the maximum allowed magnitude Cmax , we substitute Cmax back into the definition and solve for minimum Pearson Correlation 
+
+αmin :
+
+αmin + 1 1 − s(λ)
+
+> z
+
+= Cmax ,αmin = Cmax ·
+
+
+
+1 − s(λ)
+
+> z
+
+
+
+− 1.
+
+Hence, if α ≥ αmin , the Pearson correlation ( α) is high enough to ensure that the error introduced by the shortcut ( ∥wx − w′
+
+> x
+
+∥)will be less than or equal to the maximum acceptable error (ϵmax ). We included a result of the theoretical upper bound from Theorem V.1 against the observed errors in Table IX, The bound is conservative by a factor of ≈ 35 ×. For selecting αmin given tolerance ϵmax , practitioners can safely use the theoretical bound as a worst-case guarantee, knowing actual error will be significantly lower. We will detail this with clarification on the use theoretical bound with a safety factor of 0.03 for conservative estimation or 0.1 for aggressive deployment. We included a sensitivity analysis for the damping parameter 
+
+λ in Table X, 10 TABLE VI CLASSIFICATION PERFORMANCE COMPARISON OF OUR METHOD WITH BASELINES . M ISSING ENTRIES ARE DUE TO ARCHITECTURAL INCOMPATIBILITIES         
+
+> (MITR DOES NOT SUPPORT CNN S/R ES NETS , H ESSIAN -FREE UNLEARNING IS DESIGNED FOR CERTIFICATION AND DOES NOT REPORT AU METRICS ). AR = AVG . A CCURACY ON RETAINED SET (%); AU = A CC . U NLEARN (%, NORMALIZED TO [0,100]).
+
+Dataset (Model) MITR Hessian Free Unlearning Our Method AR AU AR AR AU 
+
+Synthetic GMM 73.3 93.3 – 99.71 95.67 MNIST (CNN) 53.8 78.7 91.50 98.71 81.41 MNIST (Logistic Regression) – – 87.50 97.66 73.11 Fashion-MNIST (CNN) – – 77.85 89.16 –CIFAR-10 (ResNet-18) – – 79.62 81.13 –LFW (ResNet-18) – – 71.92 79.70 – 
+
+> TABLE VII REGRESSION PERFORMANCE .
+
+Dataset AU 
+
+California Housing 91.48 Diabetes 91.44   
+
+> TABLE VIII COMPARISON WITH SOTA UNLEARNING METHODS ON
+> CIFAR-10 (R ES NET -18).
+
+Method ToW MIA 
+
+RUM(A) 0.715 0.489 RUM(B) 0.920 0.590 Our Method 0.950 0.660                               
+
+> TABLE IX EMPIRICAL VS . T HEORETICAL GAP . T HE SUBSCRIPT TAND EDEPICTS THEORETICAL AND EMPIRICAL .
+> Dataset ∥wx−w′
+> x∥T∥wx−w′
+> x∥EGap Factor
+> Diabetes 8.2 ×10 −22.1 ×10 −339.0 ×
+> Synthetic GMM 1.2 ×10 −23.1 ×10 −438.7 ×
+> MNIST (CNN) 6.8 ×10 −21.8 ×10 −337.8 ×
+> FMNIST (CNN) 7.4 ×10 −22.0 ×10 −337.0 ×
+> CIFAR-10 (ResNet-18) 1.5 ×10 −14.2 ×10 −335.7 ×
+> LFW (ResNet-18) 2.1 ×10 −16.8 ×10 −330.9 ×
+
+VIII. D ISCUSSION 
+
+Our proposed similarity-based machine unlearning frame-work utilising Pearson correlation and damped Hessian approx-imations delineates toward reconciling the practical demands of data removal with the computational realities of modern deep learning. At its core, the method successfully addresses a criti-cal inefficiency in existing approximate unlearning paradigms. The repeated, expensive computation of Hessian-inverse-vector products for each data point removal request. By introducing the key insight that the influence directions for similar data points are proportionally related formalized through the similarity factor α, the work transforms a sequence of computationally intensive operations into a single, upfront cost followed by efficient, closed-form updates. This architectural shift is grounded in a theoretical analysis provided the error bounds and stability guarantees under Hessian damping. The empirical validation across seven diverse datasets demonstrates our method’s broad applicability. The consistent out-performance of Pearson correlation over cosine similarity and projection-based measures in approximating sequential unlearning effects (with a 43.2% win rate) is a key finding. It underscores that the linear correlation of centered feature vectors capturing shared directional trends while filtering out mean shifts is more aligned with the underlying mechanics of gradient-based influence than raw angular similarity. The influence function-based unlearning is intrinsically tied to the linear relationships within the gradient space of the model at its optimum. The results showing accuracy improvements on the order of 10 −2
+
+over state-of-the-art baselines while maintaining competitive forgetting performance via ToW and MIA scores signify that our proposed approximation does not come at the cost of compromised privacy or utility. This effectively decouples computational cost from unlearning fidelity for correlated data, a major practical advancement. The theoretical grounding of our method anchored via The-orem V.1, provide strong, polynomial-scaling error guarantees that are directly actionable in practice. The derived bound ex-plicitly shows that the approximation error is controlled by the well-conditioned damped Hessian ∥H−1 
+
+> λ
+
+∥ and the computable scaling factor C = α+1 1−s(λ)
+
+> z
+
+. This is not a vulnerability but a design feature, it offers a clear, measurable pathway to ensure stability. By regularizing the Hessian with damping parameter 
+
+λ, we guarantee positive definiteness and explicitly control the self-influence term s(λ) 
+
+> z
+
+. Thus, ensuring the denominator 
+
+1 − s(λ) 
+
+> z
+
+remains non-zero and the update rule is numerically stable. The requirement for a well-behaved local curvature is not a restrictive assumption but a predictable characteristic of properly regularized models trained to convergence, a condition satisfied in our comprehensive experiments across CNNs, ResNets, and regression models. The success of the Gauss-Newton approximation in our framework is validated, which provides a sufficient and efficient rank-1 update that captures the dominant change in the Hessian when a single data point is removed, as evidenced by the high-fidelity unlearning results across diverse datasets. The method’s demonstrated robustness in these varied and realistic experimental settings. The safety analysis reinforces this practical robustness by providing a conservative, worst-case framework. It allows practitioners to determine a minimum similarity threshold αmin to guarantee the approximation error remains below any desired tolerance 
+
+ϵmax . Thus, transforming a theoretical concern into a tunable safety parameter. This analytical tool ensures the method can be deployed with confidence, even when the perfect linear relationship does not hold, by providing clear operational guidelines. The design of our method inherently follow the complexity of deep learning landscapes and addresses it through a combination of principled damping, empirical validation, and 11 TABLE X SENSITIVITY ANALYSIS FOR λλ Condition Number κ(Hλ) AR (%) AU (%) ToW Stability                                           
+
+> 10 −54.98 ×10 783.2 97.8 0.912 Unstable
+> 10 −44.98 ×10 683.8 97.5 0.923 Marginal
+> 10 −34.98 ×10 584.0 97.9 0.935 Stable
+> 10 −24.97 ×10 484 .198 .90.950 Optimal
+> 10 −14.98 ×10 383.5 96.2 0.918 Over-regularized
+> 14.98 ×10 280.1 91.3 0.875 Over-regularized
+
+a built-in safety mechanism, ensuring its findings and utility for efficient unlearning remain robust and directly applicable. 
+
+A. Implication 
+
+We consider the following threat model provided the machine unlearning scenarios in network security systems. The adversary has access to the trained model and can issue unlearning requests for specific data points, for instance, a malicious actor requesting removal of their data, or an attacker attempting to manipulate the model by requesting removal of benign data points. The adversary aims to either (a) compromise the security of the model by inducing errors through malicious unlearning requests, or (b) infer information about the training data through membership inference attacks on the unlearned model. Our method ensures that the unlearning process successfully removes the influence of requested data points within theoretical error bounds, and the approximation error ∥wx − w′
+
+> x
+
+∥ remains bounded by ϵmax when α ≥ αmin . The timing and resource consumption of unlearning requests do not leak information about the data being forgotten. We assume the underlying training process is secure and the model parameters w∗ are trustworthy. We also assume that the similarity computation α
+
+is accurate and unaffected by the adversary such as, through crafted feature vectors designed to produce high correlation. IX. C ONCLUSION 
+
+Our correlation-guided framework fundamentally restructures the sequential unlearning process by recognizing that the influence directions for similar data points are proportionally related, thereby eliminating the computational bottleneck of repeated Hessian operations for correlated removal requests. The theoretical foundation of our method established through Theorems IV.1 and V.1, provides polynomial error bounds that guarantee stability in high-dimensional settings, while the damping strategy ensures the condition number of the Hessian remains well within numerically stable ranges suitable for real-world system integration. Our comprehensive experimental evaluation across seven datasets, including large-scale deploy-ments with ResNet-50 demonstrates that the proposed approach achieves 82 × wall-clock speedup over standard unlearning methods while maintaining superior forgetting effectiveness, as evidenced by MIA success rates of 0.660 and ToW scores of 0.950 on CIFAR-10 with ResNet-18. The built-in safety analysis provides practitioners with a tunable threshold αmin to guarantee approximation error bounds, which paves the way for secure deployment. This framework addresses the increasing demands from privacy regulations such as GDPR, enabling organizations to implement efficient data removal without compromising the security integrity of their machine learning-based systems, including intrusion detection, threat intelligence, and federated learning environments. We intend to extend this framework to incorporate adaptive threshold mechanisms for dynamic selection between similarity-based and full unlearning, evaluate performance under adversarial conditions targeting the unlearning process, and explore integration with federated learning architectures where efficient unlearning is paramount for maintaining privacy guarantees across distributed nodes. The accessibility of our method, requiring no changes to existing training pipelines positions it as a practical solution for organizations seeking to deploy privacy-preserving machine unlearning in production security systems. 12 REFERENCES [1] J. Hayes, L. Melis, G. Danezis, and E. D. Cristofaro, “LOGAN: membership inference attacks against generative models,” Proc. Priv. Enhancing Technol. , vol. 2019, no. 1, pp. 133–152, 2019. [Online]. Available: https://doi.org/10.2478/popets-2019-0008 [2] R. Shokri, M. Stronati, C. Song, and V. Shmatikov, “Membership inference attacks against machine learning models,” in 2017 IEEE symposium on security and privacy (SP) . IEEE, 2017, pp. 3–18. [3] C. Guo, T. Goldstein, A. Hannun, and L. Van Der Maaten, “Certified data removal from machine learning models,” in Proceedings of the 37th International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, H. D. III and A. Singh, Eds., vol. 119. PMLR, 13–18 Jul 2020, pp. 3832–3842. [Online]. Available: https://proceedings.mlr.press/v119/guo20c.html [4] L. Bourtoule, V. Chandrasekaran, C. A. Choquette-Choo, H. Jia, A. Travers, B. Zhang, D. Lie, and N. Papernot, “Machine unlearning,” in 
+
+2021 IEEE Symposium on Security and Privacy (SP) , 2021, pp. 141–159. [5] T. T. Nguyen, T. T. Huynh, P. L. Nguyen, A. W.-C. Liew, H. Yin, and Q. V. H. Nguyen, “A survey of machine unlearning,” arXiv preprint arXiv:2209.02299 , 2022. [6] Y. Cao and J. Yang, “Towards making systems forget with machine unlearning,” in 2015 IEEE Symposium on Security and Privacy , 2015, pp. 463–480. [7] European Parliament and Council of the European Union, “Regulation (eu) 2016/679 of the european parliament and of the council,” Available at: https://data.europa.eu/eli/reg/2016/679/oj, 2016, accessed: 2025-07-14. [8] A. Ginart, M. Guan, G. Valiant, and J. Y. Zou, “Making ai forget you: Data deletion in machine learning,” Advances in neural information processing systems , vol. 32, 2019. [9] W. Alexander, P. Lukas, W. Christian, and R. Konrad, “Machine unlearning of features and labels,” Proceedings 2023 Network and Distributed System Security Symposium , 2023. [Online]. Available: https://cir.nii.ac.jp/crid/1360865821071536256 [10] P. W. Koh and P. Liang, “Understanding black-box predictions via influence functions,” in International Conference on Machine Learning .PMLR, 2017, pp. 1885–1894. [11] M. S. Bartlett, “An inverse matrix adjustment arising in discriminant analysis,” The Annals of Mathematical Statistics , vol. 22, no. 1, pp. 107–111, 1951. [12] V. Gupta, C. Jung, S. Neel, A. Roth, S. Sharifi-Malvajerdi, and C. Waites, “Adaptive machine unlearning,” Advances in Neural Information Process-ing Systems , vol. 20, pp. 16 319–16 330, 2021. [13] A. Sekhari, J. Acharya, G. Kamath, and A. T. Suresh, “Remember what you want to forget: Algorithms for machine unlearning,” Advances in Neural Information Processing Systems , vol. 34, pp. 18 075–18 086, 2021. [14] J. Xu, Z. Wu, C. Wang, and X. Jia, “Machine unlearning: Solutions and challenges,” IEEE Transactions on Emerging Topics in Computational Intelligence , vol. 8, pp. 2150–2168, 2024. [15] W. Li, J. Li, C. S. de Witt, A. Prabhu, and A. Sanyal, “Delta-influence: Unlearning poisons via influence functions,” arXiv preprint , 2024. [Online]. Available: http://arxiv.org/abs/2411.13731 [16] D. Zagardo, “A more practical approach to machine unlearning,” arXiv preprint , June 2024. [Online]. Available: https://arxiv.org/abs/2406.09391 [17] Z. Izzo, M. A. Smart, K. Chaudhuri, and J. Zou, “Approximate data deletion from machine learning models,” in International conference on artificial intelligence and statistics . PMLR, 2021, pp. 2008–2016. [18] A. Jacot, F. Gabriel, and C. Hongler, “Neural tangent kernel: Convergence and generalization in neural networks,” Advances in neural information processing systems , vol. 31, 2018. [19] J. Nocedal and S. J. Wright, Numerical optimization , 2nd ed. New York: Springer Science & Business Media, 2006. [20] R. K. Pace and R. Barry, “Sparse spatial autoregressions,” Statistics & Probability Letters , vol. 33, no. 3, pp. 291–297, 1997. [21] F. Pedregosa, G. Varoquaux et al. , “Diabetes dataset,” scikit-learn machine learning library, 2011, accessed: 2025-07-14. [Online]. Available: https://scikit-learn.org/stable/modules/generated/ sklearn.datasets.load diabetes.html [22] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner, “Mnist database of handwritten digits,” Available at: http://yann.lecun.com/exdb/mnist/, 1998, accessed via PyTorch torchvision.datasets. [23] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. Thirion, O. Grisel, M. Blondel, P. Prettenhofer, R. Weiss, V. Dubourg et al. , “Scikit-learn: Machine learning in python,” the Journal of machine Learning research ,vol. 12, pp. 2825–2830, 2011. [24] K. Zhao, M. Kurmanji, G.-O. B˘ arbulescu, E. Triantafillou, and P. Triantafillou, “What makes unlearning hard and what to do about it,” 2024. [Online]. Available: https://arxiv.org/abs/2406.01257 [25] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2016, pp. 770–778. [26] S. Xu and T. Strohmer, “Machine unlearning via information theoretic regularization,” 2025. [Online]. Available: http://arxiv.org/abs/2502.05684 [27] K. Zhao and P. Triantafillou, “Scalability of memorization-based machine unlearning,” 2024. [Online]. Available: https://arxiv.org/abs/2410.16516 [28] X. Qiao, M. Zhang, M. Tang, and E. Wei, “Hessian-free online certified unlearning,” in The Thirteenth International Conference on Learning Representations , 2025. [Online]. Available: https: //openreview.net/forum?id=C3TrHWanh5 
+
+13

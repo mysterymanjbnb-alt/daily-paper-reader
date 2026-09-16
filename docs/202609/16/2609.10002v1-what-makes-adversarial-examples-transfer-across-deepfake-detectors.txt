@@ -1,0 +1,576 @@
+Title: What Makes Adversarial Examples Transfer Across Deepfake Detectors?
+
+URL Source: https://arxiv.org/pdf/2609.10002v1
+
+Published Time: Thu, 10 Sep 2026 00:53:15 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# What Makes Adversarial Examples Transfer Across Deepfake Detectors? 
+
+## Rafael M. Mamede 1,2 Pedro C. Neto 2,3 Ana F. Sequeira 1,21INESC TEC, Porto, Portugal 
+
+2Faculty of Engineering, University of Porto (FEUP), Porto, Portugal 
+
+3Unilabs, Porto, Portugal 
+
+{rafael.c.maia,ana.f.sequeira }@inesctec.pt pedro.neto@unilabs.com 
+
+## Abstract 
+
+Deepfake detectors remain vulnerable to transfer-based black-box attacks, in which adversarial examples are gen-erated on a source surrogate model and transferred to a target model, unknown to the attacker. Yet how source– target compatibility shapes attack success remains poorly understood. Prior studies evaluate limited detector pools and rarely disentangle architectural from training factors. We conduct a controlled evaluation of adversarial trans-ferability across 60 detectors spanning six backbones, two pretraining regimes, and five training-data configurations, using two attack procedures: AutoAttack (AA) and the Carlini–Wagner attack with Expectation over Transforma-tion (CW–EOT). Matched comparisons reveal significantly higher transfer when source and target share an exact backbone, architecture family, pretraining regime, or train-ing data. This compatibility structure is attack-dependent: exact backbone compatibility has the largest effect under AA, whereas shared pretraining and training data have the largest effects under CW–EOT. When transfer is aver-aged across non-target sources, mean attack success rate (ASR) is 7.21% under AA and 19 .52% under CW–EOT. By contrast, a multi-source oracle combining both attacks at-tains a 64 .48% mean ASR after excluding exact backbone and training-data matches, showing that source averag-ing can substantially understate target vulnerability. We release 240,000 adversarially perturbed images, complete pairwise transfer results, detector configurations, and eval-uation code. These findings establish source–target com-patibility and source-model selection as central dimensions of credible transfer-based black-box robustness evaluation. 
+
+## 1. Introduction 
+
+As generative models become more widespread, so too be-comes their potential for misuse. Images and videos ma-Swin-T               
+
+> ImageNet ⬩ALL
+> im noise adv image
+> Xception
+> ImageNet ⬩ALL
+> Xception
+> FaceRec. ⬩EFS
+> Swin-T
+> FaceRec. ⬩EFS
+> CW EOT Correct prediction Incorrect prediction/ Successful attack
+> || δ|| ≤ 8/255
+> 10x amplified for visualization
+> Clean Deepfake Adversarial Deepfake Adversarial Noise
+> target model target model target model source model
+> Models displayed as:
+> Backbone
+> Pretrain ⬩Training data
+
+Figure 1. Overview of the transfer evaluation. An ℓ∞-bounded perturbation ( ϵ = 8 /255 ) is generated on a source detector and evaluated on targets differing in backbone, pretraining, and train-ing subset. 
+
+nipulated or generated using artificial intelligence (AI) have become harder to distinguish from real content, contribut-ing to growing distrust in media [29]. This, in turn, has motivated the development and evaluation of deep learning based detectors of AI-generated content [11, 19, 24, 32, 33]. For more than a decade, we have known that neural net-works are prone to being misled by adversarial examples [15, 26]. These carefully crafted manipulations consist of small perturbations in the image space, often imperceptible to humans, that change the model’s decision. While ini-tially, attacks were crafted using only perfect information of arXiv:2609.10002v1 [cs.CV] 9 Sep 2026 the model, as the field matured attacks have become more realistic. One key discovery was that adversarial examples can transfer between models, so an attacker can generate perturbations on a surrogate model to try to mislead a dif-ferent unknown model [26]. On the other hand, the detection of Deepfake content (AI-manipulated or fully generated content depicting real or fictional people) has been shown to suffer from generaliza-tion problems detecting images produced by unseen gener-ators [33]. This suggests that detectors may learn cues that are too specific to the data and generation methods seen dur-ing training, rather than generalized evidence of manipula-tion. Thus, it remains unclear whether adversarial examples crafted on one detector exploit model-specific weaknesses, or whether they capture broader vulnerabilities that persist across different training conditions and unseen types of gen-erated content. In this work, we perform an in-depth study of adver-sarial transferability in Deepfake detection. We investigate how adversarial examples generated on surrogate detectors transfer to target detectors trained with different architec-tures and different sets of generation methods. This allows us to examine whether transferability is mainly driven by shared model architecture, by similarities in the training and pretraining data, or by broader vulnerabilities common to Deepfake detectors. Thus, our main contributions are as follows: • We present a controlled, large-scale evaluation of black-box adversarial transfer across Deepfake detectors. We construct a factorial bank of 60 detectors spanning six backbones from convolutional neural network (CNN) and Transformer architecture families, two pretraining regimes, and five training-data subsets, producing 3,540 ordered black-box source–target pairs per attack. • Through matched source–target comparisons, we show that transfer is systematically associated with exact backbone, architecture family, pretraining regime, and training-data compatibility. This structure is attack-dependent: exact-backbone compatibility has the largest effect under AA ( 22 .34 pp), whereas pretraining-regime and training-data compatibility have the largest effects under CW–EOT ( 21 .25 and 19 .03 pp, respectively). • We show that single-source and source-averaged transfer evaluations can substantially understate target vulnerabil-ity. We complement these evaluations with multi-source oracle protocols that provide empirical upper-bound vul-nerability over eligible source pools. Even when sources using the target’s exact backbone or containing its com-plete manipulated-image training set are excluded, the combined strict oracle reaches a mean ASR of 64 .48% .• We release a reproducible benchmark comprising 240,000 adversarially perturbed images, complete pair-wise transfer results, detector configurations, and evalu-ation code, supporting compatibility-aware evaluation of black-box robustness 1.
+
+## 2. Related Work 
+
+In this section, we review the evolution of Deepfake gen-eration and detection, before discussing adversarial attacks against Deepfake detectors and the transfer of adversarial examples across models. 
+
+Deepfake Generation and Benchmark Diversity. 
+
+Early Deepfake benchmarks predominantly represented a limited set of facial manipulation mechanisms. FaceForen-sics++ brought together four widely used manipulation methods, including identity swapping, facial reenactment, and neural rendering, while Celeb-DF and DFDC increased the realism and scale of face-swapping data [11, 19, 24]. More recent benchmarks have expanded the scope of Deep-fake detection beyond these settings. In particular, DF40 collects 40 manipulation techniques and organizes them into four broad families: face swapping (FS), face reen-actment (FR), entire-face synthesis (EFS), and face editing (FE) [33]. These families produce substantially different vi-sual traces and artifact distributions. Consequently, detec-tors trained on a restricted set of manipulation techniques may learn method-specific cues that do not persist nor gen-eralize across other forms of generated or edited content. 
+
+Deepfake Detection and Generalization. Deepfake de-tection is commonly formulated as binary classification be-tween authentic and manipulated facial content. Most es-tablished approaches rely either on convolutional neural networks operating in the spatial domain or on transformer-based visual encoders. Other approaches exploit frequency-domain cues, while video-based detectors may addition-ally model temporal inconsistencies across frames. Deep-fakeBench provides a unified implementation and evalua-tion framework, highlighting the considerable methodolog-ical diversity of the field [32]. One recurring issue is that strong performance reported under in-distribution evaluation does not necessarily per-sist when the training and evaluation distributions differ. Therefore, generalization performance is commonly as-sessed through cross-dataset and cross-manipulation eval-uations, in which detectors are tested on datasets or forgery techniques not observed during training. These evaluations have repeatedly revealed substantial performance degrada-tion under domain shifts [14, 32, 33]. Although generalization performance is often studied under benign distribution shifts, comparatively little atten-tion has been given to whether the same detector and train-ing factors also influence adversarial transferability. 
+
+Adversarial Vulnerabilities. As most modern Deep-fake detectors are based on deep neural networks, it is not 
+
+> 1Code and benchmark resources will be made publicly available after completion of double-blind review.
+
+surprising that they inherit the adversarial weaknesses that have been broadly identified in the field. Early studies con-firmed this concern, where literature models were shown vulnerable to adversarial perturbations both on the image space, as well as the latent space of the generator [4]. Fur-thermore, both white-box (assuming full model access from the attacker), and black-box (assuming no or little model access) attacks have been shown to remain effective after common image and video processing operations, including compression [18]. AVA further demonstrated that detectors can be bypassed through semantics-preserving changes to facial attributes in the generator’s latent space [22]. More directly related to our work, Neekhara et al. 
+
+studied adversarial transfer across four Deepfake detection pipelines derived from leading DFDC submissions [11, 23]. Using Expectation over Transformation (EoT), they crafted adversarial examples robust to translation, resizing, and ad-ditive noise to account for differences in face detection and preprocessing across pipelines. They also adapted univer-sal adversarial perturbations to Deepfake video detection, showing that a single perturbation could be reused across frames and videos and transferred to unseen pipelines. However, their evaluation was limited to four CNN-based pipelines from three submissions. Because classifier archi-tecture, face extraction, preprocessing, and augmentation varied jointly, the study could not isolate which source– target properties explained the observed variation in trans-ferability. More recently, Serrano et al. adapted the DUMB/DUMBer framework to evaluate Deepfake de-tectors under realistic attacker–defender mismatches [25]. Their study considered five detectors, three attacks, and two datasets, organizing the evaluation into white-box, cross-model, cross-dataset, and combined cross-model and cross-dataset scenarios. Within this framework, they measured the effectiveness of transferred attacks and assessed whether adversarial-training strategies retained their benefits under each mismatch. Their results showed that attacks remained effective under model and dataset mismatch, whereas the benefits of adversarial training be-came less reliable under cross-dataset evaluation. However, transfer was summarized within broad model and dataset mismatch scenarios, consistent with their objective of eval-uating attack and defense performance. Consequently, their analysis shows that transfer can persist under mismatch, but does not determine which source–target compatibilities make it stronger or whether the dominant compatibilities change across attacks. In sum, these studies establish adversarial transfer as a practical threat to Deepfake detectors. However, existing analyses of adversarial example transferability have either considered a limited set of complete detection pipelines or organized transfer through broad model and dataset mis-match categories, primarily to improve transferable attacks or assess adversarial defenses. Our work treats varia-tion in transferability as the primary object of study. We construct a systematically varied detector bank and ex-amine how backbone, architectural family (CNN-based or Transformer-based), pretraining, and training data are as-sociated with transfer across source–target detector pairs. With this methodology, we complement prior work by mov-ing beyond demonstrations of whether transfer occurs to-ward a controlled, factor-based characterization of the con-ditions under which it becomes stronger or weaker. 
+
+## 3. Methodology 
+
+This work seeks to systematically characterize adversarial transferability across Deepfake detectors. To do so, we con-sider three main factors that we control for our detectors: pretraining, training data, and model architecture. We con-structed a factorial bank of detectors by combining six back-bones, two pretraining strategies, and five training subsets. The selected backbones consist of three CNNs (ResNet34 [16], Xception [7], and EfficientNet-B4 [27]) and three Transformers (DeiT-S [28], ViT-B/16 [12], and Swin-T [21]). We also consider pretraining on ei-ther ImageNet [10], or Face Recognition (on the BUPT-BalancedFace dataset [31], with ElasticArcFace+ loss [3], and validation on RFW [30]). The detectors are then trained on subsets of DF40 [33], with images sourced from FF++, and different types of manipulations: face-swapping (FS), face-reenactment (FR), entire-face-synthesis (EFS), face-editing (FE), and a union of all manipulations (ALL). This resulted in a model bank, M, with |M| = 6 × 2 ×
+
+5 = 60 trained detectors. We then construct an attack image subset of 2,000 ma-nipulated test images, and perturb them using two evasion attack methods for each source model in our detector bank, resulting in 2,000 × 60 × 2 = 240 ,000 perturbed images. We treat transfer as directional, so each ordered pair of source and target models (s, t ) ∈ M × M constituted a distinct evaluation. For each attack, this produced 60 2 =3,600 source–target evaluations, comprising 60 white-box (s = t) and 3,540 black-box pairs ( s̸ = t). The experimental analysis comprises three components: 1. Clean-performance assessment . We first verify that the trained detectors retain utility on their intended task by measuring AUC (area under the receiver operating char-acteristic curve) on three clean (unperturbed) DF40 test sets. Two test sets contain samples from all manipulation families and differ in the underlying real-image dataset, using FF++ and CDF, respectively. The third test set contains only the manipulation family used to train the evaluated detector (and images from FF++), providing a matched in-domain evaluation. 2. Adversarial risk assessment . We assess each detector us-ing white-box attacks and two black-box oracle settings. The self-excluding oracle selects the strongest attack for each image from all eligible surrogate models, estimat-ing risk when the attacker has access to a diverse surro-gate bank. The strict oracle excludes surrogates sharing the target’s backbone or training data, measuring vulner-ability under limited model similarity. 3. Adversarial transferability study . We evaluate each ad-versarial image against every target detector and mea-sure transferability for all directional black-box source– target pairs. We then analyze how transfer is influ-enced by shared backbone, architecture family, pretrain-ing strategy, and deepfake data used for training, using matched comparisons and statistical hypothesis tests. All detectors are trained for binary real-versus-manipulated classification using the FaceForensics++ based partition of DF40. The operational threshold was chosen based on maximizing balanced accuracy in a held-out val-idation set with multiple manipulations sampled from the FaceForensics++ based partition of DF40. We consider a fixed set of 2,000 manipulated test images to be attacked, balanced across the four manipulation families and span-ning 36 manipulation techniques. 
+
+3.1. Adversarial Threat Model 
+
+We consider an inference-time evasion threat in which the attacker seeks to cause a manipulated image to be classified as authentic, without modifying the detector, its parameters, or its training data. For source detector s, let ps(x) denote the predicted probability of the fake class for an image x,and let τs denote its operational decision threshold. We de-fine the threshold-adjusted margin as 
+
+ms(x) = logit( ps(x)) − logit( τs) .
+
+Where ms(x) ≥ 0 corresponds to a fake prediction, whereas ms(x) < 0 corresponds to an authentic prediction. For each deepfake image xi and attack a, the attacker seeks a perturbation, δ, by solving 
+
+δ∗,a i = arg min 
+
+> ∥δ∥∞≤ϵxi+δ∈[0 ,1] d
+
+La(ms(xi + δ)) 
+
+Here, La denotes the attack-specific objective formulated with respect to the threshold-adjusted margin. We set the perturbation budget to ϵ = 8 /255 . The resulting adversarial example is given by xadv ,s,a i = xi + δ∗,a i .We instantiate this threshold-aware evasion objective us-ing AutoAttack (AA) [9] and an L∞-constrained CW-style margin attack with Expectation over Transformation (CW– EOT) [1, 5]. Adversarial examples are generated inde-pendently for each source detector. For AA, we expose the threshold-adjusted two-class logits efs(x) = [0 , m s(x)] ,such that its constituent attacks operate relative to the source detector’s operational threshold. We use a custom AA con-figuration comprising APGD-CE, FAB, and Square-Attack. APGD-DLR is omitted because its standard loss requires at least three class logits and is therefore not applicable to our binary surrogate logit representation. For a = CW -EOT , the attack-specific objective is 
+
+La(xi, δ ) = ET ∼T [max {ms(T (xi + δ)) + κ, 0}] .
+
+where T denotes the distribution of transformations and κ
+
+controls the desired confidence margin. We optimize for 100 iterations with a learning rate of 0.01 , using 10 EOT samples per iteration. The transformations comprise ran-dom rotations of up to ±3◦, translations of up to 3% of the image dimensions, isotropic scaling in [0 .97 , 1.03] , and ad-ditive Gaussian noise with standard deviation 0.01 . We set 
+
+κ = 1 .The attacker has white-box access to the source detector 
+
+s during adversarial generation. Evaluation on t = s there-fore represents the white-box setting, and transfer to any target detector t̸ = s represents the black-box, where the attacker has no access to the target’s parameters, gradients, or predictions during generation. 
+
+3.2. Evaluation Metrics 
+
+For each attack a ∈ { AA , CW -EOT } and ordered source– target pair (s, t ), we compute attack success rate (ASR) over the manipulated images correctly classified by the target be-fore perturbation, Ct = {i : mt(xi) ≥ 0}. Transfer success is defined as 
+
+ASR as→t = 1
+
+|C t|
+
+X
+
+> i∈C t
+
+1
+
+h
+
+mt
+
+
+
+xadv ,s,a i
+
+
+
+< 0
+
+i
+
+.
+
+Thus, ASR as→t represents the proportion of manipulated images initially correctly classified by the target detector that are misclassified as authentic after the attack. By con-ditioning on initially correct predictions, ASR separates attack-induced failures from pre-existing detection errors, facilitating comparisons across target detectors with differ-ent clean performance, as is standard in adversarial robust-ness evaluation [25]. In addition to pairwise ASR, we measure target-level vulnerability using two empirical black-box oracle proto-cols. The self-excluding oracle (SE) measures worst-case black-box vulnerability within the evaluated model pool. It considers every detector other than the target as an eligible surrogate, placing no restrictions on similarity in backbone or training data: 
+
+SSE  
+
+> t
+
+= M \ { t}.
+
+The strict oracle (STR) models an attacker who cannot construct a surrogate that shares the target’s exact backbone or contains its complete manipulated-image training set, for example because neither is publicly available. Eligible sur-rogates therefore satisfy bs̸ = bt and dt ⊈ ds. Formally, 
+
+SSTR  
+
+> t
+
+= {s ∈ M : s̸ = t, b s̸ = bt, d t ⊈ ds} ,
+
+Note that this excludes considering models trained on the ALL subset as sources, but not targets. Importantly, it per-mits partial overlap between the source and target training data, reflecting realistic settings in which a target is trained on a mixture of publicly available and private data: the at-tacker may reproduce the public component without having access to the target’s complete training set. For oracle setting q ∈ { SE , STR }, the oracle ASR is 
+
+OracleASR qt = 1
+
+|C t|
+
+X
+
+> i∈C t
+
+1
+
+min 
+
+> s∈S qt
+> a∈A
+
+mt
+
+
+
+xadv ,s,a i
+
+ < 0
+
+ ,
+
+where A denotes the set of attacks available to the oracle. 
+
+3.3. Statistical Analysis 
+
+Simple grouped averages can be misleading because source–target pairs grouped by one characteristic may also differ in several others. Therefore, we use equally weighted stratified contrasts. For each characteristic, we divide the source–target pairs into strata, with each stratum group-ing pairs with the same values for the other properties rel-evant to that comparison. For example, when evaluating exact-backbone compatibility, each stratum fixes the pre-training regime and training data separately for the source and target. Within each eligible stratum, we compare the mean ASR of pairs that share a backbone with the mean ASR of pairs that do not. We then average these differ-ences equally across eligible strata to estimate the aver-age adjusted contrast for that characteristic. This common-weight construction is a special case of adjustment by sub-classification [8]. We apply the same procedure to archi-tecture family, pretraining regime, and training data. Apositive contrast indicates that sharing the evaluated char-acteristic is associated with higher transfer. All compar-isons are restricted to black-box pairs. For the training-data comparison, we exclude pairs involving A LL -trained detec-tors because A LL contains all four individual training sub-sets. For the architecture-family comparison, we exclude same-backbone pairs so that it measures sharing the broader CNN/Transformer family rather than an exact backbone. We estimate the standard error of our estimator using a leave-one-node-out jackknife, deleting each detector as both source and target and recomputing the complete statis-tic [20]. We compute the jackknife variance using the con-ventional delete-one estimator [13], and use the resulting standard errors to construct approximate 95% Wald confi-dence intervals and two-sided p-values under a standard-normal reference distribution[6]. In the main text, we report 13 hypothesis tests: four com-patibility contrasts for each attack (shared exact backbone, architecture family, pretraining regime, and training data), four tests of whether these contrasts differ between AA and CW–EOT, and one comparison of overall mean black-box ASR between the attacks. Six additional directional con-trasts are reported in the supplementary material. Since test-ing multiple hypotheses increases the chance of obtaining at least one false positive, we jointly adjust all 19 p-values us-ing Holm’s procedure, thereby controlling this probability across the full analysis [17]. 
+
+## 4. Experimental Results 
+
+4.1. Detector Performance and White-Box Attack Success 
+
+We start by verifying that the evaluated models learned their intended detection tasks. Across the 60 detector con-figurations, our models attained a mean AUC of 75 .3% 
+
+on FF + + ALL and 62 .6% on CDF ALL , with medians of 
+
+75 .0% and 63 .0% respectively. For detectors trained on a single deepfake type ( ID ∈ { F S, F R, EF S, F E }), AUC on the corresponding held-out FF + + ID domain was sub-stantially higher, with a mean of 93 .1% , a median of 96 .0% ,and a range of 66 .0% –100% . These results indicate that most detectors learned their designated manipulation do-main, although this specialization did not always extend to the broader mixture of manipulations or to a different dataset. Complete model-level clean-performance results are reported in Table 2 of the supplementary material. We next verify that both attacks successfully optimize adversarial examples on their respective source detectors. Under white-box evaluation, AA achieved a mean ASR of 
+
+99 .78% , with detector-level values ranging from 89 .66% 
+
+to 100 .00% , while CW–EOT achieved a mean ASR of 
+
+99 .96% , with values ranging from 99 .00% to 100 .00% .Thus, low black-box transfer cannot be attributed to a gen-eral failure to construct successful adversarial examples on the source detectors. 
+
+4.2. Black-Box Transfer and Source–Target Com-patibility 
+
+Having established detector functionality and white-box at-tack success, we examine how black-box transfer varies with the relationship between source and target detectors. Figure 2 reports mean black-box ASR aggregated by ar-chitecture family, exact backbone, pretraining regime, and training data. Under AA, the clearest differentiating effect occurs along the exact-backbone diagonal, where mean ASR ranges from 21% to 32% , while most cross-backbone cells remain at or below 15% . Pretraining compatibility is also visible, where the two matched-pretraining cells both attain Figure 2. Mean black-box Attack Success Rate (%) aggregated by source group (columns) and target group (rows) for AA (top) and CW– EOT (bottom): (a) architecture family, (b) backbone, (c) pretraining, and (d) training data. Panel (a) additionally excludes same-backbone pairs. Black outlines mark matched groups. White-box pairs are excluded. Columns denote source groups and rows denote target groups. 
+
+12% ASR, compared with 2% and 3% for the mismatched cells. By contrast, the architecture and training data panels exhibit weaker and less uniform diagonal structure under AA. CW–EOT exhibits a different pattern, although we still note a strong effect in the pretraining panel. Matched Face-Recognition and ImageNet configurations attain mean ASRs of 33% and 27% , respectively, compared with 6% 
+
+and 12% across pretraining regimes. The main difference lies in the behavior in the backbone and training data pan-els. Exact-backbone transfer remains elevated under CW– EOT, but its diagonal is less uniquely dominant than under AA. A pronounced diagonal is also present among the train-ing configurations, for which matched ALL, FS, FR, EFS, and FE cells attain 37% , 32% , 33% , 29% , and 21% ASR, respectively. Transfer to and from A LL trained detectors and detectors trained on the FS, FR, and EFS subsets is also compara-tively high, ranging from 24% to 34% , but is lower between ALL and FE, at 13% –14% . Because the ALL training set contains each of the four deepfake type subsets, the elevated values are consistent with training-set overlap contributing to transfer. However, the lower values involving FE indicate that overlap alone does not determine transferability. More-over, these aggregated cells do not isolate the influence of training-set overlap from the remaining detector character-istics. More generally, the heatmaps provide aggregated de-scriptive summaries of each factor. Since each cell av-erages over the remaining detector characteristics without matching or stratification, observed cell differences may re-flect simultaneous variation in backbone, architecture fam-ily, pretraining, and training subset. Table 1 presents the estimates each compatibility contrast while holding the re-maining measured characteristics fixed. Table 1 shows that all four compatibility contrasts are positive under both attacks and remain significant after Holm correction. Across source–target pairs, CW–EOT also achieves a mean black-box ASR 12 .31 pp higher than AA (95% CI [9 .41 , 15 .21] ; pHolm < 0.0001 ). More impor-tantly, the relative importance of the compatibility factors differs between attacks. Under AA, when source and target share the same back-bone we note an average contrast in transfer ( 22 .34 pp), more than twice the increase associated with shared pre-training ( 9.39 pp). The training data and architecture fam-ily contrasts are substantially smaller, at 3.19 pp and 3.73 
+
+pp, respectively. Under CW–EOT, the ordering changes. Shared pretraining ( 21 .25 pp) and training data ( 19 .03 pp) produce the largest contrasts, followed by exact backbone (13 .48 pp) and architecture family ( 7.12 pp). Direct between-attack comparisons confirm this shift. Relative to AA, the exact-backbone contrast is 8.86 pp smaller under CW–EOT, whereas the pretraining and train-Table 1. Matched source–target compatibility effects on black-box Attack Success Rate. Characteristic rows compare pairs sharing versus not sharing the indicated factor. Estimates are reported in percentage points. We highlight the first (bold) and second (underlined) strongest effect per attack. Compatibility effect Between-attack contrast Characteristic n G AA CW-EOT CW-EOT − AA Backbone 90 60 
+
+22.34 [18 .88 , 25 .80]   
+
+> pHolm <0.0001
+
+13 .48 [9 .71 , 17 .25]   
+
+> pHolm <0.0001
+
+−8.86 [ −11 .34 , −6.37]   
+
+> pHolm <0.0001
+
+Pretraining 870 60 
+
+9.39 [7 .58 , 11 .20]   
+
+> pHolm <0.0001
+
+21.25 [16 .42 , 26 .09]   
+
+> pHolm <0.0001
+
+11 .86 [7 .03 , 16 .70]   
+
+> pHolm <0.0001
+
+Training data a 132 48 
+
+3.19 [1 .68 , 4.70]  
+
+> pHolm = 0 .0003
+
+19 .03 [14 .60 , 23 .46]   
+
+> pHolm <0.0001
+
+15 .84 [11 .92 , 19 .76]   
+
+> pHolm <0.0001
+
+Architecture family b 100 60 
+
+3.73 [1 .70 , 5.77]  
+
+> pHolm = 0 .0026
+
+7.12 [4 .35 , 9.88]   
+
+> pHolm <0.0001
+
+3.39 [ −0.34 , 7.11]  
+
+> pHolm = 0 .4477
+
+Overall mean ASR 3540 60 —
+
+12 .31 [9 .41 , 15 .21]           
+
+> pHolm <0.0001
+> aALL -trained detectors excluded. bSame-backbone pairs excluded.
+> Notes. Entries are estimates [95% CI], with Holm-adjusted p-values below. For compatibility rows, ncounts matched stratum differences per attack, and in the final row, it counts source–target pairs. Gis the number of detector jackknife units. The final row reports the between-attack difference in overall mean ASR. CIs are unadjusted; Holm correction includes all 19 tests.
+
+ing data contrasts are 11 .86 pp and 15 .84 pp larger, respec-tively; all three differences remain significant after Holm correction. The architecture-family contrast is also larger under CW–EOT by 3.39 pp, but this difference is not statis-tically significant (95% CI [−0.34 , 7.11] ; pHolm = 0 .4477 ). Together, these results show that CW–EOT is not merely more transferable overall. The source–target relationships associated with transfer also differ between attacks: AA transfer is most strongly structured by exact backbone, whereas CW–EOT transfer is more strongly associated with shared pretraining and training data. 
+
+4.3. Adversarial Vulnerability Evaluation 
+
+Figure 3 reveals a pronounced gap between source-averaged black-box transfer and portfolio-based target vulnerability. When transfer is averaged across all non-target sources, AA achieves a mean ASR of 7.21% and a median of 
+
+6.22% across targets. Under the same evaluation, CW–EOT reaches a mean of 19 .52% and a median of 17 .22% . Thus, a single surrogate selected without prior knowledge of its compatibility with the target appears only weakly transfer-able on average, although the dispersion across targets indi-cates substantial heterogeneity. The result changes markedly under the self-excluding or-acle. The median target-level ASR increases to 96 .94% for AA and 96 .21% for CW–EOT, with corresponding means of 91 .90% and 90 .01% . Allowing candidates from either at-tack yields a mean ASR of 96 .37% and a median of 99 .83% ,with every target reaching at least 63 .06% . The similar near-saturation reached by both attacks indicates that ad-versarial examples generated from different sources expose complementary subsets of target inputs. The strict-oracle results provide the more demanding comparison. Under this condition, AA attains a mean ASR of 29 .71% and a median of 20 .32% , whereas CW–EOT re-tains a substantially higher mean of 62 .59% and a median of 64 .60% . Allowing either attack produces a mean strict-oracle ASR of 64 .48% and a median of 66 .34% . Thus, al-though the stricter source restrictions substantially reduce AA performance, CW–EOT continues to expose a majority of manipulated inputs for the median target. Although these values represent portfolio upper bounds rather than expected performance without target feedback, they demonstrate that weak transfer from an individual sur-rogate should not be interpreted as evidence of target ro-bustness. 
+
+## 5. Discussion 
+
+Transferability of adversarial examples strongly de-pends on the relationship between source and target models. The central finding of this study is that black-box adversarial transferability is not adequately described as a property of an attack or target detector in isolation. Rather, it is heavily structured on the relationship between the source and target detectors. This structure also differs between attack types, with AA reporting a higher impact on shared backbone, while CW–EOT reports a higher impact on pretraining and training data. These patterns suggest that transfer may arise through different forms of source– target alignment. Sharing a backbone may produce sim-ilar local decision geometry or input sensitivities despite different training conditions, whereas shared data prove-nance may lead architecturally distinct models to learn over-Figure 3. Per-target Attack Success Rate under white-box attacks, mean pairwise transfer, and two portfolio oracles. Points represent target detectors; diamonds, thick bars, and capped bars denote me-dians, interquartile ranges, and 10th–90th percentiles. 
+
+lapping representations or non-robust cues. AA and CW– EOT may therefore preferentially exploit different forms of alignment. Although our analysis does not directly mea-sure gradients or representations, this interpretation implies that compatibility between two detectors is not fixed, but depends on how an attack probes their shared weaknesses. 
+
+Shared pretraining is strongly associated with trans-ferability. The strong effect of shared pretraining, particu-larly under CW–EOT, suggests that task-specific fine-tuning does not erase the input sensitivities inherited from pretrain-ing. These findings are consistent with prior evidence that pretraining can transmit non-robust features to fine-tuned models [34] and that attacks constructed against pretrained encoders can remain effective against downstream models [2]. This result makes publicly available pretrained check-points relevant to the black-box threat model and motivates testing whether robust pretraining can reduce downstream transferability. 
+
+Single-source evaluation can give a false sense of ro-bustness. A low transfer ASR may reflect an incompat-ible source–target pairing, rather than evidence of robust-ness of the target model. Even source-averaged ASR can likewise be depressed by poorly compatible sources. Our oracle-based evaluations provide a complementary, more stringent assessment by measuring, for each input, whether any perturbation generated from an eligible surrogate pool succeeds. Our strict oracle further shows that model and data secrecy is not enough to defend against attackers that can probe the target model. Although our controlled detector pool enabled system-atic comparison of source–target factors, the conclusions remain limited to the architectures, pretraining regimes, ma-nipulation families, datasets, and attacks evaluated here. Moreover, each detector configuration is represented by a single training run, preventing us from quantifying variabil-ity arising from stochastic training. Future work should de-termine whether the identified compatibility effects persist across training seeds and defended detectors, with particular attention to whether robust pretraining reduces downstream transferability. 
+
+## 6. Conclusion 
+
+Across 60 detectors and 3,540 ordered source–target pairs per attack, we find that black-box adversarial transfer is best understood as a property of the source–attack–target configuration. Transfer increased with shared backbone and training/pretraining data, but the dominant compati-bility was attack-specific: exact backbone under AA, and shared pretraining and training data under CW–EOT. This places source surrogate selection as a central part of the black-box threat model. These findings have a direct conse-quence for robustness assessment. A low ASR from one source, or even averaging across heterogeneous source– target pairings, can conceal vulnerabilities exposed by other surrogates. Our oracle evaluations provide a complemen-tary, more stringent assessment of target vulnerability. The strict oracle further shows that vulnerabilities extend be-yond closely matched detector pipelines. Hiding model and training-data details therefore does not establish black-box robustness. We release 240,000 adversarial images, complete pair-wise transfer results, detector configurations, and evaluation code. These resources support black-box robustness evalu-ations that account for source–target compatibility and sur-rogate diversity. 
+
+## References 
+
+[1] Anish Athalye, Logan Engstrom, Andrew Ilyas, and Kevin Kwok. Synthesizing robust adversarial examples. In Pro-ceedings of the 35th International Conference on Machine Learning , pages 284–293. PMLR, 2018. 4 [2] Yuanhao Ban and Yinpeng Dong. Pre-trained adversarial perturbations. In Advances in Neural Information Processing Systems , pages 1196–1209. Curran Associates, Inc., 2022. 8 [3] Fadi Boutros, Naser Damer, Florian Kirchbuchner, and Ar-jan Kuijper. Elasticface: Elastic margin loss for deep face recognition. In 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) , pages 1577–1586, 2022. 3, 14 [4] Nicholas Carlini and Hany Farid. Evading deepfake-image detectors with white- and black-box attacks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition Workshops (CVPRW) , pages 2804–2813, 2020. 3 [5] Nicholas Carlini and David Wagner. Towards evaluating the robustness of neural networks. In 2017 IEEE Symposium on Security and Privacy (SP) , pages 39–57, 2017. 4 [6] George Casella and Roger L. Berger. Statistical Inference ,chapter 10, pages 492–504. Duxbury, Pacific Grove, CA, second edition, 2002. 5 [7] Franc ¸ois Chollet. Xception: Deep learning with depthwise separable convolutions. In Proceedings of the IEEE Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,pages 1800–1807, 2017. 3 [8] W. G. Cochran. The effectiveness of adjustment by subclas-sification in removing bias in observational studies. Biomet-rics , 24(2):295–313, 1968. 5 [9] Francesco Croce and Matthias Hein. Reliable evalua-tion of adversarial robustness with an ensemble of diverse parameter-free attacks. In Proceedings of the 37th Interna-tional Conference on Machine Learning , pages 2206–2216. PMLR, 2020. 4 [10] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Fei-Fei Li. ImageNet: A large-scale hierarchical im-age database. In 2009 IEEE Conference on Computer Vision and Pattern Recognition , pages 248–255, 2009. 3 [11] Brian Dolhansky, Joanna Bitton, Ben Pflaum, Jikuo Lu, Russ Howes, Menglin Wang, and Cristian Canton-Ferrer. The deepfake detection challenge dataset. ArXiv ,abs/2006.07397, 2020. 1, 2, 3 [12] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-vain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representa-tions , 2021. 3 [13] Bradley Efron and Trevor Hastie. Computer Age Statistical Inference: Algorithms, Evidence, and Data Science , chap-ter 10, pages 155–180. Cambridge University Press, Cam-bridge, UK, 2016. 5, 12 [14] Liang Yu Gong and Xue Jun Li. A contemporary survey on deepfake detection: Datasets, algorithms, and challenges. 
+
+Electronics , 13(3):585, 2024. 2 [15] Ian J. Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and Harnessing Adversarial Examples. In Inter-national Conference on Learning Representations (ICLR) ,2015. 1 [16] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceed-ings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 770–778, 2016. 3 [17] Sture Holm. A simple sequentially rejective multiple test procedure. Scandinavian Journal of Statistics , 6(2):65–70, 1979. 5, 12 [18] Shehzeen Hussain, Paarth Neekhara, Malhar Jere, Farinaz Koushanfar, and Julian McAuley. Adversarial deepfakes: Evaluating vulnerability of deepfake detectors to adversar-ial examples. In Proceedings of the IEEE/CVF Winter Con-ference on Applications of Computer Vision (WACV) , pages 3348–3357, 2021. 3 [19] Yuezun Li, Xin Yang, Pu Sun, Honggang Qi, and Siwei Lyu. Celeb-DF: A large-scale challenging dataset for deep-fake forensics. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 3204–3213, 2020. 1, 2 [20] Qiaohui Lin, Robert Lunde, and Purnamrita Sarkar. On the theoretical properties of the network jackknife. In Proceed-ings of the 37th International Conference on Machine Learn-ing , pages 6105–6115. PMLR, 2020. 5, 12 [21] Ze Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, and Baining Guo. Swin transformer: Hierarchical vision transformer using shifted windows. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pages 10012–10022, 2021. 3 [22] Xiangtao Meng, Li Wang, Shanqing Guo, Lei Ju, and Qingchuan Zhao. AVA: Inconspicuous attribute variation-based adversarial attack bypassing deepfake detection. In 
+
+2024 IEEE Symposium on Security and Privacy (SP) , pages 74–90, 2024. 3 [23] Paarth Neekhara, Brian Dolhansky, Joanna Bitton, and Cris-tian Canton Ferrer. Adversarial threats to deepfake detection: A practical perspective. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) , pages 923–932, 2021. 3 [24] Andreas R¨ ossler, Davide Cozzolino, Luisa Verdoliva, Chris-tian Riess, Justus Thies, and Matthias Nießner. FaceForen-sics++: Learning to detect manipulated facial images. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pages 1–11, 2019. 1, 2 [25] Adrian Serrano, Erwan Umlil, and Ronan Thomas. Deep-fake detectors are DUMB: A benchmark to assess adversarial training robustness under transferability constraints. ArXiv ,abs/2601.05986, 2026. 3, 4 [26] Christian Szegedy, Wojciech Zaremba, Ilya Sutskever, Joan Bruna, Dumitru Erhan, Ian J. Goodfellow, and Rob Fergus. Intriguing properties of neural networks. In International Conference on Learning Representations , 2014. 1, 2 [27] Mingxing Tan and Quoc Le. EfficientNet: Rethinking model scaling for convolutional neural networks. In Proceedings of the 36th International Conference on Machine Learning ,pages 6105–6114. PMLR, 2019. 3 [28] Hugo Touvron, Matthieu Cord, Matthijs Douze, Francisco Massa, Alexandre Sablayrolles, and Herv´ e J´ egou. Training data-efficient image transformers & distillation through at-tention. In Proceedings of the 38th International Conference on Machine Learning , pages 10347–10357. PMLR, 2021. 3 [29] Cristian Vaccari and Andrew Chadwick. Deepfakes and disinformation: Exploring the impact of synthetic political video on deception, uncertainty, and trust in news. Social Media + Society , 6(1):2056305120903408, 2020. 1 [30] Mei Wang, Weihong Deng, Jiani Hu, Xunqiang Tao, and Yaohai Huang. Racial Faces in the Wild: Reducing Racial Bias by Information Maximization Adaptation Network . In 
+
+2019 IEEE/CVF International Conference on Computer Vi-sion (ICCV) , pages 692–702, Los Alamitos, CA, USA, 2019. IEEE Computer Society. 3, 14 [31] Mei Wang, Yaobin Zhang, and Weihong Deng. Meta Bal-anced Network for Fair Face Recognition . IEEE Transac-tions on Pattern Analysis & Machine Intelligence , 44(11): 8433–8448, 2022. 3, 14 [32] Zhiyuan Yan, Yong Zhang, Xinhang Yuan, Siwei Lyu, and Baoyuan Wu. Deepfakebench: A comprehensive benchmark of deepfake detection. In Advances in Neural Information Processing Systems , pages 4534–4565. Curran Associates, Inc., 2023. 1, 2 [33] Zhiyuan Yan, Taiping Yao, Shen Chen, Yandan Zhao, Xinghe Fu, Junwei Zhu, Donghao Luo, Chengjie Wang, Shouhong Ding, Yunsheng Wu, and Li Yuan. DF40: Toward next-generation deepfake detection. In Advances in Neural Information Processing Systems , pages 29387–29434. Cur-ran Associates, Inc., 2024. 1, 2, 3 [34] Jiaming Zhang, Jitao Sang, Qi Yi, Yunfan Yang, Huiwen Dong, and Jian Yu. ImageNet pre-training also transfers non-robustness. Proceedings of the AAAI Conference on Artificial Intelligence , 37(3):3436–3444, 2023. 8 Supplementary Material 
+
+## A. Statistical Formulation and Inference 
+
+This section provides support to the statistical formulation reported in the paper. We first define the contrast estima-tors, then describe the detector-level jackknife inference, Wald confidence intervals and p-values, and Holm adjust-ment used for hypothesis testing. 
+
+A.1. Notation and Analysis Units 
+
+We use notation in accordance to the main paper, with 
+
+M denoting the detector bank. For attack a ∈{AA , CW -EOT }, source detector s, and target detector t,we denote ASR as→t as the attack success rate for transfer from s to t. As transfer is directional s → t and t → s are distinct observations. For each attack, the eligible ordered black-box pairs are 
+
+Pa = {(s, t ) ∈ M × M| s̸ = t} .
+
+Since the detector bank contains 60 detectors and all or-dered black-box transfers are available, |P a| = 60 × 59 = 3,540 for each attack. 
+
+A.2. Statistical Estimators 
+
+Our analysis considers three distinct questions about varia-tion in black-box transfer. First, is transfer higher when the source and target share a detector or training characteristic, after accounting for their other measured properties? Sec-ond, when transferring between two detector groups, does ASR depend on which group acts as the source and which acts as the target? Third, do AA and CW–EOT differ in their overall transferability or in how strongly source–target compatibility is associated with transfer? We address these questions using compatibility, direc-tional, and between-attack contrasts, respectively. All esti-mators are differences in mean ASR, reported in percentage points, but each uses the comparison appropriate to its ques-tion: matched source–target configurations, reversed trans-fer directions, or matched observations across attacks. 
+
+Compatibility contrasts. Compatibility contrasts ad-dress whether sharing a particular characteristic is associ-ated with higher transfer. Comparing all compatible and in-compatible pairs directly could confound the characteristic of interest with the other properties of the source and tar-get detectors. We therefore perform the comparison within matched source–target configurations, referred to as strata. A stratum fixes relevant properties of the source and tar-get models. For example, when examining the effect of shared backbone, each stratum fixes the remaining prop-erties (source pretraining, target pretraining, source train-ing data, and target training data) to possible values. Then, within that configuration, we vary the characteristic under study and group the observations according to whether the source and target share that characteristic. In our example of the shared backbone, we would separate the observations that share backbones between source and target from those that differ. We then compare the mean ASR of pairs from each group. The remaining characteristics are treated analogously. The exact-backbone and architecture-family contrasts fix source and target pretraining and training data; the pretrain-ing contrast fixes source and target backbone and training data; and the training-data contrast fixes source and target backbone and pretraining. Same-backbone pairs are ex-cluded from the architecture-family contrast, while A LL -trained detectors are excluded from the training-data con-trast. More generally, let h ⊆ P a denote one such stratum, and let c(m) denote the value of characteristic c for detector m.For an attack a, the within-stratum compatibility difference is given by 
+
+dac,h = mean 
+
+> (s,t )∈hc(s)= c(t)
+
+ASR as→t − mean 
+
+> (s,t )∈hc(s)̸=c(t)
+
+ASR as→t.
+
+Only strata containing at least one compatible and one incompatible pair are retained. Let Ha,c denote the set of these eligible strata for an attack a and characteristic c. The compatibility estimator is given by 
+
+b∆comp  
+
+> a,c
+
+= 1
+
+|H a,c |
+
+X
+
+> h∈H a,c
+
+dac,h .
+
+Directional contrasts. Directional contrasts evaluate whether transfer between two detector groups is asymmet-ric. In this work we tested 3 different asymmetries: • Is transfer different when Transformer detectors act as sources and CNN detectors as targets, compared with the reverse direction? • Is transfer different when detectors pretrained for face recognition act as sources and detectors pretrained on Im-ageNet as targets, compared with the reverse direction? • Is transfer different when detectors trained on A LL act as sources and detectors trained on a single deepfake type subset as targets, compared with the reverse direction? For comparison k, let Uk and Vk denote the detector groups acting as source and target, respectively, in the first direction stated above. For attack a, we calculate the ASR difference between both directions for each detector pair and average these differences: 
+
+b∆dir  
+
+> a,k
+
+= mean  
+
+> s∈Uk, t ∈Vk
+> (s,t ),(t,s )∈P a
+
+(ASR as→t − ASR at→s) .
+
+Positive values indicate greater transfer in the first direc-tion, whereas negative values indicate greater transfer in the reverse direction. 
+
+Between-attack contrasts. We compare AA and CW– EOT in two ways: whether their compatibility contrasts differ and whether their overall black-box ASR differs. Both comparisons are paired over common strata or source– target pairs. For characteristic c, let H∩ 
+
+> c
+
+= HCW -EOT ,c ∩ H AA ,c de-note the strata eligible under both attacks. The between-attack difference in compatibility is 
+
+b∆int  
+
+> c
+
+= mean 
+
+> h∈H ∩
+> c
+
+ dCW -EOT  
+
+> c,h
+
+− dAA 
+
+> c,h
+
+ .
+
+Positive values indicate a stronger compatibility associ-ation under CW–EOT, whereas negative values indicate a stronger association under AA. This directly tests whether the compatibility contrasts differ between attacks rather than comparing their separate significance decisions. We also compare overall ASR over the common ordered pairs P∩ = PCW -EOT ∩ P AA :
+
+b∆attack = mean 
+
+> (s,t )∈P ∩
+
+ ASR CW -EOT  
+
+> s→t
+
+− ASR AA 
+
+> s→t
+
+ .
+
+Positive values indicate higher mean black-box ASR un-der CW–EOT. 
+
+A.3. Statistical Inference 
+
+The estimators above provide point estimates of transfer dif-ferences, but their uncertainty must account for two features of our analysis. First, directed transfer observations are de-pendent because each detector appears repeatedly as both a source and a target. Second, evaluating multiple hypotheses increases the probability of false-positive findings. We therefore estimate detector-level uncertainty using a leave-one-detector-out jackknife, construct approximate Wald confidence intervals and two-sided p-values, and ad-just the resulting p-values jointly using Holm’s procedure. 
+
+Delete-one-detector jackknife. We use the detector, rather than the individual source–target pair, as the jack-knife deletion unit. For each detector g, we remove every observation in which it appears as either source or target and recompute the complete estimator. This procedure is analogous to leave-one-node-out methods for network data [20], while uncertainty is estimated using the conventional delete-one jackknife variance formula [13]. Considering b∆ as any estimator defined above, let b∆(−g)
+
+denote its value after deleting detector g. For compatibility-based estimators, the eligible strata and their within-stratum differences are reconstructed after every deletion. Let G
+
+denote the number of detector deletion units. The mean of the leave-one-detector-out estimates is given by 
+
+∆(−· ) = 1
+
+G
+
+> G
+
+X
+
+> g=1
+
+b∆(−g).
+
+The jackknife standard error is given by 
+
+cSE JK ( b∆) = 
+
+vuut G − 1
+
+G
+
+> G
+
+X
+
+> g=1
+
+ b∆(−g) − ∆(−· )
+
+2
+
+.
+
+The estimator computed using all eligible detectors re-mains the reported point estimate. For most comparisons, 
+
+G = 60 . Because A LL -trained detectors do not enter the training-data compatibility contrasts, these contrasts and their corresponding between-attack contrast use G = 48 .
+
+Wald confidence intervals and p-values. For any estima-tor b∆ defined above, we use its jackknife standard error and a standard-normal reference distribution to compute the ap-proximate Wald statistic, unadjusted two-sided p-value, and unadjusted 95% confidence interval: 
+
+z = b∆
+
+cSE JK ( b∆) ,p = 2Φ( −| z|),
+
+CI 95% = b∆ ± 1.96 cSE JK ( b∆) ,
+
+where Φ denotes the standard-normal cumulative distri-bution function. The p-values are subsequently adjusted using Holm’s procedure, while the confidence intervals re-main unadjusted. 
+
+Holm adjustment. To control the family-wise error rate across multiple hypotheses, we adjust all 19 unadjusted 
+
+p-values jointly using Holm’s step-down procedure [17]. These comprise eight attack-specific compatibility tests, six directional tests, four between-attack compatibility tests, and one comparison of overall ASR. For our m = 19 hypothesis, let p(1) ≤ · · · ≤ p(m) de-note the ordered unadjusted p-values. The Holm-adjusted value at position i is given by pHolm(i) = min 
+
+
+
+1, max 
+
+> 1≤r≤i
+
+(m − r + 1) p(r)
+
+
+
+.
+
+The adjusted values are then returned to their original hypotheses, and statistical significance is assessed using 
+
+pHolm < 0.05 . Only the p-values are adjusted; the reported confidence intervals remain pointwise 95% intervals (not adjusted for multiplicity) and should not be interpreted as simultaneous confidence intervals. 
+
+## B. Detailed Clean Performance 
+
+Table 2 reports clean performance for all 60 detectors. We evaluate each detector on the complete mixture of FaceForensics++ manipulations ( FF + + ALL ), the held-out FaceForensics++ subset corresponding to its DF40 train-ing subset ( FF + + ID ), and the complete Celeb-DF test set ( CDF ALL ). For A LL -trained detectors, the correspond-ing evaluation includes all FaceForensics++ manipulations and therefore coincides with FF + + ALL ; this duplicate value is omitted. ImageNet-pretrained detectors obtained higher mean AUC on FF + +ALL than face-recognition-pretrained detectors ( 81 .7% versus 68 .8% ). Conversely, face-recognition pretraining produced moderately higher mean AUC on CDFALL (64 .8% versus 60 .3% ). 
+
+## C. Additional Statistical Results 
+
+Table 3 reports the six prespecified directional contrasts not presented in the main results table. None of the tests pro-vide evidence of a consistent transfer asymmetry after Holm adjustment. Under AA, transfer from Transformer to CNN detectors was estimated to be 2.30 percentage points lower than in the reverse direction (95% CI [−4.48 , −0.11] ). Although this pointwise confidence interval excludes zero, the contrast is not significant after Holm adjustment ( pHolm = 0 .2769 ). The remaining AA contrasts are smaller and uncertain: de-tectors pretrained for face recognition do not transfer signif-icantly better to ImageNet-pretrained detectors than in the reverse direction, and A LL -trained detectors do not exhibit a consistent advantage over detectors trained on a single sub-set when used as sources. No directional contrast is significant under CW–EOT either. The largest estimate favors transfer from face-recognition-pretrained sources to ImageNet-pretrained tar-gets by 5.96 percentage points, but its confidence interval includes zero (95% CI [−1.25 , 13 .17] ; pHolm = 0 .5254 ). The Transformer/CNN and A LL -versus-single-subset con-trasts are both small relative to their uncertainty. These findings distinguish compatibility from direction-ality. Sharing a backbone, pretraining regime, or training data can increase transfer between source and target de-tectors, but this does not imply that one architecture, pre-training group, or training subset is consistently the stronger source. The principal transfer structure is therefore associ-ated with source–target compatibility rather than a universal ordering between detector groups. 
+
+## D. Sensitivity Analysis 
+
+We further examined whether the principal findings were disproportionately determined by a particular backbone or manipulation-training dataset. For each sensitivity repli-cate, we removed all detectors associated with one back-bone or one training dataset and recomputed the complete estimator on the reduced detector bank. Figure 4 compares these group-omission estimates with the corresponding es-timates obtained from the complete detector bank. The signs and qualitative ordering of the principal com-patibility effects remain stable across the omissions. Exact-backbone compatibility remains the dominant effect under AA, whereas shared pretraining and shared training data re-main the strongest effects under CW–EOT. Similarly, every group-omission replicate preserves the negative interaction for exact-backbone compatibility and the positive interac-tions for pretraining and training data compatibility. The overall CW–EOT versus AA contrast also remains positive after every omission. The smaller AA training dataset and architecture-family effects exhibit greater relative variation, while the architecture-family interaction remains the least precisely estimated interaction. This is consistent with the main anal-ysis, in which the latter interaction does not differ signif-icantly from zero. Nevertheless, no individual backbone or training dataset reverses the central pattern of attack-specific compatibility effects. 
+
+## E. Detailed Transfer Results 
+
+Figures 5 and 6 present the complete model-level trans-fer matrices for AA and CW–EOT, respectively. The matrices reveal substantial variation across source–target combinations that is concealed by aggregate transfer esti-mates. AA transfer is comparatively sparse and concen-trated among particular compatible detector configurations, whereas CW–EOT generally produces broader and stronger transfer. Nevertheless, individual matrix entries may reflect simultaneous differences in backbone, architecture family, pretraining, and training data. Consequently, the effects of these characteristics are assessed using the stratified con-trasts reported in Table 1, rather than through isolated com-parisons between matrix entries. F. Experimental and Reproducibility Details 
+
+Face Recognition pretraining. The face recognition pre-training was obtained by training each backbone from ran-dom initialization on all four BUPT-BalancedFace ethnicity partitions [31]. Images were resized to 224 × 224 , and the backbone output was projected to a 512-dimensional, ℓ2-normalized embedding. Identity classification used Elasti-cArcFace+ [3] with margin m = 0 .3, sampling standard deviation 0.05 , and scale 64 for CNNs or 32 for Transform-ers. Training augmentation comprised horizontal flipping (p = 0 .5), color jitter ( p = 0 .3), and random affine trans-formations with rotations up to 5◦, translations up to 3% ,and scaling in [0 .97 , 1.03] (p = 0 .3). All backbones were trained for 30 epochs with batch size 256. The CNNs used SGD with momentum 0.9, weight de-cay 5×10 −4, and effective learning rates of 10 −2, 5×10 −3,and 2.5 × 10 −3 for ResNet-34, Xception, and EfficientNet-B4, respectively. The Transformers used AdamW with weight decay 0.05 , three warm-up epochs, cosine decay, and effective learning rates of 10 −4 for DeiT-S and Swin-T and 5×10 −5 for ViT-B/16. The checkpoint with the highest RFW [30] validation AUC was retained, and only its back-bone weights were transferred to detector training. 
+
+Detector training. The FS, FR, EFS, and FE configu-rations used their respective DF40 manipulation subsets, while A LL used their union. All models used the same real-image partition and a common validation mixture contain-ing the four manipulation subsets. One indexed frame was used per video. Training augmentation consisted of horizontal flipping with probability 0.5, and Gaussian blur with probability 0.5
+
+(kernel sizes from 3 to 7). With probability 0.5, one of three color augmentations was selected with equal proba-bility: random brightness–contrast adjustment, PCA-based color perturbation, or hue–saturation adjustment. JPEG compression with quality sampled from 40 to 100 was ap-plied with probability 0.5. Inputs were 224 ×224 , except for ImageNet-initialized Xception, which used 256 × 256 . Im-ageNet initialization used ImageNet normalization except for Xception, whereas face-recognition initialization used mean and standard deviation (0 .5, 0.5, 0.5) .
+
+Hyperparameter selection and optimization. For the face recognition pretrained detectors, we conducted architecture-specific adaptive Bayesian searches using the ALL configuration and validation AUC as the objective. The search considered separate backbone and classification-head learning rates, weight decay, and, for Transformers, dropout, attention dropout, stochastic depth, and warm-up. Additional trials were allocated when initial configurations failed to converge reliably. After selection, the architecture-specific settings were fixed across all five training-data con-ditions. The final settings are reported in Table 4, with unrounded values provided in the released YAML files. All models were fine-tuned end-to-end using two-class cross-entropy and cosine learning-rate annealing to 10 −6. We train the models for 51 epochs, with a fixed seed (42). Validation was performed after every epoch, and the checkpoint with the highest validation AUC was retained. 
+
+Threshold selection and reproducibility. For each re-tained detector, 1,001 thresholds uniformly spaced over 
+
+[0 , 1] were evaluated on the validation split. The thresh-old maximizing balanced accuracy was selected, with ties resolved in favor of the value closest to 0.5, and was then fixed for clean and adversarial evaluation. Table 2. Clean AUC across the 60 detectors, organized by pretraining regime, backbone, and DF40 training subset. Entries report 
+
+FF++ ALL /FF++ ID /CDF ALL AUC in percent, rounded to the nearest percentage point. For A LL -trained detectors, the duplicated in-domain value is omitted (–). 
+
+Detector training subset Pretraining Backbone ALL FS FR EFS FE ImageNet ResNet34 93 /–/60 83 /92 /56 85 /98 /48 76 /99 /75 75 /100 /65 
+
+Xception 96 /–/57 88 /95 /60 88 /97 /40 83 /100 /75 76 /100 /66 
+
+EffNet-B4 94 /–/69 81 /93 /67 83 /99 /40 75 /99 /76 75 /100 /61 
+
+DeiT-S 86 /–/70 74 /88 /49 74 /94 /50 72 /98 /76 68 /100 /69 
+
+ViT-B/16 90 /–/73 84 /95 /53 84 /99 /48 76 /99 /76 67 /100 /60 
+
+Swin-T 96 /–/53 91 /98 /45 91 /100 /38 76 /98 /76 71 /100 /59 
+
+FaceRec. ResNet34 84 /–/73 62 /84 /62 69 /85 /63 75 /94 /63 66 /100 /63 
+
+Xception 90 /–/68 75 /87 /61 78 /90 /59 73 /94 /62 68 /100 /66 
+
+EffNet-B4 84 /–/63 74 /82 /65 74 /94 /55 67 /90 /55 67 /100 /62 
+
+DeiT-S 75 /–/78 59 /72 /62 63 /78 /69 67 /94 /68 61 /100 /62 
+
+ViT-B/16 71 /–/68 51 /66 /61 64 /77 /64 65 /93 /73 63 /100 /60 
+
+Swin-T 74 /–/77 59 /76 /67 66 /80 /66 66 /93 /73 55 /98 /56 
+
+Table 3. Directional contrasts in black-box ASR. Each row reports the mean paired difference between transfer in the first displayed direction and transfer in the reverse direction, separately for AA and CW–EOT. Estimates are reported in percentage points Directional contrast Contrast n G AA CW-EOT Transformer → CNN vs. CNN → Transformer 900 60 
+
+−2.30 [ −4.48 , −0.11] 
+
+pHolm = 0 .2769 
+
+0.89 [ −7.32 , 9.10] 
+
+pHolm = 1 .0000 
+
+FaceRec. → ImageNet vs. ImageNet → FaceRec. 900 60 
+
+0.94 [ −2.06 , 3.94] 
+
+pHolm = 1 .0000 
+
+5.96 [ −1.25 , 13 .17] 
+
+pHolm = 0 .5254 
+
+ALL → single subset vs. single subset → ALL 576 60 
+
+0.29 [ −5.17 , 5.76] 
+
+pHolm = 1 .0000 
+
+0.81 [ −14 .92 , 16 .53] 
+
+pHolm = 1 .0000 
+
+Notes. Entries report the estimate [95% leave-one-detector-out jackknife CI], with the Holm-adjusted p-value below. Positive estimates indicate higher mean black-box ASR in the first displayed direction, whereas negative estimates favor the reverse direction. Here, n is the number of paired bidirectional detector comparisons contributing to each attack-specific contrast, and G is the number of detector deletion units. Confidence intervals are unadjusted for multiplicity, whereas p-values are Holm-adjusted jointly across the 19 prespecified tests. White-box pairs are excluded. 
+
+Table 4. Final detector-training configurations. ηB and ηH denote the backbone and classification-head learning rates, respectively. WD denotes weight decay. WU denotes the number of warm-up epochs.                                                                                                                                                                    
+
+> Initialization Backbone Resolution Batch Optimizer ηBηHWD / WU
+> ImageNet
+> ResNet-34 224 128 Adam 1.00 ×10 −41.00 ×10 −41.00 ×10 −3/ 0 Xception 256 128 Adam 1.00 ×10 −41.00 ×10 −41.00 ×10 −3/ 0 EfficientNet-B4 224 128 Adam 1.00 ×10 −41.00 ×10 −41.00 ×10 −3/ 0 DeiT-S 224 128 Adam 1.00 ×10 −51.00 ×10 −41.00 ×10 −3/ 0 ViT-B/16 224 128 AdamW 2.00 ×10 −53.00 ×10 −41.00 ×10 −2/ 5 Swin-T 224 64 Adam 1.00 ×10 −51.00 ×10 −41.00 ×10 −3/ 0
+> Face recognition
+> ResNet-34 224 128 AdamW 4.91 ×10 −57.50 ×10 −51.79 ×10 −3/ 0 Xception 224 128 AdamW 1.47 ×10 −41.49 ×10 −41.17 ×10 −3/ 0 EfficientNet-B4 224 128 AdamW 1.86 ×10 −41.34 ×10 −58.91 ×10 −4/ 0 DeiT-S 224 128 AdamW 6.80 ×10 −55.98 ×10 −43.73 ×10 −6/ 5 ViT-B/16 224 128 AdamW 6.00 ×10 −56.50 ×10 −44.00 ×10 −4/ 5 Swin-T 224 64 AdamW 4.50 ×10 −57.82 ×10 −53.97 ×10 −3/ 5
+
+Figure 4. Sensitivity of the principal statistical estimates to detector-group omission. Black diamonds show estimates from the complete detector bank. Blue circles and orange triangles show estimates obtained after omitting all detectors using one backbone or trained on one DF40 subset at a time, respectively. Horizontal bars denote pointwise 95% leave-one-detector-out jackknife confidence intervals recomputed using the corresponding reduced detector bank. The upper panel reports attack-specific compatibility contrasts, the middle panel reports their CW–EOT-minus-AA differences, and the lower panel reports the overall paired contrast between attacks. The omission estimates are descriptive diagnostics and do not constitute additional hypothesis tests. Figure 5. Full pairwise transfer matrix for AA. Each cell reports the attack success rate (ASR, %) when the column detector is used as the source and the row detector as the target. Diagonal entries correspond to white-box evaluation, whereas off-diagonal entries correspond to black-box transfer. Figure 6. Full pairwise transfer matrix for CW–EOT. Each cell reports the attack success rate (ASR, %) when the column detector is used as the source and the row detector as the target. Diagonal entries correspond to white-box evaluation, whereas off-diagonal entries correspond to black-box transfer.
