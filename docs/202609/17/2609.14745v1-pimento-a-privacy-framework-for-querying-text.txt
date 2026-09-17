@@ -1,0 +1,1739 @@
+Title: PIMENTO: A Privacy Framework for Querying Text
+
+URL Source: https://arxiv.org/pdf/2609.14745v1
+
+Published Time: Tue, 15 Sep 2026 01:36:18 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# PIM εNTO : A Privacy Framework for Querying Text 
+
+## Mushtari Sadia * Ang Chen * Amrita Roy Chowdhury **University of Michigan, Ann Arbor 
+
+## Abstract 
+
+Currently, there are two state-of-the-art, complementary pri-vacy guarantees: contextual integrity (CI) for what may flow, and differential privacy (DP) for what may be inferred. Yet neither maps cleanly onto natural language, leaving existing approaches unable to provide these guarantees for analytics over unstructured text. We address this gap with P IM εNTO ,a framework that takes three forms of natural language: text corpus, queries, and privacy policies; and grounds them into a relational database, creating a common substrate on which both guarantees can be enforced formally. With this design, we not only provide end to end privacy guarantees, but also improvement to utility through three key contributions: DP aware Text-to-SQL , which searches for correct queries requir-ing the least DP noise; CI aware Text-to-SQL , which compiles natural language policies into executable CI rules over the database; and a new privacy definition we call contextual differential privacy , which redefines the traditional DP neigh-borhood under CI, and yields a tighter smooth sensitivity bound. Across new benchmarks, P IM εNTO selects the best query in 75.3% of cases (upto +45 points over baselines) and achieves zero leakage under correct policy grounding. To our knowledge, P IM εNTO is the first framework to provide formal privacy guarantees for natural language analytics under CI, DP, and their composition. 
+
+## 1 Introduction 
+
+Organizations increasingly sit on vast amounts of rich infor-mation that is trapped in unstructured text – as much as 80% of enterprise data [29]. Hospitals store physician notes, admis-sion reports, medication records, and discharge summaries; law firms maintain case files; companies retain internal com-munications; public agencies collect similarly sensitive tex-tual data. Across these domains, many important analyses reduce naturally to statistical queries over entities and rela-tionships described in text. Consider a hospital researcher asking: “How many patients reported worsening symptoms after starting a new HIV medication?” Answering this query requires reasoning and linking evidence scattered across a corpus of documents; the answer cannot simply be read from a single record. Such analyses could be enormously valuable for research, operations, and policy. Yet much of this value re-mains locked away; the underlying text is highly sensitive, its use is constrained by stringent legal and institutional require-ments, such as HIPAA [82] and GDPR [81], and meaningful analysis is only viable with strong privacy guarantees. Formalizing privacy directly over free-form text, however, is fundamentally difficult. Sensitive information has no fixed representation: it may span sentences, appear through para-phrases, be implied indirectly, or emerge only by combining innocuous facts. There is no obvious “unit” that captures what must be protected. More fundamentally, privacy has two di-mensions. First, it is contextual: whether information may be revealed depends on who is asking, what is queried, and un-der what relationship or policy. Second, even an appropriate aggregate query can reveal information about individuals [21]. No single privacy notion naturally captures both risks. Re-turning to our hospital example, the query about worsening symptoms may be appropriate for a medical researcher con-ducting an approved HIV study, but not for a budget analyst unauthorized to access patients’ HIV information. Even the authorized researcher should not receive an exact answer if it could reveal whether a patient is in the queried population. These risks correspond to two foundational privacy frame-works studied extensively, but independently. Contextual in-tegrity (CI) [6] is normative and governs the appropriateness of an information flow based on the actors, information being queried, and relevant relationships and conditions. In our ex-ample, CI may permit the query for a researcher associated with an approved HIV study while denying the same query from a budget analyst. Differential privacy (DP) [21], in con-trast, limits information revealed by adding noise calibrated to each individual’s influence on the query answer. Thus, the two guarantees answer different questions about the same query :CI determines what information may flow; DP determines 
+
+how much that flow reveals. 1arXiv:2609.14745v1 [cs.CR] 13 Sep 2026 Unfortunately, existing approaches to enforcing either CI or DP are fundamentally incompatible with natural language text. For CI, the formal framework is precise [6]: policies can be expressed in first-order logic over actors, attributes, relationships, and transmission principles. The difficulty is enforcing them over raw text, where these objects are implicit and must be inferred from context. Consequently, prior work has largely relied on LLMs or heuristic contextual classifiers to judge whether information flows are appropriate [26, 43, 58, 76, 80, 87], or on rewriting, minimization, and structured communication layers [1, 5, 26, 60, 73]. These approaches are empirical and provide no end-to-end formal guarantee that the resulting disclosure satisfies the CI policy. Differential privacy faces a similar barrier, as it requires a well-defined notion of an individual’s contribution. These concepts are natural for structured data such as relational databases, but have no direct analogue in raw text, where in-formation about an individual may be scattered across tokens, sentences, and documents. Existing approaches therefore re-sort to a weaker relaxation of DP, treating a token or embed-ding as the protected unit [24,25,55,86], which no longer cor-responds to an individual. Even setting this mismatch aside, these mechanisms are impractical: DP in high-dimensional embedding spaces can require enough noise to destroy seman-tic utility [90], while local-DP sanitization yields coherent text only at privacy parameters too weak for meaningful protec-tion [54]. LLM-based rewriting is also heuristic and provides no formal privacy guarantee [32, 35, 40]. 
+
+A new privacy substrate for text. Our key insight is to change the representation on which privacy is enforced. Rather than defining CI and DP directly over text, we in-troduce a structured representation, relational databases , be-tween natural language and privacy enforcement. This builds on a broader shift in academia [3, 15, 48, 49] and indus-try [27,56,57,74,75,77,78], where unstructured text is mapped into a database through Text-to-DB [66], and natural-language questions are compiled into executable SQL through Text-to-SQL [31, 59, 67, 94]. This paradigm offers the best of both worlds: users retain the flexibility of natural language, while decades of mature database machinery can be brought to bear. The need for structure has also been recognized at the policy level, as recent amendments to CCPA [14,65] call for bringing “structure to unstructured data” to enable privacy analysis. Our observation is that this same representation unlocks a qualitatively new benefit: formal privacy guarantees over text .Relational databases provide the explicit objects that both CI and DP lack over raw language. For DP, the connection is im-mediate. Once a natural-language question is translated into SQL, its privacy cost becomes a mathematical property of an explicit query over an explicit database, allowing us to lever-age mature DP theory for relational queries [7, 38, 42, 84]. For CI, we make a complementary observation. A CI norm spec-ifies predicates over contextual parameters such as sender, recipient, information type, purpose, and relevant relation-ships, together with logical conditions governing when a flow is permitted. These predicates can be represented as database relations, while their conjunctions, disjunctions, existential conditions, and negations can be expressed using relational operators and SQL. We can therefore compile a CI norm into an executable SQL view whose result is exactly the database tuples satisfying the norm. Unlike asking an LLM whether a disclosure “looks appropriate,” the policy becomes an explicit, mechanically enforceable authorization boundary. The LLM is used only to translate natural language into the SQL view, which can be inspected and verified at compile time, rather than making privacy decisions at runtime. 
+
+Our contributions. We propose P IM εNTO , to the best of our knowledge, the first framework to provide formal pri-vacy guarantees over natural-language text under either CI or DP, enabling a new class of privacy-preserving text analytics. PIM εNTO is flexible : applications can request DP alone, CI alone, or their composition, each formally operationalized. • Differential privacy-aware Text-to-SQL. We formulate a new Text-to-SQL task for finding equivalent lower-sensitivity SQL and develop a new search procedure. We construct the first benchmark for this task, where P IM εNTO finds a correct, minimum-sensitivity formulation in 75.3% of cases, outperforming baselines by up to 45 percentage points .• Contextual integrity-aware Text-to-SQL. We introduce TEXT -TO -CQL, a new task that grounds natural-language CI norms into SQL views. To the best of our knowledge, this is the first approach to operationalize CI as database views for natural-language analytics. On our new benchmark, current LLMs achieve up to 89% F1 .• A formal integration of CI and DP. We introduce contex-tual differential privacy , a new privacy definition integrating CI and DP by reshaping the neighborhood relation of standard DP, and characterize when it yields strictly tighter sensitivity bounds. While prior work has argued for such an integration [8], to the best of our knowledge, we are the first to formalize it as a concrete privacy definition. • End-to-end privacy over text. Together, these components enable a new paradigm for privacy-preserving text analytics: natural language remains the interface, relational databases provide the formal substrate, and privacy enforcement is ex-plicit and auditable rather than delegated to LLM judgments. 
+
+## 2 Background 
+
+Contextual Integrity (CI). CI defines privacy by whether information flows appropriately within a particular context. For example, a hospital policy may state that “a doctor may disclose a patient’s diagnosis to a researcher for an approved study,” while prohibiting the same disclosure to a budget ana-lyst. We use the formalization of Barth et al. [6], representing a norm as Ni = ( λi, rsnd  
+
+> i
+
+, rrec  
+
+> i
+
+, rsub  
+
+> i
+
+, τi, πi, θi), where λi ∈ { +, −} 
+
+indicates whether the flow is permitted or prohibited, rsnd  
+
+> i
+
+, rrec  
+
+> i
+
+,2and rsub  
+
+> i
+
+are the sender, recipient, and subject roles (doctor, researcher, and patient), τi is the data type (diagnosis), πi is the purpose (approved study), and θi specifies conditions on the flow. A flow is permitted if it matches a positive norm and no applicable negative norm prohibits it. 
+
+Differential Privacy (DP). DP is the de facto standard for protecting individual privacy in aggregate queries. 
+
+Definition 1. Let I ∼ I′ denote databases differing by one tuple in a private relation. A randomized mechanism M is 
+
+(ε, δ)-differentially private if, for every output set O and I ∼ I′,
+
+Pr [M (I) ∈ O] ≤ eε Pr [M (I′) ∈ O] + δ.
+
+A standard way to achieve DP is to add noise calibrated to query sensitivity . For example, the Laplace mechanism releases q(I) + η, where η ∼ Lap (∆q/ε) and ∆q bounds the change in q between neighboring databases. Global sensitiv-ity, GS q = sup I∼I′ |q(I) − q(I′)|, takes the worst case over all database instances and can be prohibitively large for queries with joins. In contrast, local sensitivity LS q(I) = 
+
+sup I′∼I |q(I) − q(I′)| considers only neighbors of the current instance, yielding a tighter bound, but cannot be used directly because its data-dependent noise scale may itself leak informa-tion. Smooth sensitivity [61] addresses this with an instance-dependent bound that varies smoothly across neighbors, but is intractable to compute exactly for general multiway joins. We therefore use residual sensitivity (RS) [19], an efficiently computable, order-optimal smooth upper bound for this query class, to calibrate noise throughout the paper. 
+
+Residual sensitivity (RS). RS is the tightest known efficiently computable smooth sensitivity bound for multiway join count-ing queries. It captures how a tuple change propagates through joins using data-dependent join multiplicities. Selections can be pushed to their corresponding base relations before com-puting RS, while projections do not affect the bound. Fig. 1 shows the intuition behind RS. Starting from the full join 
+
+q, we remove one relation, Z, to form the residual query q E .The boundary is where this residual query connects back to the removed relation. Here, the boundary is B. The value b1
+
+appears three times in qE , so a tuple added to Z with B = b1
+
+can join with three tuples. This multiplicity of 3 captures how much one tuple change can affect the query answer. Formally, for a counting query q =▷◁ ni=1 Ri, RS considers a residual query qE which joins a subset of relations E ⊆ [n].Its boundary BE contains the attributes connecting qE to the remaining relations. For each private relation Ri, let E = [ n] \{i}. For each boundary value b, m i(b) is the number of tuples in qE matching b. RS takes the largest such multiplicity: 
+
+TEi (I) = max   
+
+> b∈dom (BE)
+
+mi(b). (1) We denote this maximum by TEi , the largest number of output tuples one tuple in Ri can affect. Thus, LS i = TEi and LS q(I) = max i∈Rpriv LS i. Because local sensitivity can vary 𝑞 = X(A, B, C) ⋈ Y(A) ⋈ Z(B, D)               
+
+> 𝑞 E= X(A, B, C) ⋈ Y(A) BE= {B}
+> ABC
+> a1b1c1
+> a1b1c2
+> a2b1c3
+> a3b2c4
+> X ⋈ Y X ⋈ Y can connect to maximum 3 tuples in Z
+> mi(b 1) = 3 mi(b 2) = 1
+> 𝑇 𝐸 !
+> = 3 (Because only B can join with Z)
+
+Figure 1: RS. Residual query, boundary, and multiplicity. sharply across neighbors, RS also bounds how these multi-plicities grow with database distance. Let s = ( s1, . . . , s|Rpriv |),where si counts tuple changes to private relation Ri, and let 
+
+Sk contain all such vectors summing to k. RS computes 
+
+TE,s(I) = ∑
+
+> A⊆E∩Rpriv
+
+TE\A(I) ∏
+
+> j∈A
+
+s j, (2) LS q,s(I) = max 
+
+> i∈Rpriv
+
+TEi,s(I), (3) LS (k) 
+
+> q
+
+(I) = max 
+
+> s∈Sk
+
+LS q,s(I), (4) Finally, RS q(I) = max  
+
+> k≥0
+
+e−βk min {GS q, LS (k) 
+
+> q
+
+(I)}, (5) where β is the smoothing parameter. We denote the maximiz-ing distance and vector by k⋆ and s⋆.
+
+Key properties. We rely on three properties of RS: 
+
+(P1) Query dependence. RS is defined over the complete query; adding a relation can increase or decrease its sen-sitivity. 
+
+(P2) Maximizer dependence. The final RS depends on the maximizing private relation, distance k⋆, and distance vector s⋆.
+
+(P3) Reusable intermediates. Computing RS produces boundary multiplicities TE for subsets of relations. We later reuse these in our search procedure. 
+
+Text-to-SQL. Recent state-of-the-art tree-based approaches to Text-to-SQL use Monte Carlo Tree Search (MCTS) to ex-plore alternative SQL formulations during generation [44, 89]. MCTS balances exploitation , i.e., revisiting promising regions of the search space, with exploration , i.e., trying less-explored alternatives. In the tree, a node ( v) corresponds to a partial or completed SQL query, and an edge ( a) is an LLM reasoning action that produces a child node. Starting from a root node, MCTS tests whether the current node is fully explored (i.e., cannot have more children). If so, a child is chosen using a selection rule . Otherwise, an LLM performs expansion ,proposing a batch of candidate children, from which one is selected randomly. This continues until a terminal node (a complete SQL query) is reached. The query is then evalu-ated, and a reward Q(v, a) is assigned to the terminal node, typically based on SQL execution agreement. The reward is also backpropagated to every node along that query’s branch, while updating the corresponding node and action visit counts 
+
+N(v) and N(v, a). This constitutes one rollout, and rollouts 3Natural language text corpus Natural language policy (e.g., HIPAA) 
+
+Text-to-DB 
+
+> … C1. a doctor of a patient cannot share HIV info with researcher unless the patient enrolled in the study …
+
+Natural language query: 
+
+Which patients are on the new HIV drug? 
+
+> Sender view Receiver view
+> Map policy clauses to SQL views capturing contextual integrity
+> Runtime context
+
+Compilation Runtime PIMENTO 
+
+Mode DP Aware Text-to-SQL 
+
+> Choose SQL with the least DP noise
+
+SQL 
+
+CI  
+
+> Sender: doctor 2 Recipient:
+> researcher 1Purpose: research
+
+DP CI+DP 
+
+> (1) Check which CI views apply & get ans from them (2) Return ans exactly
+
+Text-to-SQL Split: (1) + (2) from above + standard DP to remaining ans from DB 
+
+SQL SQL  
+
+> Get ans from DB & add
+> standard DP noise
+
+Answer   
+
+> OR ,contextual DP release: get ans from DB & use contextual DP (count+η)
+
+CI Aware Text-to-SQL 
+
+> Condition
+> view
+> Data view
+
+For each policy clause:  
+
+> Permitted: exact records Prohibited: count with DP noise η
+> + (count+η)
+> (Does not need the compilation stage)
+> (count+η)
+
+Figure 2: PIM εNTO overview . P IM εNTO takes three natural-language inputs: a text corpus, privacy policy, and query. During policy compilation, it (i) converts the text into a relational database and (ii) compiles the policy into SQL views representing contextual integrity norms using our CI-aware Text-to-SQL method. At runtime, given the query and context (sender, recipient, and purpose), P IM εNTO supports three privacy-preserving release modes: (i) CI , which releases authorized data exactly; (ii) CI+DP , which either releases authorized data exactly and unauthorized data as a DP noisy count ( split release ), or returns a noisy count over the full database using contextual DP , treating CI-authorized data as public; and (iii) DP , which returns a noisy count with standard DP. CI modes use CI-aware Text-to-SQL , and DP modes use DP-aware Text-to-SQL . Our main contributions are the CI-aware and DP-aware Text-to-SQL mechanisms and the definition of contextual DP ; Text-to-DB and standard Text-to-SQL are orthogonal components from prior work. 
+
+continue until the budget is exhausted, after which we select a final query with the highest reward. The selection rule is typically UCT [41]: 
+
+a∗ = arg max a
+
+
+
+Q(v, a)
+
+N(v, a)
+
+| {z }
+
+exploitation 
+
++c
+
+s
+
+log N(v)
+
+N(v, a)
+
+| {z }
+
+exploration 
+
+ .
+
+Shapley Attribution. A game theoretic method [83] that rewards each decision by its contribution to the outcome. 
+
+## 3 Problem Statement 
+
+Motivating Scenario. Our target use case is an organization holding volumes of sensitive unstructured text about individ-uals. The organization is the data custodian: it controls the corpus, defines its privacy policy, and mediates every query. Analysts may be internal or external, with different roles and access levels. The goal is to answer their analytical ques-tions while enforcing policy and protecting the individuals described in the text. We use a hospital as our running example. Much of its clin-ically valuable information is stored in free-form text, includ-ing physician notes, admission reports, medication records, and discharge summaries, and queried by diverse stakeholders. Natural language appears in three forms: (i) organizational 
+
+data ; (ii) users’ analytical questions ; and (iii) the privacy policy governing access, such as HIPAA. To enable querying with formal privacy enforcement, we retain natural language at the interface but compute over a relational database. Specif-ically, we assume a Text-to-DB system has transformed the raw corpus into a database D with schema S [3, 36, 66]. We use the schema below throughout. This setting raises three novel tasks, which we define next: 
+
+(i) Differential-privacy-aware Text-to-SQL , generating SQL queries optimized for low DP noise; (ii) Contextual-integrity-aware Text-to-SQL , grounding CI policies into the database for enforcement; and (iii) Integrating CI and DP , composing both guarantees into end-to-end release mechanisms.                       
+
+> Clinical Patient (pat _id , . . . )Visit (pat _id ,diagnosis , . . . )
+> MedicationOrders (pat _id ,medication , . . . )
+> Prescription (pat _id ,medication , . . . )
+> Discharge (pat _id ,finaldiagnosis )
+> DxCategory (diagnosis ,hivstatus , . . . )
+> Roles Employee (employee _id , . . . )
+> TreatingRelationship (employee _id ,pat _id ,role )
+> Supervises (supervisor _id ,supervisee _id )
+> CareTeamMember (employee _id ,team _id )
+> TeamAssignment (team _id ,pat _id )
+> Research Researcher (researcher _id , . . . )Study (study _id ,researcher _id )
+> StudyPatient (study _id ,pat _id )
+> Constraint Γ:DxCategory .diagnosis →DxCategory .hivstatus
+
+Table 1: Schema for the running healthcare example. We assume standard primary and foreign key constraints. 
+
+## 3.1 Differential Privacy Aware Text-to-SQL 
+
+Since user queries are in natural language, answering them over the relational database requires a Text-to-SQL model that maps the question to a SQL query. Standard Text-to-SQL maps a natural-language question x and schema S to a SQL query q = T2SQL (S, x), whose answer q(D) is released directly. We consider a different setting: the generated query is executed over a private database and its answer is released under differential privacy, 
+
+q = T2SQL (S, x), ˆa = q(D) + η, η ∼ Lap 
+
+ RS q(D)
+
+ε
+
+
+
+.
+
+4This seemingly simple change introduces two challenges. First, query generation becomes part of the privacy mecha-nism: if the choice of q depends on the private database, it must itself satisfy DP. Second, utility depends on the cho-sen query’s sensitivity RS q(D), which determines the noise added to its answer. Existing DP query-processing techniques sidestep the first challenge by assuming q is fixed and address the second post-hoc , by reducing its sensitivity or release noise [7, 19, 38, 42, 84]. Text-to-SQL, however, presents a new opportunity: the query itself is not fixed. 
+
+Ambiguity as Opportunity. We turn an inherent challenge of Text-to-SQL, ambiguity, into an opportunity for improving privacy utility. While ambiguity about the user’s intent is a flaw, having multiple correct ways to express the same intent is a feature. A natural-language question can admit multiple semantically correct SQL formulations because schemas of-ten represent the same relationship through different tables, foreign keys, or join paths [9, 16, 17, 62]. Conventional Text-to-SQL has little reason to prefer among correct formulations. Under DP, however, their differences can yield substantially different sensitivities, and thus different noise. Consider the query “How many patients were pre-scribed drug X by cardiologists?” The database sup-ports two correct paths: Prescription ⋊⋉ Employee and 
+
+MedicationOrder ⋊⋉ Visit ⋊⋉ Employee . Both return the same answer, but can have very different sensitivities: the first may associate one cardiologist with hundreds of prescrip-tions, whereas the second may associate each visit with only a few medication orders. Thus, different join paths induce different multiplicities and, consequently, different sensitiv-ity. Note that choosing the lowest-sensitivity formulation is 
+
+database-dependent : neither path here is inherently better, and the question and schema alone cannot determine which has lower sensitivity. These observations motivate a new problem that we call 
+
+DP-aware Text-to-SQL : given a natural-language question 
+
+x, schema S, and private database D, the goal is to select, among semantically correct SQL formulations, a query with low sensitivity while ensuring that the selection itself pre-serves differential privacy. In other words, we ask: 
+
+Can Text-to-SQL privately select the correct query that is cheapest to release under DP? 
+
+## 3.2 Contextual Integrity Aware Text-to-SQL 
+
+For CI, we are given a natural-language policy P , the database constructed from the raw text, and a user’s query translated into SQL. The goal is to answer the query while respecting the information flows permitted by P . Prior work commonly hands CI norms to an LLM, and asks it to decide what may be revealed. This is fundamentally limited. First, authorization remains a model judgment with no formal guarantee [5, 72]. Second, LLMs make substantial contextual privacy errors: ConfAIde reports private information disclosure in 57% of cases [58]. Third, placing the privacy decision inside the LLM exposes enforcement to prompt-injection attacks [5, 92]. Our key observation is that CI norms are logical rules and should therefore define the authorization boundary, rather than merely guide an LLM. We use the LLM only to translate 
+
+natural-language norms into executable rules over the schema; the final privacy decision is deterministic. 
+
+Shared Representation as Opportunity. To make this trans-lation possible, we make a key observation: CI norms and SQL share a common logical foundation. A CI norm speci-fies who may access what information under what conditions, which can be expressed as predicates over database relations and attributes. Thus, once grounded in the schema, a CI norm can be compiled directly into executable SQL. 
+
+Proposed Workflow. Consider a hospital policy: an attending physician may disclose a patient’s diagnosis to a resident for treatment, only if the attending treats the patient and super-vises the resident. We can compile this clause into a CI norm, represented by SQL views: a sender view identifies attendings from TreatingRelationship , a recipient view identifies residents from Employee , a data view locates diagnosis information in 
+
+> Visit
+
+, and condition views encode the required treatment and supervision relationships using join queries between these tables. Hereafter, a CI norm refers to this collection of SQL views representing its roles, data, purpose, and conditions. At runtime, these views determine which norms apply and the data they authorize. Suppose resident 20 queries diagno-sis data from physician 10. We can identify norms whose data views cover the queried information, bind physician 10 and resident 20 to their views, and execute them over the database. The result contains only diagnoses satisfying the norm’s conditions. Repeating this for all applicable norms, and subtracting prohibited data from permitted data, enables releasing the resulting authorized data exactly. This motivates the problem we call contextual integrity aware Text to SQL , or T EXT -TO -CQL in short. TEXT -TO -CQL : Given a natural-language privacy policy P , relational schema S and a user query, how can we compile the policy into executable SQL views that, instantiated with the query context at runtime, enforce exactly the information the query is authorized to release under contextual integrity? 
+
+## 3.3 Integrating Contextual Integrity and Dif-ferential Privacy 
+
+So far, we have defined tasks for enforcing CI and DP indepen-dently in our setting. Yet integrating the two can provide bene-fits that neither offers alone. Contextual integrity is normative :it determines whether an information flow is appropriate. Dif-ferential privacy is descriptive : it limits what can be learned about individuals from that flow through calibrated noise. both what information may flow and how much that flow may reveal. There has been growing interest in bringing these two 5perspectives together. Benthall and Cummings [8] explicitly advocate integrating CI and DP, while related work on policy-aware DP shows that public or policy-specified information can be incorporated into sensitivity analysis [11,30,39]. What has been missing is an operational bridge: CI norms have tradi-tionally remained logical specifications rather than executable objects that a DP mechanism can directly consume. P IM εNTO 
+
+provides this bridge. By compiling natural-language CI norms into executable SQL views (Sec. 3.2), we obtain a concrete, database-grounded authorization boundary that can be com-posed directly with DP. Beyond making CI and DP independently composable within our end to end setting, we identify a further oppor-tunity from their integration: improving DP utility. Standard DP protects all records uniformly, even when CI already au-thorizes some information to flow to the querier. But if that information is already appropriate to reveal, should it still be used for noise calibration? Our key insight here is to revisit the notion of DP neighborhood under contextual integrity. Since we can identify the records authorized by CI at runtime, we can treat those records as public and hold them fixed in the neighborhood relation. This can reduce local sensitivity by excluding changes to already authorized information. The remaining question is whether this reduction also yields a tighter smooth upper bound through residual sensitivity. This leads to our third problem: 
+
+Can contextual integrity enable tighter smooth sen-sitivity bounds for differentially private query an-swering? 
+
+## 4 PIM εNTO : System Description 
+
+PIM εNTO is a privacy framework for natural-language ana-lytics over unstructured text. To the best of our knowledge, PIM εNTO is the first framework to provide formal privacy guarantees for natural-language text under either CI or DP, and to support their combination within a unified framework. As motivated in Sec. 3, we envision P IM εNTO being de-ployed by the data custodian, e.g., the hospital. It takes three natural-language inputs: (i) the text corpus, (ii) a user query, and (iii) a privacy policy, and enforces the requested privacy semantics before releasing an answer. It is flexible : applica-tions may request DP alone, CI alone, or their composition, and P IM εNTO formally operationalizes each choice. PIM εNTO realizes these guarantees by grounding all three inputs in a common relational database representation. The text corpus is converted into a relational database using ex-isting Text-to-Database techniques, while the user’s question is translated into SQL using Text-to-SQL. Our DP modes support single and multiway join counting queries with selec-tions and projections, while CI alone supports arbitrary SQL queries. Database construction is orthogonal to P IM εNTO : it is a well-studied problem, and P IM εNTO can build on any ex-isting Text-to-Database system [3,36,48,49,66]. Recent work already achieves over 95% performance on this task [66], so we focus on the privacy layer over the resulting representation. We develop DP-aware Text-to-SQL to optimize query gener-ation for private release, CI-aware Text-to-SQL to compile natural-language CI policies into enforceable database views, and mechanisms for integrating the resulting authorization boundary with DP. We describe each component next, fol-lowed by guidelines for choosing among these guarantees. Fig. 2 provides an overview. 
+
+## 4.1 Differential Privacy Aware Text-to-SQL 
+
+We start with two strawman solutions to build intuition. • Strawman Solution 1. A natural approach is to fine-tune models to favor low-sensitivity queries. However, no SQL is universally low-sensitivity: residual sensitivity is data-dependent . Thus, a model trained on one set of databases cannot reliably identify the lowest-sensitivity formulation on a new database, as our experiments confirm (Sec. 5.1). • Strawman Solution 2. Another approach is to generate the top-k candidates, privately evaluate their sensitivities, and se-lect the minimum. This has two limitations. First, evaluating more candidates consumes privacy budget because residual sensitivity is data-dependent. Second, the lowest-sensitivity formulation may lie outside the top-k, using alternative rela-tions, join paths, or predicates that receive low model proba-bility. Our experiments confirm that top-k candidates often lack this structural diversity (Sec. 5.1). At the other extreme, exhaustive search covering all structures is intractable. These limitations require sensitivity optimization at runtime ,using database-dependent feedback to guide search. This in turn creates two challenges: (1) Use of private data-dependent feedback , since the search uses private database-dependent feedback, and (2) Correctness-preserving sen-sitivity optimization , since reducing sensitivity must not come at the cost of semantic correctness. Tree search is a natural fit: unlike top-k decoding, MCTS uses feedback from explored queries to search beyond the model’s initial dis-tribution. P IM εNTO extends MCTS by making sensitivity a first-class search objective , steering search toward semanti-cally correct, low-sensitivity formulations while preserving privacy. We realize this in four stages, illustrated in Fig. 3. 
+
+4.1.1 Initialization 
+
+At initialization, P IM εNTO uses three techniques: 
+
+Private Synthetic Dataset. MCTS evaluates many candidates using two data-dependent signals: (i) residual sensitivity for DP utility and (ii) result self-consistency for semantic correctness. Repeatedly computing these on D would ac-cumulate privacy loss. Instead, P IM εNTO pays for data de-pendence once by generating a private synthetic database 
+
+eD ← Msyn (D; εsyn , δsyn ) before search and using eD for all 6STOP() 
+
+> ADD_RELATION(B)
+> ADD_RELATION(C)
+
+⭐     
+
+> Initialization Search
+> Repeat N rollout times
+> Evaluation
+> No
+> Start from root
+> Selection: select
+> child based on UCT
+> rule
+> No
+> STOP() reached?
+> Expansion:
+> 1. Generate E candidates
+> from LLM
+> 2. Prune candidates
+> 3. Randomly pick next
+> Yes
+> Rollout end; go
+> to evaluation
+
+⭐              
+
+> Ans: 10
+> Ans: 20
+> Ans: 10 Ans: 10
+> Ans: 20
+> Yes
+> Reward calculation
+> •Execute query qand assign it to an
+> answer cluster.
+> •Compute residual sensitivity RS (q).
+> •Compute consistency reward Rcorr
+> (q).
+> •Compute Shapley contributions
+> v( ϕ)for RS(q) for nodes on the
+> branch.
+> Backpropagation
+> For each node on the branch, update
+> Q(v)←Q(v)+Rcorr (q)−λv( ϕ)
+> N(v,a) ←N(v,a) + 1
+> N(v) ←N(v) + 1 .Ans: 10
+> Pruning
+> If a candidate cannot
+> beat any ⭐sensitivity,
+> prune it.
+> Final Selection
+> Choose ⭐from
+> the largest cluster
+> Warm start
+> •Generate K candidates and initialize tree
+> •Cluster executions
+> •Store lowest sensitivity query ⭐per cluster
+> LLM Reasoning Actions:
+> SET_COUNT()
+> ADD_RELATION()
+> STOP()
+
+qAns: 10  Ans: 20 
+
+> Intermediate node
+> (partial SQL)
+> Terminal node
+> (complete SQL)
+> Node has < K√N
+> children?
+
+Figure 3: The four-stage Monte Carlo Tree Search procedure for DP-aware Text-to-SQL in P IM εNTO .computations. This incurs (εsyn , δsyn ) once; all subsequent use of eD is post-processing. We use PrivPetal [10], which preserves cross-table correlations in relational data. 
+
+DP-Compatible Search Tree. DP also constrains what MCTS may generate. Generic Text-to-SQL can introduce arbitrary SQL operators, while our DP mechanism supports counting queries over multiway joins with selections and projections (Sec. 2). We therefore make the search DP-compatible by construction: each node is a partial query, and each edge is restricted to one of three actions: • S ET _C OUNT (x) sets the aggregation to γCOUNT (x), where x
+
+is ∗1 or an attribute, with ∗ as the default. • A DD _R ELATION (R, J, F) adds relation R with join predi-cate J and filter F. For the first relation, E ← σF (R); other-wise, E ← σF (E ▷◁ J R).• S TOP () terminates construction and returns q = γCOUNT (x)(E).
+
+Warm-start. Since zero shot Text-to-SQL is optimized for accuracy, we use K zero shot samples to warm start the tree and simplify the problem, decomposing each sample into our actions and inserting it as a tree path. We execute these queries on eD and group those with the same answer into execution clusters C y. Queries within a cluster agree on their answer but may differ structurally and in sensitivity. For each cluster, we maintain its lowest-sensitivity incumbent q y. Clusters and incumbents are updated as the search progresses. 
+
+4.1.2 Search 
+
+As described in Sec. 2, MCTS alternates between selection and expansion to explore new query formulations. However, broad exploration for low-sensitivity formulations is compu-tationally expensive, while naively expanding every branch quickly becomes intractable. P IM εNTO therefore uses two complementary techniques to better focus the search: 
+
+Sensitivity-Guided Pruning. PIM εNTO uses a greedy pruning 
+
+> 1
+
+COUNT (∗) returns the total number of result rows. 
+
+strategy to eliminate branches whose next action is unlikely to improve any formulation found so far. Consider a partial query qv and a proposed equijoin to relation R on qv.A = R.B.We consider the extension only when it is containment pre-serving on eD, meaning every join value in qv has a match in 
+
+R: πA(qv( eD)) ⊆ πB(R( eD)) . Although sensitivity can gener-ally increase or decrease as relations are added (P1, Sec. 2) ,containment preservation identifies a special case: if R retains every join value from qv, adding R cannot lower sensitivity because it preserves the maximum join multiplicity. This is a greedy condition, as the guarantee need not hold after sub-sequent actions. Let qv′ denote the extended query (with the proposed action) and ιmax = max y ιy the largest sensitivity incumbent among the execution clusters found so far. We prune when RS qv′ ( eD) > ιmax . The proposed action has al-ready raised sensitivity above every known cluster incumbent, making the branch less promising. We delay pruning for a few rollouts to allow the clusters and incumbents to stabilize. 
+
+Disallowing Duplicate Branches. Sibling nodes using the same relation key create redundant subtrees. We pass existing sibling keys as an exclusion set when generating children and discard any that reuse them. 
+
+4.1.3 Evaluation 
+
+When a rollout reaches S TOP () , it produces a completed query 
+
+q, which P IM εNTO evaluates for correctness and sensitivity. We design two rewards: 
+
+Correctness Reward. We estimate correctness using result self-consistency. After observing M valid queries, we define 
+
+Rcorr (q) = |Cy(q)|− 1
+
+M−1 , Rcorr (q) = 0 if M ≤ 1. (6) Thus, queries supported by larger execution clusters receive higher reward. 
+
+Sensitivity Reward. By (P1) , RS is defined only for a com-plete query, whereas MCTS constructs queries one relation at a time. Scoring partial queries is insufficient because adding a relation can raise or lower sensitivity. A terminal reward such 7as 1 /(1 + log RS q( eD)) is also too coarse: it assigns every ac-tion the same signal despite their potentially different effects. We also confirm that this performs poorly (Sec. 5.1). We instead treat sensitivity feedback as a relation-level credit-assignment problem. Viewing the relations of q as play-ers in a cooperative game with value RS q( eD), we use Shapley attribution [83] to assign each relation a contribution φi. These contributions sum to RS q( eD) and are independent of construc-tion order. We (i) define a value function over relation subsets using quantities already computed by RS, (ii) compute each relation’s Shapley contribution, and (iii) normalize and negate these contributions so sensitivity-increasing relations are pe-nalized and sensitivity-reducing ones rewarded. This converts query-level RS into an action-level signal for MCTS. 
+
+Sensitivity Value Function. Consider a completed query    
+
+> q=▷◁ ni=1Ri
+
+with relation indices V = [ n]. For distance vector s,RS q( eD) = max k≥0 e−βk min      
+
+> n
+> GS q,max s∈Skmax i∈Rpriv TV\{ i},s(eD)
+> o
+> .
+
+(Sec. 2). For each residual query qE , RS computes 
+
+TE,s( eD) = ∑A⊆E∩Rpriv TE\A( eD) ∏ j∈A s j.
+
+Thus, terminal RS already computes maximum boundary mul-tiplicities TE for relation subsets (P3) . P IM εNTO caches and reuses them to attribute to individual relation choices. By (P2) , the terminal RS depends on its maximizing dis-tance k⋆ and distance vector s⋆. We therefore retain these maximizing values from the terminal computation and, hold-ing them fixed, define for each U ⊆ VW (U) = e−βk⋆     
+
+> min
+> n
+> GS q,max i∈U∩Rpriv TU\{ i},s⋆(eD)
+> o
+> .
+
+(7) where the maximum over an empty set is defined as zero. Hence W ( /0) = 0 and, because the terminal maximizing values are retained, W (V ) = RS q( eD).Importantly, W (U) is not the residual sensitivity of the subquery containing only U. Instead, it measures the con-tribution of relations in U to the fixed terminal residual-sensitivity computation: we retain k⋆, s⋆, and GS q rather than re-optimizing residual sensitivity for every subset. We refer to {W (U) : U ⊆ V } as the sensitivity vector. 
+
+Shapley attribution. With the value function W , we divide the total sensitivity W (V ) among the relations. A relation can affect residual sensitivity by changing either the maximum boundary multiplicities, or which private relation attains the maximum in Eq. 7. Shapley attribution captures both indepen-dently of the order in which MCTS constructs the query, so each relation’s contribution reflects its intrinsic effect rather than the search trajectory. For relation Ri, its Shapley contri-bution is           
+
+> φi=∑U⊆V\{ i} |U|!(n−| U|− 1)!
+> n![W(U∪ { i})−W(U)] .
+
+(8) Here U is a subset of relations that could already be present be-fore Ri is added, and W (U ∪{ i})−W (U) measures how much the terminal computation changes when Ri joins U. Because this effect depends on which relations are already present, we average it over every U ⊆ V \ { i}. The weight |U|!(n−| U|− 1)!
+
+> n!
+
+is the fraction of the n! relation orderings in which exactly U
+
+precedes Ri (|U|! orders before, (n − | U| − 1)! after), so φi is 
+
+Ri’s order-independent contribution to residual sensitivity. Since W ( /0) = 0, W (V ) = RS q( eD), Shapley efficiency gives           
+
+> ∑i∈Vφi=W(V)−W(/0) = RS q(eD).
+
+Thus, the Shapley values exactly decompose the residual sen-sitivity of the full query into relation-level contributions. 
+
+Example. Consider q = x ⋊⋉ y ⋊⋉ z, where all three relations are private. If a tuple in x changes, the remaining relations 
+
+{y, z} determine how much that change can be amplified. At the distance vector which resulted in the maximum residual sensitivity of the final query s⋆, this bound is               
+
+> T{y,z},s⋆(eD) = T{y,z}(eD) + s⋆
+> yT{z}(eD) + s⋆
+> zT{y}(eD) + s⋆
+> ys⋆
+> zT/0(eD).
+
+Changing a tuple in y or z analogously gives T{x,z},s⋆ ( eD) and 
+
+T{x,y},s⋆ ( eD), respectively. The maximum over these cases de-termines the local-sensitivity term used by W ({x, y, z}).The Shapley contribution of z then averages its marginal effect across all possible contexts:                            
+
+> φz=13[W({z})−W(/0)] + 16[W({x,z})−W({x})] +16[W({y,z})−W({y})] + 13[W({x,y,z})−W({x,y})] .
+
+For example, W ({x, z}) − W ({x}) measures the effect of adding z when x is already present. The coefficients account for how often each term occurs across all possible relation orderings. Thus, φz < 0 means that adding z lowers sensitivity on average, whereas φz > 0 means that it raises sensitivity. 
+
+Sensitivity credit. We normalize each Shapley contribution as ν(x) = sgn (x) log (1 + |x|)/ log (1 + Sref ), where Sref is the median warm-start RS, compressing its magnitude while pre-serving its sign. If action at adds relation Ri, it receives    
+
+> Rsens (i,q) = −λsν(φi).
+
+(9) where λs controls its weight. 
+
+Backpropagation. The two rewards are backpropagated at different granularities. Correctness is a query-level signal and is propagated along the entire trajectory. Sensitivity is relation-specific and is assigned only to the edge that introduced the corresponding relation. Thus, for an action at we update:                    
+
+> Q(vt−1,at)←Q(vt−1,at) + Rcorr (q)−λsν(φi),
+> N(vt−1,at)←N(vt−1,at) + 1,
+> N(vt−1)←N(vt−1) + 1.
+
+(10) For actions that do not add a relation, only Rcorr () is ap-plied. Thus, every action receives credit for correctness, while relation-adding actions also get credit for sensitivity reduction, letting MCTS learn which choices yield lower sensitivity. 84.1.4 Final Selection 
+
+At the end of search, we select the lowest sensitiv-ity incumbent query from the largest cluster y⋆ =
+
+arg max y |Cy|, q⋆ = qy⋆ . We then compute RS q⋆ (D) on the private database to calibrate noise and release the answer. Thus, by choosing the largest cluster first, correctness takes priority over low sensitivity. Algorithm 1 in App. A.3 sum-marizes the complete search. 
+
+Theorem 1 (DP of Text-to-SQL) . If the synthetic release is  
+
+> (εsyn ,δsyn )
+
+-DP and the final query release is (εrel , δrel )-DP, then 
+
+PIM εNTO is (εsyn + εrel , δsyn + δrel )-DP (proof in App. A.2). 
+
+## 4.2 Contextual Integrity Aware Text-to-SQL 
+
+PIM εNTO takes a natural-language privacy policy P and database schema S and compiles the policy into SQL views encoding what information may be disclosed, to whom, and under what conditions. We call this task T EXT -TO -CQL. At runtime, P IM εNTO instantiates these views with the query context to derive V exact  
+
+> ρ
+
+, the exact information authorized for disclosure. This design removes the LLM from the privacy de-cision: the LLM only translates policy text into SQL, while au-thorization is enforced symbolically over the compiled views. This avoids relying on LLM judgment for privacy decisions and enables systematic validation of its output, including de-tecting compilation errors when a policy clause cannot be represented in the database. This introduces three challenges: (1) Grounding symbolic norms , mapping policy concepts such as roles, information, and conditions to concrete database operations; (2) Resolving interactions across norms , ensuring every policy clause is represented (coverage), norms do not conflict or duplicate one another (satisfiability and non-redundancy), and permitted information does not imply prohibited information (informa-tion implication); and (3) Enforcing context at runtime ,determining authorization for each query based on its context and database state. P IM εNTO addresses these through three steps: policy-to-view translation compiles CI norms into SQL views, view canonicalization validates and resolves interac-tions among them, and runtime enforcement instantiates them to derive the authorized information Ac(D). The first two run once per policy and schema, while enforcement runs per query. We consider the following running policy: An attending physician may disclose a patient’s diagnosis to a resident for treatment if the resident is supervised by the attending and is on the patient’s care team. 
+
+4.2.1 Policy-to-View Translation. 
+
+The core of T EXT -TO -CQL is translating each natural-language policy clause into executable database views. PIM εNTO first extracts a structured CI norm Ni from each policy clause, following prior work [23, 45, 70], and then grounds each component in S using an LLM. We provide the norm, source clause, schema, and examples for three types of views. Role views (V snd ,V rec ,V sub ) identify valid sender, recipient, and subject bindings; in our example, they map the attending and resident roles to Employee . Condi-tion views (V θ) encode the relationships required by the pol-icy. These may require a lookup, such as the attending rela-tionship in TreatingRelationship ; a join, such as care-team membership through CareTeamMember and TeamAssign-ment ; or recursion, such as indirect supervision through Su-pervises . Finally, data views (V data ) identify all locations con-taining the governed information. For example, Diagnosis 
+
+may appear in both DxCategory and Discharge ; P IM εNTO 
+
+unions these locations and tags each value with its prove-nance o = ( R, tid , A), identifying the source relation, tuple, and attribute. This provenance is later used for the neighbor-hood relation in Sec. 4.3. Therefore, for each Ni, translation produces Vi = {V snd  
+
+> i
+
+,V rec  
+
+> i
+
+,V sub  
+
+> i
+
+,V θ 
+
+> i
+
+,V data  
+
+> i
+
+}, which jointly cap-tures the CI constraints. 
+
+4.2.2 View Canonicalization and Verification 
+
+Compiling each norm independently can violate coverage ,
+
+satisfiability , and non-redundancy , while missing information implications across norms. Our key insight is that grounding the norms in the database enables symbolic checks for these violations. We perform four checks over the compiled views. 
+
+(1) Coverage: we assign each policy clause an identifier and ensure that it produces at least one compiled view. If not, PIM εNTO reports the clause as uncompilable and returns a policy compilation error. (2) Redundancy: PIM εNTO exe-cutes the compiled views over applicable database records and compares their outputs. Views governing the same in-formation are merged, yielding a canonical policy represen-tation. (3) Satisfiability: individually valid norms may col-lectively produce contradictory permissions and prohibitions. PIM εNTO therefore evaluates them together and checks that the policy admits at least one valid information flow; oth-erwise, it reports the policy as unsatisfiable. (4) Informa-tion implication: PIM εNTO identifies when information gov-erned by one view reveals information governed by another and materializes this dependency into the policy. For exam-ple, if Diagnosis → HIVStatus and HIV status is prohibited, PIM εNTO adds a prohibition over diagnosis records, ensur-ing they are also excluded at runtime. Thus, the result is a consistent set of policy views ready for runtime enforcement. 
+
+4.2.3 Runtime Policy Enforcement 
+
+The compiled views still contain unknown parameters (e.g., who exactly is the querier?), and must be contextualized for each query. We therefore require each query to be also be supplied with the runtime context: the sender sρ, querier rρ,9declared purpose πρ, and SQL query qρ, representing a query as ρ = ( sρ, rρ, πρ, qρ). Enforcement proceeds in three steps. 
+
+(1) Identify relevant norms. PIM εNTO first identifies the attributes returned by qρ. For example, if the query queries pa-tient IDs and diagnoses from Visit , the returned attributes are 
+
+Visit .pat _id and Visit .Diagnosis . It then selects norms whose data views V data  
+
+> i
+
+govern any of these attributes, restricting enforcement to relevant norms. 
+
+(2) Instantiate and evaluate norms. For each relevant norm, PIM εNTO substitutes the query context (sρ, rρ, πρ) into its views and evaluates them over the current database. Suppose attending physician 10 queries diagnosis information for resi-dent 20 for treatment . P IM εNTO binds physician 10 as the sender and resident 20 as the recipient, then evaluates the role and condition views to identify patients for whom the policy conditions hold. The data view then identifies the diagnosis values governed by the norm. Repeating this for all relevant positive and negative norms produces the permitted informa-tion Pos ρ and prohibited information Viol ρ, giving the final authorized set V exact  
+
+> ρ
+
+= Pos ρ \ Viol ρ.
+
+(3) Construct the authorization boundary. V exact  
+
+> ρ
+
+gives ex-actly the data authorized for release and can directly answer the query under CI. For integration with DP in the next sec-tion, we also identify the corresponding database cells. Since each data view retains the origin o = ( R, tid , A) of every value, PIM εNTO maps V exact  
+
+> ρ
+
+back to its source cells to form Ac(D).
+
+Theorem 2 (Equivalence to contextual integrity) . Assuming the CI norms are faithfully compiled by the LLM, the resulting SQL views are equivalent to contextual integrity: for any database and query, they authorize exactly the information flows permitted by CI (proof is in App. A.2). 
+
+## 4.3 Integrating Contextual Integrity and Dif-ferential Privacy 
+
+The semantics of integrating CI and DP is as follows. We wish to release a query’s answer under DP, but we now have additional contextual information about the query: the CI pol-icy specifies which information flows are authorized and any record authorized to flow is effectively public to the querier. Intuitively, this should reduce the sensitivity that DP must protect against. The key lies in the neighborhood: standard DP protects against all neighboring databases; CI rules out neighbors that differ only in information already authorized to the querier. This yields a finer-grained neighborhood that holds contextually public information fixed while continuing to protect what remains private. Unlike prior approaches that assume coarse public information such as relation cardinali-ties [11], CI can expose richer structure, including individual tuples, attributes, and relationships. We formalize this as con-textual differential privacy and characterize exactly when it yields tighter sensitivity bounds than standard DP. 
+
+Definition 2 (Contextual Differential Privacy) . Fix a query context c = ( sρ, rρ, πρ, qρ). Let Ac(D) denote the information in D that the CI policy authorizes to flow under context c. Define the contextual neighboring relation D ∼c D′ ⇐⇒ D ∼ D′ ∧ Ac(D) = Ac(D′),
+
+where D ∼ D′ denotes the standard neighboring relation. A randomized mechanism M satisfies (ε, δ)-contextual dif-ferential privacy for context c if, for all D ∼c D′ and all mea-surable sets of outputs O, 
+
+Pr [M (D, c) ∈ O] ≤ eε Pr [M (D′, c) ∈ O] + δ.
+
+Example. Suppose a resident queries diagnosis data for treat-ment. The database contains patients P1 , P2 , and P3 , whose removal changes the query answer by 10, 6, and 2, respec-tively. Under add/remove DP, the worst-case change is 10. Now suppose CI authorizes the diagnoses of P1 and P2 , plac-ing them in Ac(D). Contextual neighborhood must preserve 
+
+Ac(D), leaving only P3 as a valid removal and reducing the worst-case change to 2. However, insertion of a new unau-thorized record remains possible: if a new P4 changes the answer by 12, the insertion still preserves Ac(D). Thus, CI may restrict removals without restricting insertions, unless schema constraints limit insertions. These refinements can tighten residual sensitivity. Next, we characterize when CI tightens local sensitivity (Eq. 4). Recall P2 : since RS is determined by the maximizing private relation, these reductions matter only when they affect that relation. 
+
+Rule language. For a relation Ri, we consider the following grammar of public information 2:
+
+P :: = ⊥ | Ri | σϕ(Ri) | πBi (Ri) | πBi
+
+ σϕ(Ri) .
+
+Here, ⊥ means no information about Ri is public, while Ri
+
+makes the entire relation public. σϕ(Ri) makes public only tu-ples satisfying predicate ϕ, and πBi (Ri) makes public only the boundary attributes Bi relevant to residual sensitivity. Finally, 
+
+πBi
+
+ σϕ(Ri) combines both, making public the boundary val-ues of tuples satisfying ϕ.
+
+Neighboring edits. We consider three elementary edits to 
+
+Ri: insertion I NS i, deletion D EL i, and value change C HG i.Under add/remove DP, τ ∈ { INS i, DEL i}; under change DP, 
+
+τ = CHG i. We also allow combinations of these edits to cap-ture more general neighborhood models. 
+
+Base rule. We write Γ, Ac(D) ⊢I Ri : τ ⇒ ℓi to mean that, on database instance I, under schema constraints Γ and the in-formation Ac(D) authorized for the current query, an allowed neighboring edit τ to Ri can change the query output by at most ℓi. When Ac(D) = ⊥, no information about Ri is pub-lic, so no refinement is possible and we recover its ordinary 
+
+> 2We follow the inference system of DP4SQL [11]
+
+10 local-sensitivity contribution: 
+
+Ac(D) = ⊥
+
+Γ, Ac(D) ⊢I Ri : τ ⇒ LS i
+
+(B ASE )The B ASE rule therefore captures the standard DP case. The remaining rules tighten LS i when the public view Ac(D) re-stricts the neighboring changes that are possible for Ri.
+
+Inference rules. The box below shows the complete set of inference rules. Each rule derives the remaining sensitivity contribution ℓi of relation Ri under a particular public view and neighboring edit; FK additionally applies when Ri ref-erences the excluded relation RE through a foreign key, so referential integrity eliminates the non-occurring contribution.  
+
+> •
+
+Ac(D) = ⊥ 
+
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ LS i 
+
+> (B ASE )•
+
+Ac(D) = σϕ(Ri) τ = DEL i 
+
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ μfree  
+
+> i,1
+> (S EL -D EL )•
+
+Ac(D) = πBi (Ri) τ = CHG i 
+
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ 0 (P RJ -C HG )• Ac(D) = πBi    
+
+>  σϕ(Ri)τ=CHG i
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ max {TEi − μfree        
+
+> i,min ,μfree
+> i,1}(P RJ SEL -C HG )•τ=INS i
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ LS i 
+
+> (I NS )•
+
+Ac(D) = σϕ(Ri) τ = {DEL i, CHG i} 
+
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ max {TEi − μfree      
+
+> i,min ,μfree
+> i,1}(S EL )•
+> Ac(D)= σϕ(Ri)Γ|=Unique (Bi)
+> τ∈{ INS i,DEL i,CHG i}
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ max {μfree      
+
+> i,1,Munocc
+> i}(S EL -U NIQUE )•
+
+Ac(D) = Ri τ ∈ { INS i, DEL i, CHG i} 
+
+> Γ,
+
+Ac(D) ⊢I Ri : τ ⇒ 0 (P UB )• Ri FK       
+
+> −→RE
+> Γ|=Munocc
+> i=0(FK)
+
+Interpreting the Rules. Recall that TEi = LS i is the largest boundary multiplicity for Ri. Among boundary values that remain private, let μfree  
+
+> i,1
+
+and μfree  
+
+> i,min
+
+denote the largest and small-est occupied multiplicities, and let Munocc  
+
+> i
+
+denote the largest multiplicity at an unoccupied boundary value. The rules char-acterize which of these multiplicities remain reachable un-der contextual neighborhood. S EL -D EL excludes public tu-ples from deletion, leaving μfree  
+
+> i,1
+
+as the largest removable contribution. P RJ -C HG fixes all boundary values and there-fore gives zero sensitivity, while P RJ SEL -C HG and S EL al-low changes among the remaining private values, yielding max {TEi − μfree 
+
+> i,min
+
+, μfree  
+
+> i,1
+
+}. I NS retains ordinary sensitivity be-cause a new tuple may introduce an unrestricted boundary value; under uniqueness, S EL -U NIQUE instead limits this to max {μfree  
+
+> i,1
+
+, Munocc  
+
+> i
+
+}. FK sets Munocc  
+
+> i
+
+= 0 when referential in-tegrity prevents new boundary values. We give a detailed explanation of these rules in App. A.1. Using these rules, we                    
+
+> Mode Data / Release Pipeline Guarantee
+> CI Vexact
+> ρ/ exact TEXT -TO -CQL + T2SQL CI (Thm. 5) DP D/ noisy DP-aware T2SQL (ε,δ)-DP (Thm. 4) CI+DP: Split Vexact
+> ρexact + rest noisy TEXT -TO -CQL + DP-aware T2SQL CI + (ε,δ)-DP (Thms. 4, 5) CI+DP: Context. D/ noisy TEXT -TO -CQL + DP-aware T2SQL + CDP
+> (εsyn +εrel ,
+> δsyn +δrel )-CDP (Cor. 1)
+
+Table 2: End-to-end privacy modes supported by P IM εNTO 
+
+> .
+
+define contextual local sensitivity (CLS) and derive contextual residual sensitivity (CRS), a smooth upper bound on CLS that is no larger than standard residual sensitivity. 
+
+Theorem 3 (Contextual residual sensitivity) . For every multiway-join counting query q, database D, authorization view Ac(D), and smoothing parameter β > 0, CRS q,Ac(D)(D)
+
+is a β-smooth upper bound on CLS q,Ac(D)(D) and satisfies 
+
+CRS q,Ac(D)(D) ≤ RS q(D).
+
+Consequently, calibrating the release mechanism to 
+
+CRS q,Ac(D)(D) yields (ε, δ)-contextual DP under Ac(D). The construction and proof are given in App. A.2. 
+
+Corollary 1 (End-to-end privacy) . Since (ε, δ)-DP implies 
+
+(ε, δ)-contextual DP under any authorization view Ac(D), if the synthetic release is (εsyn , δsyn )-DP and the final query re-lease is (εrel , δrel )-contextual DP under Ac(D), then PIM εNTO 
+
+is (εsyn + εrel , δsyn + δrel )-contextual DP under Ac(D). The proof is given in App. A.2. 
+
+## 4.4 End-to-End Privacy 
+
+We have developed three components of P IM εNTO : DP-aware Text-to-SQL for query generation, CI-aware Text-to-SQL for policy compilation, and contextual DP (CDP). Together, they provide three privacy-preserving release modes, exposed as a choice to the application. All modes receive the same natural-language inputs: the text corpus, privacy policy P , and query. 
+
+CI Only. When the application needs contextual access con-trol but permits exact disclosure, P IM εNTO instantiates the CI views for the query context and computes the authorized view V exact  
+
+> ρ
+
+. The query is evaluated against V exact  
+
+> ρ
+
+, so only authorized data is released exactly, satisfying CI by Thm. 5. 
+
+DP Only. When the full population should be protected uni-formly, P IM εNTO uses DP-aware Text-to-SQL to select a correct, low-sensitivity formulation q, and releases a noisy answer satisfying standard DP by Thm. 4. 
+
+CI+DP. When a query spans both CI-authorized and private information, P IM εNTO first derives the authorized view V exact 
+
+> ρ
+
+and supports two release semantics. (i) Split release treats the 11 Table 3: Text-to-SQL performance on DP-D1. T1/T10 denote top-1/top-10 candidates; Joint is Is-Min ∧ Acc .; and ∆ is the Joint improvement over zero-shot T1. Bold marks the best result and underline the best baseline. Method Acc. Is-Min Joint ∆                                                            
+
+> XiYanSQL-32B
+> Zero-shot 77.7/70.3 50.5/55.5 49.1/52.8 0.0/ +3.7Sens. prompt 64.0/68.2 38.7/50.5 37.2/47.9 −11 .9/ −1.2SFT 78.9/81.5 50.1/62.7 47.5/59.9 −1.6/ +10 .8DPO 67.3/65.1 37.9/47.0 36.9/44.1 −12 .2/ −5.0DPO on SFT 73.2/73.9 45.7/49.2 45.2/48.5 −3.9/ −0.6AlphaSQL 80.4 39.8 35.6 −13 .5
+> PIM εNTO 81.8 76.6 75.3 +26.2
+> GPT-5.6-Luna
+> Zero-shot 79.7/79.7 32.1/39.8 28.7/35.6 0.0/ +6.9Sens. prompt 76.0/76.6 30.1/39.5 30.1/38.5 +1.4/ +9.8AlphaSQL 84.2 47.9 43.9 +15 .2
+> PIM εNTO 83.0 77.2 74.6 +45.9
+> Phi-4
+> Zero-shot 71.3/72.9 46.4/53.3 42.1/47.9 0.0/ +5.8Sens. prompt 63.4/65.9 30.6/43.3 28.6/38.6 −13 .5/ −3.5AlphaSQL 77.4 41.2 34.9 −7.2
+> PIM εNTO 79.6 74.1 71.2 +29.1
+
+Table 4: T EXT -TO -CQL performance across datasets.                                         
+
+> Dataset Dimension Precision Recall F1 CONTEXT -D1 Role 62.1% 61.1% 61.5% Data 83.3% 97.3% 86.5% Conditions 95.6% 76.6% 76.3%
+> All 68.2% 70.3% 68.0%
+> CONTEXT -D2 Role 96.1% 68.0% 71.7% Data 77.4% 71.8% 70.0% Conditions 83.7% 67.2% 68.2%
+> All 91.1% 68.9% 71.2%
+> CONTEXT -D3 Role 100.0% 81.7% 88.6% Data 95.1% 100.0% 97.3% Conditions 97.9% 82.1% 85.9%
+> All 98.6% 85.4% 89.7%
+
+portions separately: CI-authorized information is released ex-actly, while the remainder is released under standard DP. This applies when the application can meaningfully return the two parts separately. (ii) Contextual DP instead releases a single statistic over the full query. It holds the authorized information 
+
+Ac(D) fixed in the neighboring relation and calibrates noise using contextual residual sensitivity, potentially requiring less noise than standard DP. By Cor. 1, if synthetic-data generation is (εsyn , δsyn )-DP and the final release is (εrel , δrel )-contextual DP, the complete pipeline is (εsyn +εrel , δsyn +δrel )-contextual DP. Tab. 2 summarizes the guarantees. 
+
+When to use each mode. The choice depends on the in-tended release. In our hospital example, CI only mode lets a resident receive authorized diagnoses for their care-team patients exactly. DP only mode instead supports aggregates e.g.,“How many patients have HIV?”, protecting every patient with noise. CI+DP with split release applies when the por-tions can be separated: a doctor may receive exact statistics for their own patients and a DP-protected aggregate for the rest. Contextual DP applies when a single aggregate is needed: a researcher authorized to access their study patients can re-ceive one hospital-wide noisy count, with noise calibrated only to records they are not authorized to see. 
+
+## 5 Evaluation 
+
+Our evaluation is organized around the following questions: • RQ1. Can P IM εNTO find correct SQL with lower sensitivity than existing methods? • RQ2. Can P IM εNTO perform T EXT -TO -CQL, faithfully translating CI policies into accurate SQL views? • RQ3. Does contextual DP reduce noise on contextually au-thorized information compared to standard DP? • RQ4. When composed end to end, does P IM εNTO adhere more faithfully to the policy than baselines? 
+
+Benchmarks. No existing benchmark jointly provides natural language (i) text, (ii) queries, and (iii) policies together with ground truth databases, SQL queries annotated for sensitivity, query contexts, and policy grounded SQL views. We there-fore construct two benchmarks by combining existing datasets with new annotations. DP-D1 contains natural language ques-tions paired with multiple correct SQL formulations, their Residual Sensitivity values, and the minimum sensitivity for-mulation q⋆, with 3,673 training and 886 test questions. Our CI benchmark contains 450 query context instances across healthcare (C ONTEXT -D1), consumer (C ONTEXT -D2), and children’s privacy (C ONTEXT -D3), with 150 instances each. Each instance includes the natural language data, privacy pol-icy, query, runtime context, and ground truth authorized output. We use DP-D1 for RQ1 and C ONTEXT -D1–C ONTEXT -D3 for RQ2–RQ4. See App. A.4 for details. 
+
+## 5.1 RQ1: DP-Aware Text2SQL 
+
+Setup. We use (εsyn , δsyn ) = ( 1.6, 10 −6) for synthetic data and 
+
+(ε, δ) = ( 1.0, 10 −6) per query, with 10 rollouts and expansion size 5. We evaluate X IYAN SQL-Q WEN CODER -32B, P HI -4, and GPT-5.6-L UNA against six baselines: Zero-shot ; Sensi-tivity Prompt , which prompts for low sensitivity; Fine-tuning 
+
+on XiYanSQL-32B, including SFT [63], DPO [64], and DPO on SFT; Top-k Selection (k = 10), which selects the lowest-sensitivity candidate; and AlphaSQL [44], which uses MCTS without our sensitivity-guided search. We report execution accuracy ( Acc. ), minimum-sensitivity rate ( Is-Min ), and their intersection ( Joint ) in Tab. 3. DP noise reduction, inference costs, and ablations are reported in App. A.5. 
+
+Results. Table 3 shows that P IM εNTO substantially improves the joint objective across all three model families, achieving 75.3%, 74.6%, and 71.2% Joint accuracy with XiYanSQL-32B, GPT-5.6-Luna, and Phi-4, respectively. This improves over zero-shot by 26.2, 45.9, and 29.1 points, and over the strongest baseline by 15.4, 30.7, and 23.3 points. In contrast, AlphaSQL achieves high accuracy but achieves only 39.8– 47.9% Is-Min. Thus, search alone is insufficient; explicitly steering it toward low-sensitivity formulations is necessary to jointly preserve correctness and DP utility. 12 0 25 50 75 100 Authorized records (%) 0.00 0.25 0.50 0.75 1.00 Relative noise scale 
+
+> Standard DP
+> Contextual DP
+> Context-D1 Context-D2 Context-D3 Mean Median IQR
+
+Figure 4: Relative noise required by contextual DP as we authorize an increasing fraction of subject records. 
+
+## 5.2 RQ2: CI-Aware Text2SQL 
+
+Setup. We evaluate whether P IM εNTO can compile natural-language CI norms into SQL views, i.e., T EXT -TO -CQL, by comparing the compiled views against manually annotated ground truth. We report precision, recall, and F1 scores. 
+
+Results. Tab. 4 shows high precision across all mapping types (62.1–100%), with lower recall indicating that P IM εNTO 
+
+more often misses valid mappings than introduces incorrect ones. Performance is strongest on C ONTEXT -D3, reaching F1 scores of 88.6%, 97.3%, and 85.9% for role, data, and condition mappings, respectively. 
+
+## 5.3 RQ3: Contextual DP 
+
+Setup. In Sec. 4.3, we characterize the conditions under which contextual DP reduces noise. Since these patterns do not naturally arise under our benchmark policies, we validate the derived cases by progressively authorizing records in each dataset’s primary subject relation and comparing the average required noise across all queries under contextual and standard DP with the same privacy budget, ε = 1. 
+
+Results. Fig. 4 validates our characterization: contextual DP never requires more noise than standard DP. At 90% authoriza-tion, mean noise falls to 0 .44 × for C ONTEXT -D2, 0 .60 × for CONTEXT -D1, and 0 .89 × for C ONTEXT -D3, corresponding to reductions of 56%, 40%, and 11%, respectively. 
+
+## 5.4 RQ4: End-to-End Evaluation 
+
+Setup. We evaluate P IM εNTO end to end, from natural-language data and policy to the final answer released to the user. We compare the resulting information leakage under four approaches using GPT-5.6-Luna: Text-only , which an-swers directly from the text without the policy; Text+Policy ,which gives the LLM the policy and context and asks it to en-force them; AirGapAgent [5], which first uses a trusted LLM to filter the text to information it considers authorized; and PIM εNTO . We report leakage rate , the fraction of responses that reveal information prohibited by the ground-truth policy for that query. 
+
+Results. Tab. 5 shows a clear reduction in leakage as enforce-ment becomes more explicit. Giving the policy directly to the                   
+
+> System CONTEXT -D1 CONTEXT -D2 CONTEXT -D3 Text-only 88.7% 85.2% 100.0% Text+Policy 18.0% 52.3% 44.3% AirGapAgent 6.7% 38.9% 7.4%
+> PIM εNTO 0.0% 2.1% 1.3%
+> PIM εNTO †0.0% 0.0% 0.0%
+
+Table 5: End-to-end prohibited information leakage using GPT-5.6-Luna. PIM εNTO † uses the ground-truth policy views. Leakage in P IM εNTO can additionally be protected under DP rather than released exactly. 
+
+LLM (Text+Policy) still leaks prohibited information in 18.0– 52.3% of queries, while AirGapAgent reduces this to 6.7– 38.9%. In contrast, P IM εNTO reduces leakage to 0.0%, 2.1%, and 1.3% on C ONTEXT -D1, C ONTEXT -D2, and C ONTEXT -D3, respectively. The leakage in P IM εNTO comes entirely from policy-view compilation errors: with ground-truth views, deterministic enforcement achieves 0% leakage on all datasets. Moreover, the leakage in P IM εNTO can still be protected un-der DP rather than released exactly. 
+
+## 6 Related Work 
+
+CI for text. Prior work extracts or annotates CI norms from natural-language policies [12, 69–71], uses CI as LLM con-text for leakage detection [5, 23, 26, 34, 43, 45, 46, 58, 79, 85]. PIM εNTO instead compiles CI policies into SQL views. 
+
+DP for text. DP for text [33, 40] spans local sanitization of text [4, 13, 24, 25, 51, 53, 86, 93], private language-model train-ing [2,47,52,88], and private synthetic-text generation [50,91], often requiring substantial noise that degrades utility [90];. PIM εNTO instead grounds text into a relational representation and privatizes query answers. Prior SQL-DP work optimizes execution plans, query rewrites, sensitivity bounds, or DP mechanisms [18–20, 37, 38, 42]. P IM εNTO instead applies DP to SQL queries, building on prior work on private query answering [19, 38, 42], but uniquely optimizes privacy by searching over query formulations from natural language. 
+
+Policy-aware DP. Customized DP adapts protection using explicit secrets or constraints [28, 30, 39], sensitive records or text spans [68], known relational privacy policies [11]. These approaches take protection semantics as given; P IM εNTO in-stead derives querier- and context-specific authorization from natural-language CI policies and uses it to define the DP neighborhood. Prior work has connected CI and DP concep-tually [8]; P IM εNTO makes this connection operational. 
+
+## 7 Conclusion 
+
+We presented P IM εNTO , a framework for formally enforcing CI and DP over unstructured text through a shared relational representation. P IM εNTO supports DP aware query genera-tion, executable CI policies, and their composition through 
+
+contextual differential privacy .13 Ethical Considerations 
+
+This paper studies privacy-preserving analytics over sensitive unstructured text using contextual integrity (CI), differential privacy (DP), or their composition. Because the target setting includes domains such as healthcare and consumer data, fail-ures may expose sensitive information. We therefore consider the ethical implications of both the system and its deployment. 
+
+Stakeholders. Stakeholders include individuals represented in the underlying text, data custodians, analysts issuing queries, administrators defining privacy policies, and the re-search community. 
+
+Principles. We consider the Menlo Report principles of Beneficence, Respect for Persons, Justice, and Respect for Law and Public Interest. Our goal is to enable useful analysis while limiting inappropriate information flows and inference about individuals. 
+
+Potential harms. The primary risk is unintended disclosure of sensitive information. While P IM εNTO enforces CI and DP through explicit mechanisms rather than LLM judgments, errors in grounding natural-language data, queries, or policies may still affect correctness or privacy. The system also has potential for dual use. Privacy-preserving access to sensitive organizational text could be deployed under overly permissive policies or where affected individuals have limited control over how their data is ana-lyzed. Formal enforcement guarantees adherence to the sup-plied policy, not that the policy itself is ethically appropriate. 
+
+Mitigations. We mitigate these risks by making privacy en-forcement explicit and auditable. CI policies are compiled into database views that can be inspected and validated before deployment, while runtime authorization is enforced deter-ministically. DP releases provide formally bounded disclo-sure, and contextual DP applies only after determining the information authorized for the requesting context. Our experiments do not recruit or interact with human par-ticipants. We evaluate on existing Text-to-SQL benchmarks and public privacy policies, including HIPAA, CCPA, and COPPA, with additional annotations for evaluating privacy enforcement. 
+
+Decision. We believe it is ethical to proceed and publish because the work aims to reduce privacy risks in natural-language analytics while making its assumptions and failure modes explicit. Publication enables scrutiny of these guaran-tees and provides a more auditable alternative to approaches that delegate privacy decisions directly to LLMs. 
+
+## References 
+
+[1] Sahar Abdelnabi, Amr Gomaa, Eugene Bagdasarian, Per Ola Kristensson, and Reza Shokri. Firewalls to secure dynamic llm agentic networks, 2025. URL https://arxiv. org/abs/2502 , 1822. [2] Rohan Anil, Badih Ghazi, Vineet Gupta, Ravi Kumar, and Pasin Manurangsi. Large-scale differentially private BERT. In Yoav Goldberg, Zornitsa Kozareva, and Yue Zhang, editors, Findings of the Association for Compu-tational Linguistics: EMNLP 2022 , pages 6481–6491, Abu Dhabi, United Arab Emirates, December 2022. As-sociation for Computational Linguistics. URL: https: //aclanthology.org/2022.findings-emnlp.484 /, doi:10.18653/v1/2022.findings-emnlp.484 .[3] Simran Arora, Brandon Yang, Sabri Eyuboglu, Avanika Narayan, Andrew Hojel, Immanuel Trummer, and Christopher Ré. Language models enable simple sys-tems for generating structured views of heterogeneous data lakes, 2025. URL: https://arxiv.org/abs/23 04.09433 , arXiv:2304.09433 .[4] Ahmed Musa Awon, Yun Lu, Shera Potka, and Alex Thomo. CluSanT: Differentially private and semanti-cally coherent text sanitization. In Luis Chiruzzo, Alan Ritter, and Lu Wang, editors, Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 3676–3693, Albuquerque, New Mexico, April 2025. As-sociation for Computational Linguistics. URL: https: //aclanthology.org/2025.naacl- long.187/ ,
+
+doi:10.18653/v1/2025.naacl-long.187 .[5] Eugene Bagdasarian, Ren Yi, Sahra Ghalebikesabi, Pe-ter Kairouz, Marco Gruteser, Sewoong Oh, Borja Balle, and Daniel Ramage. Airgapagent: Protecting privacy-conscious conversational agents. In Proceedings of the 2024 on ACM SIGSAC Conference on Computer and Communications Security , pages 3868–3882, 2024. [6] Adam Barth, Anupam Datta, John C Mitchell, and Helen Nissenbaum. Privacy and contextual integrity: Frame-work and applications. In 2006 IEEE Symposium on Security and Privacy , pages 184–198. IEEE, 2006. 
+
+doi:10.1109/SP.2006.32 .[7] Johes Bater, Xi He, William Ehrich, Ashwin Machanava-jjhala, and Jennie Rogers. Shrinkwrap: efficient sql query processing in differentially private data federa-tions. Proceedings of the VLDB Endowment , 12(3), 2018. [8] Sebastian Benthall and Rachel Cummings. Integrating differential privacy and contextual integrity. In Proceed-ings of the 2024 Symposium on Computer Science and Law , pages 9–15, 2024. [9] Adithya Bhaskar, Tushar Tomar, Ashutosh Sathe, and Sunita Sarawagi. Benchmarking and improving text-to-sql generation under ambiguity. In Proceedings of 
+
+14 the 2023 Conference on Empirical Methods in Natural Language Processing , pages 7053–7074, 2023. [10] Kuntai Cai, Xiaokui Xiao, and Yin Yang. PrivPetal: Relational data synthesis via permutation relations. Pro-ceedings of the ACM on Management of Data (SIG-MOD) , 3(3), 2025. doi:10.1145/3725341 .[11] Andrew Cascio, KinChin Tong, Daniel Kifer, Zeyu Ding, and Danfeng Zhang. Dp4sql: Differentially pri-vate sql with flexible privacy policies. arXiv preprint arXiv:2606.07883 , 2026. [12] Jake Chanenson, Madison Pickering, and Noah Apthorpe. Automating governing knowledge commons and contextual integrity (gkc-ci) privacy policy anno-tations with large language models. arXiv preprint arXiv:2311.02192 , 2023. [13] Amrita Roy Chowdhury, David Glukhov, Divyam An-shumaan, Prasad Chalasani, Nicolas Papernot, Somesh Jha, and Mihir Bellare. Preempt: Sanitizing sensitive prompts for llms. In Network and Distributed System Security Symposium (NDSS) , 2026. doi:10.14722/n dss.2026.231277 .[14] Congruity360. Ccpa compliance guide. URL: https: //www.congruity360.com/blog/ccpa-complianc e-guide/ .[15] Zheye Deng, Chunkit Chan, Weiqi Wang, Yuxi Sun, Wei Fan, Tianshi Zheng, Yauwai Yim, and Yangqiu Song. Text-tuple-table: Towards information integration in text-to-table generation via global tuple extraction. In Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen, editors, Proceedings of the 2024 Conference on Empir-ical Methods in Natural Language Processing , pages 9300–9322, Miami, Florida, USA, November 2024. As-sociation for Computational Linguistics. URL: https: //aclanthology.org/2024.emnlp- main.523/ ,
+
+doi:10.18653/v1/2024.emnlp-main.523 .[16] Zhongjun Ding, Yin Lin, Tianjing Zeng, Rong Zhu, Bolin Ding, and Jingren Zhou. Ambisql: Interactive ambiguity detection and resolution for text-to-sql. In 
+
+Companion of the International Conference on Manage-ment of Data , pages 26–29, 2026. [17] Mingwen Dong, Nischal Ashok Kumar, Yiqun Hu, Anuj Chauhan, Chung-Wei Hang, Shuaichen Chang, Lin Pan, Wuwei Lan, Henghui Zhu, Jiarong Jiang, et al. Prac-tiq: A practical conversational text-to-sql dataset with ambiguous and unanswerable queries. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguis-tics: Human Language Technologies (Volume 1: Long Papers) , pages 255–273, 2025. [18] Wei Dong, Juanru Fang, Ke Yi, Yuchao Tao, and Ashwin Machanavajjhala. R2t: Instance-optimal truncation for differentially private query evaluation with foreign keys. In Proceedings of the 2022 International Conference on Management of Data , pages 759–772, 2022. [19] Wei Dong and Ke Yi. Residual sensitivity for differ-entially private multi-way joins. In Proceedings of the 2021 International Conference on Management of Data ,pages 432–444. ACM, 2021. doi:10.1145/3448016. 3452813 .[20] Wei Dong and Ke Yi. A nearly instance-optimal differ-entially private mechanism for conjunctive queries. In 
+
+Proceedings of the 41st ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems , pages 213–225, 2022. [21] Cynthia Dwork. Differential privacy. In International colloquium on automata, languages, and programming ,pages 1–12. Springer, 2006. [22] Cynthia Dwork and Aaron Roth. The algorithmic foun-dations of differential privacy. Foundations and Trends in Theoretical Computer Science , 9(3–4):211–407, 2014. 
+
+doi:10.1561/0400000042 .[23] Wei Fan, Haoran Li, Zheye Deng, Weiqi Wang, and Yangqiu Song. Goldcoin: Grounding large language models in privacy laws via contextual integrity theory. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 3321– 3343, 2024. [24] Oluwaseyi Feyisetan, Borja Balle, Thomas Drake, and Tom Diethe. Privacy-and utility-preserving textual anal-ysis via calibrated multivariate perturbations. In Pro-ceedings of the 13th international conference on web search and data mining , pages 178–186, 2020. [25] Oluwaseyi Feyisetan and Shiva Kasiviswanathan. Pri-vate release of text embedding vectors. In Yada Pruksachatkun, Anil Ramakrishna, Kai-Wei Chang, Satyapriya Krishna, Jwala Dhamala, Tanaya Guha, and Xiang Ren, editors, Proceedings of the First Workshop on Trustworthy Natural Language Processing , pages 15– 27, Online, June 2021. Association for Computational Linguistics. URL: https://aclanthology.org/202 1.trustnlp-1.3/ , doi:10.18653/v1/2021.trust nlp-1.3 .[26] Sahra Ghalebikesabi, Eugene Bagdasarian, Ren Yi, Itay Yona, Ilia Shumailov, Aneesh Pappu, Chongyang Shi, Laura Weidinger, Robert Stanforth, Leonard Berrada, et al. Privacy awareness for information-sharing as-sistants: A case-study on form-filling with contextual integrity. Transactions on Machine Learning Research ,2025. 15 [27] Google Cloud. Document ai overview. Google Cloud Documentation, 2026. Accessed: 2026-08-24. URL: 
+
+https://docs.cloud.google.com/document-ai/ docs/overview .[28] Samuel Haney, Ashwin Machanavajjhala, and Bolin Ding. Design of policy-aware differentially private al-gorithms. arXiv preprint arXiv:1404.3722 , 2014. [29] Tam Harbert. https://mitsloan.mit.edu/ideas-m ade-to-matter/tapping-power-unstructured-d ata .[30] Xi He, Ashwin Machanavajjhala, and Bolin Ding. Blow-fish privacy: Tuning privacy-utility trade-offs using poli-cies. In Proceedings of the 2014 ACM SIGMOD in-ternational conference on Management of data , pages 1447–1458, 2014. [31] Zijin Hong, Zheng Yuan, Qinggang Zhang, Hao Chen, Junnan Dong, Feiran Huang, and Xiao Huang. Next-generation database interfaces: A survey of llm-based text-to-sql. IEEE Transactions on Knowledge and Data Engineering , 2025. [32] Lijie Hu, Ivan Habernal, Lei Shen, and Di Wang. Dif-ferentially private natural language models: Recent advances and future directions. In Yvette Graham and Matthew Purver, editors, Findings of the Associ-ation for Computational Linguistics: EACL 2024 , pages 478–499, St. Julian’s, Malta, March 2024. Associa-tion for Computational Linguistics. URL: https: //aclanthology.org/2024.findings-eacl.33/ ,
+
+doi:10.18653/v1/2024.findings-eacl.33 .[33] Lijie Hu, Ivan Habernal, Lei Shen, and Di Wang. Dif-ferentially private natural language models: Recent advances and future directions. In Yvette Graham and Matthew Purver, editors, Findings of the Associ-ation for Computational Linguistics: EACL 2024 , pages 478–499, St. Julian’s, Malta, March 2024. Associa-tion for Computational Linguistics. URL: https: //aclanthology.org/2024.findings-eacl.33/ ,
+
+doi:10.18653/v1/2024.findings-eacl.33 .[34] Xinyue Huang, Xiaochun Cao, and Wenyuan Yang. Need to know: Contextual-integrity-grounded query rewriting for privacy-conscious llm delegation, 2026. URL: https://arxiv.org/abs/2606.04067 ,
+
+arXiv:2606.04067 .[35] Timour Igamberdiev and Ivan Habernal. Dp-bart for privatized text rewriting under local differential privacy. In Findings of the Association for Computational Lin-guistics: ACL 2023 , pages 13914–13934, 2023. [36] Yizhu Jiao, Sha Li, Sizhe Zhou, Heng Ji, and Jiawei Han. Text2DB: Integration-aware information extraction with large language model agents. In Lun-Wei Ku, Andre Martins, and Vivek Srikumar, editors, Findings of the Association for Computational Linguistics: ACL 2024 ,pages 185–205, Bangkok, Thailand, August 2024. As-sociation for Computational Linguistics. URL: https: //aclanthology.org/2024.findings-acl.12/ ,
+
+doi:10.18653/v1/2024.findings-acl.12 .[37] Noah Johnson, Joseph P Near, Joseph M Hellerstein, and Dawn Song. Chorus: a programming framework for building scalable differential privacy mechanisms. In 2020 IEEE European Symposium on Security and Privacy (EuroS&P) , pages 535–551. IEEE, 2020. [38] Noah Johnson, Joseph P Near, and Dawn Song. Towards practical differential privacy for sql queries. Proceedings of the VLDB Endowment , 11(5):526–539, 2018. [39] Daniel Kifer and Ashwin Machanavajjhala. Pufferfish: A framework for mathematical privacy definitions. ACM Transactions on Database Systems (TODS) , 39(1):1–36, 2014. [40] Oleksandra Klymenko, Stephen Meisenbacher, and Flo-rian Matthes. Differential privacy in natural language processing: The story so far. In Oluwaseyi Feyisetan, Sepideh Ghanavati, Patricia Thaine, Ivan Habernal, and Fatemehsadat Mireshghallah, editors, Proceedings of the Fourth Workshop on Privacy in Natural Language Pro-cessing , pages 1–11, Seattle, United States, July 2022. Association for Computational Linguistics. URL: http s://aclanthology.org/2022.privatenlp-1.1/ ,
+
+doi:10.18653/v1/2022.privatenlp-1.1 .[41] Levente Kocsis and Csaba Szepesvári. Bandit based monte-carlo planning. In Machine Learning: ECML 2006 , volume 4212 of Lecture Notes in Computer Sci-ence , pages 282–293. Springer, 2006. doi:10.1007/ 11871842_29 .[42] Ios Kotsogiannis, Yuchao Tao, Xi He, Maryam Fanaeep-our, Ashwin Machanavajjhala, Michael Hay, and Gerome Miklau. Privatesql: a differentially private sql query engine. Proceedings of the VLDB Endowment ,12(11):1371–1384, 2019. [43] Guangchen Lan, Huseyin A Inan, Sahar Abdelnabi, Janardhan Kulkarni, Lukas Wutschitz, Reza Shokri, Christopher G Brinton, and Robert Sim. Contextual integrity in llms via reasoning and reinforcement learn-ing. arXiv preprint arXiv:2506.04245 , 2025. [44] Boyan Li, Jiayi Zhang, Ju Fan, Yanwei Xu, Chong Chen, Nan Tang, and Yuyu Luo. Alpha-SQL: Zero-shot text-to-sql using monte carlo tree search. arXiv preprint arXiv:2502.17248 , 2025. 16 [45] Haoran Li, Wei Fan, Yulin Chen, Cheng Jiayang, Tian-shu Chu, Xuebing Zhou, Peizhao Hu, and Yangqiu Song. Privacy checklist: Privacy violation detection grounding on contextual integrity theory. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Hu-man Language Technologies (Volume 1: Long Papers) ,pages 1748–1766, 2025. [46] Haoran Li, Wenbin Hu, Huihao Jing, Yulin Chen, Qi Hu, Sirui Han, Tianshu Chu, Peizhao Hu, and Yangqiu Song. PrivaCI-bench: Evaluating privacy with contextual in-tegrity and legal compliance. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar, editors, Proceedings of the 63rd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 10544–10559, Vienna, Austria, July 2025. Association for Computational Lin-guistics. URL: https://aclanthology.org/2025. acl-long.518/ , doi:10.18653/v1/2025.acl-lon g.518 .[47] Xuechen Li, Florian Tramer, Percy Liang, and Tatsunori Hashimoto. Large Language Models Can Be Strong Dif-ferentially Private Learners. In International Conference on Learning Representations , 2022. URL: https://ml anthology.org/iclr/2022/li2022iclr-large/ .[48] Zhuowen Liang, Zhengxuan Zhang, Jiayang Wang, Ji-azhuo Chen, and Nan Tang. Beyond tables: Doc2db-bench for relationally faithful document-to-database construction. arXiv preprint arXiv:2608.08459 , 2026. [49] Teng Lin, Yuyu Luo, and Nan Tang. Structure then query: Enabling precise analytical queries over unstruc-tured documents. arXiv preprint arXiv:2608.13384 ,2026. [50] Justus Mattern, Zhijing Jin, Benjamin Weggenmann, Bernhard Schölkopf, and Mrinmaya Sachan. Differen-tially private language models for secure data sharing. In Yoav Goldberg, Zornitsa Kozareva, and Yue Zhang, edi-tors, Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , pages 4860– 4873, Abu Dhabi, United Arab Emirates, December 2022. Association for Computational Linguistics. URL: 
+
+https://aclanthology.org/2022.emnlp-main. 323/ , doi:10.18653/v1/2022.emnlp-main.323 .[51] Justus Mattern, Benjamin Weggenmann, and Florian Kerschbaum. The limits of word level differential pri-vacy. In Marine Carpuat, Marie-Catherine de Marn-effe, and Ivan Vladimir Meza Ruiz, editors, Findings of the Association for Computational Linguistics: NAACL 2022 , pages 867–881, Seattle, United States, July 2022. Association for Computational Linguistics. URL: http s://aclanthology.org/2022.findings-naacl.6 5/ , doi:10.18653/v1/2022.findings-naacl.65 .[52] Brendan McMahan, Daniel Ramage, Kunal Talwar, and Li Zhang. Learning differentially private recurrent lan-guage models. In International Conference on Learn-ing Representations (ICLR) , 2018. URL: https: //openreview.net/pdf?id=BJ0hF1Z0b .[53] Casey Meehan, Khalil Mrini, and Kamalika Chaudhuri. Sentence-level privacy for document embeddings. In Smaranda Muresan, Preslav Nakov, and Aline Villavi-cencio, editors, Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 3367–3380, Dublin, Ireland, May 2022. Association for Computational Linguistics. URL: https://aclanthology.org/2022.acl-lon g.238/ , doi:10.18653/v1/2022.acl-long.238 .[54] Stephen Meisenbacher, Maulik Chevli, and Florian Matthes. Leveraging semantic triples for private docu-ment generation with local differential privacy guaran-tees, 2025. URL: https://arxiv.org/abs/2508.2 0736 , arXiv:2508.20736 .[55] Stephen Meisenbacher, Nihildev Nandakumar, Alexan-dra Klymenko, and Florian Matthes. A comparative analysis of word-level metric differential privacy: Bench-marking the privacy-utility trade-off. In Nicoletta Calzo-lari, Min-Yen Kan, Veronique Hoste, Alessandro Lenci, Sakriani Sakti, and Nianwen Xue, editors, Proceedings of the 2024 Joint International Conference on Compu-tational Linguistics, Language Resources and Evalua-tion (LREC-COLING 2024) , pages 174–185, Torino, Italia, May 2024. ELRA and ICCL. URL: https: //aclanthology.org/2024.lrec-main.16/ .[56] Microsoft. Choose an azure ai targeted language pro-cessing technology. Microsoft Learn, 2026. Accessed: 2026-08-24. URL: https://learn.microsoft.com/ en-us/azure/architecture/data-guide/ai-ser vices/targeted-language-processing .[57] Microsoft. What is azure document intelligence in foundry tools? Microsoft Learn, 2026. Accessed: 2026-08-24. URL: https://learn.microsoft.com/en-u s/azure/ai-services/document-intelligence/ overview?view=doc-intel-4.0.0 .[58] Niloofar Mireshghallah, Hyunwoo Kim, Xuhui Zhou, Yulia Tsvetkov, Maarten Sap, Reza Shokri, and Yejin Choi. Can llms keep a secret? testing privacy implica-tions of language models via contextual integrity theory. In International Conference on Learning Representa-tions , 2024. 17 [59] Ali Mohammadjafari, Anthony S Maida, and Raju Gottumukkala. From natural language to sql: Re-view of llm-based text-to-sql systems. arXiv preprint arXiv:2410.01066 , 2024. [60] Ivoline C Ngong, Swanand Ravindra Kadhe, Hao Wang, Keerthiram Murugesan, Justin D Weisz, Amit Dhurand-har, and Karthikeyan Natesan Ramamurthy. Protecting users from themselves: Safeguarding contextual privacy in interactions with conversational agents. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 26196–26220, 2025. [61] Kobbi Nissim, Sofya Raskhodnikova, and Adam Smith. Smooth sensitivity and sampling in private data anal-ysis. In Proceedings of the thirty-ninth annual ACM symposium on Theory of computing , pages 75–84, 2007. [62] Simone Papicchio, Luca Cagliero, and Paolo Papotti. Evaluating ambiguous questions in text2sql. In ELLIS workshop on Representation Learning and Generative Models for Structured Data .[63] Aldo Pareja, Nikhil Shivakumar Nayak, Hao Wang, Krishnateja Killamsetty, Shivchander Sudalairaj, Wen-long Zhao, Seungwook Han, Abhishek Bhandwaldar, Guangxuan Xu, Kai Xu, Ligong Han, Luke Inglis, and Akash Srivastava. Unveiling the secret recipe: A guide for supervised fine-tuning small llms, 2024. URL: 
+
+https://arxiv.org/abs/2412.13337 , arXiv: 2412.13337 .[64] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christo-pher D Manning, Stefano Ermon, and Chelsea Finn. Di-rect preference optimization: Your language model is secretly a reward model. Advances in neural informa-tion processing systems , 36:53728–53741, 2023. [65] Reuters. Little breathing room: California privacy agency modifies proposed regulations, December 2022. URL: https://www.reuters.com/legal/legalind ustry/little-breathing-room-california-pri vacy-agency-modifies-proposed-regulations -2022-12-08/ .[66] Mushtari Sadia, Zhenning Yang, Yunming Xiao, Ang Chen, and Amrita Roy Chowdhury. SQUiD: Synthe-sizing relational databases from unstructured text. In Christos Christodoulopoulos, Tanmoy Chakraborty, Car-olyn Rose, and Violet Peng, editors, Proceedings of the 2025 Conference on Empirical Methods in Natural Lan-guage Processing , pages 31987–32012, Suzhou, China, November 2025. Association for Computational Lin-guistics. URL: https://aclanthology.org/2025. emnlp-main.1629/ , doi:10.18653/v1/2025.emnlp -main.1629 .[67] Liang Shi, Zhengju Tang, Nan Zhang, Xiaotong Zhang, and Zhi Yang. A survey on employing large language models for text-to-sql tasks. ACM Computing Surveys ,58(2):1–37, 2025. [68] Weiyan Shi, Aiqi Cui, Evan Li, Ruoxi Jia, and Zhou Yu. Selective differential privacy for language modeling. In Marine Carpuat, Marie-Catherine de Marneffe, and Ivan Vladimir Meza Ruiz, editors, Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics: Human Lan-guage Technologies , pages 2848–2859, Seattle, United States, July 2022. Association for Computational Lin-guistics. URL: https://aclanthology.org/2022. naacl-main.205/ , doi:10.18653/v1/2022.naacl -main.205 .[69] Yan Shvartzshanider, Ananth Balashankar, Thomas Wies, and Lakshminarayanan Subramanian. RECIPE: Applying open domain question answering to privacy policies. In Eunsol Choi, Minjoon Seo, Danqi Chen, Robin Jia, and Jonathan Berant, editors, Proceedings of the Workshop on Machine Reading for Question Answering , pages 71–77, Melbourne, Australia, July 2018. Association for Computational Linguistics. URL: 
+
+https://aclanthology.org/W18- 2608/ , doi: 10.18653/v1/W18-2608 .[70] Yan Shvartzshanider, Ananth Balashankar, Thomas Wies, and Lakshminarayanan Subramanian. Beyond the text: Analysis of privacy statements through syn-tactic and semantic role labeling. In Daniel Preot , iuc-Pietro, Catalina Goanta, Ilias Chalkidis, Leslie Barrett, Gerasimos Spanakis, and Nikolaos Aletras, editors, Pro-ceedings of the Natural Legal Language Processing Workshop 2023 , pages 85–98, Singapore, December 2023. Association for Computational Linguistics. URL: 
+
+https://aclanthology.org/2023.nllp-1.10/ .[71] Yan Shvartzshnaider, Noah Apthorpe, Nick Feamster, and Helen Nissenbaum. Going against the (appropriate) flow: A contextual integrity approach to privacy policy analysis. In Proceedings of the AAAI Conference on Hu-man Computation and Crowdsourcing , volume 7, pages 162–170, 2019. [72] Yan Shvartzshnaider and Vasisht Duddu. Position: Con-textual integrity is inadequately applied to language models. In Aarti Singh, Maryam Fazel, Daniel Hsu, Simon Lacoste-Julien, Felix Berkenkamp, Tegan Ma-haraj, Kiri Wagstaff, and Jerry Zhu, editors, Proceedings of the 42nd International Conference on Machine Learn-ing , volume 267 of Proceedings of Machine Learning Research , pages 82200–82210. PMLR, 13–19 Jul 2025. URL: https://proceedings.mlr.press/v267/shv artzshnaider25a.html .18 [73] Li Siyan, Vethavikashini Chithrra Raghuram, Omar Khattab, Julia Hirschberg, and Zhou Yu. Papil-lon: Privacy preservation from internet-based and local language model ensembles. arXiv preprint arXiv:2410.17127 , 2024. [74] Snowflake. Unstructured data analytics and ai solutions. Snowflake, 2026. Accessed: 2026-08-24. URL: https: //www.snowflake.com/en/product/use-cases/u nstructured-data-analytics/ .[75] Talonic. Talonic: Ingest once. query forever. Talonic, 2026. Accessed: 2026-08-24. URL: https://taloni c.com/ .[76] Lillian Tsai and Eugene Bagdasarian. Contextual agent security: A policy for every purpose. In Proceedings of the 2025 Workshop on Hot Topics in Operating Systems ,pages 8–17, 2025. [77] Unstract. Unstract: Agentic document processing and extraction platform. AWS Marketplace, 2026. Accessed: 2026-08-24. URL: https://aws.amazon.com/marke tplace/pp/prodview-jlud5hmy2npui .[78] Unstructured. Introducing: Extract. Unstructured, 2026. Accessed: 2026-08-24. URL: https://unstructur ed.io/blog/introducing-extract .[79] Shouju Wang, Fenglin Yu, Xirui Liu, Xiaoting Qin, Jue Zhang, Qingwei Lin, Dongmei Zhang, and Saravan Ra-jmohan. Privacy in action: Towards realistic privacy mitigation and evaluation for LLM-powered agents. In Christos Christodoulopoulos, Tanmoy Chakraborty, Car-olyn Rose, and Violet Peng, editors, Findings of the Association for Computational Linguistics: EMNLP 2025 , pages 17055–17074, Suzhou, China, November 2025. Association for Computational Linguistics. URL: 
+
+https://aclanthology.org/2025.findings-emn lp.925/ , doi:10.18653/v1/2025.findings-emnlp .925 .[80] Primal Wijesekera, Joel Reardon, Irwin Reyes, Lynn Tsai, Jung-Wei Chen, Nathan Good, David Wagner, Kon-stantin Beznosov, and Serge Egelman. Contextualizing privacy decisions for better prediction (and protection). In Proceedings of the 2018 CHI Conference on Human Factors in Computing Systems , CHI ’18, page 1–13, New York, NY, USA, 2018. Association for Computing Machinery. doi:10.1145/3173574.3173842 .[81] Wikipedia contributors. General data protection regu-lation. Wikipedia, The Free Encyclopedia, 2026. Ac-cessed: 2026-08-24. URL: https://en.wikipedia.o rg/wiki/General_Data_Protection_Regulation .[82] Wikipedia contributors. Health insurance portability and accountability act. Wikipedia, The Free Encyclopedia, 2026. Accessed: 2026-08-24. URL: https://en.wik ipedia.org/wiki/Health_Insurance_Portabili ty_and_Accountability_Act .[83] Wikipedia contributors. Shapley value. https:// en.wikipedia.org/wiki/Shapley_value , 2026. Wikipedia, The Free Encyclopedia. [84] Royce J Wilson, Celia Yuxin Zhang, William Lam, Damien Desfontaines, Daniel Simmons-Marengo, and Bryant Gipson. Differentially private sql with bounded user contribution. arXiv preprint arXiv:1909.01917 ,2019. [85] Yijia Xiao, Yiqiao Jin, Yushi Bai, Yue Wu, Xianjun Yang, Xiao Luo, Wenchao Yu, Xujiang Zhao, Yanchi Liu, Quanquan Gu, Haifeng Chen, Wei Wang, and Wei Cheng. Large language models can be contextual pri-vacy protection learners. In Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen, editors, Proceedings of the 2024 Conference on Empirical Methods in Nat-ural Language Processing , pages 14179–14201, Mi-ami, Florida, USA, November 2024. Association for Computational Linguistics. URL: https://acla nthology.org/2024.emnlp- main.785/ , doi: 10.18653/v1/2024.emnlp-main.785 .[86] Zekun Xu, Abhinav Aggarwal, Oluwaseyi Feyisetan, and Nathanael Teissier. A differentially private text per-turbation method using regularized mahalanobis metric. In Oluwaseyi Feyisetan, Sepideh Ghanavati, Shervin Malmasi, and Patricia Thaine, editors, Proceedings of the Second Workshop on Privacy in NLP , pages 7–17, Online, November 2020. Association for Computational Linguistics. URL: https://aclanthology.org/202 0.privatenlp-1.2/ , doi:10.18653/v1/2020.pri vatenlp-1.2 .[87] Ren Yi, Octavian Suciu, Adria Gascon, Sarah Meikle-john, Eugene Bagdasarian, and Marco Gruteser. Pri-vacy reasoning in ambiguous contexts. arXiv preprint arXiv:2506.12241 , 2025. [88] Da Yu, Saurabh Naik, Arturs Backurs, Sivakanth Gopi, Huseyin Inan, Gautam Kamath, Janardhan (Jana) Kulka-rni, Yin Tat Lee, Andre Manoel, Lukas Wutschitz, Sergey Yekhanin, and Huishuai Zhang. Differentially private fine-tuning of language models. In ICLR 2022 ,April 2022. URL: https://www.microsoft.com/en -us/research/publication/differentially-pri vate-fine-tuning-of-language-models/ .[89] Shuozhi Yuan, Liming Chen, Miaomiao Yuan, and Zhao Jin. Mcts-sql: light-weight llms can master the text-to-sql through monte carlo tree search. In Proceedings 
+
+19 of the Fortieth AAAI Conference on Artificial Intelli-gence and Thirty-Eighth Conference on Innovative Ap-plications of Artificial Intelligence and Sixteenth Sym-posium on Educational Advances in Artificial Intelli-gence , AAAI’26/IAAI’26/EAAI’26. AAAI Press, 2026. 
+
+doi:10.1609/aaai.v40i41.40751 .[90] Xiang Yue, Minxin Du, Tianhao Wang, Yaliang Li, Huan Sun, and Sherman S. M. Chow. Differential privacy for text analytics via natural text sanitization, 2021. URL: 
+
+https://arxiv.org/abs/2106.01221 , arXiv:2106 .01221 .[91] Xiang Yue, Huseyin Inan, Xuechen Li, Girish Kumar, Julia McAnallen, Hoda Shajari, Huan Sun, David Lev-itan, and Robert Sim. Synthetic text generation with differential privacy: A simple and practical recipe. In Anna Rogers, Jordan Boyd-Graber, and Naoaki Okazaki, editors, Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 1321–1342, Toronto, Canada, July 2023. Association for Computational Linguistics. URL: 
+
+https://aclanthology.org/2023.acl-long.74/ ,
+
+doi:10.18653/v1/2023.acl-long.74 .[92] Qiusi Zhan, Zhixiang Liang, Zifan Ying, and Daniel Kang. Injecagent: Benchmarking indirect prompt injec-tions in tool-integrated large language model agents. In 
+
+Findings of the Association for Computational Linguis-tics: ACL 2024 , pages 10471–10506, 2024. [93] Juhua Zhang, Zhiliang Tian, Minghang Zhu, Yiping Song, Taishu Sheng, Siyi Yang, Qiunan Du, Xinwang Liu, Minlie Huang, and Dongsheng Li. DYNTEXT: Semantic-aware dynamic text sanitization for privacy-preserving LLM inference. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar, editors, Findings of the Association for Com-putational Linguistics: ACL 2025 , pages 20243–20255, Vienna, Austria, July 2025. Association for Computa-tional Linguistics. URL: https://aclanthology.o rg/2025.findings-acl.1038/ , doi:10.18653/v1/ 2025.findings-acl.1038 .[94] Xiaohu Zhu, Qian Li, Lizhen Cui, and Yongkang Liu. Large language model enhanced text-to-sql generation: A survey. arXiv preprint arXiv:2410.06011 , 2024. Table 6: Notation used throughout the paper.   
+
+> Notation Meaning
+> x,
+
+S, P Natural language query; schema; privacy pol-icy.   
+
+> D,eDPrivate; DP synthetic database.
+
+Q (x, S), q⋆ Candidate queries; selected query.                   
+
+> ΓSchema integrity constraints.
+> I∼I′Neighboring database instances. GS q,LS q,RS qGlobal, local, residual sensitivity.
+> qE,BEResidual query; boundary attributes. mi(b)Boundary multiplicity at b.LS i,TEiLocal sensitivity; maximizing boundary value.
+> μfree
+> i,1,μfree
+> i,min ,Munocc
+> iPrivate boundary multiplicities.
+
+Rpriv , Sk Private relations; distance vectors.                       
+
+> Vsnd
+> i,Vrec
+> i,Vsub
+> iSender, recipient, subject views.
+> Vθ
+> i,Vdata
+> iCondition and data views.
+> o= ( R,tid ,A)Source cell provenance.
+> ρ= ( sρ,rρ,πρ)Runtime sender, recipient, purpose.
+> Pos ρ,Viol ρPermitted and prohibited information.
+> Vexact
+> ρInformation authorized for exact release.
+
+Ac(D) Authorized database cells. 
+
+## A Appendix A.1 Integrating Contextual Integrity and Dif-ferential Privacy (Cntd.) 
+
+We discuss our inference rules in detail below: 
+
+Boundary multiplicities. Recall from Sec. 2 that RS mea-sures how strongly a tuple in Ri can be amplified through the residual join. For Ri, this amplification is determined by the largest boundary multiplicity, TEi = LS i. Thus, contextual information can tighten the local sensitivity only if it can remove the boundary value realizing this witness from the neighborhood. Under contextual DP, values authorized by Ac(D) are fixed across contextual neighbors. Among the occupied boundary values that remain private, let μfree  
+
+> i,1
+
+and μfree  
+
+> i,min
+
+denote the largest and smallest multiplicities, respectively. Under deletion, μfree 
+
+> i,1
+
+is the largest private contribution that can still be removed. Under change neighborhood, a tuple may move from one boundary value to another, so μfree  
+
+> i,min
+
+captures the smallest contribution it can move to; changing from the original wit-ness can therefore change the answer by at most TEi − μfree 
+
+> i,min
+
+.Hence, μfree  
+
+> i,min
+
+≤ μfree  
+
+> i,1
+
+≤ TEi .For insertions, Munocc  
+
+> i
+
+denotes the largest multiplicity at a boundary value not currently occupied by Ri, since a new tuple may introduce such a value. If referential integrity pre-vents introducing new boundary values, then Munocc  
+
+> i
+
+= 0. The rules below characterize which of these multiplicities remain 20 reachable under each neighboring edit. 
+
+Deletion. When a selection of tuples are contextually-public, i.e., fixed across contextual neighbors, they cannot be deleted. Any valid deletion must come from the remaining private tuples. The worst case is thus the private tuple with the largest boundary multiplicity, giving μfree  
+
+> i,1
+
+in S EL -D EL . Intuitively, contextual information removes public tuples from the set of possible deletion witnesses. 
+
+Change. Under change neighborhood, tuple existence is fixed, but an existing tuple may change the boundary value through which it joins with the residual query. If the complete bound-ary projection is public, these join relevant values are fixed, so changing the tuple cannot alter its join multiplicity and the sensitivity contribution is zero (P RJ -C HG ). If only part of the boundary information is public, a change can still have a large effect in two ways: it can move a tuple away from the original witness, changing its contribution by at most TEi − μfree 
+
+> i,min
+
+, or it can move to a fully private boundary value with multiplicity at most μfree  
+
+> i,1
+
+. Taking the larger of these possibilities gives max {TEi − μfree 
+
+> i,min
+
+, μfree  
+
+> i,1
+
+} in P RJ SEL -C HG and in the model allowing both deletion and change (S EL ). 
+
+Insertion. Insertion is different because a new tuple is not restricted to boundary values already present in the public data. It may introduce a new boundary value and still realize the ordinary worst case, so I NS retains LS i. A tighter bound becomes possible when Bi is unique: with a unique bound-ary, an insertion cannot reuse an occupied boundary value, so its effect is bounded by Munocc  
+
+> i
+
+, the largest multiplicity at an unoccupied boundary value. Deletion or change may still affect an existing private tuple, with contribution bounded by μfree  
+
+> i,1
+
+. Since the rule must cover all allowed edits, S EL -UNIQUE gives max {μfree  
+
+> i,1
+
+, Munocc  
+
+> i
+
+}. Referential integrity can further rule out new boundary values, forcing Munocc  
+
+> i
+
+= 0. Fi-nally, if the entire relation is public, every tuple and value is fixed across contextual neighbors, so P UB gives zero sensitiv-ity. Unlike ordinary residual sensitivity, contextual residual sensitivity is query- and context-dependent: the same query on the same database can have different sensitivity for dif-ferent queriers or purposes because CI authorizes different information flows. 
+
+## A.2 Proofs 
+
+Theorem 4 (End-to-end differential privacy) . If the syn-thetic release is (εsyn , δsyn )-DP and the final query release is 
+
+(εrel , δrel )-DP, then PIM εNTO is (εsyn + εrel , δsyn + δrel )-DP. Proof. PIM εNTO accesses D only twice. First, it releases eD
+
+with (εsyn , δsyn )-DP. The entire search, including sensitivity evaluation and selection of q⋆, operates only on eD and is therefore post-processing. Second, P IM εNTO evaluates q⋆
+
+on D using an (εrel , δrel )-DP release mechanism. Although 
+
+q⋆ depends on eD, conditioned on eD it is fixed. The result therefore follows by adaptive composition [22]. 
+
+Theorem 5 (Equivalence of CI Policy and Compiled Views) .
+
+Fix a database D and query ρ = ( sρ, rρ, πρ, qρ). Let P + denote the implication-completed CI policy, and assume every norm in P + is faithfully compiled into its SQL views. Let 
+
+JP +KD,ρ =
+
+
+
+(v, o) ∈ qρ(D) such that 
+
+(v, o) is permitted by at least one applicable positive norm of P + and prohibited by no applicable negative norm of P +
+
+
+
+denote the information authorized by the CI policy for ρ. Then the compiled SQL views are equivalent to the CI policy: V exact  
+
+> ρ
+
+= Pos ρ \ Viol ρ = JP +KD,ρ.
+
+Equivalently, for every origin-tagged queried value (v, o) ∈
+
+qρ(D),
+
+(v, o) ∈ V exact  
+
+> ρ
+
+⇐⇒ (v, o) ∈ JP +KD,ρ.
+
+Thus, CI enforcement is both sound and complete: it releases no queried value prohibited by the policy and withholds no queried value authorized by the policy. Consequently, releas-ing V exact  
+
+> ρ
+
+satisfies contextual integrity with respect to P .Proof. Fix an origin-tagged queried value (v, o) ∈ qρ(D),where o = ( R, tid , A). We show that (v, o) belongs to V exact  
+
+> ρ
+
+if and only if its flow is authorized by P +.First, runtime relevance filtering does not remove any norm that can govern (v, o). A norm Ni is discarded only if its data view V data  
+
+> i
+
+governs none of the attributes projected by qρ.By faithful compilation, V data  
+
+> i
+
+contains exactly the database cells representing information of type τi. Hence, if Ni governs 
+
+(v, o), then its origin attribute A is represented by V data  
+
+> i
+
+and Ni
+
+is retained. Conversely, a discarded norm governs no queried value and therefore cannot affect whether (v, o) belongs to 
+
+Pos ρ or Viol ρ.Now consider any retained norm Ni. At runtime, P IM εNTO 
+
+evaluates 
+
+πq,v,o
+
+
+
+σp1=sρ (V snd  
+
+> i
+
+) ⋊⋉ σp2=rρ (V rec  
+
+> i
+
+) ⋊⋉ V sub  
+
+> i
+
+⋊⋉ V θ 
+
+> i
+
+⋊⋉ V data 
+
+> i
+
+
+
+.
+
+A tuple (q, v, o) appears in this result if and only if there exists a joint binding of the shared variables (p1, p2, q), with p1 = sρ
+
+and p2 = rρ, under which all compiled views hold. The natural join therefore implements conjunction of the corresponding conditions. By faithful compilation, the role views hold exactly when 
+
+sρ, rρ, and q instantiate the sender, recipient, and subject roles of Ni. Likewise, V θ 
+
+> i
+
+holds exactly when the transmission con-dition θi is satisfied and the declared purpose πρ matches 
+
+πi, while V data  
+
+> i
+
+contains exactly the origin-tagged values of information type τi about the bound subject. Therefore, 
+
+(q, v, o) is returned by the compiled views of Ni
+
+⇐⇒ Ni applies to the flow of (v, o) under ρ.
+
+21 Taking the union over all applicable positive norms there-fore gives exactly 
+
+Pos ρ =
+
+(v, o) ∈ qρ(D) : some positive norm of P +
+
+permits (v, o)
+
+ ,
+
+and, by the same argument, 
+
+Viol ρ =
+
+(v, o) ∈ qρ(D) : some negative norm of P +
+
+prohibits (v, o)
+
+ .
+
+It follows directly that 
+
+(v, o) ∈ V exact  
+
+> ρ
+
+⇐⇒ (v, o) ∈ Pos ρ \ Viol ρ
+
+⇐⇒ (v, o) is permitted by at least one applicable positive norm and prohibited by no applicable negative norm 
+
+⇐⇒ (v, o) ∈ JP +KD,ρ.
+
+Since this holds for every (v, o) ∈ qρ(D),
+
+V exact  
+
+> ρ
+
+= JP +KD,ρ.
+
+Finally, P + preserves the permissions of P and adds only prohibitions induced by information implications. Hence ev-ery flow authorized under P + is compliant with P , and re-leasing V exact  
+
+> ρ
+
+satisfies contextual integrity with respect to 
+
+P .
+
+Contextual residual sensitivity. We now prove Theorem 3 of Sec. 4.3: contextual residual sensitivity (CRS q) is a smooth upper bound on local sensitivity under contextual DP, and it never exceeds ordinary residual sensitivity (RS q). Throughout, fix a query q and a context c with authorized cells Ac(D).
+
+Setup. For each private relation Ri, write ℓi(I) for the bound given by the inference rule of Sec. 4.3 that applies to Ri
+
+under Ac(D), i.e., Γ, Ac(D) ⊢I Ri : τ ⇒ ℓi(I). Every contextual neighbor must preserve Ac(D) (Definition 2), so a relation entirely governed by P UB admits no contextual edit at all: inserting, deleting, or changing any of its tuples would change 
+
+Ac(D). We call the remaining relations contextually editable ,
+
+R c 
+
+> priv
+
+= {i ∈ Rpriv : ℓi is not derived by P UB },
+
+and restrict distance vectors to them, Sck = {s ∈ Sk : s j =
+
+0 for all j /∈ R c
+
+> priv
+
+}. The contextual distance d c(I, I′) is the fewest edits needed to reach I′ from I while preserving Ac(D)
+
+at every intermediate step. Since a contextual edit is in par-ticular an ordinary edit, d(I, I′) ≤ dc(I, I′), and any instance within contextual distance k of I can only differ from I on relations in R c
+
+> priv
+
+. The contextual local sensitivity of q at I is local sensitivity restricted to contextual neighbors, CLS q,Ac(D)(I) = max  
+
+> I′:I∼cI′
+
+|q(I)| − | q(I′)| .
+
+As with ordinary DP, we cannot calibrate noise to CLS q,Ac(D)
+
+directly, since it can itself change sharply between neighbors. Following Nissim et al. [61], a function ˆ S(·) is a β-smooth upper bound of local sensitivity under contextual DP if (i) ˆS(I) ≥ CLS q,Ac(D)(I) for every I, and (ii) ˆ S(I) ≤ eβ ˆS(I′) for every I ∼c I′; noise calibrated to any such ˆ S using their Cauchy or Laplace mechanisms achieves ε- or (ε, δ)-contextual DP. 
+
+Definition 3 (Contextual residual sensitivity) . For k ≥ 0, the contextual distance-k envelope dCLS (k) 
+
+> q
+
+is defined exactly as the envelope of Eq. (4) , but with distance vectors and bound-ary maxima restricted to R c
+
+> priv
+
+:
+
+dCLS (k) 
+
+> q
+
+(I) = 
+
+
+
+max  
+
+> i∈Rc
+> priv
+
+ℓi(I), k = 0,
+
+max  
+
+> i∈Rc
+> priv
+
+max 
+
+> s∈Sck
+
+# ∑ 
+
+> A⊆Ei∩Rc
+> priv
+
+TEi\A(I) ∏
+
+> j∈A
+
+s j, k ≥ 1.
+
+The contextual residual sensitivity of q on I is then 
+
+CRS q(I) = max  
+
+> k≥0
+
+e−βk min GS q, dCLS (k) 
+
+> q
+
+(I) .
+
+As with RS q (Eq. (5)), an unbounded GS q is treated as ∞.If R c 
+
+> priv
+
+= /0, every relation is fully authorized, so there is no contextual neighbor left to protect against: CLS q,Ac(D) ≡ 0and CRS q,Ac(D) ≡ 0, and the exact answer may be released. We prove Theorem 3 through three lemmas, each a contex-tual counterpart of a result of Dong and Yi [19]: the inference rules are sound (Lemma 1, analogous to their Theorem 4.5), the rules are tight against TEi (Lemma 2), and the envelope 
+
+dCLS (k) 
+
+> q
+
+is smooth across contextual neighbors (Lemma 3, anal-ogous to their Lemma 4.11). 
+
+Lemma 1 (Rule soundness) . For every instance I, 
+
+CLS q,Ac(D)(I) ≤ max i∈R c 
+
+> priv
+
+ℓi(I) = dCLS (0) 
+
+> q
+
+(I).Proof. Let I ∼c I′, so I′ is obtained from I by a single edit 
+
+τ to some private relation Ri, and this edit preserves Ac(D).Were ℓi derived by P UB , every cell of Ri would be authorized and any edit would change Ac(D); hence i ∈ R c
+
+> priv
+
+.Dong and Yi show that a single edit to Ri changes the query answer by exactly the multiplicity of the affected boundary value: if the edit inserts or deletes a tuple with boundary value b, then || q(I)| − | q(I′)|| = mi(b); if it instead changes an existing tuple’s boundary value from b to b′ (non-boundary attributes do not affect the count), then || q(I)| − | q(I′)|| =
+
+|mi(b) − mi(b′)|. It remains to bound the multiplicities each rule allows. 22 Base, Ins. No tuple of Ri is fixed by Ac(D), so b ranges over the whole domain of Bi, and the change is at most max b mi(b) = TEi (I) = LS i = ℓi.
+
+Sel-Del. Deleting an authorized tuple would remove a cell from Ac(D), so the deleted tuple must be unauthorized, mean-ing b is a boundary value occupied by a private tuple. The change is thus at most μfree  
+
+> i,1
+
+= ℓi.
+
+Prj-Chg. Every boundary cell of Ri is authorized and hence fixed across contextual neighbors, so a change can only touch non-boundary attributes: b′ = b, the answer is unchanged, matching ℓi = 0. 
+
+PrjSel-Chg, Sel. The changed or deleted tuple is unautho-rized, so its boundary value b is privately occupied, μfree  
+
+> i,min
+
+≤
+
+mi(b) ≤ μfree  
+
+> i,1
+
+; a change may move it to any boundary value b′,with m i(b′) ≤ TEi . Whichever of b, b′ has larger multiplicity, the change is at most max {TEi − μfree 
+
+> i,min
+
+, μfree  
+
+> i,1
+
+} = ℓi.
+
+Sel-Unique. Because Bi is unique, an inserted tuple (or the new value of a changed tuple) must occupy a boundary value not already present in Ri, whose multiplicity is at most 
+
+Munocc  
+
+> i
+
+; a deleted or changed tuple is instead unauthorized and privately occupied, so its multiplicity is at most μfree  
+
+> i,1
+
+. Either way, the change is at most max {μfree  
+
+> i,1
+
+, Munocc  
+
+> i
+
+} = ℓi.Taking the maximum over i ∈ R c 
+
+> priv
+
+gives CLS q,Ac(D)(I) ≤
+
+max i∈R c 
+
+> priv
+
+ℓi(I) = dCLS (0) 
+
+> q
+
+(I).
+
+Lemma 2 (Rule tightness) . For every rule and every instance I, ℓi(I) ≤ TEi (I) = LS i.Proof. BASE and I NS return LS i exactly. Every other bound is a maximum of m i(b) over some subset of dom (Bi), whereas LS i = TEi (I) maximizes over the entire domain (Eq. (1)), and a maximum over a subset can only be smaller. Con-cretely, μfree  
+
+> i,1
+
+≤ LS i and Munocc  
+
+> i
+
+≤ LS i cover S EL -D EL and SEL -U NIQUE ; since μfree  
+
+> i,min
+
+≥ 0, TEi − μfree  
+
+> i,min
+
+≤ TEi = LS i cov-ers P RJ SEL -C HG and S EL ; and 0 ≤ LS i covers P RJ -C HG and PUB .
+
+Lemma 3 (Smoothness) . For every k ≥ 0 and every pair I ∼c I′, dCLS (k) 
+
+> q
+
+(I) ≤ dCLS (k+1) 
+
+> q
+
+(I′).Proof. We use two properties of TE established by Dong and Yi [19]. First, TE (I) depends only on the relations indexed by 
+
+E and is therefore invariant under edits to relations outside E.Second, for any j ∈ E, a single edit to R j changes TE (I) by at most TE\{ j}(I). These properties allow the residual-sensitivity envelope to account for neighboring databases by increment-ing the corresponding coordinates of its distance vector. The same argument applies when the ground set is restricted to 
+
+R c
+
+> priv
+
+: only coordinates corresponding to editable relations can be incremented, and Lemma 1 establishes that every such relation belongs to R c
+
+> priv
+
+. Thus, the residual-sensitivity con-struction carries over with both its ground set and distance vector restricted to R c
+
+> priv
+
+.Let I ∼c I′ differ in relation R j, so j ∈ R c
+
+> priv
+
+, and write 
+
+T cE,s(I) = ∑A⊆E∩R c 
+
+> priv
+
+TE−A(I) ∏i∈A si for the weighted sum defining dCLS (k) 
+
+> q
+
+.
+
+Case k = 0. Let i ∈ R c 
+
+> priv
+
+attain dCLS (0) 
+
+> q
+
+(I) = ℓi(I), which is at most TEi (I) by Lemma 2. If j = i, fact (a) gives TEi (I) = 
+
+TEi (I′) directly, since i /∈ Ei. Otherwise j ∈ Ei ∩ R c
+
+> priv
+
+, and fact (b) gives TEi (I) ≤ TEi (I′) + TEi−{ j}(I′). In both cases the right-hand side is a sum of terms of T cEi,e j (I′) for the unit vector 
+
+e j ∈ Sc
+
+> 1
+
+, so dCLS (0) 
+
+> q
+
+(I) ≤ dCLS (1) 
+
+> q
+
+(I′).
+
+Case k ≥ 1. Let (i, s) attain dCLS (k) 
+
+> q
+
+(I), and set s′ = s + e j ∈
+
+Sck+1. By the smoothness argument above, applied to the ground set Ei ∩ R c
+
+> priv
+
+, incrementing coordinate j can only increase the sum: T cEi,s(I) ≤ T cEi,s′ (I′). Hence dCLS (k) 
+
+> q
+
+(I) ≤
+
+T cEi,s′ (I′) ≤ dCLS (k+1) 
+
+> q
+
+(I′).
+
+Theorem 6 (Contextual residual sensitivity) . For every multi-way join counting query q, instance I, context c, and smooth-ing parameter β > 0:(i) CRS q(I) ≤ RS q(I); and (ii) CRS q(·) is a β-smooth upper bound of local sensitivity under contextual DP. Consequently, releasing |q(I)| with general Cauchy (resp. Laplace) noise calibrated to CRS q(I), with β set exactly as for residual sensitivity, satisfies ε- (resp. (ε, δ)-) contextual differential privacy, and the injected noise never exceeds that of standard residual sensitivity. Proof. (i) CRS q never exceeds RS q. We show dCLS (k) 
+
+> q
+
+(I) ≤
+
+LS (k) 
+
+> q
+
+(I) for every k; since CRS q(I) and RS q(I) apply the same monotone transformation x 7 → e−βk min {GS q, x} to these envelopes and maximize over the same range of k
+
+(Eq. (5)), this gives CRS q(I) ≤ RS q(I).For k = 0, Lemma 2 gives dCLS (0) 
+
+> q
+
+(I) = max i∈R c 
+
+> priv
+
+ℓi(I) ≤
+
+max i∈Rpriv TEi (I) = LS q(I). For k ≥ 1, the pair (i, s) attain-ing dCLS (k) 
+
+> q
+
+(I) satisfies s ∈ Sck ⊆ Sk, and its defining sum ranges only over A ⊆ Ei ∩ R c 
+
+> priv
+
+— a subset of the nonnegative terms summed by LS (k) 
+
+> q
+
+(I), which ranges over A ⊆ Ei ∩ Rpriv 
+
+(Eq. (4)). Dropping terms from a sum of nonnegative quanti-ties cannot increase it, so dCLS (k) 
+
+> q
+
+(I) ≤ LS (k) 
+
+> q
+
+(I).
+
+(ii) CRS q is a smooth upper bound under contextual DP. 
+
+We check the two defining conditions. For condition (i), CRS q,Ac(D)(I) ≥ min GS q, dCLS (0) 
+
+> q
+
+(I) ≥ CLS q,Ac(D)(I),
+
+since dCLS (0) 
+
+> q
+
+(I) ≥ CLS q,Ac(D)(I) by Lemma 1, and GS q ≥
+
+LS q(I) ≥ CLS q,Ac(D)(I) because every contextual neighbor is also a standard neighbor. 23 For condition (ii), fix I ∼c I′ and let k⋆ attain the maximum defining CRS q(I); such a maximizer exists at some finite 
+
+k⋆, exactly as for standard residual sensitivity (Dong and Yi, Lemma 4.12), with the same argument applying verbatim over R c
+
+> priv
+
+. By Lemma 3 and then rescaling by eβ,CRS q(I) = e−βk⋆
+
+min GS q, dCLS (k⋆) 
+
+> q
+
+(I)
+
+≤ e−βk⋆
+
+min GS q, dCLS (k⋆+1) 
+
+> q
+
+(I′)
+
+= eβ · e−β(k⋆+1) min GS q, dCLS (k⋆+1) 
+
+> q
+
+(I′)
+
+≤ eβCRS q(I′).
+
+Since CRS q satisfies both conditions with respect to ∼c,the Cauchy and Laplace mechanisms of [61], calibrated to CRS q(I) with the same β used for residual sensitivity, achieve 
+
+ε- and (ε, δ)-contextual DP, respectively. Part (i) then implies this noise is never larger than what standard residual sensitiv-ity would require. 
+
+End-to-end privacy. The following proof establishes Corol-lary 1 of Sec. 4.3. 
+
+Proof. Write the end-to-end mechanism as 
+
+M (D) =   eD, Mrel (D; q⋆), eD = Msyn (D), q⋆ = f ( eD),
+
+where f is the query-selection procedure: a function of eD
+
+and public inputs (the natural-language question and schema) alone, which never reads D.By hypothesis, eD is (εsyn , δsyn )-DP. Since q⋆ = f ( eD) de-pends only on eD, the pair ( eD, q⋆) is a post-processing of eD,and post-processing preserves DP under any neighboring re-lation (Prop. 2.1 of [22]), in particular the contextual relation 
+
+∼c. So ( eD, q⋆) remains (εsyn , δsyn )-DP. By hypothesis, Mrel ( · ; q) is (εrel , δrel )-contextual DP for every query q in the DP-compatible class. Since q⋆ always lies in this class, this guarantee holds in particular for q = q⋆,regardless of which query is realized. Together, these two facts say that M is an adaptive com-position of two mechanisms: M1(D) = ( eD, q⋆), which is 
+
+(εsyn , δsyn )-DP, followed by M2(D; z) = Mrel (D; z), which is 
+
+(εrel , δrel )-contextual DP for every fixed z. Contextual DP is exactly (ε, δ)-DP with respect to the fixed neighboring rela-tion ∼c (Definition 2), so the ordinary sequential composition theorem for (ε, δ)-DP (Thm. 3.16 of [22]) applies with ∼c in place of ∼, giving that M is (εsyn +εrel , δsyn +δrel )-contextual DP. Theorem 3 shows that calibrating Mrel to CRS q satisfies this hypothesis for every q in the DP-compatible class, so PIM εNTO instantiated this way achieves the guarantee above. Finally, any additional output that depends only on eD and public inputs, such as the SQL text of q⋆, incurs no additional privacy cost by post-processing. The authorization boundary 
+
+Ac(D) is instead computed from the private database D under the fixed context c. However, by definition of contextual ad-jacency, Ac(D) = Ac(D′) for every D ∼c D′. Thus, Ac(D) is invariant across contextual neighbors and its use in defining 
+
+∼c or calibrating the release incurs no additional contextual-DP loss. 
+
+## A.3 Procedures 
+
+Alg. 1: P IM εNTO : DP-Aware Text2SQL    
+
+> Input: question x, schema
+
+S, private database D, rollout budget       
+
+> Nrollout , warm-start size K
+> Output: selected query q⋆
+> Initialization
+> 1. eD←
+
+Msyn (D; εsyn , δsyn ) ▷ One-time private proxy 2. Initialize root v0 with                                                                                        
+
+> {SET _C OUNT ,A DD _R ELATION ,S TOP }▷DP-compatible tree 3. Set N(v)←0, N(v,a)←0, Q(v,a)←0▷Node visits, edge visits, cumulative reward 4. Set {Cy} ← /0,{ιy} ← /0▷Answer clusters + best RS per cluster 5. Generate Kzero-shot queries and insert their action paths ▷
+> Warm start 6. For each warm-start query q
+> 7. y←bucket (q(eD)) ;Cy←Cy∪ { q}▷y: answer; Cy:queries with answer y
+> 8. Compute RS q(eD)and set ιy←min q′∈CyRS q′(eD)▷
+> Lowest RS found for answer y
+> 9. Evaluate and backpropagate qalong its path ▷Initialize
+> Qand N
+> 10. EndFor
+> Search and Evaluation
+> 11. For rollout i∈[Nrollout ]
+> 12. ROLLOUT (v0,i,eD)▷Explore + evaluate + update 13. EndFor
+> Final Selection
+> 14. y⋆←arg max y|Cy|▷Most supported answer 15. q⋆←arg min q∈Cy⋆RS q(eD)▷Lowest-RS formulation 16. Return q⋆
+
+24 Alg. 2: P IM εNTO : Rollout                                                                                                       
+
+> Input: root v0, rollout i, synthetic database eDSearch
+> 1. Select from v0using the UCT rule until reaching vwith
+> |children (v)|<kpN(v)▷More visited nodes are allowed more branches 2. Generate DP-compatible child actions ▷LLM expansion 3. Exclude relation keys already used by siblings ▷Remove duplicate branches 4. For each a=ADD _R ELATION (r,J,F)producing prefix u′
+> 5. bqu′←STOP (u′)▷Complete current prefix 6. If i≥αprune Nrollout , containment holds, and RS bqu′(eD)>>
+> max yιy
+> 7. Prune u′▷Sensitivity-guided pruning 8. EndIf
+> 9. EndFor
+> 10. Continue until S TOP () produces terminal query qand trajec-tory τ
+> Evaluation
+> 11. If qis invalid, nonexecutable, or not DP-compatible 12. Backpropagate 0 and Return
+> 13. EndIf
+> 14. y←bucket (q(eD)) ;Cy←Cy∪ { q}▷Execution cluster 15. Compute Rcorr (q)← |Cy(q)| − 1
+> M−1▷Reward execution agreement 16. Compute RS q(eD)and cache (k⋆,s⋆,{TE})
+> 17. Compute W(U)from cached (k⋆,s⋆,{TE})▷
+> Relation-subset sensitivity 18. For each relation r∈V(q)
+> 19. φr(q)←
+
+∑                                                             
+
+> U⊆V\{ r}
+> |U|!(|V| − | U| − 1)!
+> |V|!
+> W(U∪ { r})−
+> W(U)▷Average marginal contribution 20. EndFor
+> Backpropagation
+> 21. For each (vt−1,at)∈τ
+> 22. Gt← − λsν(φrt)if at=ADD _R ELATION (rt,Jt,Ft); oth-erwise Gt←0▷Sensitivity credit 23. Q(vt−1,at)←Q(vt−1,at) + Rcorr (q) + Gt
+> 24. N(vt−1,at)←N(vt−1,at) + 125. N(vt−1)←N(vt−1) + 126. EndFor
+> 27. Update ιy▷Best formulation so far
+
+## A.4 Benchmarks 
+
+Differential Privacy-Aware Text2SQL Benchmark (DP-D1). Existing Text2SQL benchmarks do not identify the lowest-sensitivity formulation among correct alternatives, despite sensitivity variation being common: 54.5% of DP-supported BIRD questions and 66.6% of Ambrosia questions produce candidates with different sensitivities (App. ?? ). We construct DP-D1 by identifying alternative join paths from the foreign-key graphs of BIRD, Spider, Spider2-Lite, Am-biQT and EHRSQL, and use Claude 5 Sonnet to generate alternate SQL formulations and retain correct samples. We compute their RS, and define the minimum-sensitivity formu-lation as q⋆. The benchmark contains 3,673 training questions from BIRD (3,063), AmbiQT (486), and EHRSQL (124), and Table 7: Ablation of P IM εNTO ’s search components on XiYanSQL-32B. Each row disables one component of the Full configuration in isolation, with AlphaSQL included as a reference. ∆ is the change in Joint relative to Full. Method Acc. Is-Min Joint ∆ Lat. Full (P IM εNTO ) 81.8 76.6 75.3 0.0 159.2 w/o warm-start 79.7 68.3 65.2 −10 .1 133.0 w/o pruning 81.8 76.3 74.5 −0.8 235.4 w/o sensitivity prior 81.2 74.7 73.8 −1.5 152.9 w/o sensitivity reward 81.0 66.1 64.7 −10 .6 178.7 direct RS reward 81.0 66.4 64.6 −10 .7 172.1 
+
+Policy Roles Data Purposes Conditions CCPA 21 31 31 5COPPA 12 48 28 15 HIPAA 44 7 6 11 
+
+Table 8: Ground-truth policy-to-schema mappings. 886 disjoint test questions from BIRD (415), Spider (362), AmbiQT (64), Spider2-Lite (25), and EHRSQL (20). Alterna-tive formulations differ in Residual Sensitivity by a median of 10 .5×, demonstrating substantial opportunity for reducing DP noise through SQL formulation. Contextual Integrity-Aware Text2SQL Benchmark (C ONTEXT -D1, C ONTEXT -D2, C ONTEXT -D3). No existing Text-to-SQL benchmark captures contextual-integrity policies. We therefore construct one by pairing three real policies with domain-matched Text-to-SQL datasets: HIPAA with 56 EHRSQL queries (health-care privacy), CCPA with 75 BIRD Car Retail queries (con-sumer privacy), and COPPA with 21 BIRD Computer Student Records queries (children’s online privacy), for 152 queries total. We construct the benchmark in three steps. 
+
+Policy extraction. We first use an LLM to extract CI norms specifying roles, information, purposes, conditions, and per-mit/prohibit decisions. Since prior work extensively studies this task [26, 58, 76, 87], we treat extraction as preprocessing. 
+
+Policy grounding. We manually annotate ground-truth map-pings from policy concepts to their database representations: roles to identity attributes, information types to data attributes, purposes to database values, and conditions to SQL predicates. Concepts absent from the database are marked unmapped. Ta-ble 8 summarizes these annotations. 
+
+Query grounding. We sample concrete sender and querier identities and purposes from the database and policy to form runtime contexts. For each query-context pair, we use the mappings to identify applicable norms, evaluate their condi-tions for the queried subjects, and apply their permit/prohibit decisions to obtain the ground-truth authorized output. If no norm applies, release is denied. This process produces 495,072 query-context pairs, from 25 9.4 × 9.6 × 30.3 ×     
+
+> 4.3 ×4.1 ×13.3 ×
+> 7.2 ×4.6 ×33.5 ×
+> Zero-shot Sens. Prompt AlphaSQL Phi-4 GPT-5.6 Luna XiYanSQL 32B
+> 010 20 30
+> Noise reduction
+
+Figure 5: Geometric mean reduction in DP noise relative to each baseline. which we sample 150 per policy for a 450-instance benchmark. Following prior work [66], we also generate textual narrations of each database. The resulting healthcare, consumer-privacy, and children’s-privacy datasets are denoted C ONTEXT -D1, CONTEXT -D2, and C ONTEXT -D3, respectively. We use DP-D1 for RQ1 and C ONTEXT -D1–C ONTEXT -D3 for RQ2– RQ4. 
+
+## A.5 Evaluation (Cntd.) 
+
+A.5.1 RQ1 (Cntd.) Noise reduction. Fig. 5 (App. A.5) reports the geometric mean reduction in DP noise achieved by P IM εNTO . Across models, P IM εNTO achieves 4 .1–9 .6× lower noise than zero-shot and sensitivity prompting, and 13 .3–33 .5× lower noise than AlphaSQL. 
+
+Ablation. We ablate P IM εNTO ’s four search components on XiYanSQL-32B: warm start, pruning, sensitivity prior, and Shapley-credit reward. We also replace Shapley credit with a coarse residual-sensitivity bonus 11+log (RS ) . Table 7 shows that warm start and Shapley credit have the largest impact, reducing Joint by 10.1 and 10.6 points when removed. Prun-ing reduces latency by 32.4%. Replacing Shapley credit with the coarse RS bonus reduces Joint by 10.7 points, performing even worse than removing the sensitivity reward entirely. 
+
+Cost. Table 9 reports the token cost of P IM εNTO vs Al-phaSQL. P IM εNTO is more efficient than AlphaSQL, using 2.6–5 .1× fewer tokens across models. Table 9: Inference cost of search-based Text2SQL methods. 
+
+We report the average number of model calls and total tokens consumed per question. Model Method Calls / Q. Tokens / Q. GPT-5.6-Luna AlphaSQL 24.9 40.1K PIM εNTO 6.6 11.2K 
+
+XiYanSQL-32B AlphaSQL 24.9 19.6K PIM εNTO 6.6 3.8K 
+
+Phi-4 AlphaSQL 24.9 11.4K PIM εNTO 6.6 4.4K 
+
+26

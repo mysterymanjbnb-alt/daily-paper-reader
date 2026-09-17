@@ -1,0 +1,854 @@
+Title: Canaries in the Bank: Auditing User-Level Privacy in Private Evolution
+
+URL Source: https://arxiv.org/pdf/2609.13499v1
+
+Published Time: Tue, 15 Sep 2026 00:16:35 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Canaries in the Bank: Auditing User-Level Privacy in Private Evolution 
+
+Sai Aparna Aketi Enayat Ullah Shripad Gade 
+
+Meta Platforms, Inc. Menlo Park, USA. 
+
+{aketiaparna, enayat, shripadgade}@meta.com 
+
+## Abstract 
+
+Private Evolution (PE) generates high-fidelity synthetic data in federated settings without exposing users’ raw data. It aggregates clipped user votes over a shared candidate bank into a differentially private histogram, with noise calibrated to the worst-case user contribution. However, it is unclear whether an adversary can realize this worst-case privacy loss while following the PE protocol. We introduce a protocol-aware empirical audit in which the server commits to a single shared candidate bank and replaces roughly 1% of its entries with probes derived from a known, non-private canary . We evaluate eight attacks, including an unchanged-bank baseline, exact copies, plausible paraphrases, and high-entropy synthetic nonces. Experiments on Yelp and Sentiment140 show that natural-text attacks remain substantially below the theoretical DP bound, while nonce-based attacks yield considerably stronger bounds and come closest to the mechanism’s privacy ceiling. These results quantify the gap between formal worst-case privacy and leakage achievable through protocol-valid candidate-bank manipulation. 
+
+## 1 Introduction 
+
+Synthetic data can reduce reliance on direct access to sensitive records while retaining information useful for downstream analysis [Jordon et al., 2022]. However, synthetic data is not inherently private but can still reveal sensitive information from the source data, motivating mechanisms with formal differential privacy guarantees [Cormode et al., 2025]. Private Evolution produces synthetic data without training a model on private examples. In each round, a server proposes public candidates, clients vote for nearby candidates using private records, and a differentially private (DP) histogram determines which candidates survive [Lin et al., 2024, Xie et al., 2024, Hou et al., 2024]. Because the released histogram is user-level DP, its Gaussian noise is calibrated to the worst contribution of any admissible user. This raises practical questions: (1) While following the PE protocol, can an honest-but-curious server design the candidate bank so that one user’s participation is as detectable as worst-case theory permits? (2) Does realistic user data make it substantially harder to detect user participation? 
+
+Our goal is to build an operational audit of PE that is both informative and minimally invasive. The auditor replaces only a fixed, pre-declared fraction of the shared candidate bank with canary probes 
+
+and otherwise leaves the mechanism unchanged. This restricted intervention creates a controlled membership signal while limiting disruption to output quality. The releases yield a confidence-bounded lower bound on attack-achievable privacy and thus directly quantifying its gap from εtheory .We present a protocol-aware audit comprising eight attack variants. All variants commit to one candidate bank before user sampling, and range from an unchanged-bank baseline and exact copies to plausible paraphrases and synthetic nonce probes that calibrate the strongest attainable signal. The final hypothesis test accounts for hidden participation and reports a confidence-bounded empirical ε
+
+on two user-partitioned text datasets. 
+
+Related Work. Privacy Auditing or Empirical DP is concerned with constructing privacy attacks i.e. datasets and events whose observed probabilities contradict or approach a claimed privacy curve arXiv:2609.13499v1 [cs.CR] 11 Sep 2026 Table 1: The eight audit attack variants. Nonce samples are independently generated high-entropy strings unrelated to natural text. Appendix B describes each construction in detail.                   
+
+> Attack variant Canary type Candidate selection ordinary random real user use the original bank; inject no probes exact random real user inject exact copies of the canary records paraphrase random real user inject paraphrases spread across canary records paraphrase-norm random real user select paraphrases maximizing canary probe votes paraphrase-μeff random real user maximize canary votes and minimize user votes on probes nonce synthetic nonce user inject a random subset of nonce probes nonce-norm synthetic nonce user select nonce probes maximizing canary probe votes nonce-μeff synthetic nonce user maximize canary votes and minimize user votes on probes
+
+[Jagielski et al., 2020, Nasr et al., 2023, Tramèr et al., 2022]. Federated audits such as CANIFE and one-shot privacy estimation insert optimized or random canary clients while limiting interference with ordinary client updates [Maddock et al., 2023, Andrew et al., 2024]. Our setting differs in that the adversarial object is not a client update or individualized model: it is one public candidate bank sent unchanged to all clients. Audits of DP synthetic data study worst-case datasets and disclosure from generated outputs [An-namalai et al., 2024, Meeus et al., 2025, Sun et al., 2025]. SnapAudit separates deterministic computation from DP noise and searches for embedding signals in private in-context learning [Xia et al., 2025]. To the best of our knowledge, no prior work studies the audit mechanisms for synthetic data generated via private evolution. 
+
+## 2 Methodology 
+
+Let S = {s1, . . . , s p} be a public bank of p candidate samples, and let Du contain the capped records of user u. An embedding model maps records and candidates to a shared representation space. For each record x, the assignment vector aS (x) ∈ { 0, 1}p identifies its top-k nearest candidates. After normalizing each user’s histogram and clipping it to threshold C, the user’s contribution is 
+
+¯hu(S) = 1
+
+|Du|k
+
+X
+
+> x∈Du
+
+aS (x), vu(S) = ¯hu(S) min 
+
+
+
+1, C
+
+∥¯hu(S)∥2
+
+
+
+. (1) For independent participation indicators Iu ∼ Bernoulli( q), the released histogram is Y =P 
+
+> u
+
+Iuvu(S) + Z, where Z ∼ N (0 , (σC )2I) and σ is the Gaussian noise multiplier. In round 
+
+t, PE releases a DP histogram Y (t) over the current synthetic population S(t). PE uses this histogram feedback to generate new samples and appends them to the top-˜k samples from S(t) to form S(t+1) .Every histogram release consumes privacy budget whereas selection and generation from the released histogram are post-processing. See Algorithm A.1 for the complete pseudo-code of multi-round PE. 
+
+Threat Model. We assume an honest-but-curious server (or auditor) that follows the PE protocol faithfully but uses the released DP histogram to infer whether a user participated. We assume that the server can insert canary users to the protocol. Further, it may inject r probes into the candidate bank, but commits to one ordered bank before the hidden inclusion draw. Every client receives the same bank. The server only observes aggregate messages from users but cannot inspect private traffic, individualize queries and alter any other specifics of the algorithm. We also assume access to an auxiliary public sample of naux users drawn from the same distribution as the N eligible non-canary users. The axillary set represents the public knowledge the server may have and acts as proxy to the private data distribution. 
+
+Protocol-Aware Canary and Probe Design. We consider two canary types: a randomly selected real user and a synthetic user whose records are high-entropy nonce 1 samples. Table 1 gives the eight attack variants. Each attack is evaluated on an independently selected set of five canaries. For the nonce variants, the synthetic users’ samples and candidate pools are generated independently of natural user data. 
+
+2.1 Audit Mechanism 
+
+We setup the hypothesis testing framework underlying differential privacy. Under H0, a known canary user is absent from the eligible user pool; under H1 it is present but participates only with 
+
+> 1A nonce is a pseudo-random number used only once in a cryptographic communication or security protocol.
+
+2probability q. The audit proceeds in five steps. All attack-design and calibration choices are fixed using public auxiliary data before the canaries are evaluated. 
+
+Step 1: Construct and freeze the probe bank. Let S and P denote the shared candidate bank and its designated probe coordinates respectively. During attack design, a background-aware greedy procedure selects probe candidates – see Table 1 for variants. After each candidate is added, we recompute the canary’s exact top-k routing (see Appendix B.1). On completion, S and P are frozen. Let YP = [ Y ]P be the released histogram restricted to P . For user u, let vu,P = [ vu(S)] P be the user’s contribution on these coordinates after clipping, and write vcan ,P for the canary’s contribution. 
+
+Step 2: Estimate the canary-free background. Using only the auxiliary public samples, we estimate 
+
+m0 = E[YP | H0], ΣP = Cov( YP | H0) = Σusers ,P 
+
+| {z }
+
+> random user participation
+
++ ( σC )2I
+
+| {z }
+
+> DP noise
+
+. (2) Here, Σusers ,P captures variation due to the random participation of eligible non-canary users. 
+
+Step 3: Score a participating canary. Conditional on the canary participating, its contribution shifts the mean by vcan ,P . Under a shared-covariance Gaussian approximation, the corresponding log-likelihood ratio is 
+
+ℓ(YP ) = v⊤ 
+
+> can ,P
+
+Σ−1
+
+> P
+
+
+
+YP − m0 − vcan ,P 
+
+2
+
+
+
+, μeff =
+
+q
+
+v⊤ 
+
+> can ,P
+
+Σ−1 
+
+> P
+
+vcan ,P . (3) The quantity μeff measures the canary’s separation from the background and is the objective maxi-mized during greedy probe construction in Table 1. See Appendix E for details on the derivation. 
+
+Step 4: Marginalize over hidden participation. Inclusion does not guarantee participation: un-der H1, the canary participates independently with probability q. Marginalizing over this hidden participation event gives the mixture log-likelihood ratio 
+
+ℓmix (YP ) = log[(1 − q) + q exp {ℓ(YP )}] . (4) 
+
+Step 5: Calibrate the decision rule and lower-bound privacy loss. A calibration split fixes the decision threshold before final evaluation. On the held-out evaluation split, one-sided Clopper– Pearson confidence bounds on the confusion rates yield 
+
+εlower = max 
+
+
+
+0, log TPR L − δ
+
+FPR U
+
+, log TNR L − δ
+
+FNR U
+
+
+
+. (5) For each predeclared attack variant, we control the family-wise error rate at α = 0 .05 across its five canaries. Each canary receives confidence budget α/ 5 = 0 .01 , which is then divided equally among its four one-sided confidence bounds. We treat attack variants as separate predeclared experiments and therefore do not apply an additional simultaneous correction across variants. Finally, we compute the matching theoretical guarantee εtheory using Opacus’s PRVAccountant 
+
+implementation of numerical PRV composition [Gopi et al., 2021, Yousefpour et al., 2021], with the same participation probability q, noise multiplier σ, and failure probability δ.
+
+## 3 Experiments, Results & Discussions 
+
+We use Yelp Open Dataset reviews [Yelp, Inc., 2024] and Sentiment140 tweets [Go et al., 2009] that are naturally partitioned by users. Yelp users have 64 reviews and Sentiment140 users have 32–64 tweets. All canaries have 64 records. We use all-MiniLM-L6-v2 with 384-dimensional L2-normalized embeddings and Euclidean top-k voting [Sentence-Transformers, 2021] with p = 8 ,192 
+
+candidates where k = 5 , and r = 64 probes. For each experiment, Qwen3-235B-A22B-Instruct-2507 [Qwen Team, 2025] generates the bank only using label information. We use dataset-splits with 500 user cohorts each for bank design and calibration and 1,000 user cohort for final testing. Unless stated otherwise, C = 0 .1, σ = 1 , q = 0 .1, δ = 10 −5, with 100 participating users per round; we report the 95%-confidence lower bound εlower and matching εtheory .Table 2 reports εlower for all eight attack variants at q = 0 .1 and σ = 1 , against a theoretical budget of εtheory = 1 .695 . Attacks constructed from natural user text remain well below the theoretical value. We observer that the passive ordinary baseline attains εlower = 0 .268 and 0.252 
+
+3Table 2: εlower for attacks with the label-only bank. Each entry is the maximum over five canaries with α = 0 .05 , each evaluated at α/ 5 with 1M trials per hypothesis. 
+
+Dataset ordinary exact paraphrase paraphrase-norm paraphrase-μeff nonce nonce-norm nonce-μeff εtheory 
+
+Yelp Open Dataset 0.268 0.371 0.276 0.316 0.560 1.049 1.110 1.110 1.695 Sentiment140 0.252 0.363 0.599 0.327 0.682 1.052 1.088 1.086 1.695 
+
+on Yelp and Sentiment140, respectively ( ≈ 15% of εtheory ), and the strongest attack with natural text, 
+
+paraphrase-μeff , attains 0.560 and 0.682 (below 40% of εtheory ). Attacks based on high-entropy nonce records recover a substantially larger fraction of the budget: nonce-norm attains 1.110 and 
+
+1.088 (∼ 67% of εtheory ). These results indicate that, although the PE noise is calibrated to the worst-case user contribution, protocol-valid manipulation of the candidate bank with natural text realizes only a small fraction of the permitted privacy loss, whereas synthetic nonce probes approach the theoretical limit. The same trends holds across noise multipliers and sampling rates (Figure 1). 0.5 0.7 1 1.5 2               
+
+> noise multiplier ( σ), with q= 0.1
+> 10 −2
+> 10 −1
+> 10 0
+> εempirical  (95% CI)
+> 0.01 0.05 0.1 0.25 0.5
+> sampling rate ( q), with σ= 1
+> εtheory (PRV) ordinary exact paraphrase paraphrase-μeff nonce nonce-μeff
+
+Figure 1: Sentiment140 ablations (one canary, label-only bank, 5M trials); bands are 95% CIs. 
+
+Multi-round PE with ICL: Figure 2 reports MAUVE utility [Pillutla et al., 2021] and privacy across PE rounds. Each round retains the top 5% of candidates and the probes, generates the next bank with ICL, and repeats the audit. We show the audit preserves synthetic-data utility across PE rounds while providing reasonable empirical epsilon lower bounds. 0 1 2 3 4 5PE round 0.0 0.1 0.2 0.3 0.4 0.5 0.6 MAUVE score         
+
+> no-DP (=)
+> = 2, no attack
+> = 2 + nonce attack
+> 123456PE round (composed releases) 0.0 0.5 1.0 1.5 2.0 at  = 10  5
+> theoretical (PRVAccountant) empirical (nonce attack) 95% CI
+
+Figure 2: Multi-round PE on Yelp: utility and privacy parameters (theory vs audit) against PE-round. 
+
+Embedding comparison: Table 3 varies the encoder across three sentence-transformer models of increasing capacity: MiniLM-L6-v2 ( 22 .7M parameters, 384 -d), MiniLM-L12-v2 ( 33 .4M, 384 -d), and MPNet-base-v2 ( 109 M, 768 -d). We observe that the empirical epsilon of PE is insensitive to encoder capacity for this setup. Table 3: Embedding model ablation ( εlower ). 
+
+Attack Yelp Open Reviews Sentiment140 Tweets MiniLM-L6 MiniLM-L12 MPNET-Base-V2 MiniLM-L6 MiniLM-L12 MPNET-Base-V2 ordinary 0.268 0.232 0.273 0.252 0.272 0.249 exact 0.371 0.357 0.387 0.363 0.341 0.245 nonce 1.049 1.105 1.087 1.052 1.088 1.078 
+
+## 4 Conclusion and Limitations 
+
+In this work, we designed a privacy auditing procedure for private evolution. Experiments show that practical attacks fall well short of worst-case theory, but (high entropy) nonce datasets bring empirical epsilon closer to theoretical epsilon. We note that designing and running a tight audit requires multiple trials, making it computationally expensive to run in production settings. In the future, we will explore design of one run auditing [Steinke et al., 2023] procedures to trade-off runtime and privacy measurement. 4References 
+
+Galen Andrew, Peter Kairouz, Sewoong Oh, Alina Oprea, H. Brendan McMahan, and Vinith M. Suriyakumar. One-shot empirical privacy estimation for federated learning. In International Conference on Learning Representations , 2024. Meenatchi Sundaram Muthu Selva Annamalai, Georgi Ganev, and Emiliano De Cristofaro. “What do you want from theory alone?” Experimenting with Tight Auditing of Differentially Private Synthetic Data Generation. In 33rd USENIX Security Symposium (USENIX Security 24) , pages 4855–4871, 2024. Graham Cormode, Samuel Maddock, Enayat Ullah, and Shripad Gade. Synthetic tabular data: Methods, attacks and defenses. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pages 5989–5998, 2025. Alec Go, Richa Bhayani, and Lei Huang. Twitter sentiment classification using distant supervision. CS224N project report, Stanford University, 2009. Sivakanth Gopi, Yin Tat Lee, and Lukas Wutschitz. Numerical composition of differential privacy. In 
+
+Advances in Neural Information Processing Systems , volume 34, pages 11631–11642, 2021. Charlie Hou, Akshat Shrivastava, Hongyuan Zhan, Rylan Conway, Trang Le, Adithya Sagar, Giulia Fanti, and Daniel Lazar. PrE-Text: Training language models on private federated data in the age of LLMs. In International Conference on Machine Learning , pages 19043–19061, 2024. Matthew Jagielski, Jonathan Ullman, and Alina Oprea. Auditing differentially private machine learning: How private is private SGD? In Advances in Neural Information Processing Systems ,volume 33, pages 22205–22216, 2020. James Jordon, Lukasz Szpruch, Florimond Houssiau, Mirko Bottarelli, Giovanni Cherubin, Carsten Maple, Samuel N. Cohen, and Adrian Weller. Synthetic data: What, why and how? arXiv preprint arXiv:2205.03257 , 2022. Commissioned by the Royal Society. Zinan Lin, Sivakanth Gopi, Janardhan Kulkarni, Harsha Nori, and Sergey Yekhanin. Differentially private synthetic data via foundation model APIs 1: Images. In International Conference on Learning Representations , 2024. Samuel Maddock, Alexandre Sablayrolles, and Pierre Stock. CANIFE: Crafting canaries for em-pirical privacy measurement in federated learning. In International Conference on Learning Representations , 2023. Matthieu Meeus, Lukas Wutschitz, Santiago Zanella-Béguelin, Shruti Tople, and Reza Shokri. The canary’s echo: Auditing privacy risks of LLM-generated synthetic text. In International Conference on Machine Learning , 2025. Milad Nasr, Jamie Hayes, Thomas Steinke, Borja Balle, Florian Tramèr, Matthew Jagielski, Nicholas Carlini, and Andreas Terzis. Tight auditing of differentially private machine learning. In 32nd USENIX Security Symposium (USENIX Security 23) , pages 1631–1648, 2023. Krishna Pillutla, Swabha Swayamdipta, Rowan Zellers, John Thickstun, Sean Welleck, Yejin Choi, and Zaid Harchaoui. MAUVE: Measuring the gap between neural text and human text using divergence frontiers. In Advances in Neural Information Processing Systems , volume 34, pages 4816–4828, 2021. Qwen Team. Qwen3-235B-A22B-Instruct-2507 model card. Hugging Face, https://huggingface. co/Qwen/Qwen3-235B-A22B-Instruct-2507 , 2025. Accessed August 13, 2026. Sentence-Transformers. all-MiniLM-L6-v2 model card. Hugging Face, https://huggingface. co/sentence-transformers/all-MiniLM-L6-v2 , 2021. Accessed August 4, 2026. Thomas Steinke, Milad Nasr, and Matthew Jagielski. Privacy auditing with one (1) train-ing run. In Advances in Neural Information Processing Systems , volume 36, pages 49268– 49280, 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/hash/ 9a6f6e0d6781d1cb8689192408946d73-Abstract-Conference.html .5Yidan Sun, Viktor Schlegel, Srinivasan Nandakumar, Iqra Zahid, Yuping Wu, Yulong Wu, Hao Li, Jie Zhang, Warren Del-Pinto, Goran Nenadic, Siew Kei Lam, and Anil Anthony Bharath. SynBench: A benchmark for differentially private text generation. arXiv preprint arXiv:2509.14594 , 2025. Florian Tramèr, Andreas Terzis, Thomas Steinke, Shuang Song, Matthew Jagielski, and Nicholas Carlini. Debugging differential privacy: A case study for privacy auditing. arXiv preprint arXiv:2202.12219 , 2022. Yuyang Xia, Ruixuan Liu, and Li Xiong. SnapAudit: Active auditing of differentially private in-context learning via snapshot-based simulation. arXiv preprint arXiv:2511.13502 , 2025. Chulin Xie, Zinan Lin, Arturs Backurs, Sivakanth Gopi, Da Yu, Huseyin A. Inan, Harsha Nori, Haotian Jiang, Huishuai Zhang, Yin Tat Lee, Bo Li, and Sergey Yekhanin. Differentially private synthetic data via foundation model APIs 2: Text. In International Conference on Machine Learning , pages 54531–54560, 2024. Yelp, Inc. Yelp open dataset. https://business.yelp.com/data/resources/ open-dataset/ , 2024. Accessed August 4, 2026. Ashkan Yousefpour, Igor Shilov, Alexandre Sablayrolles, Davide Testuggine, Karthik Prasad, Mani Malek, John Nguyen, Sayan Ghosh, Akash Bharadwaj, Jessica Zhao, Graham Cormode, and Ilya Mironov. Opacus: User-friendly differential privacy library in PyTorch. arXiv preprint arXiv:2109.12298 , 2021. Privacy in Machine Learning Workshop, NeurIPS 2021. 6A Multi-Round Private Evolution Algorithm 
+
+Algorithm A.1 presents multi-round PE independently of our experimental parameter choices. Each round computes a user-level DP histogram over the current synthetic population. If J(t) =Top ˜k(Y (t)), PE retains R(t) = {s(t) 
+
+> j
+
+: j ∈ J(t)} and constructs generation feedback F (t) from S(t)
+
+and Y (t). A public generator produces V (t) = G(F (t)), and PE sets S(t+1) = R(t) ∪ V (t). The feedback rule is method-dependent and may request paraphrases or supply positively and negatively scored ICL examples. The private data enter only through the bounded client contributions in Lines 4– 14. Subsequent selection and generation use only the DP histogram and public information, so they are post-processing. Because the candidate population evolves between rounds, the accountant must compose all T histogram releases under the declared sampling rule. 
+
+Algorithm A.1 Multi-round Private Evolution with user-level DP top-k feedback 
+
+Require: Private user datasets {Du}u∈U ; initial public population S(0) 
+
+Require: encoder ϕ and distance d; top-k rule; user cap m
+
+Require: clipping threshold C; noise multiplier σ; user sampler SampleUsers 
+
+Require: rounds T ; retention count ˜k; number of variations g; public ICL generator G 
+
+> 1:
+
+for t = 0 , . . . , T − 1 do  
+
+> 2:
+
+Let pt ← | S(t)| and publish the same ordered bank S(t) and encoder ϕ to all sampled users  
+
+> 3:
+
+B(t) ← SampleUsers (U) 
+
+> 4:
+
+for all u ∈ B(t) in parallel do  
+
+> 5:
+
+D′ 
+
+> u
+
+← CapRecords (Du, m ) and hu ← 0pt 
+
+> 6:
+
+for all x ∈ D′ 
+
+> u
+
+do  
+
+> 7:
+
+Nk(x) ← arg min  
+
+> J⊆[pt],|J|=k
+
+P 
+
+> j∈J
+
+d(ϕ(x), ϕ (s(t) 
+
+> j
+
+))  
+
+> 8:
+
+for all j ∈ Nk(x) do  
+
+> 9:
+
+hu,j ← hu,j + 1  
+
+> 10:
+
+end for  
+
+> 11:
+
+end for  
+
+> 12:
+
+¯hu ← hu/(|D′
+
+> u
+
+|k) ▷ by-vote normalization  
+
+> 13:
+
+vu ← ¯hu min {1, C/ ∥¯hu∥2} ▷ user-level clipping  
+
+> 14:
+
+Send vu to the protected aggregator  
+
+> 15:
+
+end for  
+
+> 16:
+
+Y (t) ← P 
+
+> u∈B(t)
+
+vu + Z(t), where Z(t) ∼ N (0 , (σC )2Ipt ) 
+
+> 17:
+
+J(t) ← Top ˜k(Y (t)) ▷ indices selected by the DP histogram  
+
+> 18:
+
+R(t) ← { s(t) 
+
+> j
+
+: j ∈ J(t)} ▷ retain top previous samples  
+
+> 19:
+
+F (t) ← BuildFeedback (S(t), Y (t)) ▷ e.g., paraphrases or positive/negative ICL  
+
+> 20:
+
+V (t) ← G (F (t); g) ▷ generate g new samples  
+
+> 21:
+
+S(t+1) ← R(t) ∪ V (t) ▷ retain and append  
+
+> 22:
+
+end for  
+
+> 23:
+
+return S(T ) ▷ evolved synthetic population 
+
+## B Attack Variant Details 
+
+All variants preserve one ordered bank shared by every participating user. Active variants reserve an ordered list of r = 64 replacement positions before selection. Let Sbase be the original bank after removing those positions. If probe jt is selected in round t, it is assigned to replacement position t;the completed bank is then frozen before membership trials. Canary, auxiliary, and final-test users are disjoint: canary records define the desired signal, auxiliary users estimate background traffic for probe selection, and final-test users only evaluate the frozen attack. 
+
+Candidate pools. Each paraphrase or nonce attack begins with an indexed pool Q = {c1, . . . , c M }
+
+of M = 512 candidate probes and injects r = 64 . The paraphrase pool contains non-verbatim rewrites generated across the 64 real-canary records. The nonce pool contains fresh high-entropy strings generated independently of natural text and of the synthetic nonce canary. The unoptimized variants choose 64 probes directly; the norm and μeff variants use the greedy procedure in Algorithm B.1. 7Trial-set routing and scores. For a trial index set P , define S(P ) = Sbase ∪ { cj : j ∈ P }. For each of the 64 canary records, we recompute its five nearest entries in S(P ). It is sufficient to merge the trial probes with that record’s five nearest entries in Sbase : no lower-ranked base entry can enter the final top five. Let wP be the resulting vector of probe-vote counts divided by the canary’s 
+
+64 × 5 = 320 total votes. The two optimized attacks differ only in the scalar score 
+
+Jnorm (P ) = ∥wP ∥22, Jμeff (P ) = w⊤ 
+
+> P
+
+bΣ−1 
+
+> P
+
+wP , (6) Before selection, we estimate a covariance bΣQ over the full 512-candidate pool from the fixed auxiliary-user split and freeze it. A trial set P uses the corresponding principal submatrix bΣP =[bΣQ]P,P . Thus the matrix used by the score changes with the selected coordinates, but it is not re-estimated from auxiliary users at every step. Norm rewards concentrated canary votes, while 
+
+μeff discounts probe coordinates that also receive background-user votes. The mechanism’s full-vector clipping is still applied when the frozen bank is audited. Appendix D gives the estimator and shrinkage coefficient. In Algorithm B.1, ProbeVotes (S(P ), D can , k ) denotes the full re-routing operation above and returns the normalized vector wP . It recomputes all 64 canary records rather than updating the previous round’s counts. 
+
+Why forward selection is necessary. Probes compete for the same top-5 votes. Adding a closer probe can take a vote from an already selected probe, so the value of a probe depends on the rest of the selected set. Ranking all 512 candidates independently and taking the top 64 is therefore incorrect. At round t, the algorithm adds each remaining candidate to the t − 1 selected probes, recomputes all canary routes and the complete score, and commits the best trial set. Exact score ties are resolved by the lowest pool index for both objectives. This deterministic rule prevents arbitrary ties from creating a false difference between nonce-norm and nonce-μeff when their objectives are equivalent. 
+
+Algorithm B.1 Greedy construction of norm and μeff probe sets 
+
+Require: Non-probe bank Sbase ; indexed pool Q = {cj }Mj=1 with M = 512 
+
+Require: Canary records Dcan with m = 64 ; auxiliary users Daux ; k = 5 ; budget r = 64 
+
+Require: Objective o ∈ { norm , μ eff }; ordered replacement positions (ρ1, . . . , ρ r ) 
+
+> 1:
+
+P ← ∅  
+
+> 2:
+
+if o = μeff then  
+
+> 3:
+
+bΣQ ← AuxCovariance (Q, D aux ) ▷ estimate once and freeze  
+
+> 4:
+
+end if  
+
+> 5:
+
+for t = 1 , . . . , r do  
+
+> 6:
+
+for all j ∈ [M ] \ P do  
+
+> 7:
+
+T ← P ∪ { j} 
+
+> 8:
+
+wT ← ProbeVotes (S(T ), D can , k ) ▷ recompute all top-k routes  
+
+> 9:
+
+if o = norm then  
+
+> 10:
+
+sj ← ∥ wT ∥22 
+
+> 11:
+
+else  
+
+> 12:
+
+bΣT ← [bΣQ]T,T  
+
+> 13:
+
+sj ← w⊤ 
+
+> T
+
+bΣ−1 
+
+> T
+
+wT 
+
+> 14:
+
+end if  
+
+> 15:
+
+end for  
+
+> 16:
+
+jt ← min  arg max j∈[M ]\P sj
+
+ ▷ lowest-index tie break  
+
+> 17:
+
+P ← P ∪ { jt} 
+
+> 18:
+
+end for  
+
+> 19:
+
+Insert cjt at position ρt for t = 1 , . . . , r and freeze the ordered bank  
+
+> 20:
+
+return frozen bank and selected sequence (j1, . . . , j r )
+
+Ordinary. This passive baseline randomly selects a real canary user and leaves the candidate bank unchanged. The audit observes the histogram coordinates on which the canary naturally votes under the original top-k routing. It measures how distinguishable the canary is without adding probes or otherwise adapting the bank to that user. 8Exact. This variant uses the same randomly selected real user and injects one exact copy of each of its 64 records. Each copied record is at zero embedding distance from its source. 
+
+Paraphrase. From the 512-item paraphrase pool, this unoptimized semantic baseline selects 64 probes spread across the canary’s records rather than concentrating on a few records. It uses no norm or background-aware score. 
+
+Paraphrase-norm. This variant applies Algorithm B.1 to the 512-paraphrase pool using Jnorm . It favors sets on which canary votes have high magnitude and are concentrated on relatively few probes, without accounting for background traffic. 
+
+Paraphrase-μeff . This primary realistic attack runs the same algorithm and pool with Jμeff . Its frozen pool covariance comes only from auxiliary users, and each trial uses the submatrix for its selected coordinates; no final-test user influences selection. It favors paraphrases that attract the canary but lie on coordinates with little or uncorrelated background traffic. 
+
+Nonce. This calibration constructs a synthetic canary from 64 fresh, high-entropy nonce records and independently generates the 512-item nonce probe pool. It injects 64 pool entries selected uniformly without replacement. These are independent audit markers, not hashes of private records; they place signal where natural users are unlikely to vote and approximate the mechanism ceiling. 
+
+Nonce-norm. This variant applies Algorithm B.1 to the 512-nonce pool using Jnorm . It estimates the mechanism ceiling when selection explicitly maximizes the magnitude and concentration of nonce-canary votes without background covariance. 
+
+Nonce-μeff . This variant runs the same nonce search with Jμeff . If nonce strings separate cleanly from natural text, bΣP is approximately isotropic and the selected sequence should match nonce-norm, including under ties. If natural users collide with nonce probes, the objective preserves canary votes while avoiding those background directions. 
+
+## C Complete Results 
+
+Bank A is generated by Qwen3-235B-A22B-Instruct-2507 using label-only prompts. Bank B uses the same generator with three public in-context examples, yielding candidates that are better matched to the private-user distribution. Table 4 reports both candidate-bank arms for each dataset. Table 4: εlower for two datasets and two candidate-bank arms. Each entry is the maximum over five canaries with α = 0 .05 , each evaluated at α/ 5 = 0 .01 and 1M trials per hypothesis; εtheory = 1 .695 .                                    
+
+> Attack variant Yelp A Yelp B Sentiment140 A Sentiment140 B ordinary 0.247 0.295 0.475 0.429 exact 0.313 0.304 0.363 0.587 paraphrase 0.276 0.297 0.599 0.759 paraphrase-norm 0.316 0.457 0.327 0.871 paraphrase-μeff 0.560 0.439 0.682 0.932 nonce 1.038 1.047 1.018 1.014 nonce-norm 1.110 1.120 1.088 1.063
+> nonce-μeff 1.110 0.958 1.086 0.977
+
+## D Hyperparameter settings 
+
+Users and record cap. All experiments cap each user at m = 64 records. Yelp admits users with exactly 64 records, whereas Sentiment140 admits users with 32–64 records. The single-release experiments use an eligible non-canary population of N = 1 ,000 users and q = 0 .1 unless swept, giving 100 expected participants per release. We use 500 disjoint auxiliary users to design probes and estimate non-canary moments, 500 calibration users to lock the threshold, and the N = 1 ,000 
+
+final-test users only for evaluation. 9Trial budgets. Table 2 and Table 4 use 1M trials per hypothesis. Figure 1 uses 5M trials per hypothesis because small noise multipliers separate the hypotheses more strongly, making errors at the selected tail threshold rare; the larger budget stabilizes the Clopper–Pearson bounds. The multi-round audit also uses 5M trials per hypothesis. 
+
+Multi-round accounting. Figure 2 composes T = 6 Poisson-sampled releases on Yelp with 
+
+q = 0 .1, σ = 1 .1088 , δ = 10 −5, N = 8 ,000 eligible test users, and 500 auxiliary users. For each prefix t, a fresh Opacus PRVAccountant is stepped once per release with the same sampling rate and noise multiplier, then queried at δ = 10 −5. This gives εtheory = 1 .345 , 1.540 , 1.682 , 1.800 , 1.905 ,
+
+and 2.000 after releases one through six, respectively. The empirical audit composes the same prefixes by summing their mixture log-likelihood ratios. 
+
+## E Additional Mathematical Details 
+
+This appendix supplies derivations omitted from the main text. In particular, it distinguishes the absent-canary, fixed-inclusion, and hidden-participation distributions; derives the Gaussian and mixture likelihood ratios; records the distribution of the resulting score; and connects the final hypothesis test to a confidence-bounded empirical privacy lower bound. These derivations do not change the audit mechanism or its assumptions. 
+
+E.1 Background aggregate and its moments 
+
+Let P denote the histogram coordinates inspected by the audit. Write the contribution of non-canary user u, restricted to these coordinates, as 
+
+cu = vu,P .
+
+For a fixed eligible population of N non-canary users, define the background aggregate 
+
+B =
+
+> N
+
+X
+
+> u=1
+
+Iucu + ZP , Iu
+
+> ind
+
+∼ Bernoulli( q), ZP ∼ N  0, (σC )2I . (7) The user vectors cu are fixed after the candidate bank, routing rule, and clipping operation have been frozen. Randomness comes from user sampling and Gaussian DP noise. Since E[Iu] = q, the absent-canary mean is 
+
+m0 := E[B] = q
+
+> N
+
+X
+
+> u=1
+
+cu. (8) For a fixed vector cu,
+
+Cov( Iucu) = Var( Iu)cuc⊤ 
+
+> u
+
+= q(1 − q)cuc⊤ 
+
+> u
+
+.
+
+Independence therefore gives 
+
+Σ := Cov( B) = q(1 − q)
+
+> N
+
+X
+
+> u=1
+
+cuc⊤ 
+
+> u
+
++ ( σC )2I. (9) The off-diagonal entries capture correlated voting: one user may contribute to several inspected coordinates simultaneously. 
+
+E.2 Three cases 
+
+Let 
+
+v = vcan ,P 
+
+be the known canary contribution on the inspected coordinates. Because the bank and canary records are fixed before the trial, v is a deterministic vector. Case Released vector Mean Covariance Canary absent B m0 Σ
+
+Canary sampled B + v m0 + v Σ
+
+Canary eligible B + Jv m0 + qv Σ + q(1 − q)vv ⊤
+
+10 Here J ∼ Bernoulli( q) is the canary’s sampling indicator, independent of B.The covariance is the same under absence and fixed inclusion because adding a deterministic vector changes only the mean: 
+
+Cov( B + v) = E
+
+h B + v − (m0 + v)  B + v − (m0 + v)⊤i
+
+= E(B − m0)( B − m0)⊤
+
+= Σ . (10) In contrast, the full eligible-canary hypothesis contains the random term Jv :
+
+Cov( B + Jv ) = Cov( B) + Cov( Jv )= Σ + q(1 − q)vv ⊤. (11) Thus the full alternative does not have the same covariance as the null. It is a mixture of the absent and fixed-inclusion distributions. Independent Bernoulli sampling is important for this argument. Adding an eligible canary does not displace an ordinary user, so the background distribution remains unchanged. Under fixed-size sampling without replacement, conditioning on canary inclusion could change the distribution of the remaining sampled users. 
+
+E.3 Gaussian approximation and fixed-inclusion likelihood ratio 
+
+The background is a Bernoulli-weighted sum of user vectors convolved with Gaussian noise. The audit approximates it by 
+
+B ≈ N (m0, Σ) .
+
+Consequently, the absent and fixed-inclusion component distributions are 
+
+H0 : Y ≈ N (m0, Σ) , (12) 
+
+Hinc : Y ≈ N (m0 + v, Σ) . (13) The equality of the component covariances is exact; their Gaussian shape is the approximation. The fixed-inclusion log-likelihood ratio is 
+
+ℓ(y) := log pinc (y)
+
+p0(y) .
+
+Using the two Gaussian densities, 
+
+ℓ(y) = − 12
+
+(y − m0 − v)⊤Σ−1(y − m0 − v) − (y − m0)⊤Σ−1(y − m0) .
+
+Expanding the first quadratic form gives 
+
+(y − m0 − v)⊤Σ−1(y − m0 − v) = ( y − m0)⊤Σ−1(y − m0)
+
+− 2v⊤Σ−1(y − m0) + v⊤Σ−1v. 
+
+The shared quadratic term cancels, leaving 
+
+ℓ(y) = v⊤Σ−1(y − m0) − 12 v⊤Σ−1v = v⊤Σ−1 
+
+y − m0 − v
+
+2
+
+
+
+. (14) The score is linear in y precisely because the two Gaussian components have equal covariance. 
+
+E.4 Whitening and effective separation 
+
+Define 
+
+x = Σ −1/2(y − m0), s = Σ −1/2v. 
+
+In whitened coordinates, 
+
+H0 : x ∼ N (0 , I ), Hinc : x ∼ N (s, I ),
+
+11 and 
+
+ℓ(x) = s⊤x − 12 ∥s∥22.
+
+The distance between the component means is 
+
+μeff = ∥s∥2 = √v⊤Σ−1v. (15) This is the Mahalanobis signal-to-noise ratio. Directions with large background variance receive less weight, while signal on quiet coordinates receives more weight. Writing d = μeff , the score distributions are 
+
+ℓ(Y ) | H0 ∼ N 
+
+
+
+− d2
+
+2 , d 2
+
+
+
+, (16) 
+
+ℓ(Y ) | Hinc ∼ N 
+
+
+
++ d2
+
+2 , d 2
+
+
+
+. (17) At threshold a,
+
+FPR( a) = 1 − Φ
+
+ a + d2/2
+
+d
+
+
+
+, (18) 
+
+TPR inc (a) = 1 − Φ
+
+ a − d2/2
+
+d
+
+
+
+. (19) At the equal-prior threshold a = 0 ,
+
+FPR = Φ( −d/ 2) , TPR inc = Φ( d/ 2) .
+
+Because 
+
+Σ ⪰ (σC )2I and ∥v∥2 ≤ C, 
+
+the conditional Gaussian separation satisfies 
+
+μ2eff = v⊤Σ−1v ≤ ∥v∥22
+
+(σC )2 ≤ 1
+
+σ2 . (20) This is a ceiling on component separation, not directly an (ε, δ )-DP formula. 
+
+E.5 Hidden participation and the mixture likelihood ratio 
+
+Under the actual alternative, the canary is eligible but is sampled only with probability q. Therefore 
+
+p1(y) = (1 − q)p0(y) + q p inc (y). (21) Dividing by p0(y) and using pinc (y)/p 0(y) = eℓ(y) gives 
+
+ℓmix (y) := log p1(y)
+
+p0(y) = log 
+
+h
+
+(1 − q) + qe ℓ(y)i
+
+. (22) This expression explicitly preserves the mixture; it does not approximate full H1 as a single Gaussian. The identity is exact if ℓ is the true component likelihood ratio. In the audit, it inherits the Gaussian approximation used to obtain Equation (14). For q > 0,
+
+dℓ mix 
+
+dℓ = qe ℓ
+
+(1 − q) + qe ℓ > 0.
+
+Hence ℓ and ℓmix rank observations identically for a single release, although only ℓmix is the likelihood-ratio value for the eligible-canary hypothesis. For any fixed threshold event, 
+
+TPR = (1 − q) FPR + q TPR inc , (23) and therefore 
+
+TPR − FPR = q (TPR inc − FPR) .
+
+This equation makes the effect of user subsampling explicit: only a fraction q of eligible-canary trials contain the canary’s signal. 12 E.6 From test errors to an empirical privacy lower bound 
+
+Let A be the event that the frozen audit predicts that the canary is present. Define 
+
+TPR = PH1 (A), FPR = PH0 (A),
+
+and, for the complementary event, 
+
+TNR = PH0 (Ac), FNR = PH1 (Ac).
+
+For neighboring user-level datasets, (ε, δ )-DP requires 
+
+PH1 (A) ≤ eεPH0 (A) + δ, (24) 
+
+PH0 (Ac) ≤ eεPH1 (Ac) + δ. (25) Substitution and rearrangement yield 
+
+ε ≥ log TPR −δ
+
+FPR , (26) 
+
+ε ≥ log TNR −δ
+
+FNR . (27) The rates are estimated from finitely many final-evaluation trials. Let TPR L and TNR L denote one-sided lower confidence bounds, and let FPR U and FNR U denote one-sided upper confidence bounds. A conservative empirical privacy lower bound is 
+
+εlower = max 
+
+
+
+0, log TPR L −δ
+
+FPR U
+
+, log TNR L −δ
+
+FNR U
+
+
+
+. (28) A branch whose lower-confidence numerator is at most δ supplies no positive bound. For x successes among n Bernoulli trials, the one-sided Clopper–Pearson endpoints at tail probability 
+
+γ are 
+
+pL =
+
+(
+
+0, x = 0 ,F −1Beta( x,n −x+1) (γ), x > 0, (29) 
+
+pU =
+
+(
+
+1, x = n, F −1Beta( x+1 ,n −x)(1 − γ), x < n. (30) With overall α = 0 .05 , five canaries per predeclared attack, and four one-sided rate bounds per canary, the audit uses 
+
+γ = 0.05 5 · 4 = 0 .0025 .
+
+The calibration split is independent of final evaluation so that the event A, including its threshold, is frozen before the final confusion counts are observed. 
+
+E.7 Auxiliary moment estimation 
+
+For naux auxiliary users with clipped contributions cu on the inspected coordinates, define 
+
+bμP = 1
+
+naux 
+
+> naux
+
+X
+
+> u=1
+
+cu, (31) 
+
+cMP = 1
+
+naux 
+
+> naux
+
+X
+
+> u=1
+
+cuc⊤ 
+
+> u
+
+. (32) The second quantity is an uncentered second moment, rather than a sample covariance, because Bernoulli participation contributes 
+
+Cov( Iucu) = q(1 − q)cuc⊤ 
+
+> u
+
+.
+
+13 Because naux is finite, off-diagonal entries of cMP can be noisy. We therefore use diagonal shrinkage 
+
+shrink 0.1( cMP ) = 0 .9 cMP + 0 .1 diag(diag( cMP )) , (33) which preserves each diagonal second moment and multiplies the estimated off-diagonal terms by 
+
+0.9. The plug-in estimators thus used by the audit are 
+
+bm0 = qN bμP , (34) 
+
+bΣP = q(1 − q)N shrink 0.1( cMP ) + ( σC )2I + 10 −9I, (35) The term (σC )2I is the covariance of the Gaussian DP noise already present in the released histogram; no noise is added to the public auxiliary data. The final 10 −9I term is only a numerical ridge for stable inversion. 
+
+E.8 Conditional composition across rounds 
+
+When the candidate bank evolves across rounds, the joint transcript likelihood ratio follows the chain rule 
+
+log p1(y1: T )
+
+p0(y1: T ) =
+
+> T
+
+X
+
+> t=1
+
+log p1(y(t) | y(<t ))
+
+p0(y(t) | y(<t )) . (36) Thus per-round mixture scores may be summed when each score is the appropriate conditional likelihood ratio given the realized earlier transcript. Summing unconditional marginal likelihood ratios would not generally be correct for an adaptive candidate-bank process. Formal DP accounting remains valid under adaptive composition because candidate retention and public generation are post-processing, while every new private histogram is separately composed. 14
