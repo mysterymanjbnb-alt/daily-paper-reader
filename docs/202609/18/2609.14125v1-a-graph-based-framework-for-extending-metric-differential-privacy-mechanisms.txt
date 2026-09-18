@@ -1,0 +1,2288 @@
+Title: A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms
+
+URL Source: https://arxiv.org/pdf/2609.14125v1
+
+Published Time: Tue, 15 Sep 2026 00:57:11 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms 
+
+# Ruiyao Liu 
+
+University of North Texas Denton, Texas, USA RuiyaoLiu@my.unt.edu 
+
+# Chenxi Qiu ∗
+
+University of North Texas Denton, Texas, USA chenxi.qiu@unt.edu 
+
+## Abstract 
+
+Metric differential privacy (mDP) is well suited to structured secret domains, but directly constructing utility-aware mechanisms over large or fine-grained domains is often computationally prohibitive. We study extension-based mDP design, where a mechanism is first specified on a finite set of seed records and then extended to a larger target domain. To our knowledge, this is the first work to systematically formulate extension as a general design paradigm for mDP rather than a method-specific construction. We present a graph-based extension framework, identify three requirements for correctness, local mDP constraints , overlap consistency , and successor-level mDP preservation , and show that, under these conditions, the induced global mechanism is well defined and satisfies 𝜖 -mDP on the target domain. We further instantiate the framework with a tree-based extension algorithm for multi-resolution grids, where multi-dimensional extension is realized through one-dimensional interpolation and dimension-wise composition. Experiments on road-map datasets demonstrate that our approach achieves a strong utility-scalability trade-off while preserving exact mDP guarantees. 
+
+## CCS Concepts 
+
+• Security and privacy Ñ Formal security models .
+
+## Keywords 
+
+Metric differential privacy, extension algorithm 
+
+ACM Reference Format: 
+
+Ruiyao Liu and Chenxi Qiu. 2018. A Graph-Based Framework for Extend-ing Metric Differential Privacy Mechanisms. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 27 pages. https: //doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Metric differential privacy (mDP) [2] generalizes differential privacy (DP) to domains equipped with a meaningful distance metric. Rather than requiring a uniform privacy level for all pairs of secrets, mDP 
+
+> ∗Chenxi Qiu is the corresponding author. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> © 2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+calibrates indistinguishability according to their distance, requiring stronger protection for nearby records and allowing greater distin-guishability as records become farther apart. This makes mDP par-ticularly suitable for structured domains such as geo-locations [18], text embeddings [10], and images [8], where a metric can capture application-specific similarity among secrets. Beyond mDP, feder-ated analytics has also been studied for privacy-preserving image classification [11]. In domains lacking such a metric, the benefits of mDP over standard DP formulations are less evident. Accordingly, this work focuses on structured domains in which similarity among secrets can be characterized by a meaningful metric. Existing mDP mechanisms can be broadly divided into distance-based [2, 7] and optimization-based designs [3, 18]. Distance-based mechanisms directly determine perturbation probabilities using a predefined function of the distance between the input and output. Although simple and broadly applicable, such mechanisms may not optimize application-specific utility because the privacy metric does not necessarily capture all relevant utility factors. For example, in fine-grained location privacy, spatial distance can define the mDP privacy metric, while utility may additionally depend on road-network connectivity, travel distance, task-assignment quality, or downstream service requirements [18]. To improve the privacy–utility trade-off, another line of work [3, 18] has developed optimization-based mechanisms that explicitly compute perturbation probabilities under mDP constraints. These methods typically formulate mechanism design as a constrained op-timization problem, where the decision variables are the conditional reporting probabilities, the objective minimizes expected utility loss, and the constraints enforce mDP and valid probability distributions. This formulation can incorporate prior distributions, heterogeneous utility costs, and downstream task requirements rather than relying on a fixed distance-decay rule. However, optimization-based mech-anisms introduce substantial computational overhead because they must optimize a reporting probability for every input–output pair and enforce privacy constraints between every pair of secrets for each possible output. As the domain grows, the number of variables increases quadratically, while the number of privacy constraints can increase cubically [18]. Direct optimization over the full target domain therefore becomes computationally prohibitive for large or finely discretized domains [12]. Existing approaches improve the scalability of optimization-based mDP mechanisms through domain decomposition [15, 18] or localized mechanism construction [14, 20]. Although these ap-proaches reduce the size of individual optimization problems, they still rely on centralized or overlapping local optimizations whose arXiv:2609.14125v1 [cs.CR] 12 Sep 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+computational cost increases with domain resolution. Extension-based design [16] provides an alternative by optimizing perturba-tion distributions over a small seed domain and extending them to the remaining records through efficient local operations. However, existing methods are limited to specific one-stage interpolation schemes and lack general correctness conditions for multi-stage, branching, or hierarchical extensions. This gap motivates our graph-based framework. Section 2 (related work) provides a detailed com-parison of these approaches. 
+
+## Our Contributions 
+
+Contribution 1: A general framework for extending mDP mechanisms. We develop a graph-based framework for construct-ing an mDP mechanism over a large domain from a mechanism optimized over a much smaller set of seed records. The framework is not tied to a specific extension algorithm; rather, it formalizes a broad class of constructions in which the seed mechanism is extended to a larger target domain through local operations. The graph provides a unified way to organize these operations and supports sequential, parallel, and hierarchical constructions. Within this framework, we identify three conditions that, when satisfied jointly, are necessary and sufficient to ensure that the local constructions provide the required privacy protection, agree on shared records, and preserve privacy across multiple extension stages. We formally prove in Theorem 1 that any construction jointly satisfying these conditions forms a well-defined mDP mech-anism over the full target domain. The framework therefore pro-vides a reusable foundation for designing and verifying scalable extension-based mechanisms. 
+
+Contribution 2: A tree-based extension algorithm for fine-grained ℓ𝑝 -metric domains. We instantiate the general frame-work with a tree-based algorithm for hierarchical grid domains. Starting from perturbation distributions optimized over a coarse set of seed records, the algorithm recursively constructs distribu-tions for finer-grid records through efficient local interpolation. It thereby replaces costly full-domain optimization with a smaller seed-level optimization followed by inexpensive extension steps. The interpolation and hierarchical extension procedures jointly satisfy the conditions established by the general framework. For two-dimensional domains, the algorithm performs interpolation along one coordinate at a time, with the resulting privacy guar-antees composing under commonly used ℓ𝑝 metrics. We prove in 
+
+Theorem 4 that the resulting mechanism satisfies mDP over the complete fine-grained target domain. 
+
+Contribution 3: Empirical validation on large location do-mains. We evaluate the proposed tree-based construction on loca-tion domains derived from the Rome, New York City, and London road networks [1] across different domain resolutions, seed densi-ties, and privacy budgets. Comparisons with representative mDP mechanisms show that our methods generally provide favorable utility and scalability while exhibiting no empirical mDP violations in the tested settings. Additional experiments demonstrate how seed density can be adjusted to balance utility and computational cost, supporting both the practical effectiveness and theoretical guarantees of the proposed construction. The remainder of this paper is organized as follows. Section 2 reviews related work on mDP mechanism design and its scalability. Section 3 introduces the background on mDP and optimization-based mechanism design and formalizes the extension problem. Section 4 presents the general extension framework and its correct-ness conditions. Section 5 develops the tree-based instantiation for 
+
+ℓ𝑝 -metric domains. Section 6 presents the empirical evaluation, and Section 7 concludes the paper. 
+
+## 2 Related Work 
+
+Predefined distance-based mechanisms. Since the introduction of mDP [5], extensive work has studied mechanisms that enforce distance-dependent privacy guarantees. A common approach speci-fies a noise distribution whose probabilities decay with the distance between the input and output. Representative examples include the planar Laplace mechanism [2] for ℓ2 geo-indistinguishability and the exponential mechanism [7], which favors outputs closer to the true input. Their analytical forms enable efficient construction over continuous or fine-grained domains. However, this efficiency comes at the cost of flexibility, as fixed distributions generally can-not incorporate heterogeneous utility costs, prior distributions, or application-specific downstream objectives. 
+
+Utility-aware optimization. To overcome the limited flex-ibility of predefined noise distributions, optimization-based ap-proaches directly optimize perturbation probabilities under mDP constraints [3]. By incorporating data priors, heterogeneous utility costs, domain geometry, and application-specific requirements into the objective, these methods can achieve favorable privacy–utility trade-offs on relatively small domains [3, 22–24]. However, their scalability is limited by the size of the resulting optimization problem. For a secret domain X and output domain Y,a direct formulation contains |X|| Y| decision variables and up to 
+
+𝑂 p| X|2|Y|q privacy constraints. When Y “ X, these quantities be-come 𝑂 p| X|2q and 𝑂 p| X|3q, respectively. Consequently, full-domain optimization becomes computationally prohibitive as the domain grows or is discretized more finely. 
+
+Scalable optimization-based mechanism design. The scalabil-ity bottleneck of full-domain optimization has motivated methods that reduce the size, scope, or number of optimization problems. One direction combines predefined mechanisms with restricted optimization or post-processing. For example, Bayesian remap-ping [6] improves the utility of an existing mechanism through post-processing, while ConstOPT [12] restricts the optimization struc-ture. Although these hybrid approaches reduce computation, they remain tied to predefined noise structures or may still incur substan-tial overhead on fine-grained domains. Other approaches exploit the structure of the secret domain to improve scalability. Table 1 com-pares three representative categories in terms of their optimization scope, construction strategy, and reported evaluation scale. 
+
+Decomposition-based methods partition the original problem by grouping locations, exploiting graph structure, or separating inde-pendent feature blocks [12, 15, 17, 18]. By solving smaller subprob-lems, they retain the flexibility of utility-aware optimization while reducing the cost of each optimization. However, the number or size of these subproblems generally increases with domain resolution, limiting scalability on large, fine-grained domains. A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 1: Comparison of scalable optimization-based mDP mechanism designs.                
+
+> Approach Optimized domain Construction strategy Number of secret records Decomposition-based [15, 17] Original secret domain XSolve centralized optimization subproblems and combine their results Approximately 1 ,000 Localized [14, 20] User-, region-, or anchor-specific domain rXĂX
+> Construct multiple smaller local mechanisms and coordinate their outputs 2,500–6 ,000 Extension-based [16] Seed domain Xseed ĂXtar Optimize a seed mechanism and extend it to the target domain 40 ,000–130 ,000
+> The reported domain sizes are taken from the corresponding studies and are intended to indicate the demonstrated scale of each approach, rather than a controlled runtime comparison across different experimental environments.
+
+Localized mechanism-design methods construct smaller user- or anchor-specific mechanisms. Locally relevant geo-obfuscation [20] optimizes over subsets of locations relevant to particular users or regions, whereas PAnDA [14] uses anchor-based approximation to reduce the optimization size. If rX denotes a local domain, these methods reduce each optimization from the full domain X to rX,where | rX| ! | X|. However, overlapping local domains and inde-pendently constructed mechanisms require careful coordination to maintain compatibility with the global metric and preserve mDP. 
+
+Extension-based methods optimize a mechanism over a small seed domain and generate distributions for the remaining records through efficient local operations, thereby avoiding repeated or full-domain optimization. Existing work [16] uses coordinate-wise log-convex interpolation to extend a core mechanism to fine-grained records, supporting substantially larger target domains while re-taining utility-aware optimization over the core domain. However, the existing method is limited to a specific one-stage interpolation scheme and does not establish general correctness conditions for multi-stage, branching, or hierarchical extensions. In these settings, generated records may support subsequent exten-sions, and multiple local extension paths must be integrated into a globally valid mechanism. Our work addresses this gap through a graph-based framework that establishes necessary and sufficient conditions for preserving mDP under general multi-stage exten-sions and a tree-based algorithm that instantiates these conditions for hierarchical grid domains. 
+
+## 3 Preliminary 
+
+In this section, we review the preliminaries of mDP. For conve-nience, we summarize the main notation used throughout the paper in Table 6 in Appendix A .
+
+Threat model. We let X denote the input domain (i.e., the set of possible secret records) and Y denote the output domain (i.e., the set of values real records can be mapped to by perturbation mechanisms). A perturbation mechanism is defined as a randomized mapping M : X Ñ Y. To capture record similarity, we equip X
+
+with a distance function 𝑑 : X ˆ X Ñ Rě0 that quantifies pairwise dissimilarity, e.g., geographic distance for locations, embedding-based distances for categorical values, or application-defined se-mantic distances. Let the random variable 𝑋 denote the true input record drawn from X.A perturbation mechanism is defined as a randomized map-ping M : X Ñ Y. For the discrete output domain Y, we write 
+
+Mpy | xq :“ Pr rMpxq “ ys for the conditional probability mass of output y given input x; accordingly, Mp¨ | xq denotes the output distribution induced by x.We consider a local deployment of an mDP mechanism, analo-gous to the standard LDP setting [22]. The server is untrusted: it knows the perturbation mechanism M, may have a prior distribu-tion over the true data 𝑋 , and may attempt to infer an individual’s sensitive input from the received perturbed report. In particular, given an observed output 𝑦 , the prior, and knowledge of M, the server can compute a posterior belief over 𝑋 via Bayes’ rule [24]. This captures realistic deployments in which the data collector is incentivized to analyze collected records and therefore cannot be fully trusted from a privacy standpoint. Each user faithfully ap-plies the fixed mechanism M locally before transmission, so the server observes only the perturbed report and does not control the client-side randomization. The server may perform arbitrary com-putations on the report or deviate from any prescribed downstream analysis; by the post-processing property, such actions alone cannot degrade the report’s formal mDP guarantee. 
+
+Formal definition of mDP . LDP requires data perturbation to maintain a uniform level of indistinguishability between users’ data [9]. mDP generalizes this concept by tying the privacy guar-antee to a distance over the input space: nearby inputs should be harder to distinguish than far-apart ones. Originally proposed for location privacy [2], mDP has been naturally extended to high-dimensional domains such as text embedding [10] and image data protection [8]. 
+
+Definition 1 (Lipschitz bound and continuity [16]) . Define a func-tion 𝑓 : X Ñ R. We say 𝑓 satisfies an p𝜖, 𝑑 𝑝 q-Lipschitz bound 
+
+between x, x1 P X if 
+
+|𝑓 pxq ´ 𝑓 px1q| ď 𝜖 𝑑 px, x1q. (1) 
+
+We say 𝑓 is p𝜖, 𝑑 q-Lipschitz continuous if the bound in (1) holds for all x, x1 P X.
+
+Definition 2 (p𝜖, 𝑑 q-mDP [2]) . Let Y be a measurable output space. A randomized mechanism M : X Ñ Y satisfies p𝜖, 𝑑 q-mDP if, for all x, x1 P X and every measurable set S Ď Y,
+
+Pr rMpxq P Ss ď exp `𝜖𝑑 px, x1q˘ Pr “Mpx1q P S‰ . (2) When Y is countable, Definition 2 is equivalently expressed as Pr rMpxq “ ys ď exp `𝜖𝑑 px, x1q˘ Pr rMpx1q “ ys (3) for every y P Y. When both probability masses are positive, this is equivalent to the log-Lipschitz formulation. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+In the remainder of this paper, we consider a finite discrete output domain Y. We therefore use Mpy | xq :“ Pr rMpxq “ ys to denote the conditional probability mass of output y given input x, and use 
+
+Mp¨ | xq to denote the corresponding output distribution. For sim-plicity, we use Mpxq 𝜖 
+
+« Mpx1q to represent that Eq. (2) is satisfied. Intuitively, mDP ensures that small changes in the input x of the perturbation method M result in bounded changes in the distribu-tion of the output Mpxq, thus providing privacy guarantees in the corresponding distance metric space. A lower 𝜖 signifies a tighter bound, meaning less information can be inferred about the secret input x from the released output Mpxq. Additionally, to distinguish the privacy model from the form of the privacy guarantee, Table 7 in Appendix C compares conventional central DP, LDP, and mDP. Although we use metric terminology throughout, the general extension framework also applies to pseudometrics. If distinct se-crets x, x1 P X satisfy 𝑑 px, x1q “ 0, Definition 2, applied in both directions, requires Pr rMpxq P Ss “ Pr rMpx1q P Ss for every measurable S Ď Y. Thus, the seed mechanism and subsequent extensions must assign identical output distributions to secrets in the same zero-distance equivalence class. 
+
+## 4 Graph-Based Extension Framework 
+
+In this section, we present a general graph-based framework for extending perturbation mechanisms from a finite seed set Xseed to a larger target set Xtar . We first formulate the problem in §4.1 , then define the extension graph in §4.2 , and finally present extension algorithms and necessary and sufficient conditions for correctness in §4.3 . This framework provides the foundation for the tree-based construction developed in the next section. 
+
+Motivating example: why one-stage extension is insufficient. 
+
+Consider a multi-resolution grid where perturbation distributions are specified only on coarse seed records, while the target domain is finer. A one-stage extension constructs all target distributions directly from the seed mechanism, either globally or through par-allel local steps. However, the generated distributions are treated as final and cannot be further propagated, making such schemes unsuitable for recursive or hierarchical extensions across multiple resolutions. To address this limitation, we introduce a multi-stage procedure in which mechanisms generated at one stage can serve as inputs to subsequent stages until Xtar is covered. This supports sequential, parallel, and hierarchical extension within a unified framework. However, locally valid extensions do not automatically guarantee global mDP: different regions may not be jointly constrained, over-lapping regions may assign inconsistent distributions, and earlier privacy relations may not be preserved. Additional consistency conditions are therefore required. 
+
+Graph-based representation. To formalize mechanism propaga-tion across multiple stages, we represent the extension procedure as a directed acyclic graph (DAG) . Each node corresponds to a lo-cal record region, and each directed edge represents an extension step that constructs a mechanism on a successor region from one defined on its predecessor. Directed paths capture sequential exten-sion, multiple successors capture parallel extension, and multiple graph levels capture recursive or hierarchical extension. This rep-resentation provides a systematic way to specify local conditions on extension steps, overlapping regions, and successive stages, and to characterize when they yield a globally valid mDP mechanism. 
+
+## 4.1 Problem Formulation 
+
+Let Xseed Ď Xtar denote, respectively, the seed and target secret domains, and let Y denote the output domain. Suppose that an 
+
+p𝜖, 𝑑 q-mDP seed mechanism Mseed : Xseed Ñ Y has already been constructed. The goal of mechanism extension is to construct a target mechanism Mtar : Xtar Ñ Y that preserves the existing seed distributions while defining valid distributions for all additional target records. 
+
+Problem (Utility-aware mDP mechanism extension). Given 
+
+pXseed , Xtar , Y, 𝑑, 𝜖, Mseed q, construct Mtar satisfying the following requirements: (1) Seed preservation: for every x P Xseed and y P Y,
+
+Mtar py | xq “ Mseed py | xq.
+
+(2) Valid extension: for every x P Xtar , Mtar p¨ | xq is a valid probability distribution: 
+
+Mtar py | xq ě 0, ř 
+
+> yPY
+
+Mtar py | xq “ 1.
+
+(3) Global mDP: for every x, x1 P Xtar and y P Y,
+
+Mtar py | xq ď exp `𝜖𝑑 px, x1q˘ Mtar py | x1q.
+
+Privacy feasibility alone does not distinguish among potentially useful and trivial extensions. Let 𝑐 px, yq denote the utility loss incurred when y is reported for x, and let 𝜋 tar denote a prior dis-tribution over the target domain. The expected utility loss of an extension is UL pMtar q “ ř 
+
+> xPXtar
+
+𝜋 tar pxq ř 
+
+> yPY
+
+Mtar py | xq𝑐 px, yq.
+
+A utility-aware extension seeks a mechanism satisfying the three mandatory requirements while minimizing, or otherwise control-ling, this loss. This formulation separates privacy correctness from utility opti-mization . The first three requirements define a valid mDP extension, while the utility-loss objective distinguishes among feasible exten-sions according to their usefulness. The framework introduced next provides necessary and sufficient conditions for constructing a correct extension, whereas the choice of seed mechanism and extension procedure determines the resulting utility. 
+
+## 4.2 Extension Graph 
+
+The formulation above specifies the requirements of a valid exten-sion from Xseed to Xtar , but not how the extension is constructed. Rather than determining all target distributions simultaneously, we construct the mechanism progressively through local operations, whose dependencies are represented by a directed graph. Its nodes correspond to local record sets, while its edges describe how exist-ing distributions are extended to new records. This representation supports sequential, parallel, and hierarchical constructions while explicitly capturing dependencies and overlaps among extension operations. Importantly, the extension graph does not replace or redefine the metric 𝑑 . The metric specifies the privacy relationships among secrets, whereas the graph describes where and in what order their A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+perturbation distributions are constructed. Separating privacy re-quirements from construction dependencies allows different ex-tension operators to be analyzed within a common correctness framework. We formalize this dependency structure below. 
+
+Definition 3 (Extension graph) . Given a seed domain Xseed Ď Xtar ,an extension graph is a triple G “ p V, E, tX𝑣 u𝑣 PV q, where V is a finite set of nodes, E Ď V ˆ V is a set of directed edges such that pV, Eq is acyclic, and each node 𝑣 P V is associated with a local record set X𝑣 Ď Xtar . A directed edge p𝑣, 𝑢 q P E indicates that the construction at node 𝑢 depends on the perturbation distributions available at node 𝑣 .For each node 𝑣 P V, define Succ p𝑣 q :“ t 𝑢 P V : p𝑣, 𝑢 q P Eu
+
+and Pred p𝑣 q :“ t 𝑢 P V : p𝑢, 𝑣 q P Eu. The nodes in V0 :“ t 𝑣 P
+
+V : Pred p𝑣 q “ ∅u are called source nodes , and their associated sets tX𝑣 : 𝑣 P V0u are called source regions . The extension graph satisfies: 
+
+Ź (i) seed initialization: Xseed “ Ť 
+
+> 𝑣 PV0
+
+X𝑣 ;
+
+Ź (ii) target coverage: Xtar “ Ť 
+
+> 𝑣 PV
+
+X𝑣 ; and 
+
+Ź (iii) extension coverage: for every node 𝑣 P V with Succ p𝑣 q ‰ 
+
+∅, X𝑣 Ď Ť 
+
+> 𝑢 PSucc p𝑣 q
+
+X𝑢 .
+
+Remark (Single-successor vs. multi-successor extension) . When constructing the extension graph, the expansion of a node region can be represented either by a single successor or by multiple successors. Concretely, for a node 𝑢 P V, one may introduce a single successor 𝑣 
+
+and perform a monolithic extension on a larger region X𝑣 , or alter-natively introduce several successors 𝑣 1, . . . , 𝑣 𝑚 whose regions jointly cover the extension target, e.g., X𝑢 Ď X𝑣 or X𝑢 Ď Ť𝑚 𝑖 “1 X𝑣 𝑖 . Both representations describe the same conceptual step, extending from the perturbation distributions already specified on 𝑢 to additional records, and do not change the definition of extension. However, they differ operationally in the next stage of the pipeline: multiple successors naturally correspond to extension subproblems that can be executed in parallel (one per successor region), whereas a single successor cor-responds to performing the extension as one sequential/monolithic subproblem. 
+
+Next, we show that two representative extension schemes from prior work can be viewed as special cases of the proposed extension-graph abstraction. As illustrated in Fig. 1(a)(b), global seed-set ex-tension [4] performs a one-step global expansion of a seed set, whereas parallel local extension [16] performs one-step local ex-tensions over multiple overlapping subregions. Notably, both are shallow instances of the same abstraction; in contrast, the proposed extension graph supports recursive multi-step extension, in which mechanisms are propagated through multiple layers of successor re-gions before reaching the target records. 
+
+(a) Global seed-set extension [4]. Fig. 1(a) shows a McShane-Whitney extension from an already specified record set (e.g., t𝑎, 𝑏, 𝑑 ,
+
+𝑒, 𝑓 u) to additional target records (e.g., 𝑔 ), while preserving the per-turbation distributions on the original records. Under our abstrac-tion, this is represented by a predecessor-to-successor transition in which the successor region enlarges the predecessor region by adjoining the newly extended records. 
+
+(b) Parallel local extension [16]. Fig. 1(b) shows extension over two adjacent subregions. Each subregion selects local anchors (left: 𝒂  𝒃  𝒄   
+
+> 𝒅 𝒆 𝒇
+> 𝒈
+> {𝒂, 𝒃, 𝒅, 𝒆, 𝒇}
+> {𝒂, 𝒃, 𝒅, 𝒆, 𝒇, 𝒈}
+> DAG representation
+
+(a) Global seed-set extension 𝒂  𝒃  𝒄      
+
+> 𝒅 𝒆 𝒇
+> 𝒈 𝒉
+> {𝒂, 𝒃, 𝒅, 𝒆} {𝒃, 𝒄, 𝒆, 𝒇}
+> {𝒂, 𝒃, 𝒅, 𝒆, 𝒈} {𝒃, 𝒄, 𝒆, 𝒇, 𝒉}
+> DAG representation
+
+(b) Parallel local extension 
+
+Figure 1: Existing extension schemes viewed as instances of the extension-graph abstraction. 
+
+t𝑎, 𝑏, 𝑑, 𝑒 u; right: t𝑏, 𝑐, 𝑒, 𝑓 u) and independently generates new inte-rior records (e.g., 𝑔 and ℎ) via log-convex interpolation followed by normalization. Under our abstraction, this corresponds to parallel local extension steps over overlapping regions, where shared bound-ary anchors (e.g., t𝑏, 𝑒 u) require consistency across neighboring subproblems. 
+
+## 4.3 mDP Extension Algorithms 
+
+We next address the algorithmic side of the framework. Given an extension graph, an mDP extension algorithm specifies how mechanisms are initialized on seed records Xseed and propagated through successor regions. For any record set S Ď Xtar , let Mech pSq denote the set of perturbation mechanisms from S to the common output domain 
+
+Y. That is, each M P Mech pSq assigns a distribution Mp¨ | 𝑥 q P 
+
+ΔpYq to every x P S. We use M, Mseed , and M𝑣 for specific mechanisms, and reserve Mech p¨q for mechanism spaces. 
+
+Definition 4 (Extension algorithm) . Fix an extension graph G “pV, E, tX𝑣 u𝑣 PV q. An extension algorithm consists of: 
+
+Ź for each node 𝑣 P V with Succ p𝑣 q ‰ ∅, a local extension operator 
+
+Ext 𝑣 : Mech pX𝑣 q Ñ ś 
+
+> 𝑢 PSucc p𝑣 q
+
+Mech pX𝑢 q,
+
+which maps a mechanism M𝑣 on X𝑣 to a collection of successor mechanisms tM𝑣 Ñ𝑢 u𝑢 PSucc p𝑣 q, where M𝑣 Ñ𝑢 P Mech pX𝑢 q;and 
+
+Ź an initialization rule that assigns the prescribed seed mecha-nism Mseed to the seed records Xseed , together with a propaga-tion rule that applies the local operators through the graph to construct a mechanism on Xtar .
+
+We then introduce the three requirements, (A1)–(A3) , that en-sure the resulting extended mechanisms are well defined and satisfy the desired p𝜖, 𝑑 q-mDP constraints when assembled into a global mechanism. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 𝒗 
+
+𝓜 𝒗→𝒖  𝒖  𝒘  𝓜 𝒗→𝒘 
+
+𝓜 𝒗 
+
+mDP is satisfied between the 
+
+successor mechanisms 
+
+𝓜 𝒗→𝒖 and 𝓜 𝒗→𝒘 
+
+> Extend
+
+(a) Local mDP constraints 𝓜 𝒑→𝒗  𝒗  𝒘  𝓜 𝒒→𝒘 
+
+> Extend
+
+𝓜 𝒑→𝒖  𝐲 𝒈 = 𝓜 𝒒→𝒘  𝐲 𝒈 ∀ 𝐲: 
+
+Mechanism of the overlapped 
+
+record  𝐱  is consistent 
+
+> Extend
+
+{𝒂, 𝒃, 𝒅, 𝒆, 𝒈}  {𝒈, 𝒃, 𝒄, 𝒆, 𝒇}  (b) Overlap consistency 𝓜 𝒖→𝒖′  𝒖′ 
+
+> Extend
+
+𝒘′ 
+
+> Extend
+
+𝓜 𝒘→𝒘′ 
+
+mDP is satisfied between the 
+
+successor mechanisms  𝓜 𝒖→𝒖′ 
+
+and  𝓜 𝒘→𝒘′ 
+
+𝒑 
+
+𝓜 𝒑→𝒖  𝒖  𝒘  𝓜 𝒑→𝒘 
+
+𝓜 𝒑 
+
+> Extend
+
+𝒒  𝓜 𝒒 
+
+> Extend
+
+(c) Successor mDP preservation 𝓜 𝐩𝐚𝐫(𝒖′′)→𝒖′′ 
+
+𝒖′′  𝒘′′ 
+
+𝓜 𝐩𝐚𝐫(𝒘′′)→𝒘′′ 
+
+mDP is satisfied between the descendant mechanisms 
+
+𝓜 𝐩𝐚𝐫(𝒖′′)→𝒖′′  and  𝓜 𝐩𝐚𝐫(𝒘′′)→𝒘′′ 
+
+𝓜 𝒖  𝒖  𝒘  𝓜 𝒘    
+
+> …
+> …
+> Extend Extend
+> Extend Extend
+
+(d) Descendant mDP preserva-tion (Lemma 1) 
+
+Figure 2: Algorithmic requirements for extension on a DAG. 
+
+(A1) Local mDP constraints. We require that for every prede-cessor 𝑣 P V, the mechanisms produced for its successor regions jointly satisfy the p𝜖, 𝑑 q-mDP inequality over the entire extension cover of 𝑣 . Formally, as Fig. 2(a) shows, for any 𝑣 P V and any two successors 𝑢, 𝑤 P Succ p𝑣 q (allowing 𝑢 “ 𝑤 ), the edge mechanisms 
+
+M𝑣 Ñ𝑢 and M𝑣 Ñ𝑤 must satisfy 
+
+M𝑣 Ñ𝑢 pxq 𝜖 
+
+« M𝑣 Ñ𝑤 px1q, @x P X𝑢 , @x1 P X𝑤 , (4) When 𝑢 “ 𝑤 , Eq. (4) reduces to the usual local p𝜖, 𝑑 q-mDP con-straints within a single successor region X𝑣 ; when 𝑢 ‰ 𝑤 , it en-forces cross-successor privacy across sibling regions refined from the same predecessor. 
+
+Appendix E presents three representative extension algorithms, 
+
+McShane–Whitney , Log-convex , and LP-based interpolation methods, that can be designed to satisfy the local mDP constraint (A1) .Notably, local constraints alone are not sufficient to guarantee global mDP: two points x, x1 that belong to different, disjoint nodes may never appear together in the same local constraint. To bridge this gap, next we introduce additional requirements (A2) and (A3) that relate successors in the extension hierarchy and ensure that privacy guarantees are preserved under extension. 
+
+(A2) Overlap consistency. The extended mechanisms must agree on overlapping records along extension paths. Specifically, for any two edges p𝑝, 𝑣 q, p𝑞, 𝑤 q P E such that as Fig. 2(b) shows, for any overlapped record x P X𝑣 X X𝑤 (e.g., x “ 𝑏 ), we require 
+
+M𝑝 Ñ𝑣 py | xq “ M𝑞 Ñ𝑤 py | xq, @y P Y. (5) That is, whenever two node regions overlap, the perturbation dis-tribution assigned to a shared record must be identical. A particularly important special case arises when a node 𝑢 has multiple predecessors. In this case, for any 𝑣 1, 𝑣 2 P Pred p𝑢 q, we require 
+
+M𝑣 1Ñ𝑢 py | xq “ M𝑣 2Ñ𝑢 py | xq, @x P X𝑢 , @y P Y. (6) Under condition (6), the node mechanism M𝑢 py | xq is well defined. In practice, successor regions are often chosen to be disjoint, or to overlap only on boundary sets. Moreover, merge nodes are typically constructed so that their incoming mechanisms already coincide. These design choices simplify the enforcement of (5) and (6). 
+
+(A3) Successor-level mDP preservation . As illustrated in Fig. 2(c), once a cross-node 𝜀 -mDP relation has been established between two extended regions, that relation must be preserved under one additional extension step. Specifically, suppose that two node mech-anisms M𝑝 Ñ𝑢 and M𝑞 Ñ𝑤 satisfy 
+
+M𝑝 Ñ𝑢 pxq 𝜖 
+
+« M𝑞 Ñ𝑤 px1q, @x P X𝑢 , @x1 P X𝑤 , (7) where p𝑝, 𝑢 q, p𝑞, 𝑤 q P E. Then the same relation must continue to hold after one additional extension step: for every pair of direct successors 𝑢 1 P Succ p𝑢 q and 𝑤 1 P Succ p𝑤 q,
+
+M𝑢 Ñ𝑢 1 pxq 𝜖 
+
+« M𝑤 Ñ𝑤 1 px1q, @x P X𝑢 1 , @x1 P X𝑤 1 . (8) In other words, once the 𝜀 -mDP relation is established between two nodes, all of their immediate extensions must satisfy mDP. For convenience, we write Desc p𝑣 q for the set of all descendants of a node 𝑣 P V, including 𝑣 itself; that is, x P Desc p𝑣 q if and only if there exists a (possibly empty) directed path from 𝑣 to 𝑧 in G.
+
+Lemma 1 (Descendant closure of cross-node mDP) . As illustrated in Fig. 2(d), consider two possibly identical nodes 𝑢, 𝑤 P V whose associated mechanisms satisfy 
+
+M𝑢 pxq 𝜖 
+
+« M𝑤 px1q, @x P X𝑢 , @x1 P X𝑤 . (9) 
+
+Suppose that (A1)–(A3) hold along all subsequent extensions from 𝑢 
+
+and 𝑤 . Then, for every pair of respective descendants 𝑢 2 P Desc p𝑢 q
+
+and 𝑤 2 P Desc p𝑤 q, their associated mechanisms satisfy 
+
+Mpar p𝑢 2qÑ 𝑢 2 pxq 𝜖 
+
+« Mpar p𝑤 2qÑ 𝑤 2 px1q, @x P X𝑢 2 , @x1 P X𝑤 2 .
+
+(10) 
+
+Validity of the induced global mechanism . We are now ready to show that the induced global mechanism ( Definition 5 ) is p𝜖, 𝑑 q-mDP (in Theorem 1 ). 
+
+Definition 5 (Induced global mechanism) . Let tM𝑣 u𝑣 PV0 denote the source mechanisms and let tM𝑣 Ñ𝑢 up𝑣,𝑢 qP E denote the edge-local mechanisms produced by the extension algorithm. We define the induced global mechanism M on Xtar as follows. For any x P Xtar ,choose any local assignment that contains x:
+
+Mpy | xq :“
+
+$&%
+
+M𝑢 py | xq, if 𝑢 P V0 and x P X𝑢 ,
+
+M𝑣 Ñ𝑢 py | xq, if p𝑣, 𝑢 q P E and x P X𝑢 .A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+If multiple such local assignments exist, they give the same distribution by source-level compatibility and overlap consistency. Hence M is well defined. 
+
+Theorem 1 (Global p𝜖, 𝑑 q-mDP guarantee via extension algorithms) .
+
+Consider a metric space pX, 𝑑 q, a target set Xtar Ď X, and a finite extension graph G “ p V, E, tX𝑣 u𝑣 PV q whose local regions cover 
+
+Xtar and whose relevant nodes are reachable from source nodes V0 “t𝑣 P V : Pred p𝑣 q “ ∅u. Suppose the source regions are equipped with initial mechanisms tM𝑣 u𝑣 PV0 that agree with the prescribed seed mechanism Mseed on Xseed , are consistent on overlapping source regions, and jointly satisfy p𝜖, 𝑑 q-mDP over Ť 
+
+> 𝑣 PV0
+
+X𝑣 .Assume that the extension algorithm propagates these source mech-anisms through G and produces edge-local mechanisms tM𝑣 Ñ𝑢 up𝑣,𝑢 qP E .The induced global mechanism M in Definition 5 is well defined and satisfies p𝜖, 𝑑 q-mDP on Xtar if and only if the source and edge-local mechanisms satisfy (A1)–(A3) .
+
+Proof sketch. The proof establishes both directions. For suffi-ciency, overlap consistency (A2) ensures that the induced mecha-nism is well defined because all local mechanisms assign the same distribution to any shared record. For any two target records, local mDP (A1) establishes the required relation when they belong to the same extension region, while Lemma 1 uses successor-level preservation (A3) to propagate cross-node mDP relations to their descendant regions. Hence, the induced global mechanism satis-fies p𝜖, 𝑑 q-mDP. For necessity, any local mechanism constituting a global mDP mechanism must satisfy (A1) as its restriction; mecha-nisms sharing a record must agree on its distribution, yielding (A2) ;and global mDP restricted to any pair of successor regions yields 
+
+(A3) . Therefore, (A1)–(A3) are necessary and sufficient within the proposed extension framework. The formal proof is given in Ap-pendix B.2 . □
+
+Remark. Intuitively, Theorem 1 formalizes the idea that p𝜖, 𝑑 q-mDP can be enforced hierarchically : once the privacy bound is established at coarse regions, the successor-level preservation rule (A3) ensures that all extensions inherit the same bound. As a consequence, the combination of local constraints within nodes and cross-successor con-straints that are preserved under extension is necessary and sufficient to guarantee global p𝜖, 𝑑 q-mDP over the entire domain. 
+
+Discussion and Algorithmic Implications. Among the three algorithmic requirements, (A1) and (A2) are relatively straight-forward to enforce in practice. In particular, (A1) can be imposed through a local extension procedure over the successor regions of each node, while (A2) can often be ensured either by construction (e.g., by choosing disjoint successors) or by explicitly enforcing consistency on overlapping records. In contrast, (A3) is substantially more subtle. The successor-level preservation condition couples mechanisms across extension levels and ensures that privacy guarantees established at a coarse level are inherited by all subsequent extensions. Whether this condition can be enforced efficiently depends on the construction of the extension graph and on the geometry of the underlying metric space, as both affect how local privacy constraints interact and propagate through the extension process. Enforcing (A3) directly at the global level would undermine the scalability benefits of the graph-based decomposition. Therefore, the central algorithmic challenge lies in 
+
+how to design local extension rules and optimization procedures that implicitly guarantee (A3) while remaining computationally efficient. 
+
+In the next section, we specialize the framework to a tree-based extension algorithm in an ℓ𝑝 metric space, and show how (A1) –(A3) 
+
+can be enforced by construction using only local information at each extension step. 
+
+## 5 Tree-based Extension Algorithms 
+
+In this section, we instantiate the general graph-based framework with a tree-based extension algorithm for hierarchical grid domains. This setting is natural for geo-location secrets [19] and other struc-tured domains that admit multi-resolution representations [21]. The key idea is to optimize perturbation distributions on coarse seed records and then recursively extend them to finer grid records through local interpolation. We first define the grid-based secret representation and the in-duced extension tree in §5.1 . We then present the coordinate-wise interpolation principle and dimension-wise composition argument in §5.2 , which provide the key tool for preserving mDP constraints under extension. Finally, in §5.3 , we describe the recursive tree-based extension algorithm and show how the framework require-ments (A1) –(A3) are enforced by construction. Together, these results yield a scalable mechanism for fine-grained domains under an ℓ𝑝 metric while preserving the desired mDP guarantee. 
+
+## 5.1 Grid-based Secret Representation 
+
+We consider a target geographic area in R2, such as a city bound-ary. For any two locations x and x1 in this area, their distance is measured using the ℓ𝑝 metric 
+
+𝑑 px, x1q “ } x ´ x1}𝑝 “
+
+´ř2 
+
+> 𝑡 “1
+
+|𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|𝑝 
+
+¯1{𝑝 
+
+, 𝑝 ě 1,
+
+where } ¨ } 𝑝 denotes the ℓ𝑝 norm. We discretize the target area using a multi-resolution grid and treat the grid vertices lying within the area (i.e., cell corners) as the secret records to be protected. Here, each vertex represents a discretized location coordinate rather than membership in any of its neighboring cells; the cells serve only to organize the extension computation. When the origi-nal location is continuous, it can be mapped to a vertex through a predetermined quantization rule, such as nearest-vertex mapping. Vertices are convenient for our construction because adjacent cells share boundary vertices, which serve as common interpolation an-chors and facilitate overlap consistency by construction. Although centroid-based grids can also be refined hierarchically, centroids are cell-specific and would require additional rules to coordinate interpolation and ensure consistency across neighboring cells. As illustrated in Fig. 3, we fix a maximum extension level 𝐿 P N
+
+and a base cell side length ℎ0 ą 0. For each level 𝑟 P t 0, 1, . . . , 𝐿 u,let C𝑟 denote the collection of axis-aligned square grid cells with side length ℎ𝑟 that intersect the target area. If a level-𝑟 cell is refined into an 𝑁 𝑟 `1 ˆ 𝑁 𝑟 `1 subgrid at level 𝑟 ` 1, then ℎ𝑟 `1 “ ℎ𝑟 {𝑁 𝑟 `1,and only the resulting subcells that intersect the target area are retained in C𝑟 `1.We define the target secret domain Xtar as the set of corner ver-tices of the retained level-𝐿 cells, i.e., the finest-resolution discrete secret locations in the target region. Let 𝑟 src ă 𝐿 denote the source Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu Root 
+
+…
+
+# …
+
+…
+
+… 
+
+> Cells with corners covering 𝓧 𝐭𝐚𝐫
+> (Corners are the locations at the highest granularity)
+
+…
+
+…             
+
+> 𝒞 2:𝑁 2× 𝑁 2grid
+> Level 0
+> Level 1
+> Level 2
+> Level 𝐿
+> 𝒞 1:𝑁 1× 𝑁 1grid Cell covering the whole
+> target region 𝓡
+> Cells with corners covering
+> 𝓧 𝐬𝐞𝐞𝐝
+> ℎ0
+> ℎ1= ℎ 0/𝑁 1
+> ℎ𝐿
+> ℎ1= ℎ 0/𝑁 1
+
+Figure 3: Tree representation of the grid-based secret records. 
+
+level. The retained cells at this level provide the initial coarse repre-sentation and are chosen so that their associated record sets cover the seed records: Xseed Ď Ť 
+
+> 𝑣 PC𝑟 src
+
+X𝑣 . These level-𝑟 src cells serve as the source nodes of the extension graph and are equipped with initial mechanisms that agree with the prescribed seed mechanism on Xseed .We then construct the extension tree over the retained cells from level 𝑟 src to level 𝐿 , denoted by G “ p V, E, tX𝑣 u𝑣 PV q:
+
+(1) Node set V: Each node 𝑣 is identified with a retained cell at some level 𝑟 P t 𝑟 src , . . . , 𝐿 u. The source nodes are V0 fi C𝑟 src , and the full node set is V fi Ť𝐿 𝑟 “𝑟 src C𝑟 .
+
+(2) Secret set tX𝑣 u𝑣 PV : For each node 𝑣 P V, let corner p𝑣 q denote the set of corner vertices of cell 𝑣 . We define X𝑣 fi Xtar X corner p𝑣 q.Thus, X𝑣 contains the finest-resolution secret records located at the corners of 𝑣 ; a standard square cell contains at most four such records, while boundary cells may contain fewer. 
+
+(3) Edge set E: For any non-leaf node 𝑣 P C𝑟 with 𝑟 ă 𝐿 , its children are the retained subcells of 𝑣 in C𝑟 `1. We add an edge 
+
+p𝑣, 𝑣 1q P E whenever 𝑣 1 is a retained child of 𝑣 . Since each retained cell at level 𝑟 ` 1 is refined from exactly one retained cell at level 
+
+𝑟 , every non-source node has a unique predecessor. Hence, the resulting extension graph is a rooted tree when there is a single source cell, and a forest when multiple source cells are used. Fig. 4 illustrates the tree construction on a simple two-level grid. At level 𝑡 , a coarse cell has four corner vertices t𝑎, 𝑏, 𝑐, 𝑑 u Ď 
+
+Xtar , which form the record set of the corresponding parent node. Extending this cell to level 𝑡 ` 1 (here, a 2 ˆ 2 subgrid) introduces additional vertices (e.g., 𝑒, 𝑓 , 𝑔, ℎ, 𝑜 ) and yields four child cells. In the induced tree (a special case of the extension graph), each child node corresponds to one subcell and is associated with the corner-vertex set of that subcell, e.g., t𝑎, 𝑒, 𝑓 , 𝑔 u, t𝑒, 𝑏, 𝑔, ℎ u, t𝑓 , 𝑔, 𝑐, 𝑜 u, t𝑔, ℎ, 𝑜, 𝑑 u.Thus, the extension process from level 𝑡 to level 𝑡 ` 1 is represented by a single parent node with multiple successor nodes. 
+
+Discussion: Selection of seed records Xseed . We select the cor-ners of coarse-grid cells as seed records because they naturally {𝒂, 𝒃, 𝒄, 𝒅}              
+
+> {𝒂, 𝒆, 𝒇, 𝒈}
+> DAG
+> representation
+> 𝒂 𝒃
+> 𝒄 𝒅
+> 𝒂 𝒃
+> 𝒄 𝒅
+> 𝒆
+> 𝒇 𝒈 𝒉
+> 𝒐
+> {𝒆, 𝒃, 𝒈, 𝒉} {𝒇, 𝒈, 𝒄, 𝒐} {𝒈, 𝒉, 𝒐, 𝒅}
+> Level ℓ
+> Level ℓ + 𝟏
+> Overlapped points: {𝒆, 𝒈}
+> Overlapped points: {𝒈}
+> Overlapped points: {𝒈, 𝒐}
+
+Figure 4: Example of a grid-cell hierarchy inducing a tree. 
+
+define local extension blocks, provide shared anchors that main-tain consistency across overlapping blocks, and support coordinate-aligned, dimension-wise log-convex interpolation. These properties enable the extension steps to satisfy requirements (A1)–(A3). The grid resolution controls the seed density and thus the utility– efficiency trade-off. A denser seed set reduces the extent of inter-polation and can better preserve the optimized mechanism across the target domain, but increases the cost of seed-level optimization. Conversely, a sparser seed set improves scalability but requires extension over larger regions, which may increase utility loss. In practice, candidate coarse-grid resolutions can be evaluated to select the sparsest seed set that meets the desired utility requirement or, equivalently, the densest set permitted by the computational budget. We empirically examine this trade-off across different seed-grid resolutions in Section 6. 
+
+## 5.2 Interpolation-Based Preservation via Dimension-Wise Composition 
+
+A central challenge in the tree-based extension algorithm is that direct multi-dimensional interpolation does not, in general, pre-serve the p𝜖, 𝑑 q-mDP relations required for recursive extension [16]. For this reason, we construct the extension through multiple one-dimensional interpolation steps, each of which can be controlled by a coordinate-wise Lipschitz bound in log-probability space. Propo-sition 1 establishes the validity of a single one-dimensional in-terpolation step, while Theorem 2 shows how these coordinate-wise guarantees compose into a global p𝜖, 𝑑 𝑝 q-Lipschitz bound [16]. Building on these two ingredients, Theorem 3 further shows that the two-dimensional interpolation operator preserves cross-cell Lip-schitz relations after refinement, which is the key property needed to satisfy successor-level mDP preservation (A3) . Together, these re-sults provide the theoretical foundation for the tree-based extension procedure described next. To accommodate different interpolation schemes, we first define a generic one-dimensional interpolation rule in log-probability space. The rule is specified along a single coordinate line, matches the anchor log-probabilities, and satisfies a coordinate-wise slope cap. Proposition 1 then shows that any such rule automatically preserves the desired p𝜖 𝑡 , 𝑑 1q-Lipschitz bound for all interpolated records on that line. A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Definition 6 (One-dimensional interpolation) . Fix a coordinate 
+
+𝑡 P t 1, . . . , 𝑁 u and an output y P Y. Let xp1q, . . . , xp𝑚 q P ˆ𝑋 be anchor records that differ only in their 𝑡 -th coordinate, with 𝑥 p1q 
+
+> 𝑡
+
+ă
+
+𝑥 p2q 
+
+> 𝑡
+
+ă ¨ ¨ ¨ ă 𝑥 p𝑚 q 
+
+> 𝑡
+
+. Define the interval I𝑡 :“ r 𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s. A one-dimensional interpolation rule along coordinate 𝑡 is an absolutely continuous function 𝑓 𝑡, y : I𝑡 Ñ R such that: (i) Anchor consistency: 𝑓 𝑡, yp𝑥 p𝑟 q 
+
+> 𝑡
+
+q “ ln Mpy|xp𝑟 qq, 𝑟 “ 1, . . . , 𝑚 ;(ii) Slope cap: 
+
+ˇˇˇ d𝑓 𝑡, yp𝑠 q
+
+> d𝑠
+
+ˇˇˇ ď 𝜖 𝑡 , for a.e. 𝑠 P p 𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+q.For any record x P X whose non-𝑡 coordinates agree with those of the anchors and whose 𝑡 -th coordinate lies in I𝑡 , we define the interpolated log-probability by ln 𝑓 py | xq :“ 𝑓 𝑡, yp𝑥 𝑡 q.
+
+Proposition 1 (One-Dimensional Interpolation Validity) . Let 𝑓 𝑡, y
+
+be a one-dimensional interpolation rule as in Definition 6. Then for any two records x, x1 P X that differ from the anchors only in the 𝑡 -th coordinate, with 𝑥 𝑡 , 𝑥 1 
+
+> 𝑡
+
+P I𝑡 , the interpolated log-probabilities satisfy 
+
+ˇˇln 𝑓 py | xq ´ ln 𝑓 py | x1qˇˇ ď 𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|. (11) 
+
+Hence, the interpolated values satisfy the p𝜖 𝑡 , 𝑑 1q-Lipschitz bound along coordinate 𝑡 , regardless of whether x and x1 lie in the same sub-interval r𝑥 p𝑟 q 
+
+> 𝑡
+
+, 𝑥 p𝑟 `1q 
+
+> 𝑡
+
+s or in different sub-intervals. The detailed proof is given in Appendix B.3 .
+
+Theorem 2 (Dimension-Wise Composition for Lipschitz Bound Condition [16]) . Let 𝑓 : X Ñ R be a mechanism that inter-polates values in an 𝑁 -dimensional space. Suppose that for each 
+
+𝑡 P t 1, . . . , 𝑁 u, 𝑓 satisfies p𝜖 𝑡 , 𝑑 1q-Lipschitz bound when the input records differ only in the 𝑡 th coordinate. If the parameters 𝜖 1, . . . , 𝜖 𝑁 
+
+satisfy the following budget composition condition: 
+
+ř𝑁 𝑡 “1 𝜖  
+
+> 𝑝 𝑝 ´1
+> 𝑡
+
+ď 𝜖 𝑝 𝑝 ´1 , for 𝑝 ą 1, (12) 
+
+and max  
+
+> 𝑡
+
+𝜖 𝑡 ď 𝜖, for 𝑝 “ 1, (13) 
+
+then 𝑓 is p𝜖, 𝑑 𝑝 q-Lipschitz continuous. 
+
+Definition 7 (Two-Dimensional Interpolation) . Fix a non-leaf par-ent cell 𝑣 Ď X, with corner-anchor set X𝑣 “ t xp𝛾 q : 𝛾 P t 0, 1u2u,
+
+xp𝛾 q “ xp0q ` 𝛾 d Δ, where Δ “ p Δ1, Δ2q. Assume that: 
+
+Ź for each coordinate 𝑡 P t 1, 2u, the restriction of the interpola-tion to any axis-aligned segment in 𝑣 parallel to coordinate 𝑡 
+
+is p𝜖 𝑡 , 𝑑 1q-valid in the sense of Proposition 1 ;
+
+Ź the coordinate-wise privacy budgets 𝜖 1, 𝜖 2 satisfy the composi-tion conditions in Eq. (12) and Eq. (13) .The local extension operator at 𝑣 is defined as 
+
+Ext 𝑣 : Mech pX𝑣 q Ñ ś 
+
+> 𝑢 PSucc p𝑣 q
+
+Mech pX𝑢 q,
+
+where, for any parent mechanism M𝑣 P Mech pX𝑣 q, for all x P X𝑢 ,
+
+𝑢 P Succ p𝑣 q, and y P Y, the child mechanism M𝑣 Ñ𝑢 is defined by the normalized 2-dimensional interpolation 
+
+M𝑣 Ñ𝑢 py | xq “ 𝑓 𝑣 py | xq
+
+ř 
+
+> y1PY
+
+𝑓 𝑣 py1 | xq , (14) 
+
+where ln 𝑓 𝑣 py | xq “ ř 
+
+> 𝛾 Pt 0,1u2
+
+𝑤 𝛾 pxq ln M𝑣 
+
+´
+
+y | xp𝛾 q¯
+
+, with 𝑤 𝛾 pxq “ 
+
+ś2
+
+> 𝑡 “1
+
+´
+
+p1 ´ 𝛾 𝑡 q𝜆 𝑡 pxq ` 𝛾 𝑡 
+
+`1 ´ 𝜆 𝑡 pxq˘¯
+
+and 𝜆 𝑡 pxq “ 𝑥 p0q   
+
+> 𝑡 `Δ𝑡 ´𝑥 𝑡
+> Δ𝑡
+
+,
+
+p𝑡 P t 1, 2uq . Thus, Ext 𝑣 maps the perturbation mechanism on the 𝐱 𝟐 
+
+𝝐 𝟏  Lipschitz condition is satisfied 
+
+𝐱 𝟏 
+
+𝐱 𝟑  𝐱 𝟒 
+
+𝐱 𝟔 𝐱 𝟓 
+
+𝐱 𝟕  𝐱 𝟖 
+
+𝐱′ 
+
+𝐱 
+
+𝒗 𝒄 
+
+𝝐 𝟐  Lipschitz 
+
+condition is satisfied   
+
+> Dimension-wise Composition
+> 𝝐 12+ 𝝐 12≤ 𝝐 2
+
+Figure 5: Illustration of one-dimensional interpolation valid-ity and dimension-wise composition. 
+
+parent corner-vertex set X𝑣 to a collection of child mechanisms on 
+
+tX𝑢 u𝑢 PSucc p𝑣 q by treating X𝑣 as the anchor set and applying 2-dimensional interpolation inside each child cell. 
+
+Theorem 3 (Successor-level preservation under two-dimensional interpolation) . Let 𝑢 and 𝑤 be two cells at the same extension level, and suppose their mechanisms satisfy the coordinate-wise cross-cell Lipschitz bound: for any x P X𝑢 , x1 P X𝑤 , and y P Y,
+
+|ln M𝑢 py|xq ´ ln M𝑤 py|x1q| ď ř2 
+
+> 𝑡 “1
+
+𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|.
+
+Let 𝑢 1 P Succ p𝑢 q and 𝑤 1 P Succ p𝑤 q, and suppose that the mecha-nisms on 𝑢 1 and 𝑤 1 are generated from M𝑢 and M𝑤 , respectively, using the two-dimensional interpolation operator in Definition 7. Then, for any x P X𝑢 1 , x1 P X𝑤 1 , and y P Y, the pre-normalization inter-polants satisfy 
+
+|ln 𝑓 𝑢 py|xq ´ ln 𝑓 𝑤 py|x1q| ď ř2 
+
+> 𝑡 “1
+
+𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|.
+
+Consequently, if 𝜖 1 and 𝜖 2 satisfy the dimension-wise composition condition in Theorem 2, then 
+
+ˇˇln 𝑓 𝑢 py|xq ´ ln 𝑓 𝑤 py|x1qˇˇ ď ¯𝜖𝑑 𝑝 px, x1q,
+
+where ¯𝜖 is the composed pre-normalization budget. In particular, with the calibrated choice ¯𝜖 “ 𝜖 {2, the normalized successor mechanisms satisfy the target p𝜖, 𝑑 q-mDP bound. The detailed proof can be found in Appendix B.4 .
+
+Fig. 5 illustrates the intuition behind successor-level preserva-tion in the tree-based extension. Consider two records x and x1
+
+generated in different successor cells. Instead of directly bound-ing the log-probability difference between them through a single two-dimensional interpolation, we decompose the comparison into coordinate-wise steps through an intermediate aligned point 𝑣 𝑐 .Along each axis, the one-dimensional interpolation rule enforces the corresponding coordinate-wise Lipschitz bound, with budget 𝜖 1
+
+for the first coordinate and 𝜖 2 for the second coordinate. By Propo-sition 1, these one-dimensional interpolation steps preserve the required p𝜖 𝑡 , 𝑑 1q-Lipschitz property. Then, Theorem 2 combines the two coordinate-wise bounds via dimension-wise composition, e.g., 
+
+𝜖 21 `𝜖 22 ď 𝜖 2 when 𝑝 “ 2, to obtain the global p𝜖, 𝑑 𝑝 q-Lipschitz guar-antee. Thus, the figure shows why the proposed coordinate-wise interpolation preserves cross-cell mDP relations during recursive refinement. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+## 5.3 Extension Algorithm Design 
+
+Having defined the interpolation-based local extension operator in Definition 7, we now describe how the operator is applied recur-sively over the extension tree. The procedure starts from source cells whose corner records are equipped with seed mechanisms, and then propagates these mechanisms from coarse cells to finer cells until all records in Xtar are covered. 
+
+Seed record optimization. Before the recursive extension begins, we first construct a utility-aware perturbation mechanism on the seed records Xseed , which correspond to coarse grid corners and serve as the initial anchors for extension. Instead of optimizing over all fine-grained target records, we project the full-domain utility loss onto the seed records using interpolation weights and solve a constrained linear program only on Xseed . The resulting seed mechanism Mseed satisfies the seed-level mDP constraints and is used to initialize the source mechanisms on the source cells. The detailed seed-level cost construction and LP formulation are deferred to Appendix F. 
+
+Algorithm description. The tree-based extension procedure per-forms a breadth-first traversal over the extension tree. Starting from the source nodes, whose mechanisms are initialized from the seed mechanism, it processes cells level by level from coarse to fine resolution. When a non-leaf cell 𝑣 is processed, its mechanism on the corner-vertex set X𝑣 is used as the input to the local extension operator Ext 𝑣 , which jointly constructs mechanisms for all child cells in Succ p𝑣 q.At each refinement step, the operator first treats the parent-corner distributions as anchors. It then assigns mechanisms to child-boundary vertices using log-convex interpolation along the corresponding parent edges. Once the boundary values are fixed, the operator extends to child-interior vertices using coordinate-wise interpolation. The resulting pre-normalization values are nor-malized over the output domain Y to obtain valid perturbation distributions on the child record sets. The procedure continues re-cursively until all reachable nodes have been processed, after which the global mechanism on Xtar is assembled from the resulting local node mechanisms. Detailed pseudocode is provided in Appendix G. We next show how this construction satisfies (A1) –(A3) and therefore induces a globally valid p𝜖, 𝑑 q-mDP mechanism. 
+
+(A1) Local mDP constraints. For each non-leaf cell 𝑣 , the local operator extends the parent mechanism jointly to all child cells Succ p𝑣 q “ t 𝑣 1, . . . , 𝑣 𝑚 u. The resulting child mechanisms must sat-isfy p𝜖, 𝑑 q-mDP over their union, covering both within-child and cross-sibling pairs: for any 𝑖, 𝑗 , M𝑣 Ñ𝑣 𝑖 p¨ | xq 𝜖 
+
+„ M𝑣 Ñ𝑣 𝑗 p¨ | x1q,for all x P X𝑣 𝑖 and x1 P X𝑣 𝑗 . By Proposition 1 and Theorem 2, the two-dimensional interpolation operator yields a pre-normalization 
+
+p ¯𝜖, 𝑑 𝑝 q-Lipschitz bound over the child-cell union; after calibrated normalization with ¯ 𝜖 “ 𝜖 {2, the resulting child mechanisms satisfy the required p𝜖, 𝑑 q-mDP constraints. 
+
+(A2) Overlap consistency. In the grid-based tree, neighboring child cells may share boundary vertices, so a target record may belong to multiple cell record sets. Overlap consistency requires that every shared record receive the same perturbation distribution regardless of which cell generates it. That is, for any two cells 
+
+𝑢 and 𝑤 with X𝑢 X X𝑤 ‰ ∅, M𝑢 py | xq “ M𝑤 py | xq, @x P
+
+X𝑢 X X𝑤 , @y P Y. This ensures that the induced global mechanism is well defined. In our construction, overlaps occur only on shared boundaries. For boundary vertices introduced along a parent edge, the mecha-nism is generated by log-convex interpolation using only the two endpoint anchors of that edge. Thus, sibling cells sharing the same boundary vertex compute its distribution from the same two end-points and assign identical values. If two cells meet only at a corner, consistency is inherited from the shared corner value. For neigh-boring cells with different parents, source-level compatibility and deterministic edge-based boundary interpolation ensure consis-tency across shared boundary records. Thus, (A2) is satisfied by construction. 
+
+Discussion: Order independence of transform-linear inter-polation. The consistency argument above relies on deterministic interpolation rules for shared boundary records. For transform-linear rules, such as log-convex interpolation, we further have an order-independence property: repeated interpolation toward a fixed endpoint yields the same final value regardless of the order in which the interpolation parameters are applied. This property is not needed for the mDP proof, but it simplifies implementation by ensuring that coordinate-wise updates are insensitive to the chosen interpolation order. The formal statement and proof are given in 
+
+Appendix D .These transform-linear assumptions are sufficient, but they are not a necessary characterization of order-independent interpolation. The essential requirement is that repeated update parameters admit a well-defined associative and commutative composition law, or an equivalent path-independent merge rule. Other interpolation opera-tors may satisfy this algebraic property without being representable by the same functions 𝑓 and 𝛼 . Within the transform-linear family, strict monotonicity is useful because it makes the effective param-eter unique; beyond that restricted family, necessity need not hold. 
+
+(A3) Successor-level mDP preservation. The remaining chal-lenge is to show that cross-region mDP relations are preserved un-der recursive refinement. In the tree-based setting, this means that if an mDP relation holds between two coarse regions, then the same relation should continue to hold between their descendant regions. This condition is subtle because direct multi-dimensional interpo-lation does not necessarily preserve cross-region mDP guarantees: simultaneous interpolation along multiple coordinates may produce log-probability changes that are not tightly controlled by the true ℓ𝑝 -distance between two records, even when the anchor mechanisms themselves satisfy mDP [16]. Our construction avoids this issue by decomposing each local extension into one-dimensional interpola-tion steps. Each step enforces a coordinate-wise Lipschitz bound in log-probability space, and the dimension-wise composition prop-erty in Theorem 2 converts these coordinate-wise bounds into an 
+
+ℓ𝑝 -metric guarantee. The following theorem states the subtree-level invariant that establishes (A3) for the tree-based construction. 
+
+Theorem 4 (Subtree-level preservation of the tree-based exten-sion) . Consider the tree-based extension algorithm. Fix a node 𝑣 in the extension tree, and define Xsub p𝑣 q :“ Ť 
+
+> 𝑧 PDesc p𝑣 q
+
+X𝑧 . Assume that the corner anchors of 𝑣 satisfy the coordinate-wise Lipschitz bounds in log space with pre-normalization budgets 𝜖 1, 𝜖 2, and that every A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+extension inside the subtree rooted at 𝑣 is performed by the two-dimensional interpolation operator in Definition 7. Assume further that 𝜖 1, 𝜖 2 satisfy the dimension-wise composition condition with total pre-normalization budget ¯𝜖 under the ℓ𝑝 metric. Then, for any two records x, x1 P Xsub p𝑣 q and any output y P Y,the pre-normalization interpolants satisfy 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď ¯𝜖𝑑 𝑝 px, x1q.
+
+Consequently, after normalization, the induced mechanism on Xsub p𝑣 q
+
+satisfies 2 ¯ 𝜖 -mDP. In particular, choosing ¯𝜖 “ 𝜖 {2 yields the target 
+
+p𝜖, 𝑑 q-mDP guarantee. The detailed proof can be found in Appen-dix B.5 .
+
+Theorem 4 shows that the tree-based extension operator pre-serves the Lipschitz invariant throughout every subtree. Together with the local sibling constraints in (A1) and the boundary consis-tency in (A2) , this implies that the recursive tree-based construction satisfies all three framework requirements and therefore induces a well-defined global mechanism satisfying p𝜖, 𝑑 q-mDP on Xtar .
+
+Complexity analysis. A direct all-pairs optimization over the tar-get domain requires 𝑂 p| Xtar || Y|q variables and up to 𝑂 p| Xtar |2|Y|q 
+
+mDP constraints. In contrast, our framework optimizes only over the seed domain, using 𝑂 p| Xseed || Y|q variables and 𝑂 pΔ|Xseed || Y|q 
+
+neighboring-seed constraints, where Δ is the maximum degree of the seed graph. For the bounded-degree grid graphs considered here, this reduces to 𝑂 p| Xseed || Y|q constraints. The remaining records are generated recursively without further global optimization. Computing one extended distribution costs 
+
+𝑂 p| Y|q , giving an overall extension cost of 𝑂 p| Xtar || Y|𝐿 q for 𝐿 ex-tension levels and 𝑂 p| Xtar || Y|q space to store the final mechanism. Hence, the computational savings are governed by the seed den-sity |Xseed |{| Xtar |: sparser seed sets reduce the optimization size, while denser seed sets trade additional computation for potentially improved utility. In our experimental configuration, described in Section 6, seed records constitute approximately 0 .26% of the target domain, cor-responding to an approximately 378 ˆ reduction in the number of optimization variables. 
+
+Discussion: Applicability beyond ℓ𝑝 metrics. The general graph-based framework is not restricted to ℓ𝑝 metrics and can support both central and local instantiations of mDP, provided that the domain admits an appropriate extension graph and local operators satisfying requirements (A1)–(A3). Under suitable metrics, conven-tional central DP and 𝜖 -LDP arise as special cases: the graph metric induced by dataset adjacency recovers central DP and its group-privacy extension, while the discrete metric 𝑑 px, x1q “ 1rx‰x1s
+
+recovers 𝜖 -LDP. However, extension is generally less useful in these standard settings because their distance structures provide limited fine-grained proximity information for seed-based interpolation. Its usefulness for central DP therefore depends on whether the dataset space contains additional exploitable structure beyond basic adja-cency. The tree-based algorithm developed in this work focuses on ℓ𝑝 
+
+metrics because they are widely used in the mDP literature and nat-urally support our hierarchical construction. Their coordinate-wise structure allows Theorem 2 to compose one-dimensional interpola-tion guarantees into a global ℓ𝑝 -metric guarantee. For other metrics, the general framework may still guide extension design, but dif-ferent extension structures, local operators, algorithms, or proof techniques may be required to satisfy (A1)–(A3). 
+
+Discussion: Limitations of tree-based extension. The current extension construction assumes that the secret domain admits a nested hierarchy in which each successor record is associated with a well-defined parent block. It may therefore be less suitable for non-hierarchical domains or arbitrary graphs containing cycles and multiple natural predecessors. Imposing a single-parent tree on such domains can discard important cross-branch connections and distort the underlying metric. For example, our tree construction should not be interpreted as a direct representation of the OSM road network: the tree organizes the multi-resolution spatial grid, whereas the road network is used only to evaluate travel-distance utility. Extending the construction to general graphs or multiple-parent structures remains future work. 
+
+## 6 Empirical Validation 
+
+In this section, we empirically evaluate the proposed tree-based extension framework on road-map datasets under different grid granularities and privacy budgets. We evaluate each method using three complementary metrics: 
+
+Ź Utility loss measures the expected distortion in travel-distance estimation caused by location perturbation. Let Q denote the set of spatial task locations, let 𝜋 X pxq and 𝜋 Q pqq denote the distributions of true and task locations, respectively, and let 
+
+𝑑 G p¨ , ¨q denote shortest-path distance on the OSM road net-work after nearest-road-node mapping. For a true location x
+
+and reported location y, we define the expected utility loss as 
+
+𝑐 px, yq “ ř 
+
+> qPQ
+
+𝜋 Q pqq | 𝑑 G px, qq ´ 𝑑 G py, qq| . (15) The overall utility loss of mechanism M is UL pMq “ ř 
+
+> xPX
+
+𝜋 X pxq ř 
+
+> yPY
+
+Mpy | xq𝑐 px, yq. (16) The loss is measured in kilometers, and lower values indi-cate more accurate travel-distance estimates. This metric is meaningful for location-based services such as spatial task allocation [18], where decisions depend on estimated travel distances from users to task locations. 
+
+Ź Computation time , reported in seconds, measures the end-to-end time required to construct the perturbation mechanism, including seed-level optimization and recursive extension. All experiments were conducted in MATLAB R2025b on a system equipped with an Apple M5 processor and 24 GB of unified memory. 
+
+Ź mDP violation rate empirically checks whether the constructed mechanism satisfies the target mDP constraints. We compute the fraction of triples px, x1, yq for which the log-probability difference exceeds the allowed privacy bound, i.e., | ln Mpy |
+
+xq ´ ln Mpy | x1q| ą 𝜖𝑑 px, x1q ` 𝜏 , where 𝜏 is a small nu-merical tolerance. In our experiments, the Euclidean privacy metric 𝑑 px, x1q is mea-sured in kilometers. Therefore, the privacy budget 𝜖 has unit km ´1
+
+(i.e., per kilometer), ensuring that 𝜖𝑑 px, x1q in the mDP guarantee is dimensionless. For a fixed distance, a larger 𝜖 corresponds to a weaker privacy guarantee. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+Datasets. We conduct experiments on three road-network datasets: 
+
+Rome , London , and New York , with road-network data retrieved from OpenStreetMap (OSM) [1]. The OSM road network and the grid serve distinct purposes in our experiments. The multi-resolution grid discretizes the geographic domain into secret locations and provides the hierarchical structure used by the extension algorithm. Each grid vertex is mapped to its nearest OSM road-network node, and the shortest-path travel distance between the corresponding road-network nodes is used to compute the utility loss. For each city, we overlay the multi-resolution grid described in Section 5 on the corresponding geographic region and retain the grid vertices in the target domain. These datasets cover urban road networks with different spatial layouts and domain sizes, allowing us to eval-uate the proposed extension framework across different geographic settings. Due to space limitations, we present the Rome results in the main text and report the London and New York results in Appendix H, where similar trends are observed. 
+
+Compared Methods. We compare against representative methods from five categories. 
+
+Ź Predefined noise mechanisms : We include two prede-fined distance-based mechanisms: the Exponential Mecha-nism (EM) [7] and the planar Laplace mechanism [2]. Both use the Euclidean ( ℓ2) distance 𝑑 2px, yq “ ∥x ´ y∥2. EM uses the score function 𝑢 px, yq “ ´ 𝑑 2px, yq and samples y P Y ac-cording to Pr rMEM pxq “ ys “ exp p´ 𝜖  
+
+> 2𝑑 2px,yq
+
+q 
+
+> ř
+> y1PYexp
+
+p´ 𝜖  
+
+> 2𝑑 2px,y1q
+
+q . The planar Laplace mechanism samples a continuous output 
+
+y P R2 with density 𝑝 Lap py | xq “ 𝜖 2 
+
+> 2𝜋
+
+exp p´ 𝜖𝑑 2px, yqq .These mechanisms are computationally efficient because their perturbation distributions are fixed by Euclidean dis-tance, but they are not optimized for the task-specific travel-distance utility considered in our experiments. 
+
+Ź Hybrid methods : we consider EM+RMP , which applies 
+
+Bayesian remapping [6] after EM to improve utility through post-processing while preserving the privacy guarantee of the first-stage mechanism. We also include COPT [13], which scales LP-based mDP design by constraining selected transi-tion probabilities to follow the exponential mechanism and optimizing the remaining probabilities. 
+
+Ź Optimization-based methods : We include three optimization-based baselines. linear programming (LP) [3] directly opti-mizes the perturbation probabilities over the full target do-main under the mDP constraints; LP-A uses the same 12 ˆ 12 initial-grid setting as all other evaluated methods in the main comparison and solves the optimization problem on the cor-responding reduced domain, which improves scalability but may lose fine-grained utility. In addition, we also include 
+
+PAnDA [14], which improves scalability by using anchor-based approximation to reduce the number of optimization variables and constraints. 
+
+Ź Existing extension-based methods : We compare with extension-based baselines, including McShane–Whitney ex-tension (MW) [4] and anchor-based interpolation optimization (AIPO) [16], which construct mechanisms on anchor records and extend them to non-anchor records without solving a full-domain optimization problem. 
+
+Ź Tree-based extension methods : We evaluate three vari-ants of our tree-based extension framework, MLaEt-A , MLaEt-M, and MLaEt-O , which recursively extend mechanisms from coarse seed records to fine-grained target records using dif-ferent local extension or optimization strategies. In the main comparison, all evaluated methods, including LP-A, use the same 12 ˆ 12 initial grid. In the table headings, depth denotes the number of recursive grid-refinement levels applied from this initial grid to construct the target domain; thus, depth 2, 3, and 4 correspond to two, three, and four successive refinement levels, respectively. The accompanying value is the total number of partic-ipating location points included at the resulting target resolution, rather than the number of possible grid cells. 
+
+Experimental protocol. The main comparison is conducted on the Rome, London, and New York City datasets with privacy budgets 
+
+𝜖 P t 0.5, 1.0, 1.5u km ´1 and target depths 2, 3, and 4, using the common 12 ˆ 12 initial grid described above. The seed-grid-density study instead varies the initial grid from 5 ˆ 5 to 17 ˆ 17. For every method–dataset–parameter configuration, we perform 50 independent repetitions. A “—” indicates that the method could not complete mechanism construction within the 1800-second time limit; consequently, the corresponding experimental results were unavailable. Next, we introduce the experimental results: 
+
+Utility Loss. Table 2 reports the utility loss on the Rome road-map dataset under three domain granularities and three privacy budgets. Across all tested settings, the proposed tree-based variants con-sistently outperform EM, Laplace, and EM+RMP, reducing utility loss by approximately 40%–55%. These results show that optimiz-ing the mechanism over coarse seed records and then extending it can achieve substantially better utility than fixed distance-based perturbation rules. The proposed variants also remain competitive with existing extension-based methods. In particular, MLaEt-A closely matches AIPO across different tree depths and privacy budgets, indicating that the recursive construction preserves most of the utility benefit of anchor-based interpolation while supporting hierarchical, multi-stage extension. MLaEt-O reduces utility loss by 4.5% relative to AIPO, although at a higher computational cost. The limited improvement of the proposed tree-based methods over AIPO is partly attributable to the regular two-dimensional grids considered here, on which a strong one-stage method can already perform the extension effectively. The main advantage of recursive extension is therefore not necessarily lower utility loss, but its ability to support compositional, multi-stage construction while preserving global mDP. This flexibility may be particularly beneficial for large, multidimensional, hierarchical, or irregular domains, which we leave for future evaluation. LP-A optimizes only over the coarse initial grid, improving fea-sibility but yielding higher target-domain utility loss than the pro-posed methods across all tested settings. Its computational cost also grows rapidly with the record density, whereas our methods achieve lower utility loss and scale more effectively through fine-grained recursive extension. As expected, utility loss decreases as 𝜖 increases because weaker privacy constraints permit more utility-preserving perturbations. A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY     
+
+> # Participating Points 483 (depth=2) 4087 (depth=3) 63865 (depth=4) Privacy budget (km ´1)
+
+𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5                                                                                                                        
+
+> Rome road map Pre-defined EM 13.27±0.95 10.96±0.92 10.31±0.88 12.95±0.92 10.64±0.89 9.99±0.85 12.79±0.90 10.48±0.88 9.83±0.84 Noise Distribution Laplace 12.97±0.95 10.62±0.96 9.97±0.91 12.66±0.93 10.32±0.94 9.67±0.89 12.51±0.92 10.17±0.93 9.52±0.88 Hybrid EM+RMP 13.14±0.90 10.88±0.89 10.27±0.86 12.83±0.87 10.57±0.86 9.95±0.84 12.67±0.86 10.41±0.85 9.79±0.82 Methods COPT ————-————-————-————-————-————-————-————-————-Optimization LP ————-————-————-————-————-————-————-————-————-Based LP-A 9.81±0.65 9.61±0.66 10.13±0.63 9.52±0.64 9.32±0.64 9.83±0.60 9.38±0.62 9.18±0.63 9.65±0.59 Methods PAnDA ————-————-————-————-————-————-————-————-————-Existing Extension AIPO 7.05±0.14 5.23±0.22 4.55±0.27 7.09±0.14 5.27±0.22 4.59±0.26 7.10±0.14 5.28±0.22 4.60±0.26 Based Methods MW 9.04±0.04 7.09±0.12 5.95±0.15 9.08±0.04 7.14±0.11 6.01±0.14 9.09±0.04 7.15±0.11 6.03±0.14 Tree-based MLaEt-A 7.05±0.14 5.23±0.22 4.55±0.27 7.09±0.14 5.27±0.22 4.59±0.26 7.10±0.14 5.28±0.22 4.60±0.26 extension MLaEt-M 6.94±0.14 5.12±0.22 4.43±0.26 6.97±0.14 5.16±0.22 4.46±0.26 6.97±0.14 5.16±0.22 4.46±0.26 algorithms MLaEt-O 6.84±0.14 5.02±0.23 4.39±0.27 6.80±0.14 4.98±0.23 4.37±0.27 6.78±0.15 4.96±0.23 4.35±0.27
+
+Table 2: Utility loss of different perturbation methods (kilometers) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”.     
+
+> # Participating Points 483 (depth=2) 4087 (depth=3) 63865 (depth=4) Privacy budget (km ´1)
+
+𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5                                                                                                                        
+
+> Rome road map Pre-defined EM 0.0005±0.0017 0.0001±0.0000 0.0001±0.0000 0.0004±0.0002 0.0004±0.0000 0.0004±0.0000 0.0014±0.0000 0.0014±0.0000 0.0013±0.0000 Noise Distribution Laplace 0.0002±0.0002 0.0001±0.0001 0.0001±0.0000 0.0002±0.0000 0.0003±0.0004 0.0002±0.0002 0.0004±0.0001 0.0004±0.0001 0.0004±0.0001 Hybrid EM+RMP 0.0010±0.0032 0.0002±0.0001 0.0002±0.0001 0.0007±0.0002 0.0006±0.0001 0.0006±0.0001 0.0023±0.0006 0.0021±0.0003 0.0021±0.0004 Methods COPT ————-————-————-————-————-————-————-————-————-Optimization LP ————-————-————-————-————-————-————-————-————-Based LP-A 10.35±0.84 9.75±0.84 10.24±1.51 10.35±0.84 9.75±0.84 10.24±1.51 10.35±0.84 9.75±0.84 10.24±1.51 Methods PAnDA ————-————-————-————-————-————-————-————-————-Existing Extension AIPO 8.27±0.29 7.28±0.02 7.10±0.02 9.56±0.29 8.57±0.02 8.39±0.02 280.36±0.99 277.77±1.04 277.91±0.54 Based Methods MW 8.10±0.17 7.29±0.11 7.11±0.07 8.23±0.15 7.41±0.10 7.23±0.06 28.70±2.02 27.53±1.48 27.23±1.58 Tree-based MLaEt-A 4.59±0.21 3.50±0.06 3.26±0.04 4.65±0.21 3.57±0.06 3.32±0.04 5.30±0.21 4.21±0.08 3.96±0.06 extension MLaEt-M 10.87±0.85 6.73±0.18 5.72±0.10 10.92±0.85 6.77±0.18 5.76±0.10 11.29±0.85 7.12±0.18 6.11±0.11 algorithms MLaEt-O 5.40±0.38 4.30±0.28 4.04±0.28 15.13±4.40 13.93±4.41 10.32±4.07 1488.3±241.2 821.7±154.1 868.9±269.9
+
+Table 3: Computation time of different perturbation methods (seconds) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. 
+
+The relative ranking of the methods remains stable across domain granularities, indicating that the utility advantage of tree-based extension persists as the domain becomes finer. 
+
+Computation time. Table 3 compares computation time on the Rome road-map dataset. The proposed tree-based variants, partic-ularly MLaEt-A and MLaEt-M, maintain low and stable runtime across domain granularities and privacy budgets, remaining com-parable to existing extension-based methods. Both finish within a few seconds as the domain grows from hundreds to thousands of records, indicating that recursive tree-based extension introduces only modest computational overhead. In contrast, LP-A requires substantially more time when computationally feasible, while sev-eral full optimization-based methods exceed the 1000-second time limit. MLaEt-O becomes more expensive at finer granularities, in-dicating that the choice of local extension strategy directly affects end-to-end efficiency. Although predefined and hybrid mechanisms are faster, they in-cur substantially higher utility loss. Overall, the results demonstrate a favorable utility–efficiency trade-off: the proposed tree-based methods retain much of the efficiency of lightweight extension methods while achieving substantially better utility than predefined baselines and scaling more effectively than optimization-intensive approaches. 
+
+mDP violation rate. We finally evaluate empirical mDP violation rates on the Rome road-map dataset, with results reported in Ta-ble 4. The proposed tree-based variants, MLaEt-A, MLaEt-M, and MLaEt-O, achieve zero empirical violations across all tested granu-larities and privacy budgets. This is consistent with the theoreti-cal design of the framework: local extension, overlap consistency, and successor-level preservation together prevent privacy errors from accumulating during recursive refinement. In contrast, LP-A has small but nonzero violation ratios, suggesting that its coarse-domain approximation may leave residual privacy violations. EM, Laplace, EM+RMP, MW, AIPO, and the proposed tree-based variants all achieve zero violation in the reported Rome settings. Together with the utility and runtime results, these findings show that the proposed tree-based framework offers a favorable balance among utility, efficiency, and empirical privacy validity. 
+
+Effect of seed-grid density. To examine how seed-set selection affects performance, we conduct an ablation study of the three MLaEt variants and the LP-A baseline on the Rome dataset. We vary the seed-grid resolution from 5 ˆ 5 to 17 ˆ 17 while holding all other experimental settings fixed. A denser grid provides more Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+# Participating Points 483 (depth=2) 4087 (depth=3) 63865 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+Rome road map Pre-defined EM 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Noise Distribution Laplace 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Hybrid EM+RMP 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 0.0465±0.0031 0.0245±0.0025 0.0119±0.0012 0.0465±0.0031 0.0245±0.0025 0.0119±0.0012 0.0465±0.0031 0.0245±0.0025 0.0119±0.0012 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Based Methods MW 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Tree-based MLaEt-A 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 extension MLaEt-M 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 algorithms MLaEt-O 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 
+
+Table 4: mDP violation ratio of different perturbation methods Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. Table 5: Effect of the seed-grid density on the three MLaEt variants and the LP-A baseline (Rome).                                                                                            
+
+> Grid dimensions 5ˆ57ˆ79ˆ911 ˆ11 13 ˆ13 15 ˆ15 17 ˆ17
+> MLaEt-A
+> Loss (km) 7.2902 6.4534 5.9906 5.7265 5.5845 5.4542 5.6767 Time (seconds) 0.9248 1.3292 2.0040 3.2189 5.0931 8.8058 14.1384 mDP violation ratio 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+> MLaEt-M
+> Loss (km) 7.3541 6.4185 5.9390 5.7302 5.7552 5.6641 5.5718 Time (seconds) 0.9122 1.2934 1.9375 3.0449 4.8038 8.0187 13.0760 mDP violation ratio 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+> MLaEt-O
+> Loss (km) 6.7389 6.1400 5.5556 5.4801 5.4539 5.1714 5.2085 Time (seconds) 1.2254 2.0426 3.3818 5.4406 8.5851 13.6740 21.4490 mDP violation ratio 0.00 0.00 0.00 0.00 0.00 0.00 0.00 LP-A Loss (km) 10.2718 10.3325 10.5798 9.6375 9.3371 9.2056 9.1385 Time (seconds) 0.0622 0.3433 1.6355 6.0257 17.1640 48.2081 108.6403 mDP violation ratio 0.0334 0.0382 0.0326 0.0289 0.0254 0.0232 0.0203
+
+seed records for representing the target domain but also increases the size of the seed-level optimization problem. Table 5 reports the resulting utility loss, computation time, and empirical mDP violation ratio. 10 0 10 2
+
+> Computation time (s, log scale)
+> 5678910
+> Utility loss (km)  MLaEt-A MLaEt-M MLaEt-O LP-A
+
+Figure 6: Utility vs. com-putation time (Rome). 
+
+The results show a clear utility–efficiency trade-off for the proposed variants. Increas-ing the seed-grid resolution gen-erally reduces the utility loss of all three MLaEt variants, with most improvements occurring between 5 ˆ 5 and 11 ˆ 11– 13 ˆ 13. Beyond this range, the gains diminish and are not strictly monotonic: MLaEt-A and MLaEt-O achieve their low-est losses at 15 ˆ 15, while MLaEt-M reaches its lowest loss at 17 ˆ 17. Computation time increases with seed density, while all three variants maintain zero empirical mDP violations across the tested settings. LP-A shows a less favorable trade-off: its runtime in-creases rapidly with seed density, exceeding 100 seconds at 17 ˆ 17, while maintaining higher utility loss and nonzero empirical mDP violation ratios across all tested resolutions. Overall, the proposed MLaEt variants achieve a better utility–efficiency–privacy balance. Fig. 6 further illustrates the utility–efficiency trade-off by plot-ting utility loss against computation time on a logarithmic scale, where points closer to the lower-left indicate a better balance. Among the proposed variants, MLaEt-O generally achieves lower utility loss but requires more computation, while MLaEt-A and MLaEt-M exhibit similar utility and efficiency. LP-A shows higher utility loss across all tested seed densities, while its runtime grows much faster with seed density. 
+
+## 7 Conclusions and Discussions 
+
+This paper presented a graph-based framework for extending mDP mechanisms from seed records to large, fine-grained target do-mains. We identified three necessary and sufficient correctness requirements, local mDP, overlap consistency, and successor-level mDP preservation, and proved that they characterize a well-defined global mDP mechanism within our extension framework. We fur-ther instantiated the framework through a tree-based algorithm for multiresolution grid domains. Experiments on road-map datasets demonstrate a favorable utility–scalability–privacy trade-off. The proposed tree-based algorithms reduce utility loss compared with predefined and hybrid mechanisms, scale more effectively than com-putationally intensive optimization-based approaches, and maintain negligible empirical mDP violations. These results demonstrate the potential of extension-based design for scalable mDP mechanism construction over large fine-grained domains. Several directions remain for future work. First, the framework can be extended to higher-dimensional, non-grid, and irregular met-ric domains, where extension graphs may be induced by meshes, road-network partitions, embeddings, or other domain-specific structures. Second, adaptive seed selection could further improve the utility–efficiency trade-off by placing more anchors in regions with complex geometry, high prior probability, or large utility sen-sitivity. Third, richer task-specific utility objectives could be incor-porated, including downstream prediction accuracy, task allocation A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+quality, or application-aware travel-cost metrics. Finally, it would be valuable to study tighter normalization analysis, adaptive privacy-budget allocation across extension levels, and deployment-oriented evaluations under realistic mobility traces and stronger inference attacks. 
+
+## 8 Acknowledgements 
+
+This paper was edited for grammar using ChatGPT. This research was partially supported by U.S. NSF grants CNS-2136948 and CNS-2313866. 
+
+## References 
+
+[1] 2020. openstreetmap. https://www.openstreetmap.org/. Accessed: 2020-04-07. [2] Miguel E Andrés, Nicolás E Bordenabe, Konstantinos Chatzikokolakis, and Catus-cia Palamidessi. 2013. Geo-indistinguishability: Differential privacy for location-based systems. In Proceedings of the 2013 ACM SIGSAC conference on Computer & communications security . 901–914. [3] N. E. Bordenabe, K. Chatzikokolakis, and C. Palamidessi. 2014. Optimal Geo-Indistinguishable Mechanisms for Location Privacy. In Proc. of ACM CCS . 251– 262. [4] Christian Borgs, Jennifer Chayes, Adam Smith, and Ilias Zadik. 2018. Private Algorithms Can Always Be Extended. arXiv:1810.12518 [math.ST] https://arxiv. org/abs/1810.12518 [5] Konstantinos Chatzikokolakis, Miguel E Andrés, Nicolás Emilio Bordenabe, and Catuscia Palamidessi. 2013. Broadening the scope of differential privacy using metrics. In international symposium on privacy enhancing technologies symposium .Springer, 82–102. [6] Konstantinos Chatzikokolakis, Ehab Elsalamouny, and Catuscia Palamidessi. 2017. Efficient utility improvement for location privacy. Proceedings on Privacy Enhancing Technologies (2017). [7] Konstantinos Chatzikokolakis, Catuscia Palamidessi, and Marco Stronati. 2015. Constructing elastic distinguishability metrics for location privacy. Proceedings on Privacy Enhancing Technologies (2015). [8] Jia-Wei Chen, Li-Ju Chen, Chia-Mu Yu, and Chun-Shien Lu. 2021. Perceptual indistinguishability-net (pi-net): Facial image obfuscation with manipulable se-mantics. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 6478–6487. [9] John C. Duchi, Michael I. Jordan, and Martin J. Wainwright. 2013. Local Pri-vacy and Statistical Minimax Rates. In 2013 IEEE 54th Annual Symposium on Foundations of Computer Science . 429–438. doi:10.1109/FOCS.2013.53 [10] Oluwaseyi Feyisetan and Shiva Kasiviswanathan. 2021. Private release of text embedding vectors. In Proceedings of the First Workshop on Trustworthy Natural Language Processing . 15–27. [11] Yuchao Hou, Jiazhe Jiao, Jie Wang, Guangyin Jin, Zijian Zhang, Xiaoyu Xia, Zhiquan Liu, Minglu Li, and Youliang Tian. 2026. Federated Analytics Assisted Semantic Alignment for Secure and Privacy-Preserving Image Classification. 
+
+IEEE Transactions on Dependable and Secure Computing (2026), 1–16. doi:10.1109/ TDSC.2026.3704515 [12] Jacob Imola, Shiva Kasiviswanathan, Stephen White, Abhinav Aggarwal, and Nathanael Teissier. 2022. Balancing utility and scalability in metric differential privacy. In Proc. of UAI 2022 .[13] Jacob Imola, Shiva Kasiviswanathan, Stephen White, Abhinav Aggarwal, and Nathanael Teissier. 2022. Balancing utility and scalability in metric differential privacy. In Uncertainty in Artificial Intelligence . PMLR, 885–894. [14] Ruiyao Liu and Chenxi Qiu. 2025. PAnDA: Rethinking Metric Differential Privacy Optimization at Scale with Anchor-Based Approximation. In Proceedings of The 32nd ACM Conference on Computer and Communications Security (CCS) .[15] Chenxi Qiu. 2024. Enhancing scalability of metric differential privacy via secret dataset partitioning and benders decomposition. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence . 1944–1952. [16] Chenxi Qiu. 2026. Interpolation-Based Optimization for Enforcing lp-Norm Metric Differential Privacy in Continuous and Fine-Grained Domains. In Proc. of USENIX 2026 .[17] Chenxi Qiu, Ruiyao Liu, Primal Pappachan, Anna Squicciarini, and Xinpeng Xie. 2025. Time-Efficient Locally Relevant Geo-Location Privacy Protection. 
+
+Proceedings on Privacy Enhancing Technologies (2025). [18] C. Qiu, A. C. Squicciarini, C. Pang, N. Wang, and B. Wu. 2022. Location Privacy Protection in Vehicle-Based Spatial Crowdsourcing via Geo-Indistinguishability. 
+
+IEEE Transactions on Mobile Computing (2022), 1–1. doi:10.1109/TMC.2020. 3037911 [19] Chenxi Qiu, Sourabh Yadav, Yuede Ji, Anna Squicciarini, Ramanamurthy Dantu, Juanjuan Zhao, and Chengzhong Xu. 2024. Fine-Grained Geo-Obfuscation to Protect Workers’ Location Privacy in Time-Sensitive Spatial Crowdsourcing. In 
+
+Proc. of EDBT .[20] C. Qiu et al. 2025. Scalable Optimization for Locally Relevant Geo-Location Privacy. In PETS .[21] Hanan Samet. 1984. The Quadtree and Related Hierarchical Data Structures. 
+
+ACM Comput. Surv. 16, 2 (June 1984), 187–260. doi:10.1145/356924.356930 [22] L. Wang, D. Yang, X. Han, T. Wang, D. Zhang, and X. Ma. 2017. Location Privacy-Preserving Task Allocation for Mobile Crowdsensing with Differential Geo-Obfuscation. In Proc. of ACM WWW . 627–636. [23] L. Wang, D. Zhang, D. Yang, B. Lim, and X. Ma. 2016. Differential Location Privacy for Sparse Mobile Crowdsensing. 1257–1262. doi:10.1109/ICDM.2016.0169 [24] Lei Yu, Ling Liu, and Calton Pu. 2017. Dynamic Differential Location Privacy with Personalized Error Bounds.. In NDSS , Vol. 17. 1–15. 
+
+## Ethical Considerations 
+
+We reviewed the venue’s ethics guidance and conducted this study accordingly. The primary stakeholders include researchers and prac-titioners developing metric differential privacy (mDP) mechanisms, users whose locations may be protected, public data and infrastruc-ture providers, and communities vulnerable to location disclosure. Our evaluation uses public OpenStreetMap road-network data for Rome, London, and New York. We conduct only offline perturba-tion simulations and utility evaluations; we collect no personal data, involve no human subjects, interact with no live platforms, and perform no re-identification. Therefore, the research process poses limited direct risk. The proposed framework may benefit re-searchers and practitioners by enabling scalable, utility-aware mDP mechanism design for large spatial domains. However, deployment risks remain. Inappropriate privacy budgets, poorly chosen distance metrics, violations of the framework’s assumptions, or combina-tion with auxiliary data could provide insufficient protection and enable profiling or tracking. To mitigate these risks, we document the framework’s assumptions and calibration procedures, report empirical mDP violations, and recommend conservative privacy budgets and application-specific evaluation. Our artifacts contain only code, scripts, derived results, and public road-network data; no private trajectories or newly collected personal data are released. We concluded that transparent publication offers a net ethical benefit because the study poses low direct risk while enabling community scrutiny and supporting more robust and auditable location-privacy mechanisms. 
+
+## Open Science 
+
+In compliance with the Open Science Policy, we provide all artifacts needed to evaluate the paper’s core contributions in an anonymous, login-free repository: https://anonymous.4open.science/r/metric-DP-Extension-Algorithms-D0DF. The repository contains no per-sonal identifiers and includes: 
+
+Ź source code , which implementations of the proposed meth-ods and all evaluated baselines; 
+
+Ź datasets used in the paper, with preprocessing scripts where applicable; and 
+
+Ź documentation , including environment information, re-production commands, expected runtimes, and a minimal verification example. All artifacts required to reproduce the main experiments, figures, and tables are shared without licensing, privacy, safety, or responsible-disclosure restrictions. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+## Appendix A Mathematical Notations 
+
+Table 6: Summary of main notation. 
+
+Symbol Description Mechanisms and mDP 
+
+X Secret/input domain. 
+
+Y Output/perturbed domain. 
+
+x, x1 Two secret records. 
+
+y A perturbed output. 
+
+M Randomized perturbation mechanism. 
+
+Mpy | xq Probability of outputting 𝑦 given input 𝑥 .
+
+𝑑 p¨ , ¨q Distance metric on the secret domain. 
+
+𝑑 𝑝 p¨ , ¨q ℓ𝑝 -metric for grid/location records. 
+
+𝜖 Total privacy budget. 
+
+𝑓 ypxq Log-probability function, 𝑓 ypxq “ ln Mpy | xq.
+
+Extension framework 
+
+Xseed Seed records with initially specified or optimized mechanisms. 
+
+Xtar Target records protected by the final mechanism. 
+
+G “ p V, E, tX𝑣 uq Extension graph. 
+
+V, E Node set and directed edge set. 
+
+𝑣, 𝑢, 𝑤 Nodes in the extension graph. 
+
+X𝑣 Record set associated with node 𝑣 .Succ p𝑣 q Direct successors of 𝑣 .Pred p𝑣 q Direct predecessors of 𝑣 .Desc p𝑣 q Descendants of 𝑣 , including 𝑣 .
+
+M𝑣 Ñ𝑢 Edge-local mechanism from 𝑣 to successor 𝑢 .Ext 𝑣 Local extension operator at node 𝑣 .
+
+Tree/grid extension 
+
+𝐿 Maximum extension level. 
+
+𝑟 Grid level, 𝑟 P t 0, . . . , 𝐿 u.
+
+C𝑟 Retained grid cells at level 𝑟 .
+
+ℎ𝑟 Side length of level-𝑟 cells. 
+
+𝑁 𝑟 extension factor between grid levels. corner p𝑣 q Corner vertices of cell/node 𝑣 .
+
+Xsub p𝑣 q Records in the subtree rooted at 𝑣 .
+
+Interpolation 
+
+𝜖 𝑡 Coordinate-wise privacy budget. 
+
+𝑓 𝑡, y One-dimensional interpolation function in log-probability space. 
+
+𝐼 𝑡 Interpolation interval along coordinate 𝑡 .
+
+𝜆 𝑡 pxq One-dimensional interpolation weight of point 
+
+𝑥 .
+
+𝑤 𝛾 pxq Multilinear interpolation weight for corner index 
+
+𝛾 .
+
+𝑓 𝑣 py | xq Pre-normalization interpolated value at node 𝑣 .
+
+𝛾 P t 0, 1u2 Corner index of a 2D cell. 
+
+## B Omitted Proofs B.1 Proof of Lemma 1 
+
+Lemma 1 (Descendant closure of cross-node mDP) . Consider two possibly identical nodes 𝑢, 𝑤 P V whose associated mechanisms satisfy 
+
+M𝑢 pxq 𝜖 
+
+« M𝑤 px1q, @x P X𝑢 , @x1 P X𝑤 . (17) 
+
+Suppose that (A1)–(A3) hold along all subsequent extensions from 𝑢 
+
+and 𝑤 . Then, for every pair of respective descendants 𝑢 2 P Desc p𝑢 q
+
+and 𝑤 2 P Desc p𝑤 q, their associated mechanisms satisfy 
+
+Mpar p𝑢 2qÑ 𝑢 2 pxq 𝜖 
+
+« Mpar p𝑤 2qÑ 𝑤 2 px1q, @x P X𝑢 2 , @x1 P X𝑤 2 .
+
+(18) Proof. Fix descendants 𝑢 2 P Desc p𝑢 q and 𝑤 2 P Desc p𝑤 q, and choose directed paths 
+
+𝑢 “ 𝑢 0 Ñ 𝑢 1 Ñ ¨ ¨ ¨ Ñ 𝑢 𝑇 𝑢 “ 𝑢 2, (19) 
+
+𝑤 “ 𝑤 0 Ñ 𝑤 1 Ñ ¨ ¨ ¨ Ñ 𝑤 𝑇 𝑤 “ 𝑤 2. (20) Let 𝑇 “ max t𝑇 𝑢 ,𝑇 𝑤 u. If the paths have different lengths, pad the shorter path with the identity extensions permitted by (A3) . Such steps leave the corresponding node and its mechanism unchanged. We may therefore write 
+
+𝑢 “ 𝑢 0 Ñ 𝑢 1 Ñ ¨ ¨ ¨ Ñ 𝑢 𝑇 “ 𝑢 2, (21) 
+
+𝑤 “ 𝑤 0 Ñ 𝑤 1 Ñ ¨ ¨ ¨ Ñ 𝑤 𝑇 “ 𝑤 2. (22) We prove by induction on 𝑡 “ 0, . . . ,𝑇 that 
+
+M𝑢 𝑡 pxq 𝜖 
+
+« M𝑤 𝑡 px1q, @x P X𝑢 𝑡 , @x1 P X𝑤 𝑡 . (23) For 𝑡 “ 0, this is exactly the premise in Eq. (17). Suppose that Eq. (23) holds for some 𝑡 ă 𝑇 . By construction, 𝑢 𝑡 `1 is either a direct successor of 𝑢 𝑡 or an identity extension of 𝑢 𝑡 , and similarly for 𝑤 𝑡 `1. Applying successor-level mDP preservation (A3) gives 
+
+M𝑢 𝑡 `1 pxq 𝜖 
+
+« M𝑤 𝑡 `1 px1q, @x P X𝑢 𝑡 `1 , @x1 P X𝑤 𝑡 `1 , (24) which establishes Eq. (23) for 𝑡 ` 1. Applying the induction through 𝑡 “ 𝑇 yields 
+
+M𝑢 2 pxq 𝜖 
+
+« M𝑤 2 px1q, @x P X𝑢 2 , @x1 P X𝑤 2 ,
+
+which is Eq. (18). If either descendant has multiple incoming edges, overlap consistency (A2) ensures that its associated node mecha-nism is independent of the selected incoming edge. □
+
+## B.2 Proof of Theorem 1 
+
+Theorem 1 (Global p𝜖, 𝑑 q-mDP guarantee via extension algorithms) .
+
+Consider a metric space pX, 𝑑 q, a target set Xtar Ď X, and a finite extension graph G “ p V, E, tX𝑣 u𝑣 PV q whose local regions cover 
+
+Xtar and whose relevant nodes are reachable from source nodes V0 “t𝑣 P V : Pred p𝑣 q “ ∅u. Suppose the source regions are equipped with initial mechanisms tM𝑣 u𝑣 PV0 that agree with the prescribed seed mechanism Mseed on Xseed , are consistent on overlapping source regions, and jointly satisfy p𝜖, 𝑑 q-mDP over Ť 
+
+> 𝑣 PV0
+
+X𝑣 .Assume that the extension algorithm propagates these source mech-anisms through G and produces edge-local mechanisms tM𝑣 Ñ𝑢 up𝑣,𝑢 qP E .The induced global mechanism M in Definition 5 is well defined and satisfies p𝜖, 𝑑 q-mDP on Xtar if and only if the source and edge-local mechanisms satisfy (A1)–(A3) .
+
+Proof of Theorem 1. We prove the sufficiency and necessity directions separately. 
+
+Sufficiency. Suppose that the source and edge-local mechanisms satisfy (A1)–(A3) . We first show that they induce a well-defined global mechanism. Let x P Xtar and suppose that two local mecha-nisms assign distributions to x. Each assignment may come from a source mechanism M𝑣 , where 𝑣 P V0, or an edge-local mechanism A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+M𝑝 Ñ𝑣 , where p𝑝, 𝑣 q P E. If both assignments come from source mechanisms, they agree by source-level consistency. Otherwise, overlap consistency (A2) ensures that they agree on x. Therefore, the distribution Mpxq is independent of the selected local assign-ment, and the induced global mechanism is well defined. We next establish the global p𝜖, 𝑑 q-mDP guarantee. Fix arbitrary 
+
+x, x1 P Xtar . By target coverage, choose nodes 𝑣, 𝑧 P V whose associated mechanisms define their distributions, with x P X𝑣 and 
+
+x1 P X𝑧 . If both records belong to the same local region, the required relation follows directly from (A1) or, for a source region, from the source-level mDP assumption. Otherwise, by source reachability, choose source nodes 𝑠, 𝑡 P V0
+
+such that 𝑣 P Desc p𝑠 q and 𝑧 P Desc p𝑡 q, where each node is regarded as its own depth-zero descendant. Because the source mechanisms jointly satisfy p𝜖, 𝑑 q-mDP, 
+
+M𝑠 p ˜xq 𝜖 
+
+« M𝑡 p ˜x1q, @ ˜x P X𝑠 , @ ˜x1 P X𝑡 .
+
+Applying Lemma 1 to the source nodes 𝑠 and 𝑡 propagates this relation to their respective descendants 𝑣 and 𝑧 . Therefore, 
+
+M𝑣 pxq 𝜖 
+
+« M𝑧 px1q.
+
+By the definition and well-definedness of the induced global mechanism, the node-level distributions coincide with Mpxq and 
+
+Mpx1q, respectively. Hence, 
+
+Mpxq 𝜖 
+
+« Mpx1q.
+
+Because x and x1 were arbitrary, M satisfies p𝜖, 𝑑 q-mDP on Xtar .
+
+Necessity. Conversely, suppose that the source and edge-local mechanisms jointly induce a well-defined global mechanism M
+
+satisfying p𝜖, 𝑑 q-mDP on Xtar , with every local mechanism coincid-ing with the restriction of M to its corresponding region. We show that (A1)–(A3) must hold. First, consider any edge-local mechanism M𝑣 Ñ𝑢 and any x, x1 P
+
+X𝑢 . Because M𝑣 Ñ𝑢 is the restriction of M to X𝑢 , global mDP gives 
+
+M𝑣 Ñ𝑢 pxq 𝜖 
+
+« M𝑣 Ñ𝑢 px1q.
+
+Thus, local mDP validity (A1) is necessary. Second, suppose that two local mechanisms are defined on a shared record x. Since both coincide with the same global mecha-nism at x, they must assign the identical distribution Mpxq. There-fore, overlap consistency (A2) is necessary. Finally, consider any two successor regions X𝑢 1 and X𝑤 1 appear-ing in (A3) . For every x P X𝑢 1 and x1 P X𝑤 1 , global mDP implies 
+
+Mpxq 𝜖 
+
+« Mpx1q.
+
+Because the successor mechanisms are restrictions of M, this is equivalent to 
+
+M𝑢 Ñ𝑢 1 pxq 𝜖 
+
+« M𝑤 Ñ𝑤 1 px1q.
+
+Thus, the relation required by successor-level mDP preservation holds whenever its premise holds, establishing the necessity of 
+
+(A3) .Therefore, within the proposed extension framework, (A1)–(A3) 
+
+are both necessary and sufficient for the local mechanisms to induce a well-defined global p𝜖, 𝑑 q-mDP mechanism on Xtar . □
+
+## B.3 Proof of Proposition 1 
+
+Lemma 2 (One-Dimensional mDP-Preserving Interpolation) . Fix an output y P Y and a coordinate 𝑡 . Consider a one-dimensional interval r𝑎, 𝑏 s Ă R along coordinate 𝑡 (with all other coordinates held fixed), and let two anchor records x𝑖 , x𝑖 1 satisfy 𝑥 𝑖,𝑡 “ 𝑎 , 𝑥 𝑖 1,𝑡 “ 𝑏 .Let 𝑔 : r𝑎, 𝑏 s Ñ R be an interpolation curve satisfying the endpoint constraints 
+
+𝑔 p𝑎 q “ ln Mpy | x𝑖 q, 𝑔 p𝑏 q “ ln Mpy | x𝑖 1 q. (25) 
+
+Assume 𝑔 is absolutely continuous on r𝑎, 𝑏 s.1 Then the following are equivalent: (i) 𝑔 is 𝜖 𝑡 -Lipschitz on r𝑎, 𝑏 s, i.e., 
+
+|𝑔 p𝑣 q ´ 𝑔 p𝑢 q| ď 𝜖 𝑡 |𝑣 ´ 𝑢 |, @ 𝑢, 𝑣 P r 𝑎, 𝑏 s. (26) 
+
+(ii) 𝑔 is differentiable almost everywhere on p𝑎, 𝑏 q and its derivative satisfies 
+
+ˇˇˇˇ
+
+d𝑔 p𝑢 q
+
+d𝑢 
+
+ˇˇˇˇ ď 𝜖 𝑡 for almost every 𝑢 P p 𝑎, 𝑏 q. (27) 
+
+Consequently, defining ln 𝑓 py | xp𝑢 qq :“ 𝑔 p𝑢 q yields a one-dimensional 
+
+p𝜖 𝑡 , 𝑑 1q-Lipschitz log-probability (and hence one-dimensional mDP along coordinate 𝑡 ) on this interval. 
+
+Proof. We prove both directions. 
+
+(ii) ñ (i) (Sufficiency). Since 𝑔 is absolutely continuous on r𝑎, 𝑏 s, the fundamental theorem of calculus gives, for any 𝑢, 𝑣 P r 𝑎, 𝑏 s,
+
+𝑔 p𝑣 q ´ 𝑔 p𝑢 q “ 
+
+ż 𝑣 𝑢 
+
+d𝑔 p𝑤 q
+
+d𝑤 𝑑𝑤 . (28) Taking absolute values and using the derivative bound: 
+
+|𝑔 p𝑣 q ´ 𝑔 p𝑢 q| “
+
+ˇˇˇˇż 𝑣 𝑢 
+
+d𝑔 p𝑤 q
+
+d𝑤 𝑑𝑤 
+
+ˇˇˇˇ (29) 
+
+ď
+
+ż max t𝑢,𝑣 u
+
+> min t𝑢,𝑣 u
+
+ˇˇˇˇ
+
+d𝑔 p𝑤 q
+
+d𝑤 
+
+ˇˇˇˇ 𝑑𝑤 (30) 
+
+ď
+
+ż max t𝑢,𝑣 u
+
+> min t𝑢,𝑣 u
+
+𝜖 𝑡 𝑑𝑤 (31) 
+
+“ 𝜖 𝑡 |𝑣 ´ 𝑢 |. (32) 
+
+(i) ñ (ii) (Necessity). If 𝑔 is 𝜖 𝑡 -Lipschitz, then by Rademacher’s theorem 𝑔 is differentiable almost everywhere on p𝑎, 𝑏 q. At every point of differentiability, 
+
+ˇˇˇˇ
+
+d𝑔 p𝑢 q
+
+d𝑢 
+
+ˇˇˇˇ “ lim 
+
+> ℎÑ0
+
+ˇˇˇˇ
+
+𝑔 p𝑢 ` ℎq ´ 𝑔 p𝑢 q
+
+ℎ
+
+ˇˇˇˇ ď lim 
+
+> ℎÑ0
+
+𝜖 𝑡 |ℎ||ℎ| “ 𝜖 𝑡 , (33) where we used |𝑔 p𝑢 ` ℎq ´ 𝑔 p𝑢 q| ď 𝜖 𝑡 |ℎ|. Hence 
+
+ˇˇˇ d𝑔 p𝑢 q
+
+> d𝑢
+
+ˇˇˇ ď 𝜖 𝑡 for a.e. 𝑢 P p 𝑎, 𝑏 q. □
+
+Remark (Why anchors and multiple intervals do not change the IFF) . The equivalence in Lemma 2 is a global characterization on 
+
+r𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s and does not depend on how 𝑔 is constructed (e.g., via dif-ferent formulas on different sub-intervals r𝑥 p𝑟 q 
+
+> 𝑡
+
+, 𝑥 p𝑟 `1q 
+
+> 𝑡
+
+s). The anchor constraints 𝑔 p𝑥 p𝑟 q 
+
+> 𝑡
+
+q “ ln Mpy | xp𝑟 qq merely restrict the feasible set of interpolants; they do not affect the Lipschitz–derivative equivalence.  
+
+> 1Absolute continuity is a mild regularity condition satisfied by all standard interpola-tion schemes (e.g., linear, log-convex, spline). It guarantees the fundamental theorem of calculus and rules out pathological (e.g., Cantor-function-type) interpolants. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu
+
+We now generalize to a multi-anchor setting, which is the situa-tion encountered in the tree-based extension: each one-dimensional line through the grid passes through multiple anchor records, and the interpolation may use different formulas on different sub-intervals. 
+
+Proposition 1 (One-Dimensional Interpolation Validity — Unified Intra- and Across-Interval) . Fix a coordinate 𝑡 and an output y P Y.Let xp1q, . . . , xp𝑚 q P ˆ𝑋 be anchor records that differ only in their 𝑡 -th coordinate, with 
+
+𝑥 p1q 
+
+> 𝑡
+
+ă 𝑥 p2q 
+
+> 𝑡
+
+ă ¨ ¨ ¨ ă 𝑥 p𝑚 q 
+
+> 𝑡
+
+. (34) 
+
+Suppose that consecutive anchor pairs satisfy the p𝜖 𝑡 , 𝑑 1q-Lipschitz bound: 
+
+ˇˇln Mpy | xp𝑟 qq´ ln Mpy | xp𝑟 `1qqˇˇ ď 𝜖 𝑡 
+
+ˇˇ𝑥 p𝑟 q 
+
+> 𝑡
+
+´𝑥 p𝑟 `1q
+
+> 𝑡
+
+ˇˇ, 𝑟 “ 1, . . . , 𝑚 ´1.
+
+(35) 
+
+Let 𝑔 : r𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s Ñ R be any absolutely continuous interpolation function satisfying: (i) Anchor consistency: 𝑔 `𝑥 p𝑟 q
+
+> 𝑡
+
+˘ “ ln Mpy | xp𝑟 qq for all 𝑟 “
+
+1, . . . , 𝑚 ;(ii) Slope cap: 
+
+ˇˇˇ d𝑔 p𝑢 q
+
+> d𝑢
+
+ˇˇˇ ď 𝜖 𝑡 for a.e. 𝑢 P `𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q
+
+> 𝑡
+
+˘.Then for any two records x, x1 P X that differ from the anchors only in the 𝑡 -th coordinate, with 𝑥 𝑡 , 𝑥 1 
+
+> 𝑡
+
+P r 𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s — regardless of whether 
+
+𝑥 𝑡 and 𝑥 1 
+
+> 𝑡
+
+fall in the same sub-interval r𝑥 p𝑟 q 
+
+> 𝑡
+
+, 𝑥 p𝑟 `1q 
+
+> 𝑡
+
+s or in different sub-intervals — the interpolated log-perturbation probabilities satisfy 
+
+ˇˇln 𝑓 py | xq ´ ln 𝑓 py | x1qˇˇ ď 𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|, (36) 
+
+i.e., the p𝜖 𝑡 , 𝑑 1q-Lipschitz bound holds between x and x1.
+
+Proof. By condition (ii), 
+
+ˇˇˇ d𝑔 p𝑢 q
+
+> d𝑢
+
+ˇˇˇ ď 𝜖 𝑡 for a.e. 𝑢 P p 𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+q.Applying the (ii) ñ (i) direction of Lemma 2 to the full interval 
+
+r𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s, we conclude that 𝑔 is globally 𝜖 𝑡 -Lipschitz. The result follows by evaluating the Lipschitz inequality at 𝑢 “ 𝑥 𝑡 and 𝑣 “
+
+𝑥 1 
+
+> 𝑡
+
+. □
+
+Remark. Proposition 1 simultaneously subsumes both the intra-interval case (where 𝑥 𝑡 and 𝑥 1 
+
+> 𝑡
+
+lie in the same sub-interval, corre-sponding to the original Proposition 1) and the across-interval case (where they lie in different sub-intervals, corresponding to the origi-nal Proposition 2). No case distinction is needed: the global Lipschitz property established via Lemma 2 applies uniformly to all pairs. 
+
+Remark (Why anchors and multiple intervals do not change the IFF) . The equivalence in Lemma 2 is a global characterization on 
+
+r𝑥 p1q 
+
+> 𝑡
+
+, 𝑥 p𝑚 q 
+
+> 𝑡
+
+s and does not depend on how 𝑓 is constructed (e.g., via dif-ferent formulas on different sub-intervals r𝑥 p𝑟 q 
+
+> 𝑡
+
+, 𝑥 p𝑟 `1q 
+
+> 𝑡
+
+s). The anchor constraints 𝑓 p𝑥 p𝑟 q 
+
+> 𝑡
+
+q “ ln Mpy | xp𝑟 qq merely restrict the feasible set of interpolants; they do not affect the Lipschitz–derivative equivalence. 
+
+## B.4 Proof of Theorem 3 
+
+Theorem 3 (Successor-level preservation under two-dimensional interpolation) . Let 𝑢 and 𝑤 be two cells at the same extension level, and suppose their mechanisms satisfy the coordinate-wise cross-cell Lipschitz bound: for any x P X𝑢 , x1 P X𝑤 , and y P Y,
+
+ˇˇln M𝑢 py|xq ´ ln M𝑤 py|x1qˇˇ ď
+
+> 2
+
+ÿ
+
+> 𝑡 “1
+
+𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|.
+
+Let 𝑢 1 P Succ p𝑢 q and 𝑤 1 P Succ p𝑤 q, and suppose that the mecha-nisms on 𝑢 1 and 𝑤 1 are generated from M𝑢 and M𝑤 , respectively, using the two-dimensional interpolation operator in Definition 7. Then, for any x P X𝑢 1 , x1 P X𝑤 1 , and y P Y, the pre-normalization inter-polants satisfy 
+
+ˇˇln 𝑓 𝑢 py|xq ´ ln 𝑓 𝑤 py|x1qˇˇ ď
+
+> 2
+
+ÿ
+
+> 𝑡 “1
+
+𝜖 𝑡 |𝑥 𝑡 ´ 𝑥 1 
+
+> 𝑡
+
+|.
+
+Consequently, if 𝜖 1 and 𝜖 2 satisfy the dimension-wise composition condition in Theorem 2, then 
+
+ˇˇln 𝑓 𝑢 py|xq ´ ln 𝑓 𝑤 py|x1qˇˇ ď ¯𝜖𝑑 𝑝 px, x1q,
+
+where ¯𝜖 is the composed pre-normalization budget. In particular, with the calibrated choice ¯𝜖 “ 𝜖 {2, the normalized successor mechanisms satisfy the target p𝜖, 𝑑 q-mDP bound. 
+
+Lemma 3 (Cross-cell bound from 2D interpolation when one co-ordinate coincides) . Let 𝑢 and 𝑤 be two cells at the same extension level of the aligned grid tree, and let 
+
+𝑢 1 P Succ p𝑢 q, 𝑤 1 P Succ p𝑤 q
+
+be successor cells generated by the two-dimensional interpolation rule in Definition 7. Let 
+
+x “ p 𝑥 1, 𝑥 2q P X𝑢 1 , x1 “ p 𝑥 1
+
+> 1
+
+, 𝑥 1
+
+> 2
+
+q P X𝑤 1 .
+
+Assume that either 𝑥 1 “ 𝑥 1 
+
+> 1
+
+or 𝑥 2 “ 𝑥 1
+
+> 2
+
+. Also assume that the corresponding endpoint pairs used by the interpolation satisfy the coordinate-wise cross-cell Lipschitz bound. Then, for every y P Y,
+
+ˇˇln 𝑓 𝑢 p𝑦 | xq ´ ln 𝑓 𝑤 p𝑦 | x1qˇˇ ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+| ` 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|. (37) Proof. We prove the case 𝑥 1 “ 𝑥 1
+
+> 1
+
+; the case 𝑥 2 “ 𝑥 1 
+
+> 2
+
+is symmetric by exchanging coordinates 1 and 2. Let x𝐿 , x𝑅 be the two endpoints of the horizontal interpolation segment through x inside cell 𝑢 , and let x1𝐿 , x1𝑅 be the corresponding endpoints of the horizontal interpolation segment through x1 inside cell 𝑤 . Since 𝑢 and 𝑤 are at the same extension level and use the same extension template, the equality 𝑥 1 “ 𝑥 1 
+
+> 1
+
+implies that x and 
+
+x1 have the same relative position along coordinate 1. Hence they use the same interpolation coefficient 𝜆 along that coordinate. By the one-dimensional restriction property of Definition 7, ln 𝑓 𝑢 p𝑦 | xq “ 𝜆 ln 𝑓 𝑢 p𝑦 | x𝐿 q ` p 1 ´ 𝜆 q ln 𝑓 𝑢 p𝑦 | x𝑅 q,
+
+and ln 𝑓 𝑤 p𝑦 | x1q “ 𝜆 ln 𝑓 𝑤 p𝑦 | x1𝐿 q ` p 1 ´ 𝜆 q ln 𝑓 𝑤 p𝑦 | x1𝑅 q.
+
+Subtracting the two equalities and applying the triangle inequality gives ˇˇln 𝑓 𝑢 p𝑦 | xq ´ ln 𝑓 𝑤 p𝑦 | x1qˇˇ
+
+ď 𝜆 ˇˇln 𝑓 𝑢 p𝑦 | x𝐿 q ´ ln 𝑓 𝑤 p𝑦 | x1𝐿 qˇˇ
+
+` p 1 ´ 𝜆 qˇˇln 𝑓 𝑢 p𝑦 | x𝑅 q ´ ln 𝑓 𝑤 p𝑦 | x1𝑅 qˇˇ. (38) By the coordinate-wise cross-cell Lipschitz assumption applied to the two corresponding endpoint pairs, 
+
+ˇˇln 𝑓 𝑢 p𝑦 | x𝐿 q ´ ln 𝑓 𝑤 p𝑦 | x1𝐿 qˇˇ ď 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|,
+
+and ˇˇln 𝑓 𝑢 p𝑦 | x𝑅 q ´ ln 𝑓 𝑤 p𝑦 | x1𝑅 qˇˇ ď 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|.A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Substituting these bounds into (38) yields 
+
+ˇˇln 𝑓 𝑢 p𝑦 | xq ´ ln 𝑓 𝑤 p𝑦 | x1qˇˇ ď 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|.
+
+Since 𝑥 1 “ 𝑥 1
+
+> 1
+
+, this is exactly 
+
+ˇˇln 𝑓 𝑢 p𝑦 | xq ´ ln 𝑓 𝑤 p𝑦 | x1qˇˇ ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+| ` 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|.
+
+This proves the claim. □
+
+Proof. Fix arbitrary 
+
+x “ p 𝑥 1, 𝑥 2q P X𝑢 1 , x1 “ p 𝑥 1
+
+> 1
+
+, 𝑥 1
+
+> 2
+
+q P X𝑤 1 , y P Y.
+
+Let 𝑢 “ 𝐶 𝑖 0 𝑗 0 and 𝑤 “ 𝐶 𝑖 1 𝑗 1 . Define the intermediate cell 
+
+𝑡 :“ 𝐶 𝑖 0 𝑗 1 ,
+
+and let 𝑡 1 P Succ p𝑡 q be the successor cell occupying the same rela-tive position under the common extension template as 𝑢 1 and 𝑤 1. If the retained grid excludes 𝑡 or 𝑡 1, we treat them as virtual aligned cells used only for the proof; the same interpolation rule assigns pre-normalization values on these virtual points. Define the intermediate point 
+
+m :“ p 𝑥 1, 𝑥 1
+
+> 2
+
+q.
+
+By alignment of the extension template, m P X𝑡 1 or is a virtual interpolation point in the aligned extension. Now x P X𝑢 1 and m P X𝑡 1 have the same first coordinate. Hence, by Lemma 3, 
+
+ˇˇln 𝑓 𝑢 py | xq ´ ln 𝑓 𝑡 py | mqˇˇ ď 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|. (39) Similarly, m P X𝑡 1 and x1 P X𝑤 1 have the same second coordinate. Again by Lemma 3, 
+
+ˇˇln 𝑓 𝑡 py | mq ´ ln 𝑓 𝑤 py | x1qˇˇ ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+|. (40) Applying the triangle inequality and then substituting (39) and (40), we obtain 
+
+ˇˇln 𝑓 𝑢 py | xq ´ ln 𝑓 𝑤 py | x1qˇˇ ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+| ` 𝜖 2|𝑥 2 ´ 𝑥 1
+
+> 2
+
+|.
+
+This proves the coordinate-wise cross-cell preservation bound. By the dimension-wise composition theorem, if 𝜖 1 and 𝜖 2 com-pose to the pre-normalization budget ¯ 𝜖 , then 
+
+ˇˇln 𝑓 𝑢 py | xq ´ ln 𝑓 𝑤 py | x1qˇˇ ď ¯𝜖𝑑 𝑝 px, x1q.
+
+Finally, consider the normalized mechanisms 
+
+M𝑢 p𝑦 | xq “ 𝑓 𝑢 p𝑦 | xq
+
+ř 
+
+> y1PY
+
+𝑓 𝑢 py1 | xq
+
+and similarly for M𝑤 . Since the pre-normalization log-scores are ¯𝜖 -Lipschitz for every output, the corresponding log-normalizers are also ¯ 𝜖 -Lipschitz. Therefore, 
+
+ˇˇln M𝑢 p𝑦 | xq ´ ln M𝑤 p𝑦 | x1qˇˇ ď 2 ¯ 𝜖𝑑 𝑝 px, x1q.
+
+Choosing ¯ 𝜖 “ 𝜖 {2 yields the desired p𝜖, 𝑑 q-mDP bound for the normalized successor mechanisms. □
+
+## B.5 Proof of Theorem 4 
+
+Theorem 4 (Subtree-level preservation of the tree-based exten-sion) . Consider the tree-based extension algorithm. Fix a node 𝑣 in the extension tree, and define 
+
+Xsub p𝑣 q :“ ď
+
+> xPDesc p𝑣 q
+
+X𝑧 .
+
+Assume that the corner anchors of 𝑣 satisfy the coordinate-wise Lips-chitz bounds in log space with pre-normalization budgets 𝜖 1, 𝜖 2, and that every extension inside the subtree rooted at 𝑣 is performed by the 2-dimensional interpolation operator in Definition 7. Assume further that 𝜖 1, 𝜖 2 satisfy the dimension-wise composition condition with total pre-normalization budget 𝜖 under the ℓ𝑝 metric. Then, for any two records x, x1 P Xsub p𝑣 q and any output y P Y,the pre-normalization interpolants satisfy 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď 𝜖𝑑 𝑝 px, x1q.
+
+Consequently, after the calibrated normalization step, the induced mechanism on Xsub p𝑣 q satisfies p𝜖, 𝑑 q-mDP. 
+
+Lemma 4 (Coordinate-wise preservation in a subtree) . Fix a node 
+
+𝑣 in the extension tree, and define 
+
+Xsub p𝑣 q :“ ď
+
+> xPDesc p𝑣 q
+
+X𝑧 .
+
+Assume that the corner anchors of 𝑣 satisfy the coordinate-wise Lips-chitz bounds in log space, and that every extension inside the subtree rooted at 𝑣 is performed by the 2-dimensional interpolation operator in Definition 7. Then, for any two records x, x1 P Xsub p𝑣 q that differ only in coordinate 𝑡 P t 1, 2u, the pre-normalization interpolants satisfy 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď 𝜖 𝑡 |𝑥 𝑡 ´ x1 
+
+> 𝑡
+
+|, @y P Y.
+
+Proof. We prove the case 𝑡 “ 1; the case 𝑡 “ 2 is symmetric. By Definition 7, the restriction of each 2-dimensional interpola-tion step to any axis-aligned segment parallel to coordinate 1 is a one-dimensional interpolation rule satisfying the p𝜖 1, 𝑑 1q-Lipschitz bound in log space. By Proposition 1, every pair of records gener-ated on such a segment satisfies the coordinate-wise bound. Moreover, since the parent anchors of 𝑣 satisfy the coordinate-wise Lipschitz constraints, the first extension from 𝑣 produces child corner values that also satisfy these constraints. Therefore, the child corners are valid anchors for the next extension step. Repeating this argument level by level shows that every one-dimensional interpolation segment inside the subtree rooted at 𝑣 satisfies the same coordinate-wise Lipschitz bound. Now let 
+
+𝑥 “ p 𝑥 1, 𝑡 q, x1 “ p 𝑥 1
+
+> 1
+
+, 𝑡 q
+
+be two records in Xsub p𝑣 q with 𝑥 1 ă 𝑥 1
+
+> 1
+
+. Because the extensions are axis-aligned and nested, the horizontal segment from 𝑥 to x1 can be partitioned into finitely many subsegments 
+
+𝑥 “ p0, p1, . . . , p𝑚 “ x1,
+
+where each consecutive pair p𝑖 ´1, p𝑖 lies on one such one-dimensional interpolation segment. Hence, for every 𝑖 “ 1, . . . , 𝑚 ,
+
+|ln 𝑓 𝑣 py | p𝑖 q ´ ln 𝑓 𝑣 py | p𝑖 ´1q| ď 𝜖 1|p p𝑖 q1 ´ p p𝑖 ´1q1|.Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+Table 7: Comparison of conventional central DP, LDP, and mDP. 
+
+Property Central DP LDP mDP Input Dataset 𝐷 Individual record x Secret x or dataset 𝐷 
+
+Randomization Trusted curator User device Central or local Compared inputs Neighboring datasets Any two records Any two secrets Privacy bound 𝑒 𝜖 𝑒 𝜖 𝑒 𝜖𝑑 px,x1q
+
+Distance Dataset adjacency Discrete record metric Application-defined metric By the triangle inequality, 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď
+
+> 𝑚
+
+ÿ
+
+> 𝑖 “1
+
+|ln 𝑓 𝑣 py | p𝑖 q ´ ln 𝑓 𝑣 py | p𝑖 ´1q| ď 𝜖 1
+
+> 𝑚
+
+ÿ
+
+> 𝑖 “1
+
+|p p𝑖 q1 ´ p p𝑖 ´1q1|“ 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+|.
+
+Thus the coordinate-wise preservation bound holds for 𝑡 “ 1. The case 𝑡 “ 2 follows identically by considering a vertical segment. □
+
+Proof. By Lemma 4, the 2-dimensional interpolation operator preserves the coordinate-wise Lipschitz bounds throughout the subtree rooted at 𝑣 . Therefore, for any two records in Xsub p𝑣 q that differ only in coordinate 𝑡 P t 1, 2u, we have 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď 𝜖 𝑡 |𝑥 𝑡 ´ x1 
+
+> 𝑡
+
+|, @y P Y.
+
+Now take arbitrary records 
+
+𝑥 “ p 𝑥 1, 𝑥 2q, x1 “ p 𝑥 1
+
+> 1
+
+, x1
+
+> 2
+
+q
+
+in Xsub p𝑣 q, and fix any output y P Y. Define the intermediate point 
+
+𝑚 :“ p 𝑥 1, x1
+
+> 2
+
+q.
+
+If 𝑚 is not an explicitly retained record, we treat it as a virtual in-terpolation point inside the aligned extension of the subtree rooted at 𝑣 . The same interpolation rule assigns a pre-normalization value 
+
+𝑓 𝑣 py | 𝑚 q to this point. Since 𝑥 and 𝑚 differ only in the second coordinate, Lemma 4 gives 
+
+|ln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | 𝑚 q| ď 𝜖 2|𝑥 2 ´ x1
+
+> 2
+
+|.
+
+Similarly, since 𝑚 and x1 differ only in the first coordinate, the same lemma gives 
+
+ˇˇln 𝑓 𝑣 py | 𝑚 q ´ ln 𝑓 𝑣 py | x1qˇˇ ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+|.
+
+By the triangle inequality, 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď | ln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | 𝑚 q| ` ˇˇln 𝑓 𝑣 py | 𝑚 q ´ ln 𝑓 𝑣 py | x1qˇˇ
+
+ď 𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+| ` 𝜖 2|𝑥 2 ´ x1
+
+> 2
+
+|.
+
+Since 𝜖 1, 𝜖 2 satisfy the dimension-wise composition condition with total pre-normalization budget 𝜖 {2, we have 
+
+𝜖 1|𝑥 1 ´ 𝑥 1
+
+> 1
+
+| ` 𝜖 2|𝑥 2 ´ x1
+
+> 2
+
+| ď 𝜖 
+
+2𝑑 𝑝 px, x1q.
+
+Therefore, 
+
+ˇˇln 𝑓 𝑣 py | xq ´ ln 𝑓 𝑣 py | x1qˇˇ ď 𝜖 
+
+2𝑑 𝑝 px, x1q.
+
+Finally, by the calibrated normalization step, a pre-normalization 
+
+p𝜖 {2, 𝑑 𝑝 q-Lipschitz bound in log space yields a final p𝜖, 𝑑 𝑝 q-mDP mechanism. Hence the induced mechanism on Xsub p𝑣 q satisfies 
+
+p𝜖, 𝑑 q-mDP. □
+
+## C Comparison Between DP, LDP, and mDP 
+
+Table 7 compares conventional central DP, LDP, and mDP. Central DP operates on a dataset and provides indistinguishability between neighboring datasets, typically through randomization performed by a trusted curator. In contrast, LDP randomizes each user’s record locally before release and protects any pair of possible records using the same multiplicative privacy bound, 𝑒 𝜖 . The randomized reports may still be aggregated by the server; thus, the key distinction between central DP and LDP is where randomization occurs and whether the curator has access to raw records, rather than pertur-bation versus aggregation. mDP generalizes these guarantees by incorporating an application-defined metric 𝑑 px, x1q, resulting in the distance-dependent privacy bound 𝑒 𝜖𝑑 px,x1q. Thus, secrets that are closer under the metric receive stronger indistinguishability guarantees. Importantly, "local" specifies where perturbation occurs, whereas "metric" specifies how indistinguishability scales with the distance between secrets. When the input is an individual record and 𝑑 px, x1q “ 
+
+1rx‰x1s, mDP reduces to 𝜖 -LDP. When the input is a dataset and 𝑑 
+
+is the dataset-level Hamming distance, mDP reduces to standard 
+
+𝜖 -DP for neighboring datasets and to its group-privacy extension for datasets differing in multiple records. Therefore, mDP can be instantiated in either the central or local setting, depending on the protected input and where randomization is performed. 
+
+## D Discussion: Order independence of transform-linear interpolation. 
+
+Proposition 2 (Order independence for transform-linear interpo-lation) . Consider a predefined interpolation operator 
+
+Mp𝑎, 𝑑 ; 𝑡 q “ 𝑓 ´1`p1 ´ 𝛼 p𝑡 qq 𝑓 p𝑎 q ` 𝛼 p𝑡 q𝑓 p𝑑 q˘,
+
+where 𝑓 is continuous and strictly monotone, and 𝛼 : r0, 1s Ñ r 0, 1s
+
+is continuous and strictly monotone with 𝛼 p0q “ 0 and 𝛼 p1q “ 1.Starting from 𝑥 0 “ 𝑎 , define 
+
+𝑥 𝑘 :“ Mp𝑥 𝑘 ´1, 𝑑 ; 𝑡 𝑘 q, 𝑘 “ 1, . . . , 𝑛. 
+
+Then 𝑥 𝑛 depends on 𝑡 1, . . . , 𝑡 𝑛 only through 
+
+> 𝑛
+
+ź
+
+> 𝑘 “1
+
+p1 ´ 𝛼 p𝑡 𝑘 qq .A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Consequently, 𝑥 𝑛 is independent of the order of the parameters 𝑡 1, . . . , 𝑡 𝑛 .
+
+Proof. Recall that the interpolation operator is defined as 
+
+Ip𝜉 𝐿 , 𝜉 𝑅 ; 𝑡 q “ 𝜓 ´1pp 1 ´ 𝛼 p𝑡 qq 𝜓 p𝜉 𝐿 q ` 𝛼 p𝑡 q𝜓 p𝜉 𝑅 qq , (41) where 𝜓 is continuous and strictly monotone, and 𝛼 : r0, 1s Ñ r 0, 1s
+
+is continuous and strictly monotone with 𝛼 p0q “ 0 and 𝛼 p1q “ 1. Define 
+
+𝛽 p𝑡 q :“ 1 ´ 𝛼 p𝑡 q. (42) Then 
+
+𝜓 pIp𝜉 𝐿 , 𝜉 𝑅 ; 𝑡 qq “ 𝛽 p𝑡 q𝜓 p𝜉 𝐿 q ` `1 ´ 𝛽 p𝑡 q˘𝜓 p𝜉 𝑅 q. (43) Starting from 𝜉 0 “ 𝜉 𝐿 , consider repeated interpolation toward the same fixed endpoint 𝜉 𝑅 :
+
+𝜉 𝑘 :“ Ip𝜉 𝑘 ´1, 𝜉 𝑅 ; 𝑡 𝑘 q, 𝑘 “ 1, . . . , 𝑛. (44) Applying (43) with 𝜉 𝐿 “ 𝜉 𝑘 ´1 gives 
+
+𝜓 p𝜉 𝑘 q “ 𝛽 p𝑡 𝑘 q𝜓 p𝜉 𝑘 ´1q ` `1 ´ 𝛽 p𝑡 𝑘 q˘𝜓 p𝜉 𝑅 q. (45) We prove by induction that 
+
+𝜓 p𝜉 𝑛 q “ 
+
+˜ 𝑛 ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝐿 q ` 
+
+˜
+
+1 ´
+
+> 𝑛
+
+ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝑅 q. (46) For 𝑛 “ 1, the claim follows directly from (43). Assume that it holds for 𝑛 ´ 1. Then, by (45), 
+
+𝜓 p𝜉 𝑛 q “ 𝛽 p𝑡 𝑛 q𝜓 p𝜉 𝑛 ´1q ` `1 ´ 𝛽 p𝑡 𝑛 q˘𝜓 p𝜉 𝑅 q“ 𝛽 p𝑡 𝑛 q
+
+«˜ 𝑛 ´1ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝐿 q ` 
+
+˜
+
+1 ´
+
+> 𝑛 ´1
+
+ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝑅 q
+
+ff 
+
+` `1 ´ 𝛽 p𝑡 𝑛 q˘𝜓 p𝜉 𝑅 q“
+
+˜ 𝑛 ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝐿 q ` 
+
+˜
+
+1 ´
+
+> 𝑛
+
+ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q
+
+¸
+
+𝜓 p𝜉 𝑅 q. (47) Thus (46) holds for all 𝑛 .Let 
+
+𝐵 𝑛 :“
+
+> 𝑛
+
+ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q. (48) Since 𝛼 is continuous and strictly increasing with 𝛼 p0q “ 0 and 
+
+𝛼 p1q “ 1, the function 𝛽 p𝑡 q “ 1 ´ 𝛼 p𝑡 q is continuous and strictly decreasing from 1 to 0. Hence 𝛽 is bijective on r0, 1s. Therefore, for 
+
+𝐵 𝑛 P r 0, 1s, we may define 
+
+𝑇 𝑛 :“ 𝛽 ´1p𝐵 𝑛 q. (49) Substituting 𝐵 𝑛 “ 𝛽 p𝑇 𝑛 q into (46), we get 
+
+𝜓 p𝜉 𝑛 q “ 𝛽 p𝑇 𝑛 q𝜓 p𝜉 𝐿 q` `1´𝛽 p𝑇 𝑛 q˘𝜓 p𝜉 𝑅 q “ 𝜓 pIp𝜉 𝐿 , 𝜉 𝑅 ;𝑇 𝑛 qq . (50) Since 𝜓 is strictly monotone, it is injective. Therefore, 
+
+𝜉 𝑛 “ Ip𝜉 𝐿 , 𝜉 𝑅 ;𝑇 𝑛 q. (51) Finally, 𝑇 𝑛 depends on 𝑡 1, . . . , 𝑡 𝑛 only through the product 
+
+𝐵 𝑛 “
+
+> 𝑛
+
+ź
+
+> 𝑖 “1
+
+𝛽 p𝑡 𝑖 q.
+
+Because multiplication is commutative, 𝐵 𝑛 , and hence 𝑇 𝑛 , is un-changed under any permutation of 𝑡 1, . . . , 𝑡 𝑛 . Therefore, the final value 𝜉 𝑛 is independent of the order in which the parameters 
+
+𝑡 1, . . . , 𝑡 𝑛 are applied. This proves the claimed order-independence property for repeated interpolation toward a fixed endpoint. □
+
+Notably, Proposition 2 applies only to interpolation rules that can be written in transform-linear form, namely 
+
+Ip𝜉 𝐿 , 𝜉 𝑅 ; 𝑡 q “ 𝜓 ´1pp 1 ´ 𝛼 p𝑡 qq 𝜓 p𝜉 𝐿 q ` 𝛼 p𝑡 q𝜓 p𝜉 𝑅 qq .
+
+Among the three interpolation methods considered in this paper, the log-convex interpolation rule satisfies this requirement directly. In particular, for positive endpoint values 𝜉 𝐿 , 𝜉 𝑅 , log-convex inter-polation can be written with 𝜓 p𝜉 q “ ln 𝜉 :
+
+Ip𝜉 𝐿 , 𝜉 𝑅 ; 𝑡 q “ exp pp 1 ´ 𝛼 p𝑡 qq ln 𝜉 𝐿 ` 𝛼 p𝑡 q ln 𝜉 𝑅 q “ 𝜉 1´𝛼 p𝑡 q 
+
+> 𝐿
+
+𝜉 𝛼 p𝑡 q 
+
+> 𝑅
+
+.
+
+Thus, repeated log-convex interpolation toward a fixed endpoint has the order-independence property stated in Proposition 2. The McShane–Whitney extension does not generally satisfy the transform-linear form. Although it produces Lipschitz-valid values by choosing a point between lower and upper McShane–Whitney envelopes, the resulting value is determined by envelope operations rather than by a fixed transform-linear average of two endpoints. Therefore, Proposition 2 does not directly apply to the McShane– Whitney extension, except in special cases where the chosen value happens to reduce to a transform-linear interpolation rule. Similarly, the LP-based interpolation method does not generally satisfy the proposition. Its values are obtained as the solution of a constrained optimization problem and may depend on the objective, the feasible region, and the active constraints. Hence, unless the LP is explicitly restricted so that its solution coincides with a transform-linear rule, the order-independence property in Proposition 2 is not guaranteed. Therefore, Proposition 2 should be viewed as an auxiliary prop-erty of predefined transform-linear interpolation rules, most no-tably log-convex interpolation. It is not used in the proof of (A3), which relies instead on coordinate-wise Lipschitz preservation and dimension-wise composition. 
+
+## E Details of Interpolation Algorithms Satisfying Requirement A1 
+
+We present three representative extension algorithms that can be designed to satisfy the local mDP constraint (A1) . Fix a node 𝑣 with associated record set X𝑣 , and suppose a predecessor mechanism 
+
+tM𝑣 p¨ | ˆxqu ˆxPX𝑣 is already specified on X𝑣 . Each algorithm below constructs successor mechanisms tM𝑣 Ñ𝑢 u𝑢 PSucc p𝑣 q over the local extension cover Ť 
+
+> 𝑢 PSucc p𝑣 q
+
+X𝑢 .(1) McShane–Whitney extension [4]. For each output y P Y,assume that log M𝑣 py | ˆxq satisfies the 𝜖 {2-Lipschitz bound on X𝑣 . Then, for any record x P Ť 
+
+> 𝑢 PSucc p𝑣 q
+
+X𝑢 , define the McShane–Whitney envelopes 
+
+𝑙 ypxq fi sup 
+
+> ˆxPX𝑣
+
+´
+
+log M𝑣 py | ˆxq ´ 𝜖 
+
+2𝑑 px, ˆxq
+
+¯
+
+, (52) 
+
+𝑢 ypxq fi inf 
+
+> ˆxPX𝑣
+
+´
+
+log M𝑣 py | ˆxq ` 𝜖 
+
+2𝑑 px, ˆxq
+
+¯
+
+. (53) Since 𝑙 ypxq ď 𝑢 ypxq, choose any 𝑓 ypxq P r 𝑙 ypxq, 𝑢 ypxqs (e.g., the midpoint), and for each 𝑢 P Succ p𝑣 q define 
+
+M𝑣 Ñ𝑢 py | xq fi exp p𝑓 ypxqq 
+
+ř 
+
+> y1PY
+
+exp p𝑓 y1 pxqq , @x P X𝑢 . (54) Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+By construction, the resulting successor mechanisms satisfy the required local p𝜖, 𝑑 q-mDP inequalities across successor regions. (2) Log-convex interpolation [16]. Assume that X𝑣 consists of the vertices of a 𝑑 -dimensional grid cell, and that the successor regions of 𝑣 contain records inside the same cell. Let ¯ 𝜖 𝑡 denote the pre-normalization privacy budget assigned to coordinate 𝑡 . We assume that the anchor mechanism on X𝑣 
+
+satisfies the coordinate-wise log-Lipschitz bound on every pair of 𝑡 -neighbor anchors ˆ x, ˆx1 P X𝑣 :
+
+ˇˇlog M𝑣 py | ˆxq ´ log M𝑣 py | ˆx1qˇˇ ď ¯𝜖 𝑡 | ˆ𝑥 𝑡 ´ ˆ𝑥 1 
+
+> 𝑡
+
+|, @y P Y. (55) For each record x P Ť 
+
+> 𝑢 PSucc p𝑣 q
+
+X𝑢 , let t𝜆 ˆxpxqu ˆxPX𝑣 be the multilinear interpolation weights induced by the coordinates of x in the cell. The pre-normalization log-score is defined as log 𝑓 ypxq fi ÿ
+
+> ˆxPX𝑣
+
+𝜆 ˆxpxq log M𝑣 py | ˆxq. (56) The successor mechanism is then obtained by normalization: 
+
+M𝑣 Ñ𝑢 py | xq fi 𝑓 ypxq
+
+ř 
+
+> y1PY
+
+𝑓 y1 pxq , @x P X𝑢 . (57) Under the coordinate-wise interpolation rule, the pre-normalization log-scores satisfy the coordinate-wise Lipschitz bounds, which compose to a pre-normalization ¯ 𝜖 -Lipschitz bound under the dimension-wise composition condition. By choosing the pre-normalization budget so that normalization yields the target budget 𝜖 (e.g., ¯ 𝜖 “ 𝜖 {2), the resulting successor mechanisms satisfy the required local mDP constraints in (A1) .(3) LP-based interpolation. The successor mechanisms 
+
+tM𝑣 Ñ𝑢 u𝑢 PSucc p𝑣 q can also be constructed by solving a LP over the local extension cover. Specifically, for each 𝑢 P
+
+Succ p𝑣 q and each x P X𝑢 , impose the simplex constraint 
+
+ř 
+
+> yPY
+
+M𝑣 Ñ𝑢 py | xq “ 1, @𝑢 P Succ p𝑣 q, @x P X𝑢 , (58) together with predecessor-inheritance constraints on shared records, 
+
+M𝑣 Ñ𝑢 py | ˆxq “ M𝑣 py | ˆxq, (59) 
+
+@𝑢 P Succ p𝑣 q, @ˆx P X𝑣 X X𝑢 , @y P Y, (60) and the local p𝜖, 𝑑 q-mDP constraints 
+
+M𝑣 Ñ𝑢 py | xq ď 𝑒 𝜖𝑑 px,x1qM𝑣 Ñ𝑤 py | x1q, (61) 
+
+@𝑢, 𝑤 P Succ p𝑣 q, @x P X𝑢 , @x1 P X𝑤 , @y P Y, (62) together with the symmetric constraint obtained by exchang-ing p𝑥, 𝑢 q and px1, 𝑤 q. Finally, optimize a utility objective such as min ÿ
+
+> 𝑢 PSucc p𝑣 q
+
+ÿ
+
+> xPX𝑢
+
+ÿ
+
+> yPY
+
+𝜋 pxq Lp𝑥, 𝑦 q M𝑣 Ñ𝑢 py | xq, (63) where 𝜋 is a prior over the local extension cover and Lp𝑥, 𝑦 q
+
+is a task-specific loss. Any feasible optimum satisfies (A1) 
+
+by construction. 
+
+## F Perturbation Optimization for Seed Records 
+
+Before applying the tree-based extension procedure, we first opti-mize a perturbation mechanism on a small set of seed records. This seed mechanism serves as the anchor mechanism for subsequent recursive extension, while avoiding full-domain optimization over all fine-grained records. Let Xreal “ t r1, . . . , r𝑁 u, Xseed “ t x1, . . . , x𝐽 u, and Y “ t y1, . . . , y𝐾 u.For each real location r𝑛 and output y𝑘 , let 𝐿 𝑛,𝑘 “ 𝑡 pr𝑛 , y𝑘 q denote the task-specific utility loss. In our experiments, this loss measures the travel-distance estimation error when y𝑘 is used in place of the true location r𝑛 .To make the seed-level optimization aware of the full real-location domain, we aggregate the full-domain loss matrix onto the seed records. Let 𝑊 P R𝑁 ˆ𝐽 be a corner-weight matrix, where 𝑊 𝑛,𝑗 is the interpolation weight of seed record x𝑗 for representing real loca-tion r𝑛 . The approximated seed-level cost matrix is 𝐶 approx “ 𝑊 J𝐿 ,i.e., 
+
+𝑐 approx  
+
+> 𝑗,𝑘
+
+“
+
+> 𝑁
+
+ÿ
+
+> 𝑛 “1
+
+𝑊 𝑛,𝑗 𝐿 𝑛,𝑘 , 𝑗 “ 1, . . . , 𝐽, 𝑘 “ 1, . . . , 𝐾 . 
+
+Thus, although the optimization variables are defined only on seed records, the objective incorporates utility loss over the selected real locations. For each seed record x𝑗 and output y𝑘 , define 
+
+𝑧 𝑗,𝑘 “ Pr rMseed px𝑗 q “ y𝑘 s.
+
+Let 𝑍 “ t 𝑧 𝑗,𝑘 u𝐽 ,𝐾 𝑗 “1,𝑘 “1 denote the seed-level perturbation matrix. We compute 𝑍 by solving the following linear program: min 
+
+> 𝑍 𝐽
+
+ÿ
+
+> 𝑗 “1
+> 𝐾
+
+ÿ
+
+> 𝑘 “1
+
+𝑐 approx  
+
+> 𝑗,𝑘
+
+𝑧 𝑗,𝑘 
+
+s.t.
+
+> 𝐾
+
+ÿ
+
+> 𝑘 “1
+
+𝑧 𝑗,𝑘 “ 1, @𝑗, 𝛿 ď 𝑧 𝑗,𝑘 ď 1, @𝑗, 𝑘, 𝑧 𝑗,𝑘 ď exp ` ¯𝜖 𝑡 𝑑 𝑝 px𝑖 , x𝑗 q˘ 𝑧 𝑖,𝑘 , @p 𝑖, 𝑗 q P E𝑡 , 𝑡 P t 1, 2u, @𝑘. 
+
+Here, 𝛿 ą 0 is a small constant used to avoid zero probabilities; we set 𝛿 “ 10 ´6 in our implementation. The sets E1 and E2 contain neighboring seed-record pairs along the first and second coordinate directions, respectively. We use ¯ 𝜖 1 “ 𝜖 1{2 and ¯ 𝜖 2 “ 𝜖 2{2 as the directional privacy budgets in the seed optimization step. If E𝑡 
+
+is defined as an undirected neighbor set, the above constraint is imposed in both directions. Let 𝑍 ‹ be an optimal solution. The optimized seed mechanism is then given by 
+
+Mseed py𝑘 | x𝑗 q “ 𝑧 ‹ 
+
+> 𝑗,𝑘
+
+.
+
+This mechanism initializes the source cells in the tree-based ex-tension algorithm, which constructs perturbation distributions for finer records through interpolation and normalization. A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 8: One-dimensional interpolation rules for different extension methods. 
+
+Method One-dimensional interpolation rule 
+
+McShane– Whitney For anchors 𝑥 𝐿 , 𝑥 𝑅 and output 𝑦 , define 𝑙 ypxq “
+
+sup ˆxPt 𝑥 𝐿 ,𝑥 𝑅 u
+
+`log Mpy | ˆxq ´ 𝜖 𝑡 |𝑥 ´ ˆx|˘
+
+and 𝑢 ypxq “ inf ˆxPt 𝑥 𝐿 ,𝑥 𝑅 u
+
+`log Mpy | ˆxq ` 𝜖 𝑡 |𝑥 ´ ˆx|˘.Then, choose the midpoint log 𝑓 py | xq “ 𝑙 ypxq,𝑢 ypxq 
+
+> 2
+
+.Log-convex For 𝑥 𝐿 𝑡 ă 𝑥 𝑅 𝑡 , let 𝜆 𝑡 pxq “ 𝑥 𝑅 𝑡 ´𝑥 𝑡  
+
+> 𝑥 𝑅 𝑡 ´𝑥 𝐿 𝑡
+
+. Then log 𝑓 py |
+
+xq “ 𝜆 𝑡 pxq log Mpy | 𝑥 𝐿 q ` `1 ´ 𝜆 𝑡 pxq˘ log Mpy |
+
+𝑥 𝑅 q. Equivalently, 𝑓 py | xq “ Mpy | 𝑥 𝐿 q𝜆 𝑡 pxq Mpy |
+
+𝑥 𝑅 q1´𝜆 𝑡 pxq.LP-based Introduce variables Mpy | xq for refined one-dimensional points 𝑥 , and solve an LP subject to an-chor inheritance, simplex constraints, and Mpy | xq ď 
+
+𝑒 𝜖 𝑡 |𝑥 ´x1| Mpy | x1q, @x, x1, @y P Y, plus the symmet-ric reverse inequality. The interpolated values are given by the feasible or optimal LP solution. 
+
+Algorithm 1: BFS-based tree extension 
+
+Input: Extension tree G “ p V, E, tX𝑣 u𝑣 P𝑉 q; source mechanisms tM𝑣 u𝑣 P𝑉 0 initialized from Mseed 
+
+Output: Global mechanism M on Xtar  
+
+> 1
+
+Initialize a FIFO queue 𝑄 with all source nodes in 𝑉 0; 
+
+> 2
+
+while 𝑄 is not empty do  
+
+> 3
+
+dequeue a node 𝑣 ; 
+
+> 4
+
+if Succ p𝑣 q “ ∅ then  
+
+> 5
+
+continue;  
+
+> 6
+
+Apply the local extension operator 
+
+tM𝑣 Ñ𝑢 u𝑢 PSucc p𝑣 q Ð Ext 𝑣 pM𝑣 q
+
+by: (1) treating the parent-corner distributions as anchors; (2) interpolating from parent corners to child-boundary vertices using log-convex interpolation (as described in Table 8); (3) interpolating from child-boundary vertices to child-interior vertices using coordinate-wise interpolation; (4) normalizing the pre-normalization values over Y.
+
+foreach 𝑢 P Succ p𝑣 q do 
+
+assign M𝑢 Ð M𝑣 Ñ𝑢 on X𝑢 ;enqueue 𝑢 ; 
+
+> 7
+
+Assemble the induced global mechanism M from the node mechanisms on Xtar ; 
+
+> 8
+
+return M;10 0 10 2
+
+> Computation time (s, log scale)
+> 5678910 11
+> Utility loss (km)
+> MLaEt-A MLaEt-M MLaEt-O LP-A
+
+(a) New York 10 0 10 2 
+
+> Computation time (s, log scale)
+> 66.5 77.5 88.5 99.5
+> Utility loss (km)
+> MLaEt-A MLaEt-M MLaEt-O LP-A
+
+(b) London 
+
+Figure 7: Tradeoff between utility and computation time. 
+
+## G Pseudo Code of Three-based Extension Algorithm H Additional Experimental Results 
+
+This appendix reports additional experimental results on the NYC and London road-map datasets. Tables 9– ?? and Figs. 7(a)(b) follow the same evaluation protocol as the Rome results in the main text. Specifically, Tables 9 and 10 report utility loss on NYC and Lon-don, respectively; Tables 11 and 12 report computation time; and Tables 13 and 14 report empirical mDP violation rates. We further report the seed-density ablation results in Tables ?? and ?? , to-gether with the corresponding utility–computation trade-off plots in Figs. 7(a)(b). Overall, the results follow trends similar to those observed on Rome: the proposed tree-based extension variants improve utility over predefined and hybrid baselines, achieve better scalability than full optimization-based methods, and maintain negligible empirical mDP violations. These results further support the stability of the proposed utility–scalability–privacy trade-off across different urban road-network domains. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu 
+
+# Participating Points 225 (depth=2) 1849 (depth=3) 28561 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+NYC road map Pre-defined EM 12.35±0.85 10.21±0.86 9.63±0.83 11.98±0.82 9.83±0.83 9.25±0.80 11.80±0.80 9.65±0.81 9.06±0.78 Noise Distribution Laplace 12.30±0.47 10.21±0.53 9.63±0.53 11.94±0.46 9.84±0.52 9.25±0.52 11.76±0.46 9.66±0.51 9.07±0.52 Hybrid EM+RMP 12.26±0.81 10.14±0.83 9.59±0.81 11.89±0.78 9.77±0.80 9.22±0.78 11.71±0.76 9.59±0.78 9.03±0.77 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 9.78±0.42 9.63±0.43 10.11±0.46 9.54±0.42 9.37±0.44 9.82±0.46 9.42±0.42 9.25±0.44 9.68±0.47 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 7.19±0.15 5.27±0.20 4.60±0.22 7.23±0.15 5.30±0.20 4.63±0.22 7.23±0.15 5.31±0.20 4.63±0.22 Based Methods MW 10.07±0.24 7.60±0.21 6.33±0.24 10.13±0.25 7.69±0.21 6.43±0.24 10.14±0.25 7.71±0.21 6.44±0.24 Tree-based MLaEt-A 7.19±0.15 5.27±0.20 4.60±0.22 7.23±0.15 5.30±0.20 4.63±0.22 7.23±0.15 5.31±0.20 4.63±0.22 extension MLaEt-M 7.08±0.18 5.15±0.24 4.47±0.27 7.11±0.18 5.18±0.24 4.50±0.27 7.11±0.17 5.19±0.23 4.50±0.27 algorithms MLaEt-O 7.02±0.33 5.14±0.43 4.52±0.47 6.97±0.33 5.09±0.43 4.50±0.47 6.95±0.33 5.07±0.43 4.48±0.47 
+
+Table 9: Utility loss of different perturbation methods (NYC; kilometers) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. 
+
+# Participating Points 285 (depth=2) 2365 (depth=3) 36673 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+London road map Pre-defined EM 12.34±0.72 10.05±0.66 9.50±0.64 11.91±0.70 9.62±0.65 9.07±0.63 11.70±0.69 9.41±0.65 8.86±0.62 Noise Distribution Laplace 12.34±1.02 10.09±0.93 9.56±0.90 11.92±1.00 9.68±0.91 9.14±0.88 11.72±0.99 9.47±0.90 8.93±0.87 Hybrid EM+RMP 12.24±0.67 10.02±0.65 9.49±0.64 11.82±0.66 9.60±0.64 9.06±0.63 11.62±0.66 9.39±0.64 8.85±0.6 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 8.34±0.65 7.84±0.72 8.18±0.69 8.10±0.65 7.60±0.71 7.95±0.68 7.98±0.64 7.48±0.70 7.82±0.67 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 8.18±0.20 6.06±0.30 5.40±0.34 8.21±0.20 6.10±0.30 5.42±0.33 8.21±0.20 6.10±0.30 5.42±0.33 Based Methods MW 11.11±0.09 8.36±0.06 6.93±0.05 11.15±0.09 8.42±0.06 7.02±0.06 11.16±0.09 8.43±0.06 7.03±0.06 Tree-based MLaEt-A 8.18±0.20 6.06±0.30 5.40±0.34 8.21±0.20 6.10±0.30 5.42±0.33 8.21±0.20 6.10±0.30 5.42±0.33 extension MLaEt-M 8.11±0.21 5.97±0.29 5.26±0.32 8.13±0.21 5.99±0.29 5.28±0.32 8.14±0.21 6.00±0.29 5.29±0.32 algorithms MLaEt-O 7.94±0.16 5.83±0.23 5.20±0.25 7.87±0.16 5.78±0.23 5.17±0.25 7.84±0.16 5.76±0.23 5.15±0.25 
+
+Table 10: Utility loss of different perturbation methods (London; kilometers) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. 
+
+# Participating Points 225 (depth=2) 1849 (depth=3) 28561 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+NYC road map Pre-defined EM 0.0004±0.0012 0.0001±0.0000 0.0001±0.0000 0.0002±0.0001 0.0002±0.0001 0.0002±0.0000 0.0007±0.0000 0.0007±0.0001 0.0007±0.0000 Noise Distribution Laplace 0.0021±0.0087 0.0002±0.0002 0.0001±0.0001 0.0002±0.0001 0.0002±0.0003 0.0002±0.0002 0.0004±0.0002 0.0003±0.0000 0.0003±0.0001 Hybrid EM+RMP 0.0006±0.0020 0.0003±0.0005 0.0002±0.0002 0.0004±0.0002 0.0004±0.0002 0.0003±0.0001 0.0011±0.0003 0.0011±0.0002 0.0011±0.0001 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 11.06±3.88 6.78±0.78 7.96±1.46 11.06±3.88 6.78±0.78 7.97±1.46 11.06±3.88 6.79±0.78 7.97±1.46 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 6.23±0.00 6.11±0.01 6.05±0.02 6.57±0.00 6.45±0.01 6.38±0.02 54.13±0.26 54.00±0.24 53.82±0.23 Based Methods MW 6.22±0.01 6.09±0.04 6.02±0.03 6.26±0.01 6.13±0.04 6.07±0.03 10.62±0.02 10.29±0.24 10.17±0.29 Tree-based MLaEt-A 5.53±0.22 4.06±0.05 3.83±0.04 5.59±0.22 4.12±0.05 3.89±0.04 6.11±0.22 4.63±0.05 4.41±0.04 extension MLaEt-M 14.07±0.96 8.36±0.34 6.72±0.08 14.11±0.96 8.40±0.34 6.76±0.08 14.47±0.96 8.75±0.34 7.11±0.08 algorithms MLaEt-O 6.18±0.29 4.74±0.07 4.49±0.05 14.29±0.30 12.71±0.39 7.64±0.95 42.98±1.87 38.29±1.96 33.90±2.30 
+
+Table 11: Computation time of different perturbation methods (NYC; seconds) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+# Participating Points 285 (depth=2) 2365 (depth=3) 36673 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+London road map Pre-defined EM 0.0004±0.0012 0.0001±0.0000 0.0001±0.0000 0.0003±0.0001 0.0003±0.0001 0.0002±0.0001 0.0009±0.0000 0.0009±0.0000 0.0009±0.0000 Noise Distribution Laplace 0.0001±0.0000 0.0001±0.0000 0.0001±0.0000 0.0002±0.0000 0.0002±0.0000 0.0001±0.0000 0.0004±0.0000 0.0003±0.0000 0.0003±0.0000 Hybrid EM+RMP 0.0004±0.0012 0.0001±0.0000 0.0001±0.0000 0.0004±0.0001 0.0004±0.0001 0.0004±0.0001 0.0013±0.0001 0.0012±0.0000 0.0012±0.0000 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 8.16±1.54 7.25±1.17 7.41±0.88 8.16±1.54 7.25±1.17 7.41±0.88 8.16±1.54 7.25±1.17 7.41±0.88 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 16.47±0.08 16.35±0.01 16.31±0.05 16.97±0.09 16.85±0.02 16.81±0.05 120.93±0.36 120.89±0.29 120.76±0.02 Based Methods MW 16.49±0.03 16.31±0.01 16.21±0.04 16.54±0.04 16.36±0.01 16.25±0.04 23.34±0.29 22.79±0.00 22.61±0.01 Tree-based MLaEt-A 8.22±0.11 7.52±0.05 7.24±0.04 8.28±0.11 7.57±0.05 7.30±0.04 8.80±0.11 8.09±0.05 7.82±0.04 extension MLaEt-M 14.51±0.40 11.89±0.14 11.18±0.08 14.55±0.40 11.93±0.14 11.22±0.08 14.91±0.41 12.29±0.14 11.57±0.08 algorithms MLaEt-O 9.01±0.32 8.29±0.27 8.00±0.27 18.92±4.47 17.47±4.47 13.47±4.04 84.16±61.00 79.03±61.26 75.98±60.61 
+
+Table 12: Computation time of different perturbation methods (London; seconds) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. 
+
+# Participating Points 225 (depth=2) 1849 (depth=3) 28561 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+NYC road map Pre-defined EM 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Noise Distribution Laplace 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Hybrid EM+RMP 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 0.0329±0.0024 0.0148±0.0015 0.0067±0.0005 0.0329±0.0024 0.0148±0.0015 0.0067±0.0005 0.0329±0.0024 0.0148±0.0015 0.0067±0.0005 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Based Methods MW 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Tree-based MLaEt-A 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 extension MLaEt-M 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 algorithms MLaEt-O 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 
+
+Table 13: Violation ratio of different perturbation methods (NYC) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. 
+
+# Participating Points 285 (depth=2) 2365 (depth=3) 36673 (depth=4) Privacy budget (km ´1) 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5 𝜖 “ 0.5 𝜖 “ 1.0 𝜖 “ 1.5
+
+London road map Pre-defined EM 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Noise Distribution Laplace 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Hybrid EM+RMP 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Methods COPT ————- ————- ————- ————- ————- ————- ————- ————- ————-Optimization LP ————- ————- ————- ————- ————- ————- ————- ————- ————-Based LP-A 0.0314±0.0011 0.0108±0.0009 0.0051±0.0005 0.0314±0.0011 0.0108±0.0009 0.0051±0.0005 0.0314±0.0011 0.0108±0.0009 0.0051±0.0005 Methods PAnDA ————- ————- ————- ————- ————- ————- ————- ————- ————-Existing Extension AIPO 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Based Methods MW 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 Tree-based MLaEt-A 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 extension MLaEt-M 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 algorithms MLaEt-O 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 0.00±0.00 
+
+Table 14: Violation ratio of different perturbation methods (London) Mean ˘1.96 ˆstandard error; for the algorithm without getting the results, we label its results by “——–”. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Ruiyao Liu and Chenxi Qiu A Graph-Based Framework for Extending Metric Differential Privacy Mechanisms Conference acronym ’XX, June 03–05, 2018, Woodstock, NY

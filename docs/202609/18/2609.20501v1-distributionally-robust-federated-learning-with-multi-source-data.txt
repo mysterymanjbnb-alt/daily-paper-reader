@@ -1,0 +1,2550 @@
+Title: Distributionally Robust Federated Learning with Multi-Source Data
+
+URL Source: https://arxiv.org/pdf/2609.20501v1
+
+Published Time: Fri, 18 Sep 2026 01:26:33 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+## Distributionally Robust Federated Learning with Multi-Source Data 
+
+Yingzhu Liu, Zhongkui Li, Pengcheng You †, Ashish Cherukuri 
+
+Abstract — Federated learning trains a shared model from private client data. In practice, data-generating distributions may differ, and the true mixture across clients is often unknown, making the underlying group distribution difficult to specify. Existing approaches address cross-client mixture uncertainty by optimizing against the worst-case mixture, yet assume accurate client-wise distribution estimates. However, these estimates can be unreliable when based on finite samples. To handle both cross-client mixture uncertainty and within-client distributional ambiguity, we construct a global ambiguity set as the union of admissible mixtures of local ambiguity sets. The construction allows client-specific ambiguity radii and admits a client-wise separable reformulation. Leveraging this structure, we establish a high-probability out-of-sample performance guarantee. We further develop a federated algorithm for a penalty-based re-formulation and prove its convergence under milder regularity conditions. Simulations validate the algorithm’s effectiveness. 
+
+I. I NTRODUCTION 
+
+In a federated learning (FL) system, a central server coor-dinates multiple clients to train a shared model while keep-ing data private. This decentralized and privacy-preserving paradigm has been widely applied in mobile devices and healthcare networks [1]. In practice, varying measurement conditions across clients often lead to heterogeneous local data-generating distributions. As a result, two sources of uncertainty arise. First, the true global distribution, under which the learned model is expected to perform well, is unknown. This is assumed to be a mixture of the clients’ local distributions, but the mixing ratio is unknown. Second, since local samples are limited, the local datasets might not accurately represent the true local distributions. These two challenges hinder the development of robust models that generalize well. To address the within-client distributional ambiguity, we adopt the framework of Distributionally Robust Optimiza-tion (DRO) [2]–[4]. DRO optimizes against the worst-case expected cost over an ambiguity set, that is, a family of candidate distributions consistent with the observed data. Among various choices of ambiguity sets, the Wasserstein ball has gained significant attention due to its ability to cap-ture geometric feature shifts while often admitting tractable finite-dimensional reformulations [2]. In multi-source settings, a key challenge is how to define a coherent global learning objective. Classical federated           
+
+> Y. Liu, Z. Li, and P. You are with the Department of Control Science and Systems Engineering, Peking University, Beijing, China. A. Cherukuri is with the Engineering and Technology Institute Groningen and the Jan C. Willems Center for Systems and Control, University of Groningen, The Netherlands. This work was supported in part by the National Natural Science Foundation of China (NSFC) under grants 72671003, 72431001, and 62373008. AC was supported in part by TKI HTSM FD-CODE (24PPS175).
+> †Corresponding author: Pengcheng You.
+
+algorithms, such as FedAvg [5], assign weights in proportion to local sample sizes. However, this empirical approach often fails to match the true mixture weights in practice, potentially leading to biased models. To address this issue, several approaches instead focus on the worst-case performance. For instance, agnostic federated learning (AFL) considers the worst-case mixture of local objectives to improve robustness and fairness [6]. From a distribution-level perspective, Group DRO similarly optimizes over the worst-case mixture of local distributions under group-level shifts [7], [8]. However, both lines of work presume accurate local distribution estimates, which can be fragile in the finite-sample regime. While recent work incorporates local ambiguity into Group DRO models [9], its solution is limited to centralized settings, and extending it to federated learning remains non-trivial. Another line of work, not necessarily restricted to fed-erated learning, models uncertainty in multi-source data through a global ambiguity set centered at a representative distribution, such as a Wasserstein barycenter [10] or a spe-cific mixture of distributions [11]. One recent variant uses an unbalanced Wasserstein ambiguity set for outlier robustness, with the center varying over admissible mixtures of local distributions [12]. However, both the single-center formu-lation and this unbalanced Wasserstein variant couple local uncertainties together. As a result, the relation between the ambiguity set and the local distributions is less transparent, which hinders explicit out-of-sample performance analysis. By comparison, a mixture of Wasserstein balls preserves local structure more directly as in [13], but the formulation in that work is restricted to fixed mixture weights and therefore does not account for cross-client mixture uncertainty. To address these challenges, we develop a distribution-ally robust FL framework based on admissible mixtures of client-wise Wasserstein ambiguity sets. We establish out-of-sample guarantees for the resulting global ambiguity set and develop BiDRO-FL for a penalized formulation. Our main contributions are summarized as follows: 1) We design a global ambiguity set capturing the two kinds of uncertainty: the cross-client mixture uncer-tainty and the client-specific ambiguity in estimating the true local distribution using local samples. 2) We derive a lower bound on the probability that the global ambiguity set contains the true global distribu-tion and an out-of-sample performance bound for the resulting robust solution under the true distribution. 3) We develop a federated algorithm with provable con-vergence for a Lagrangian penalty reformulation. arXiv:2609.20501v1 [cs.LG] 17 Sep 2026 II. P ROBLEM STATEMENT 
+
+Consider a federated learning system with n clients in-dexed by [n] := {1, . . . , n }. Each client computes model updates locally using private data and communicates only with a central server to train a shared model. Let P denote the unknown true group distribution of clients. Let ξ be a measurable random variable in the space Ξ ⊆ Rm that follows the distribution P, where the set Ξ is convex and compact. Note that the true distribution P is assumed to be a mixture of local distributions: 
+
+P =
+
+nX
+
+i=1 
+
+α⋆i Pi , (1) where α⋆ := (α⋆
+
+1, . . . , α ⋆n) ∈ ∆n−1 is unknown , and 
+
+Pi is the true local distribution for client i ∈ [n]. Here, 
+
+∆n−1 := {α ∈ Rn : αi ≥ 0, Pni=1 αi = 1} is the probability simplex. For each client i, the samples in the local dataset Di := {bξ1
+
+i , . . . , bξNi
+
+i } are drawn independently from the unknown local distribution Pi. The datasets D1, . . . , Dn
+
+are mutually independent. Note that α⋆i may differ from the empirical proportions Ni/N , where N := P
+
+i Ni is the total number of samples. The goal is to learn a shared model x ∈ X from data distributed across clients, where the learning part is characterized by a cost function ℓ : Rd ×Ξ →
+
+R, (x, ξ ) 7 → ℓ(x, ξ ), which is continuous on X × Ξ. The performance of the learned model is evaluated under the true group distribution P, i.e., EP[ℓ(x, ξ )] . Here, the set X is convex and compact with Dx := max x,x ′∈X ∥x−x′∥, where 
+
+∥·∥ denotes the Euclidean norm in the appropriate dimension throughout the paper. 
+
+A. Within-client distributional ambiguity 
+
+Given the observed samples, each client can approximate 
+
+Pi by the empirical distribution bPi from local data, given by 
+
+bPi := 1
+
+NiNiX
+
+k=1 
+
+δbξki
+
+, (2) where δbξki
+
+is the unit point mass at bξki . However, such an estimator may not accurately represent Pi when the number of gathered samples is small. Additionally, the single-point estimate may fail to capture plausible local perturbations around the true distribution Pi. To tackle both issues, client 
+
+i constructs a set of plausible distributions, referred to as an ambiguity set, and then makes decisions against the worst-case distribution in the set. Specifically, for a fixed 
+
+p ∈ [1 , ∞), for each client i ∈ [n], we define the local ambiguity set as a p-Wasserstein ball of radius εi centered at bPi:
+
+Wi(εi) := 
+
+n
+
+Q ∈ M (Ξ) : Wp(Q, bPi) ≤ εi
+
+o
+
+, (3) where M(Ξ) is the space of probability distributions Q
+
+supported on Ξ with finite p-th moment. Moreover, εi ≥ 0
+
+is a client-dependent ambiguity radius, allowing different levels of local uncertainty across clients. To measure the distance between a candidate distribution Q and the empirical <latexit sha1_base64="ZVMD4EUk+l+wKo5wHItavo7lHCs=">AAAQ0nichZfbbts2GIDVdocuO9TdLncjLCjQqyAehm6XTeI2cZMUdmI7ceLAoCTSFqJTKcqHCLoYdrtH2O12sTfa24yUZJPUr9gGglD/9+mneJRoRZ4bs/39/548ffbZ5198+fyrna+/+fa7F42X3w/iMKE27tuhF9JrC8XYcwPcZy7z8HVEMfItD19Z90eCX80wjd0w6LFlhO98NAlc4tqI8dC40RjNXQdPEUtHltXJxs1xY3d/bz//mbDQLAu7RvnrjF+++HfkhHbi44DZHorj2+Z+xO5SRJlrezjbGSUxjpB9jyb4lhcD5OP4Ls0fPTNf8YhjkpDyv4CZeVS9I0V+HC99i5s+YtO4ykSwjt0mjPx2l7pBlDAc2EVFJPFMFpqiH0zHpdhm3pIXkE1d/qymPUUU2Yz3llaL5WttSEVdNCZxtrMzCvDcDn0fBQ7vv1mWpqP8SWyaHmZZpvOeG7jc6I3TEcMLlkSpCECN6BKpUR505QEqSVFZsqWyZaEtt2jzQptv0RaFttii9SMu9cdFX1E/jWoUois1nZBEZfsez5IQXanL4uiKA5WhqGi4saIh0ZWaipZR2c+PZ1kSXanL4uhKzeM6iKFyrB6X5g+6UjODZqKq2eYsRM9S88D9iO8tYl2stpl+tmXgN/g1+YfV/MPN+YfV/MPN+fmGJOxyOourqjFAVDHEVdU4CmeKIa6qBl5EfDPKt+TVHmJZ6Tvh5SKb4pBiPgaY8BVVaHk+i6QtGcs0mW/FiR/p8oGM6XJEwyiMK6k7SlDX7ZCGnofoUspH65Cuepg3Umpn+aWulP+l1CsDusb/EL2X1kVxDRoSEq0J/BJs1dZFtu7mi+poWFZb0jakXUm7NamvJb6GN/cl7UN6I+kNpFeSXkE6kHQAaU/SHqQtSVuQXkp6CemhpIeQdiTtgM5y4hV24hxXaFfSmp4mi1Vuki5AzSSRNIF0Lukc0pmkM0gdSR1IJ5JOIP0k6SdIqaQU0qmk05ruOJf4HN58IOkBpIeSwkEkR5IeQdqSFE4ecizpMaRdSbuQXkgKVyk5k/QM0lNJTyHtSArmnUV8MXes0HPEp2foFRMVWJfuJN/ZVLGIwXGdhhVRRIAWuRWLB2C18tHhaiRtSdtgjtjIW00DXoTzgAcPFQ5mAg+2FA5GmwffK/x9DT9WOJgPPHii8JMa/kHhH2r4ucLBKuDBjwr/WMM7CgdjzoNdhYMZy4OXCgfDw4N9hYMXAA8OFA62cR68Ujh4CfDgtcLB64cHbxR+UzdBThUBLBzBz1QBLDzRheoc6bRAJXi9u+bfODqMaPnyDkLqi/vBPjiJproiAhVnKrpx9YkHupFV6mCgjraTrT/Y2tnYyXZemWzqxmaEIkzNMPCWlaMPb5Ny7oGfeB4/kztItLwobXL5Q4t86wYssi22TL4+zReh6o38dN+snuVhYfDzXvPN3pvuL7tvX5fn/OfGj8ZPxmujafxqvDVOjI7RN2xjZvxl/G380+g1Hhq/N/4o1KdPynt+MLRf48//ARAdpGA=</latexit> 
+
+bP1
+
+<latexit sha1_base64="OxeBSjkRFD6IZfs1Kob3Wfka/38=">AAAQ0nichZfbbts2GIDV7tRlh7rb5W6EBQV6FSTF0O6ycbwmbpLCTmwnThwYlETaQnQqRfkQQRfDbvcIu90u9kZ7m5GSbJL6FdtAEOr/Pv0UjxKtyHNjtr//35Onn33+xZdfPft655tvv/v+eePFD4M4TKiN+3bohfTaQjH23AD3mcs8fB1RjHzLw1fW/ZHgVzNMYzcMemwZ4TsfTQKXuDZiPDRuNEZz18FTxNKRZXWy8etxY3d/bz//mbBwUBZ2jfLXGb94/u/ICe3ExwGzPRTHtwf7EbtLEWWu7eFsZ5TEOEL2PZrgW14MkI/juzR/9Mx8ySOOSULK/wJm5lH1jhT5cbz0LW76iE3jKhPBOnabMPLrXeoGUcJwYBcVkcQzWWiKfjAdl2KbeUteQDZ1+bOa9hRRZDPeW1otlq+1IRV10ZjE2c7OKMBzO/R9FDi8/2ZZmo7yJ7Fp2syyTOc9N3C50RunI4YXLIlSEYAa0SVSozzoygNUkqKyZEtly0JbbtHmhTbfoi0KbbFF60dc6o+LvqJ+GtUoRFdqOiGJyvY9niUhulKXxdEVBypDUdFwY0VDois1FS2jsp8fz7IkulKXxdGVmsd1EEPlWD0uzR90pWYGzURVs81ZiJ6l5oH7Ed9bxLpYbTP9bMvAb/Br8g+r+Yeb8w+r+Yeb8/MNSdjldBZXVWOAqGKIq6pxFM4UQ1xVDbyI+GaUb8mrPcSy0t+El4tsikOK+RhgwldUoeX5LJK2ZCzTZL4VJ36ky4cypssRDaMwrqTuKEFdt0Maeh6iSykfrUO66mHeSKmd5Ze6Uv6XUq8M6Br/Q/ReWhfFNWhISLQm8EuwVVsX2bqbL6qjYVltSduQdiXt1qS+lvga3tyXtA/pjaQ3kF5JegXpQNIBpD1Je5C2JG1BeinpJaRNSZuQdiTtgM5y4hV24hxXaFfSmp4mi1Vuki5AzSSRNIF0Lukc0pmkM0gdSR1IJ5JOIP0k6SdIqaQU0qmk05ruOJf4HN58KOkhpE1J4SCSI0mPIG1JCicPOZb0GNKupF1ILySFq5ScSXoG6amkp5B2JAXzziK+mDtW6Dni0zP0iokKrEt3ku9sqljE4LhOw4ooIkCL3IrFA7Ba+ehwNZK2pG0wR2zkraYBL8J5wINNhYOZwIMthYPR5sH3Cn9fw48VDuYDD54o/KSGf1D4hxp+rnCwCnjwo8I/1vCOwsGY82BX4WDG8uClwsHw8GBf4eAFwIMDhYNtnAevFA5eAjx4rXDw+uHBG4Xf1E2QU0UAC0fwM1UAC090oTpHOi1QCV7vrvk3jg4jWr68g5D64n6wD06iqa6IQMWZim5cfeKBbmSVOhioo+1k6w+2djZ2sp2XJpu6sRmhCFMzDLxl5ejD26Sce+AnnsfP5A4SLS9Km1z+0CLfugGLbIstk69P80WoeiM/3R9Uz/KwMHi9d/Bm7033l913r8pz/jPjJ+Nn45VxYLw13hknRsfoG7YxM/4y/jb+afQaD43fG38U6tMn5T0/Gtqv8ef/IHqkYQ==</latexit> 
+
+bP2
+
+<latexit sha1_base64="FGHS4ma7ELDmJ09+ftaPF1Ug27g=">AAAQ0nichZfbbts2GIDV7tRlh7rb5W6EBQV6FSRb0e2ycbwmbpLCTmwnThwYlETaQnQqRfkQQRfDbvcIu90u9kZ7m5GSbJL6FdtAEOr/Pv0UjxKtyHNjtr//35Onn3z62edfPPty56uvv/n2eePFd4M4TKiN+3bohfTaQjH23AD3mcs8fB1RjHzLw1fW/ZHgVzNMYzcMemwZ4TsfTQKXuDZiPDRuNEZz18FTxNKRZXWy8c/jxu7+3n7+M2HhoCzsGuWvM37x/N+RE9qJjwNmeyiObw/2I3aXIspc28PZziiJcYTsezTBt7wYIB/Hd2n+6Jn5kkcck4SU/wXMzKPqHSny43jpW9z0EZvGVSaCdew2YeTXu9QNooThwC4qIolnstAU/WA6LsU285a8gGzq8mc17SmiyGa8t7RaLF9rQyrqojGJs52dUYDnduj7KHB4/82yNB3lT2LTtJllmc57buByozdORwwvWBKlIgA1okukRnnQlQeoJEVlyZbKloW23KLNC22+RVsU2mKL1o+41B8XfUX9NKpRiK7UdEISle17PEtCdKUui6MrDlSGoqLhxoqGRFdqKlpGZT8/nmVJdKUui6MrNY/rIIbKsXpcmj/oSs0MmomqZpuzED1LzQP3I763iHWx2mb62ZaB3+DX5B9W8w835x9W8w835+cbkrDL6SyuqsYAUcUQV1XjKJwphriqGngR8c0o35JXe4hlpb8JLxfZFIcU8zHAhK+oQsvzWSRtyVimyXwrTvxIlw9lTJcjGkZhXEndUYK6boc09DxEl1I+Wod01cO8kVI7yy91pfwvpV4Z0DX+h+i9tC6Ka9CQkGhN4Jdgq7YusnU3X1RHw7LakrYh7UrarUl9LfE1vLkvaR/SG0lvIL2S9ArSgaQDSHuS9iBtSdqC9FLSS0ibkjYh7UjaAZ3lxCvsxDmu0K6kNT1NFqvcJF2AmkkiaQLpXNI5pDNJZ5A6kjqQTiSdQPpR0o+QUkkppFNJpzXdcS7xObz5UNJDSJuSwkEkR5IeQdqSFE4ecizpMaRdSbuQXkgKVyk5k/QM0lNJTyHtSArmnUV8MXes0HPEp2foFRMVWJfuJN/ZVLGIwXGdhhVRRIAWuRWLB2C18tHhaiRtSdtgjtjIW00DXoTzgAebCgczgQdbCgejzYPvFP6uhh8rHMwHHjxR+EkNf6/w9zX8XOFgFfDgB4V/qOEdhYMx58GuwsGM5cFLhYPh4cG+wsELgAcHCgfbOA9eKRy8BHjwWuHg9cODNwq/qZsgp4oAFo7gZ6oAFp7oQnWOdFqgErzeXfNvHB1GtHx5ByH1xf1gH5xEU10RgYozFd24+sQD3cgqdTBQR9vJ1h9s7WzsZDsvTTZ1YzNCEaZmGHjLytGHt0k598BPPI+fyR0kWl6UNrn8oUW+dQMW2RZbJl+f5otQ9UZ+uj+onuVhYfDT3sGbvTfd17tvX5Xn/GfGD8aPxivjwPjFeGucGB2jb9jGzPjL+Nv4p9FrPDR+b/xRqE+flPd8b2i/xp//AzDXpGI=</latexit> 
+
+bP3
+
+<latexit sha1_base64="tg0EsAbwoOiBKBJJ2YcgFXjqYZA=">AAAQ0nichZfbbts2GIDV7tRlh7rb5W6EBQV6FSRD0e6ycbwmbpLCTmwnThwYlETaQnQqRfkQQRfDbvcIu90u9kZ7m5GSbJL6FdtAEOr/Pv0UjxKtyHNjtr//35Onn33+xZdfPft655tvv/v+eePFD4M4TKiN+3bohfTaQjH23AD3mcs8fB1RjHzLw1fW/ZHgVzNMYzcMemwZ4TsfTQKXuDZiPDRuNEZz18FTxNKRZXWy8etxY3d/bz//mbBwUBZ2jfLXGb94/u/ICe3ExwGzPRTHtwf7EbtLEWWu7eFsZ5TEOEL2PZrgW14MkI/juzR/9Mx8ySOOSULK/wJm5lH1jhT5cbz0LW76iE3jKhPBOnabMPLrXeoGUcJwYBcVkcQzWWiKfjAdl2KbeUteQDZ1+bOa9hRRZDPeW1otlq+1IRV10ZjE2c7OKMBzO/R9FDi8/2ZZmo7yJ7Fp2syyTOc9N3C50RunI4YXLIlSEYAa0SVSozzoygNUkqKyZEtly0JbbtHmhTbfoi0KbbFF60dc6o+LvqJ+GtUoRFdqOiGJyvY9niUhulKXxdEVBypDUdFwY0VDois1FS2jsp8fz7IkulKXxdGVmsd1EEPlWD0uzR90pWYGzURVs81ZiJ6l5oH7Ed9bxLpYbTP9bMvAb/Br8g+r+Yeb8w+r+Yeb8/MNSdjldBZXVWOAqGKIq6pxFM4UQ1xVDbyI+GaUb8mrPcSy0t+El4tsikOK+RhgwldUoeX5LJK2ZCzTZL4VJ36ky4cypssRDaMwrqTuKEFdt0Maeh6iSykfrUO66mHeSKmd5Ze6Uv6XUq8M6Br/Q/ReWhfFNWhISLQm8EuwVVsX2bqbL6qjYVltSduQdiXt1qS+lvga3tyXtA/pjaQ3kF5JegXpQNIBpD1Je5C2JG1BeinpJaRNSZuQdiTtgM5y4hV24hxXaFfSmp4mi1Vuki5AzSSRNIF0Lukc0pmkM0gdSR1IJ5JOIP0k6SdIqaQU0qmk05ruOJf4HN58KOkhpE1J4SCSI0mPIG1JCicPOZb0GNKupF1ILySFq5ScSXoG6amkp5B2JAXzziK+mDtW6Dni0zP0iokKrEt3ku9sqljE4LhOw4ooIkCL3IrFA7Ba+ehwNZK2pG0wR2zkraYBL8J5wINNhYOZwIMthYPR5sH3Cn9fw48VDuYDD54o/KSGf1D4hxp+rnCwCnjwo8I/1vCOwsGY82BX4WDG8uClwsHw8GBf4eAFwIMDhYNtnAevFA5eAjx4rXDw+uHBG4Xf1E2QU0UAC0fwM1UAC090oTpHOi1QCV7vrvk3jg4jWr68g5D64n6wD06iqa6IQMWZim5cfeKBbmSVOhioo+1k6w+2djZ2sp2XJpu6sRmhCFMzDLxl5ejD26Sce+AnnsfP5A4SLS9Km1z+0CLfugGLbIstk69P80WoeiM/3R9Uz/KwMPhl7+DN3pvu6913r8pz/jPjJ+Nn45VxYLw13hknRsfoG7YxM/4y/jb+afQaD43fG38U6tMn5T0/Gtqv8ef/QTSkYw==</latexit> 
+
+bP4
+
+<latexit sha1_base64="i5nstbiMUVitcKcQuSUnP8oFlvQ=">AAAQ0nichZfbbts2GIDV7tRlh7rb5W6EBQV6FSTD2u2ycbwmbpLCTmwnThwYlETaQnQqRfkQQRfDbvcIu90u9kZ7m5GSbJL6FdtAEOr/Pv0UjxKtyHNjtr//35Onn3z62edfPPty56uvv/n2eePFd4M4TKiN+3bohfTaQjH23AD3mcs8fB1RjHzLw1fW/ZHgVzNMYzcMemwZ4TsfTQKXuDZiPDRuNEZz18FTxNKRZXWy8etxY3d/bz//mbBwUBZ2jfLXGb94/u/ICe3ExwGzPRTHtwf7EbtLEWWu7eFsZ5TEOEL2PZrgW14MkI/juzR/9Mx8ySOOSULK/wJm5lH1jhT5cbz0LW76iE3jKhPBOnabMPLrXeoGUcJwYBcVkcQzWWiKfjAdl2KbeUteQDZ1+bOa9hRRZDPeW1otlq+1IRV10ZjE2c7OKMBzO/R9FDi8/2ZZmo7yJ7Fp2syyTOc9N3C50RunI4YXLIlSEYAa0SVSozzoygNUkqKyZEtly0JbbtHmhTbfoi0KbbFF60dc6o+LvqJ+GtUoRFdqOiGJyvY9niUhulKXxdEVBypDUdFwY0VDois1FS2jsp8fz7IkulKXxdGVmsd1EEPlWD0uzR90pWYGzURVs81ZiJ6l5oH7Ed9bxLpYbTP9bMvAb/Br8g+r+Yeb8w+r+Yeb8/MNSdjldBZXVWOAqGKIq6pxFM4UQ1xVDbyI+GaUb8mrPcSy0t+El4tsikOK+RhgwldUoeX5LJK2ZCzTZL4VJ36ky4cypssRDaMwrqTuKEFdt0Maeh6iSykfrUO66mHeSKmd5Ze6Uv6XUq8M6Br/Q/ReWhfFNWhISLQm8EuwVVsX2bqbL6qjYVltSduQdiXt1qS+lvga3tyXtA/pjaQ3kF5JegXpQNIBpD1Je5C2JG1BeinpJaRNSZuQdiTtgM5y4hV24hxXaFfSmp4mi1Vuki5AzSSRNIF0Lukc0pmkM0gdSR1IJ5JOIP0o6UdIqaQU0qmk05ruOJf4HN58KOkhpE1J4SCSI0mPIG1JCicPOZb0GNKupF1ILySFq5ScSXoG6amkp5B2JAXzziK+mDtW6Dni0zP0iokKrEt3ku9sqljE4LhOw4ooIkCL3IrFA7Ba+ehwNZK2pG0wR2zkraYBL8J5wINNhYOZwIMthYPR5sF3Cn9Xw48VDuYDD54o/KSGv1f4+xp+rnCwCnjwg8I/1PCOwsGY82BX4WDG8uClwsHw8GBf4eAFwIMDhYNtnAevFA5eAjx4rXDw+uHBG4Xf1E2QU0UAC0fwM1UAC090oTpHOi1QCV7vrvk3jg4jWr68g5D64n6wD06iqa6IQMWZim5cfeKBbmSVOhioo+1k6w+2djZ2sp2XJpu6sRmhCFMzDLxl5ejD26Sce+AnnsfP5A4SLS9Km1z+0CLfugGLbIstk69P80WoeiM/3R9Uz/KwMPhp7+DN3pvuz7tvX5Xn/GfGD8aPxivjwPjFeGucGB2jb9jGzPjL+Nv4p9FrPDR+b/xRqE+flPd8b2i/xp//A1GRpGQ=</latexit> 
+
+bP5
+
+<latexit sha1_base64="iY1GK5CdxbMKSz/S4pZoJY/XEEI=">AAAQ0nichZfLbuM2FEA109c0fYynXXYjNBhgVkFSFGmXE8edxJNkYCe2EycODEoibSF6DUX5EUGLott+Qrfton/UvykpySapq9gGglD3HF2KT4lW5Lkx29//79nzTz797PMvXny589XX33z7svHqu0EcJtTGfTv0QnpjoRh7boD7zGUevokoRr7l4Wvr4Vjw6xmmsRsGPbaM8L2PJoFLXBsxHho3GqO56+ApYunIsjrZ+HDc2N3f289/JiwclIVdo/x1xq9e/jtyQjvxccBsD8Xx3cF+xO5TRJlrezjbGSUxjpD9gCb4jhcD5OP4Ps0fPTNf84hjkpDyv4CZeVS9I0V+HC99i5s+YtO4ykSwjt0ljPx6n7pBlDAc2EVFJPFMFpqiH0zHpdhm3pIXkE1d/qymPUUU2Yz3llaL5WttSEVdNCZxtrMzCvDcDn0fBQ7vv1mWpqP8SWyaNrMs03nPDVxu9MbpiOEFS6JUBKBGdInUKI+68giVpKgs2VLZstCWW7R5oc23aItCW2zR+hGX+uOir6ifRjUK0ZWaTkiisn1PZ0mIrtRlcXTFgcpQVDTcWNGQ6EpNRcuo7OensyyJrtRlcXSl5nEdxFA5Vk9L80ddqZlBM1HVbHMWomepeeB+xPcWsS5W20w/2zLwG/ya/MNq/uHm/MNq/uHm/HxDEnY5ncVV1RggqhjiqmochzPFEFdVAy8ivhnlW/JqD7Gs9Dfh5SKb4pBiPgaY8BVVaHk+i6QtGcs0mW/FiR/p8pGM6XJEwyiMK6k7SlDX7ZCGnofoUsrH65Cuepg3Umrn+aWulP+l1CsDusb/EH2Q1mVxDRoSEq0J/BJs1dZltu7my+poWFZb0jakXUm7NalvJL6BN/cl7UN6K+ktpNeSXkM6kHQAaU/SHqQtSVuQXkl6BWlT0iakHUk7oLOceIWdOMcV2pW0pqfJYpWbpAtQM0kkTSCdSzqHdCbpDFJHUgfSiaQTSD9K+hFSKimFdCrptKY7LiS+gDcfSXoEaVNSOIjkWNJjSFuSwslDTiQ9gbQraRfSS0nhKiXnkp5DeibpGaQdScG8s4gv5o4Veo749Ay9YqIC68qd5DubKhYxOK7TsCKKCNAit2LxAKxWPjpcjaQtaRvMERt5q2nAi3Ae8GBT4WAm8GBL4WC0efCdwt/V8BOFg/nAg6cKP63h7xX+voZfKBysAh78oPAPNbyjcDDmPNhVOJixPHilcDA8PNhXOHgB8OBA4WAb58FrhYOXAA/eKBy8fnjwVuG3dRPkTBHAwhH8XBXAwhNdqM6RTgtUgte7a/6No8OIli/vIKS+uB/sg5NoqisiUHGmohtXn3igG1mlDgbqaDvZ+oOtnY2dbOe1yaZubEYowtQMA29ZOfrwNinnHviJ5/EzuYNEy4vSJpc/tMi3bsAi22LL5OvTfBGq3shP9wfVszwsDH7aOzjcO+z+vPv2TXnOf2H8YPxovDEOjF+Mt8ap0TH6hm3MjL+Mv41/Gr3GY+P3xh+F+vxZec/3hvZr/Pk/Ye6kZQ==</latexit> 
+
+bP6
+
+<latexit sha1_base64="FcwMDQ5Iyyn48k5SoqnQugzwEz4=">AAAQxnichZfbTuNGGIC929OWHjbbXvbGKlppr1BCUdi9WyBdyAKrBJJAICga2zOJi087HueAZamP0Nv2EfpGfZvOxAkz498kkRD2/33+f8/RthV5bsyq1f+ePf/iy6++/ubFt1vfff/Djy8rr37qxWFCbdy1Qy+k1xaKsecGuMtc5uHriGLkWx6+su6PBL+aYBq7YdBh8wjf+WgUuMS1EeOh3sCyWsP6sLJd3XlX3d3frZnVnb1qvV5/xw9qe/tva7+ZtZ3q4rdtLH+t4auX/w6c0E58HDDbQ3F8W6tG7C5FlLm2h7OtQRLjCNn3aIRv+WGAfBzfpYvbzczXPOKYJKT8L2DmIqpekSI/jue+xU0fsXFcZCJYxm4TRt7epW4QJQwHdl6IJJ7JQlO03XRcim3mzfkBsqnL79W0x4gim/Ee0qpYvtaGVNSiMYmzra1BgKd26PsocNKBNcnSdLC4E5umh1mW6bzjBi43OsN0wPCMJVEqAlAjukRKlAddeYBKkhdLNhSb59p8gzbNtekGbZZrsw1aN+JSd5j3FfXTqEQhulLSCUm0bN/TWRKiK2VZHF1xoNIXhfprC/WJrpQUmkfLfn46y5zoSlkWR1dKbtdBDC3H6mlp+qArJTNoIkpN1mchepaSG+5GY8TEupi6DuaHaTfbMPBr/JL8/WL+/vr8/WL+/vr8fEMS9nI6i7Oi0UNUMcRZ0TgKJ4ohzooGnkV8M1psw6s9xLLS34W3ENkYhxTzMcCEr6hcW+SzSNqQsUyT+Vac+JEuH8iYLkc0jMK4kLqlBHXdDmnoeYjOpXz0GNJVD/NGSu1scaory/9S6iwDusb/EL2X1kV+DhoSEq0J/BRs1dZF9tjNF8XRsKympE1I25K2S1JfS3wNL+5K2oX0RtIbSK8kvYK0J2kP0o6kHUgbkjYgvZT0EtJDSQ8hbUnaAp3lxCvsxAtcoG1JS3qazFa5SToDlUkiaQLpVNIppBNJJ5A6kjqQjiQdQfpZ0s+QUkkppGNJxyXdcS7xObz4QNIDSA8lhYNIjiQ9grQhKZw85FjSY0jbkrYhvZAUrlJyJukZpKeSnkLakhTMO4v4Yu5YoeeIV8/QyycqsC7d0WJnU8U8Bsd1HBZEEQFa5BYsHoBl5a3D1UiakjbBHLGRt5oG/BDOAx48VDiYCTzYUDgYbR78oPAPJfxY4WA+8OCJwk9K+EeFfyzh5woHq4AHPyn8UwlvKRyMOQ+2FQ5mLA9eKhwMDw92FQ4eADzYUzjYxnnwSuHgIcCD1woHjx8evFH4TdkEOVUEsHAEP1MFsPBEF6pzpNUARfDj7rp4x9FhRJcP7yCkvrge7IOjaKwrIlBwxqIbV694oBtZoQYDNZpO9vjC1syGTrb12mRjNzYjFGFqhoE3L3z68DYp3z3wFc/j3+EOEi3Pj9a5/KZFvscGzLINtky+umRZpXgh/7pffcKbTx/0dndq9Z16e2/7/Zvld/4L4xfjV+ONUTP2jffGidEyuoZt/GH8Zfxt/FM5qQSVpDLN1efPltf8bGi/yp//A5W7n+I=</latexit> 
+
+P6
+
+<latexit sha1_base64="S5KU3O3JgEgjB1HD/ieZAtkuflQ=">AAAQxnichZfbUttGGICVpIeUHuKkl73RlMlMrhibEkjuArgBB8jYYBsMZjwraddW0SmrlQ9oNNNH6G37CH2jvk13LZvd1S9szzBI//fp/7VHSVbkuTGrVv978vTZV19/8+3z7za+/+HHn15UXr7qxmFCbdyxQy+kVxaKsecGuMNc5uGriGLkWx6+tO4OBb8cYxq7YdBmswjf+mgYuMS1EeOhbt+ymoO3g8pmdet9dXtvu2ZWt3aqu7u77/lBbWfvXe03s7ZVnf82jcWvOXj54t++E9qJjwNmeyiOb2rViN2miDLX9nC20U9iHCH7Dg3xDT8MkI/j23R+u5n5mkcck4SU/wXMnEfVK1Lkx/HMt7jpIzaKi0wEy9hNwsi729QNooThwM4LkcQzWWiKtpuOS7HNvBk/QDZ1+b2a9ghRZDPeQ1oVy9fakIpaNCZxtrHRD/DEDn0fBU7at8ZZmvbnd2LT9CDLMp233cDlRnuQ9hmesiRKRQBqRJdIiXKvK/dQSfJiyZpis1ybrdEmuTZZo01zbbpG60Rc6gzyvqJ+GpUoRFdKOiGJFu17PEtCdKUsi6MrDlR6olBvZaEe0ZWSQrNo0c+PZ5kRXSnL4uhKye06iKHFWD0uTe51pWQGjUWp8eosRM9ScsOdaISYWBcT18H8MO1kawZ+hV+Sv1fM31udv1fM31udn29Iwl5MZ3FWNLqIKoY4KxqH4VgxxFnRwNOIb0bzbXi5h1hW+rvw5iIb4ZBiPgaY8BWVa/N8FknrMpZpMt+KEz/S5X0Z0+WIhlEYF1I3laCu2yENPQ/RmZQPH0K66mHeSKmdzk91ZfFfSu1FQNf4H6J30jrPz0FDQqI1gZ+Crdo6zx66+bw4GpbVkLQBaUvSVknqK4mv4MUdSTuQXkt6DemlpJeQdiXtQtqWtA1pXdI6pBeSXkB6IOkBpE1Jm6CznHiJnXiOC7QlaUlPk+kyN0mnoDJJJE0gnUg6gXQs6RhSR1IH0qGkQ0i/SPoFUiophXQk6aikO84kPoMX70u6D+mBpHAQyaGkh5DWJYWThxxJegRpS9IWpOeSwlVKTiU9hfRE0hNIm5KCeWcRX8wdK/Qc8eoZevlEBdaFO5zvbKqYx+C4jsKCKCJAi9yCxQOwrLx1uBpJQ9IGmCM28pbTgB/CecCDBwoHM4EH6woHo82DHxX+sYQfKRzMBx48VvhxCf+k8E8l/EzhYBXw4GeFfy7hTYWDMefBlsLBjOXBC4WD4eHBjsLBA4AHuwoH2zgPXiocPAR48Erh4PHDg9cKvy6bICeKABaO4KeqABae6EJ1jjTroAh+2F3n7zg6jOji4R2E1BfXg31wGI10RQQKzkh04/IVD3QjK9RgoEbDyR5e2BrZwMk2Xpts5MZmhCJMzTDwZoVPH94m5bsHvuJ5/DvcQaLl+dEql9+0yPfQgGm2xpbJl5csqhQv5F/3y0948/GD7vZWbXdrt7Wz+eHN4jv/ufGL8avxxqgZe8YH49hoGh3DNv4w/jL+Nv6pHFeCSlKZ5OrTJ4trfja0X+XP/wGFXp/h</latexit> 
+
+P5
+
+<latexit sha1_base64="+dkoOmVA3e/xa06GJR7vjMK8dVw=">AAAQxnichZfbTuNGGIC929OWHjbbXvbGKlppr1BCUdi9WyBdyAKrBJJAICga2zOJi087HueAZamP0Nv2EfpGfZvOxAkz498kkRD2/33+f8/RthV5bsyq1f+ePf/iy6++/ubFt1vfff/Djy8rr37qxWFCbdy1Qy+k1xaKsecGuMtc5uHriGLkWx6+su6PBL+aYBq7YdBh8wjf+WgUuMS1EeOh3sCyWsO9YWW7uvOuuru/WzOrO3vVer3+jh/U9vbf1n4zazvVxW/bWP5aw1cv/x04oZ34OGC2h+L4tlaN2F2KKHNtD2dbgyTGEbLv0Qjf8sMA+Ti+Sxe3m5mvecQxSUj5X8DMRVS9IkV+HM99i5s+YuO4yESwjN0mjLy9S90gShgO7LwQSTyThaZou+m4FNvMm/MDZFOX36tpjxFFNuM9pFWxfK0NqahFYxJnW1uDAE/t0PdR4KQDa5Kl6WBxJzZND7Ms03nHDVxudIbpgOEZS6JUBKBGdImUKA+68gCVJC+WbCg2z7X5Bm2aa9MN2izXZhu0bsSl7jDvK+qnUYlCdKWkE5Jo2b6nsyREV8qyOLriQKUvCvXXFuoTXSkpNI+W/fx0ljnRlbIsjq6U3K6DGFqO1dPS9EFXSmbQRJSarM9C9CwlN9yNxoiJdTF1HcwP0262YeDX+CX5+8X8/fX5+8X8/fX5+YYk7OV0FmdFo4eoYoizonEUThRDnBUNPIv4ZrTYhld7iGWlvwtvIbIxDinmY4AJX1G5tshnkbQhY5km86048SNdPpAxXY5oGIVxIXVLCeq6HdLQ8xCdS/noMaSrHuaNlNrZ4lRXlv+l1FkGdI3/IXovrYv8HDQkJFoT+CnYqq2L7LGbL4qjYVlNSZuQtiVtl6S+lvgaXtyVtAvpjaQ3kF5JegVpT9IepB1JO5A2JG1AeinpJaSHkh5C2pK0BTrLiVfYiRe4QNuSlvQ0ma1yk3QGKpNE0gTSqaRTSCeSTiB1JHUgHUk6gvSzpJ8hpZJSSMeSjku641zic3jxgaQHkB5KCgeRHEl6BGlDUjh5yLGkx5C2JW1DeiEpXKXkTNIzSE8lPYW0JSmYdxbxxdyxQs8Rr56hl09UYF26o8XOpop5DI7rOCyIIgK0yC1YPADLyluHq5E0JW2COWIjbzUN+CGcBzx4qHAwE3iwoXAw2jz4QeEfSvixwsF84METhZ+U8I8K/1jCzxUOVgEPflL4pxLeUjgYcx5sKxzMWB68VDgYHh7sKhw8AHiwp3CwjfPglcLBQ4AHrxUOHj88eKPwm7IJcqoIYOEIfqYKYOGJLlTnSKsBiuDH3XXxjqPDiC4f3kFIfXE92AdH0VhXRKDgjEU3rl7xQDeyQg0GajSd7PGFrZkNnWzrtcnGbmxGKMLUDANvXvj04W1SvnvgK57Hv8MdJFqeH61z+U2LfI8NmGUbbJl8dcmySvFC/nW/+oQ3nz7o7e7U6jv19t72+zfL7/wXxi/Gr8Ybo2bsG++NE6NldA3b+MP4y/jb+KdyUgkqSWWaq8+fLa/52dB+lT//B3UBn+A=</latexit> 
+
+P4
+
+<latexit sha1_base64="g08/AElc5TRBnjiGoq0balCVKdQ=">AAAQxnichZfbUttGGICVpG1SeojTXPZGUyYzuWJswkByF8ANOEDGBttgMONZSbu2ik5ZrXxAo5k+Qm/bR+gb9W26a9nsrn5he4ZB+r9P/689SrIiz41Ztfrfk6fPvvn2u+cvvt/44ceffn5ZefVLNw4TauOOHXohvbJQjD03wB3mMg9fRRQj3/LwpXV3KPjlGNPYDYM2m0X41kfDwCWujRgPdfuW1Ry8G1Q2q1sfqtt72zWzurVT3d3d/cAPajt772vvzNpWdf7bNBa/5uDVy3/7TmgnPg6Y7aE4vqlVI3abIspc28PZRj+JcYTsOzTEN/wwQD6Ob9P57WbmGx5xTBJS/hcwcx5Vr0iRH8cz3+Kmj9goLjIRLGM3CSPvb1M3iBKGAzsvRBLPZKEp2m46LsU282b8ANnU5fdq2iNEkc14D2lVLF9rQypq0ZjE2cZGP8ATO/R9FDhp3xpnadqf34lN04Msy3TedgOXG+1B2md4ypIoFQGoEV0iJcq9rtxDJcmLJWuKzXJttkab5NpkjTbNtekarRNxqTPI+4r6aVSiEF0p6YQkWrTv8SwJ0ZWyLI6uOFDpiUK9lYV6RFdKCs2iRT8/nmVGdKUsi6MrJbfrIIYWY/W4NLnXlZIZNBalxquzED1LyQ13ohFiYl1MXAfzw7STrRn4FX5J/l4xf291/l4xf291fr4hCXsxncVZ0egiqhjirGgchmPFEGdFA08jvhnNt+HlHmJZ6e/Cm4tshEOK+RhgwldUrs3zWSSty1imyXwrTvxIl/dlTJcjGkZhXEjdVIK6boc09DxEZ1I+fAjpqod5I6V2Oj/VlcV/KbUXAV3jf4jeSes8PwcNCYnWBH4KtmrrPHvo5vPiaFhWQ9IGpC1JWyWpryS+ghd3JO1Aei3pNaSXkl5C2pW0C2lb0jakdUnrkF5IegHpgaQHkDYlbYLOcuIlduI5LtCWpCU9TabL3CSdgsokkTSBdCLpBNKxpGNIHUkdSIeSDiH9KulXSKmkFNKRpKOS7jiT+AxevC/pPqQHksJBJIeSHkJalxROHnIk6RGkLUlbkJ5LClcpOZX0FNITSU8gbUoK5p1FfDF3rNBzxKtn6OUTFVgX7nC+s6liHoPjOgoLoogALXILFg/AsvLW4WokDUkbYI7YyFtOA34I5wEPHigczAQerCscjDYPflL4pxJ+pHAwH3jwWOHHJfyzwj+X8DOFg1XAg18U/qWENxUOxpwHWwoHM5YHLxQOhocHOwoHDwAe7CocbOM8eKlw8BDgwSuFg8cPD14r/LpsgpwoAlg4gp+qAlh4ogvVOdKsgyL4YXedv+PoMKKLh3cQUl9cD/bBYTTSFREoOCPRjctXPNCNrFCDgRoNJ3t4YWtkAyfbeGOykRubEYowNcPAmxU+fXiblO8e+Irn8e9wB4mW50erXH7TIt9DA6bZGlsmX16yqFK8kH/dLz/hzccPuttbtd2t3dbO5se3i+/8F8avxm/GW6Nm7BkfjWOjaXQM2/jD+Mv42/inclwJKkllkqtPnyyueW1ov8qf/wNkpJ/f</latexit> 
+
+P3
+
+<latexit sha1_base64="KWfIeD/dtQhyi2n7t1lFJI4cxcU=">AAAQxnichZfbTuNGGIC929OWHjbbXvbGKlppr1BCUdi9WyBdyAKrBJJAICga2zOJi087HueAZamP0Nv2EfpGfZvOxAkz498kkRD2/33+f8/RthV5bsyq1f+ePf/iy6++/ubFt1vfff/Djy8rr37qxWFCbdy1Qy+k1xaKsecGuMtc5uHriGLkWx6+su6PBL+aYBq7YdBh8wjf+WgUuMS1EeOh3sCyWsPdYWW7uvOuuru/WzOrO3vVer3+jh/U9vbf1n4zazvVxW/bWP5aw1cv/x04oZ34OGC2h+L4tlaN2F2KKHNtD2dbgyTGEbLv0Qjf8sMA+Ti+Sxe3m5mvecQxSUj5X8DMRVS9IkV+HM99i5s+YuO4yESwjN0mjLy9S90gShgO7LwQSTyThaZou+m4FNvMm/MDZFOX36tpjxFFNuM9pFWxfK0NqahFYxJnW1uDAE/t0PdR4KQDa5Kl6WBxJzZND7Ms03nHDVxudIbpgOEZS6JUBKBGdImUKA+68gCVJC+WbCg2z7X5Bm2aa9MN2izXZhu0bsSl7jDvK+qnUYlCdKWkE5Jo2b6nsyREV8qyOLriQKUvCvXXFuoTXSkpNI+W/fx0ljnRlbIsjq6U3K6DGFqO1dPS9EFXSmbQRJSarM9C9CwlN9yNxoiJdTF1HcwP0262YeDX+CX5+8X8/fX5+8X8/fX5+YYk7OV0FmdFo4eoYoizonEUThRDnBUNPIv4ZrTYhld7iGWlvwtvIbIxDinmY4AJX1G5tshnkbQhY5km86048SNdPpAxXY5oGIVxIXVLCeq6HdLQ8xCdS/noMaSrHuaNlNrZ4lRXlv+l1FkGdI3/IXovrYv8HDQkJFoT+CnYqq2L7LGbL4qjYVlNSZuQtiVtl6S+lvgaXtyVtAvpjaQ3kF5JegVpT9IepB1JO5A2JG1AeinpJaSHkh5C2pK0BTrLiVfYiRe4QNuSlvQ0ma1yk3QGKpNE0gTSqaRTSCeSTiB1JHUgHUk6gvSzpJ8hpZJSSMeSjku641zic3jxgaQHkB5KCgeRHEl6BGlDUjh5yLGkx5C2JW1DeiEpXKXkTNIzSE8lPYW0JSmYdxbxxdyxQs8Rr56hl09UYF26o8XOpop5DI7rOCyIIgK0yC1YPADLyluHq5E0JW2COWIjbzUN+CGcBzx4qHAwE3iwoXAw2jz4QeEfSvixwsF84METhZ+U8I8K/1jCzxUOVgEPflL4pxLeUjgYcx5sKxzMWB68VDgYHh7sKhw8AHiwp3CwjfPglcLBQ4AHrxUOHj88eKPwm7IJcqoIYOEIfqYKYOGJLlTnSKsBiuDH3XXxjqPDiC4f3kFIfXE92AdH0VhXRKDgjEU3rl7xQDeyQg0GajSd7PGFrZkNnWzrtcnGbmxGKMLUDANvXvj04W1SvnvgK57Hv8MdJFqeH61z+U2LfI8NmGUbbJl8dcmySvFC/nW/+oQ3nz7o7e7U6jv19t72+zfL7/wXxi/Gr8Ybo2bsG++NE6NldA3b+MP4y/jb+KdyUgkqSWWaq8+fLa/52dB+lT//B1RHn94=</latexit> 
+
+P2
+
+<latexit sha1_base64="hSxj5y5l+XFxtFziHYEEfskGQ5M=">AAAQxnichZfbTuNGGIC929OWHjbbXvbGKlppr1BCUdi9WyBdyAKrBJJAICga2zOJi087HueAZamP0Nv2EfpGfZvOxAkz498kkRD2/33+f8/RthV5bsyq1f+ePf/iy6++/ubFt1vfff/Djy8rr37qxWFCbdy1Qy+k1xaKsecGuMtc5uHriGLkWx6+su6PBL+aYBq7YdBh8wjf+WgUuMS1EeOh3sCyWsPasLJd3XlX3d3frZnVnb1qvV5/xw9qe/tva7+ZtZ3q4rdtLH+t4auX/w6c0E58HDDbQ3F8W6tG7C5FlLm2h7OtQRLjCNn3aIRv+WGAfBzfpYvbzczXPOKYJKT8L2DmIqpekSI/jue+xU0fsXFcZCJYxm4TRt7epW4QJQwHdl6IJJ7JQlO03XRcim3mzfkBsqnL79W0x4gim/Ee0qpYvtaGVNSiMYmzra1BgKd26PsocNKBNcnSdLC4E5umh1mW6bzjBi43OsN0wPCMJVEqAlAjukRKlAddeYBKkhdLNhSb59p8gzbNtekGbZZrsw1aN+JSd5j3FfXTqEQhulLSCUm0bN/TWRKiK2VZHF1xoNIXhfprC/WJrpQUmkfLfn46y5zoSlkWR1dKbtdBDC3H6mlp+qArJTNoIkpN1mchepaSG+5GY8TEupi6DuaHaTfbMPBr/JL8/WL+/vr8/WL+/vr8fEMS9nI6i7Oi0UNUMcRZ0TgKJ4ohzooGnkV8M1psw6s9xLLS34W3ENkYhxTzMcCEr6hcW+SzSNqQsUyT+Vac+JEuH8iYLkc0jMK4kLqlBHXdDmnoeYjOpXz0GNJVD/NGSu1scaory/9S6iwDusb/EL2X1kV+DhoSEq0J/BRs1dZF9tjNF8XRsKympE1I25K2S1JfS3wNL+5K2oX0RtIbSK8kvYK0J2kP0o6kHUgbkjYgvZT0EtJDSQ8hbUnaAp3lxCvsxAtcoG1JS3qazFa5SToDlUkiaQLpVNIppBNJJ5A6kjqQjiQdQfpZ0s+QUkkppGNJxyXdcS7xObz4QNIDSA8lhYNIjiQ9grQhKZw85FjSY0jbkrYhvZAUrlJyJukZpKeSnkLakhTMO4v4Yu5YoeeIV8/QyycqsC7d0WJnU8U8Bsd1HBZEEQFa5BYsHoBl5a3D1UiakjbBHLGRt5oG/BDOAx48VDiYCTzYUDgYbR78oPAPJfxY4WA+8OCJwk9K+EeFfyzh5woHq4AHPyn8UwlvKRyMOQ+2FQ5mLA9eKhwMDw92FQ4eADzYUzjYxnnwSuHgIcCD1woHjx8evFH4TdkEOVUEsHAEP1MFsPBEF6pzpNUARfDj7rp4x9FhRJcP7yCkvrge7IOjaKwrIlBwxqIbV694oBtZoQYDNZpO9vjC1syGTrb12mRjNzYjFGFqhoE3L3z68DYp3z3wFc/j3+EOEi3Pj9a5/KZFvscGzLINtky+umRZpXgh/7pffcKbTx/0dndq9Z16e2/7/Zvld/4L4xfjV+ONUTP2jffGidEyuoZt/GH8Zfxt/FM5qQSVpDLN1efPltf8bGi/yp//A0Pqn90=</latexit> 
+
+P1
+
+<latexit sha1_base64="mo7qYZd5Nf7hJaTDYF7Hkr7Va8A=">AAAQzXichZdbU+M2FIC929uWXjbbPvbFU2Zn9omBtrPt4wLpQhbYJpAEwobJyLaUePBFyHIuuO5rf0Jf29f+o/6bSrGDJB+TZIZBPt/nc6yLZduhgZ/w3d3/njz96ONPPv3s2edbX3z51dfPGy++6Sdxylzcc+MgZlcOSnDgR7jHfR7gK8owCp0AXzq3h5JfTjFL/Djq8gXFNyEaRz7xXcRF6GY4RQzTxA/iaPTjqLG9u7O7/NmwsVc2tq3y1x69eP7v0IvdNMQRdwOUJB/2dim/yRDjvhvgfGuYJpgi9xaN8QfRjFCIk5tsedW5/VJEPJvETPxF3F5G9TMyFCbJInSEGSI+SapMBuvYh5STX24yP6Ipx5FbFCJpYPPYlkNgez7DLg8WooFc5otrtd0JYsjlYqCMKk5o9CGTtVhCknxraxjhmRuHIYq8bOhM8ywbLq/EZdlBnucm7/qRL4zuKBtyPOcpzWQAasSUSI1ybyr3UEmLYumGYotCW2zQZoU226DNC22+QetRIfVGxVixMKM1CjGVmkFIadm/x7OkxFTqsnim4kFlIAsN1hYaEFOpKbSg5Tg/nmVBTKUui2cqNZfrIY7KuXpcmt2bSs0KmspS0/VZiJml5oJ7dIK4vC9mvodFM+vlGyZ+jV+Tf1DNP1iff1DNP1ifX2xI0i6XszyqGn3ENEMeVY3DeKoZ8qhq4DkVm9FyN17tIY6T/Sq9pcgnOGZYzAEm4o4qtGU+h2RNFcsNWWzFaUhNeV/FTJmymMZJJXVbC5q6G7M4CBBbKPnwIWSqARadVNrp8tBUyv9K6pYBUxN/iN0q67w4Bh2JidEFcQi2auc8fxjm8+psOE5L0RakHUU7NamvFL6CJ/cU7UF6reg1pJeKXkLaV7QPaVfRLqRNRZuQXih6AemBogeQthVtg8HykhX2kiWu0I6iNSNN5qvcJJuDyiRVNIV0pugM0qmiU0g9RT1Ix4qOIb1T9A5SpiiDdKLopGY4zhQ+gyfvK7oP6YGicBLJoaKHkDYVhYuHHCl6BGlH0Q6k54rCu5ScKnoK6YmiJ5C2FQXrziGhXDtOHHjy1TMOioUKrAt/vNzZdLGIwXmdxBVRRoBG/YolArCsunR4N5KWoi2wRlwUrJaBaMJ1IIIHGgcrQQSbGgezLYJvNf62hh9pHKwHETzW+HENf6fxdzX8TOPgLhDB9xp/X8PbGgdzLoIdjYMVK4IXGgfTI4I9jYMHgAj2NQ62cRG81Dh4CIjglcbB40cErzV+XbdATjQB3DiSn+oCuPHkEOprpN0ERfDD7rp8xzEhZeXDO4pZKM8H++CYTkxFBirORA7j6hUPDCOv1OCgRsvLH17YWvnIy7de2nziJzZFFDM7joJF5dNH9En77oGveIH4HPeQ7HnRWueKi5b5HjowzzfYKvnqlLJK9UTxdb9X/ZaHjf4PO3uvd153ftp+86r8zn9mfWd9b72y9qyfrTfWsdW2epZr3Vl/WX9b/zR+a6SN3xt/FOrTJ+U531rGr/Hn/y7Oowg=</latexit> 
+
+"3
+
+Fig. 1: Illustration of the ambiguity set WG defined in (6) for 
+
+n = 6 clients. For client i, the orange and black points denote 
+
+Pi and bPi, respectively. Blue dashed balls represent Wi(εi),centered at bPi. The orange region represents mixtures of the true client distributions. distribution bPi, we use the p-Wasserstein distance, denoted by Wp(·, ·) and defined below. 
+
+Definition 1 (p-Wasserstein Distance [3]) . For any p ∈
+
+[1 , +∞), let P and P′ be two probability distributions on a Polish metric space (Ξ , d ) with finite moments of order p. Let 
+
+Γ( P, P′) denote the set of all couplings γ ∈ M (Ξ ×Ξ) having first marginal P and second marginal P′, and let c : Ξ ×Ξ →
+
+[0 , ∞), c (x, y ) := d(x, y )p denote the transportation cost. The p-Wasserstein distance between P and P′ is defined as 
+
+Wp(P, P′) := 
+
+
+
+inf 
+
+γ∈Γ( P,P′)
+
+Z
+
+Ξ×Ξ
+
+c(x, y ) d γ(x, y )
+
+ 1
+
+p
+
+. (4) Throughout this paper, we use the Euclidean ground metric 
+
+d(ξ, ζ ) = ∥ξ − ζ∥, so that c(ξ, ζ ) = ∥ξ − ζ∥p.
+
+B. Cross-client mixture uncertainty 
+
+Following the mixture structure in (1), we allow each local distribution to vary within its Wasserstein ambiguity set. For fixed weights α ∈ ∆n−1, this yields the mixture of local ambiguity sets: 
+
+WM(α) := 
+
+n
+
+Q =
+
+nX
+
+i=1 
+
+αiQi : Qi ∈ W i(εi), ∀i ∈ [n]
+
+o
+
+,
+
+(5) where αi is client i’s weight. Ideally, if the true weights α⋆
+
+were known, one would use WM(α⋆) to construct the global ambiguity set. However, since α⋆ is unavailable in practice, a natural robust approach is to consider all mixtures induced by weights in the feasible set ∆n−1. Accordingly, we define the global ambiguity set as a union: 
+
+WG : = [
+
+α∈∆n−1
+
+WM(α)=
+
+n nX
+
+i=1 
+
+αiQi : α ∈ ∆n−1, Qi ∈ W i(εi)
+
+o
+
+. (6) This construction accounts for uncertainty in local distri-bution estimates through Wi(εi) and in client proportions through the union over α ∈ ∆n−1. See Fig. 1 for the proposed global ambiguity set with n = 6 clients. C. Problem formulation 
+
+With the global ambiguity set WG in place, we consider the following mixing Wasserstein-ball distributionally robust optimization (MW-DRO) problem: 
+
+inf  
+
+> x∈X
+
+sup 
+
+> Q∈W G
+
+EQ[ℓ(x, ξ )] , (MW-DRO) where x ∈ X ⊆ Rd is the decision variable. The goal is to seek a solution that is robust to both within-client distributional ambiguity and uncertainty in the client mixture weights. Let bx⋆ denote a DRO optimizer of (MW-DRO), and define the DRO optimal value as bJ⋆. We further define 
+
+J := EP[ℓ(bx⋆, ξ )] as the true expected cost at the same decision bx⋆ under the true distribution P. This leads to two central questions in this paper: 1) Out-of-sample guarantee: How well does the DRO solution perform under the true distribution P?2) Efficient computation: Can we solve the prob-lem (MW-DRO) efficiently in a federated setting? III. O UT -OF -S AMPLE PERFORMANCE GUARANTEES 
+
+In this section, we evaluate the performance of the solution of (MW-DRO) under the true group distribution P. First, we establish a finite-sample coverage guarantee ensuring that P belongs to the proposed global ambiguity set with high probability. This coverage result yields an explicit bound on the out-of-sample performance gap , i.e., the difference between the true expected cost achieved by a DRO optimizer and the DRO optimal value. 
+
+A. Coverage of the ambiguity set 
+
+The following lemma provides a local coverage guarantee by quantifying the probability that the true local distribution 
+
+Pi belongs to the corresponding ambiguity set. This result serves as a key building block for establishing coverage of the global ambiguity set. 
+
+Lemma 1 (Measure Concentration [14, Proposition 4.2]) .
+
+For each client i, consider the dataset Di sampled on a compact space Ξ ⊆ Rm. Then, for any p ≥ 1, Ni ≥ 1, and confidence level 1 − βi with βi ∈ (0 , 1) , we have: 
+
+PNi {Pi ∈ W i(εNi 
+
+> i
+
+(βi)) } = PNi {Wp(Pi, bPi) ≤ εNi 
+
+> i
+
+(βi)}≥ 1 − βi , (7) 
+
+where                  
+
+> εNi
+> i(βi) :=
+> 
+> R
+> 
+> h−1
+> ln( c1β−1
+> i)
+> c2Ni
+>  1
+> p
+> ,if p=m
+> 2,R
+> ln( c1β−1
+> i)
+> c2Ni
+> 1max {2p,m }
+> ,if p̸=m
+> 2,
+> (8)
+
+with R := 12 diam ∞
+
+ Ξ and h(x) := 
+
+x2/ (ln(2 + 1 /x )) 2 , x > 0. The constants c1 and c2
+
+depend only on p and m. Here, diam ∞ denotes the diameter induced by the infinity norm. 
+
+Throughout the remainder of this section, we set εi := 
+
+εNi 
+
+> i
+
+(βi), as defined in (8). To establish coverage of the global ambiguity set, a baseline guarantee requires simultaneous local coverage events, which can be conservative for nearly homogeneous local distributions. To exploit the distributional structure, we introduce the following bounded-heterogeneity assumption. 
+
+Assumption 1. Suppose there exists a constant δ ≥ 0 such that for all i, j ∈ [n], Wp(Pi, Pj ) ≤ δ.
+
+With small heterogeneity δ, one local ambiguity set may cover all true distributions, yielding a tighter bound. Proposi-tion 2 combines the structure-aware result with the baseline by taking their maximum. 
+
+Proposition 2 (Coverage of the Global Ambiguity Set) . Let Assumption 1 hold. For any p ≥ 1, given Ni ≥ 1, βi ∈ (0 , 1) ,and the radius εi in (8) for each client i ∈ [n], the global ambiguity set WG defined in (6) satisfies 
+
+Pr {P ∈ W G} ≥ 1 − β , (9) 
+
+where (1 − β) := max 
+
+n Qni=1 (1 − βi), 1 − Qni=1 ¯βi
+
+o
+
+. If 
+
+εi > δ , define ¯βi ∈ (0 , 1) by 
+
+εNi 
+
+> i
+
+( ¯βi) = εi − δ. 
+
+If this equation has no solution in (0 , 1) or εi ≤ δ, set ¯βi = 1 .Proof. We establish global coverage through two sufficient conditions: simultaneous coverage of the corresponding local distributions, and coverage of all true local distributions by a single local ambiguity set. All probabilities below refer to the joint sampling of the client datasets. 
+
+First condition: simultaneous local coverage. Suppose that each local ambiguity set contains its corresponding true distribution. For each i ∈ [n], define 
+
+Ei := {Pi ∈ W i(εi)} = {Wp(Pi, bPi) ≤ εi}.
+
+On T 
+
+> i
+
+Ei, the true mixture weights give 
+
+P =
+
+> n
+
+X
+
+> i=1
+
+α⋆i Pi ∈ W M(α⋆) ⊆ W G.
+
+Lemma 1 yields Pr( Ei) ≥ 1 − βi. Each Ei depends only on 
+
+Di, so the independence of the datasets implies 
+
+Pr {P ∈ W G} ≥ Pr 
+
+ n\
+
+> i=1
+
+Ei
+
+
+
+=
+
+> n
+
+Y
+
+> i=1
+
+Pr( Ei) ≥
+
+> n
+
+Y
+
+> i=1
+
+(1 − βi).
+
+Second condition: one local set covers all true distributions. 
+
+Sufficiently small heterogeneity allows a single local ambi-guity set to contain all true local distributions, provided that its empirical estimate is sufficiently accurate. Define 
+
+E♯i := 
+
+(
+
+{Wp(bPi, Pi) ≤ εi − δ}, εi > δ, 
+
+∅, εi ≤ δ. 
+
+On E♯i , Assumption 1 and the triangle inequality give, for every j ∈ [n],
+
+Wp(bPi, Pj ) ≤ Wp(bPi, Pi) + Wp(Pi, Pj )≤ (εi − δ) + δ = εi. (10) Thus, Wi(εi) contains every Pj . Convexity of W pp in its distribution argument further yields 
+
+W pp (bPi, P) ≤
+
+> n
+
+X
+
+> j=1
+
+α⋆j W pp (bPi, Pj ) ≤ εpi ,
+
+so the same local ambiguity set contains their true mixture 
+
+P. Since the simplex permits assigning all weight to client 
+
+i, we have Wi(εi) ⊆ W G. Consequently, it suffices that E♯i
+
+holds for at least one client. If ¯βi < 1, its defining equation and Lemma 1 give 
+
+Pr( E♯i ) ≥ 1 − ¯βi. If ¯βi = 1 , this inequality holds trivially, including when εi ≤ δ or the defining equation has no solution. Each E♯i depends only on Di, so independence gives 
+
+Pr {P ∈ W G} ≥ Pr 
+
+ n[
+
+> i=1
+
+E♯i
+
+
+
+= 1 −
+
+> n
+
+Y
+
+> i=1
+
+Pr  (E♯i )c
+
+≥ 1 −
+
+> n
+
+Y
+
+> i=1
+
+¯βi.
+
+Both arguments bound the probability of the same global-coverage event from below. Taking the larger of the two bounds proves (9). 
+
+B. Performance evaluation under the true group distribution 
+
+We now connect the coverage result to the out-of-sample performance of the solution of (MW-DRO). The coverage implies that on the event {P ∈ W G}, the worst-case expected cost in (MW-DRO) upper-bounds the true expected cost for any x ∈ X :
+
+EP[ℓ(x, ξ )] ≤ sup 
+
+> Q∈W G
+
+EQ[ℓ(x, ξ )] . (11) For the DRO solution bx⋆, Proposition 2 implies that the DRO optimal value bJ⋆ is a certificate for the true cost J with high probability. We next bound the out-of-sample performance gap bJ⋆ − J using the following auxiliary lemmas. 
+
+Lemma 3 (Simplex-weight inequality) . Let αI, α II ∈ ∆n−1
+
+and b ∈ Rn, and let ∥ · ∥ 1 denote the ℓ1-norm. Then, the following inequality holds: 
+
+|(αI − αII )⊤b| ≤ 12 ∥αI − αII ∥1
+
+
+
+max  
+
+> i
+
+bi − min  
+
+> i
+
+bi
+
+
+
+. (12) 
+
+Proof. Since αI, α II ∈ ∆n−1, we have Pni=1 (αI 
+
+> i
+
+− αII  
+
+> i
+
+) = 0 .Thus, for any c ∈ R, we have 
+
+(αI − αII )⊤b =
+
+> n
+
+X
+
+> i=1
+
+(αI 
+
+> i
+
+− αII  
+
+> i
+
+)bi − c
+
+> n
+
+X
+
+> i=1
+
+(αI 
+
+> i
+
+− αII  
+
+> i
+
+)=
+
+> n
+
+X
+
+> i=1
+
+(αI 
+
+> i
+
+− αII  
+
+> i
+
+)( bi − c). (13) By choosing c = (max i bi + min i bi)/2, the inequality 
+
+|bi − c| ≤ 12 (max  
+
+> i
+
+bi − min  
+
+> i
+
+bi) (14) holds for all i ∈ [n]. As a consequence, taking absolute values on both sides of (13) leads to 
+
+|(αI − αII )⊤b| =
+
+> n
+
+X
+
+> i=1
+
+(αI 
+
+> i
+
+− αII  
+
+> i
+
+)( bi − c)
+
+≤
+
+> n
+
+X
+
+> i=1
+
+|αI 
+
+> i
+
+− αII  
+
+> i
+
+| · | bi − c|≤ 12 (max  
+
+> i
+
+bi − min  
+
+> i
+
+bi)
+
+> n
+
+X
+
+> i=1
+
+|αI 
+
+> i
+
+− αII  
+
+> i
+
+|, (15) where the last inequality follows from (14). The union and mixture constructions of WG enable a natural decomposition of the worst-case expectation objec-tive. Lemma 4 formalizes this separability and yields an equivalent client-wise reformulation of (MW-DRO). 
+
+Lemma 4 (Problem Separability) . The problem (MW-DRO) 
+
+admits the following reformulation: 
+
+inf  
+
+> x∈X
+
+sup 
+
+> Q∈W G
+
+EQ [ℓ(x, ξ )] = inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+> n
+
+X
+
+> i=1
+
+αi sup 
+
+> Qi∈W i(εi)
+
+EQi [ℓ(x, ξ )] . (16) 
+
+Proof. For a fixed x ∈ X , the union structure of WG gives 
+
+sup 
+
+> Q∈W G
+
+EQ[ℓ(x, ξ )] = sup  
+
+> Q∈S
+> α∈∆n−1WM(α)
+
+EQ[ℓ(x, ξ )] = sup 
+
+> α∈∆n−1
+
+sup 
+
+> Q∈W M(α)
+
+EQ[ℓ(x, ξ )] . (17) The first equality follows from (6). The second holds because taking the supremum over a union is equivalent to taking the supremum over its index and then over the corresponding set. For any fixed α ∈ ∆n−1, following the decomposition argument in [13, Proposition 1], we have 
+
+sup 
+
+> Q∈W M(α)
+
+EQ[ℓ(x, ξ )] = sup 
+
+> {Qi∈W i(εi)}ni=1
+
+EPni=1 αiQi [ℓ(x, ξ )] = sup 
+
+> {Qi∈W i(εi)}ni=1
+> n
+
+X
+
+> i=1
+
+αiEQi [ℓ(x, ξ )] 
+
+> (a)
+
+=
+
+> n
+
+X
+
+> i=1
+
+αi sup 
+
+> Qi∈W i(εi)
+
+EQi [ℓ(x, ξ )] , (18) where the first equality follows from the definition of WM(α)
+
+in (5), and the second follows from the linearity of integration with respect to the measure. Equality (a) holds because each 
+
+Qi can be chosen independently within its local ambiguity set, affects only its corresponding summand, and has a nonnegative weight αi. Substituting (18) into (17) and taking the infimum over x ∈ X completes the proof. Theorem 5 (Out-of-Sample Performance) . Let Assumption 1 hold. Assume that for all x ∈ X , the function ξ 7 → ℓ(x, ξ )
+
+is Lξ -Lipschitz. Under the same setting as in Proposition 2, with probability at least Qni=1 (1 − βi), we have 
+
+bJ⋆ − Lξ (2 r + δ) ≤ J ≤ bJ⋆, (19) 
+
+where r := max i{εi}.Proof. We work on the event E := Tni=1 {Wp(Pi, bPi) ≤ εi},on which local coverage holds simultaneously for all clients. Its probability is at least Qni=1 (1 − βi), as established in the proof of Proposition 2. This event implies P ∈ W G. Given the DRO optimizer bx⋆, we have 
+
+J = EP[ℓ(bx⋆, ξ )] ≤ sup 
+
+> Q∈W G
+
+EQ[ℓ(bx⋆, ξ )] = bJ⋆,
+
+which proves the right-hand side inequality. To bound bJ⋆ −J, fix the observed data and bx⋆. Each local ball Wi(εi) contains bPi and is weakly closed in the weakly compact space M(Ξ) , since Ξ is compact [15, Chapter 4 and Theorem 6.9]. Thus, each local ball is nonempty and weakly compact. Since ℓ(bx⋆, ·) is bounded and continuous, the expected-loss functional is continuous under weak con-vergence and attains a maximum on each local ball. Denote these local maximum values by mi. By Lemma 4, 
+
+sup 
+
+> Q∈W G
+
+EQ[ℓ(bx⋆, ξ )]= sup 
+
+> α∈∆n−1
+> n
+
+X
+
+> i=1
+
+αimi
+
+= max  
+
+> i∈[n]
+
+mi.
+
+Choose any j ∈ arg max i∈[n] mi, assign unit weight to client 
+
+j, and select its local worst-case distribution. This gives a feasible distribution attaining the global supremum. We can therefore choose worst-case weights bα and a corresponding distribution QW as 
+
+bα∈ arg max 
+
+> α∈∆n−1
+
+max 
+
+> Q∈W M(α)
+
+EQ[ℓ(bx⋆, ξ )] , (20a) 
+
+QW ∈ arg max 
+
+> Q∈W M(bα)
+
+EQ[ℓ(bx⋆, ξ )] . (20b) By Lemma 4, we may choose these maxi-mizers so that QW = Pni=1 bαiQ(i) 
+
+> W
+
+, where 
+
+Q(i) 
+
+> W
+
+∈ arg max Qi∈W i(εi)EQi [ℓ(bx⋆, ξ )] is a local worst-case distribution for client i. Thus, the performance gap can be decomposed as 
+
+| bJ⋆ − J| = |EQW [ℓ(bx⋆, ξ )] − EP[ℓ(bx⋆, ξ )] |
+
+= |
+
+> n
+
+X
+
+> i=1
+
+bαiEQ(i)
+
+> W
+
+[ℓ(bx⋆, ξ )] −
+
+> n
+
+X
+
+> i=1
+
+α⋆i EPi [ℓ(bx⋆, ξ )] |
+
+=
+
+> n
+
+X
+
+> i=1
+
+bαiEQ(i)
+
+> W
+
+[ℓ(bx⋆, ξ )] −
+
+> n
+
+X
+
+> i=1
+
+bαiEPi [ℓ(bx⋆, ξ )] +
+
+> n
+
+X
+
+> i=1
+
+bαiEPi [ℓ(bx⋆, ξ )] −
+
+> n
+
+X
+
+> i=1
+
+α⋆i EPi [ℓ(bx⋆, ξ )] 
+
+≤
+
+> n
+
+X
+
+> i=1
+
+bαi
+
+
+
+EQ(i)
+
+> W
+
+[ℓ(bx⋆, ξ )] − EPi [ℓ(bx⋆, ξ )] 
+
+| {z }
+
+> sampling
+
++
+
+> n
+
+X
+
+> i=1
+
+(bαi − α⋆i )EPi [ℓ(bx⋆, ξ )] 
+
+| {z }
+
+> heterogeneity & weights
+
+, (21) where the second equality follows from arguments in Lemma 4. We next bound the two terms in (21) on the event E. If 
+
+Lξ = 0 , then ℓ(bx⋆, ·) is constant on Ξ, so both terms vanish and the claim follows. Suppose henceforth that Lξ > 0. Let 
+
+∥h∥Lip denote the smallest Lipschitz constant of h : Ξ → R.Since ℓ(bx⋆, ·) is Lξ -Lipschitz, the normalized loss 1 
+
+> Lξ
+
+ℓ(bx⋆, ·)
+
+belongs to the class {h : Ξ → R : ∥h∥Lip ≤ 1}. On E, the sampling term satisfies 
+
+> n
+
+X
+
+> i=1
+
+bαi
+
+
+
+EQ(i)
+
+> W
+
+[ℓ(bx⋆, ξ )] − EPi [ℓ(bx⋆, ξ )] 
+
+
+
+≤
+
+> n
+
+X
+
+> i=1
+
+bαi EQ(i)
+
+> W
+
+[ℓ(bx⋆, ξ )] − EPi [ℓ(bx⋆, ξ )] 
+
+= LξnX
+
+> i=1
+
+bαi EQ(i)
+
+> W
+
+h 1
+
+Lξ
+
+ℓ(bx⋆, ξ )
+
+i
+
+− EPi
+
+h 1
+
+Lξ
+
+ℓ(bx⋆, ξ )
+
+i
+
+> (a)
+
+≤ LξnX
+
+> i=1
+
+bαi sup 
+
+> ∥h∥Lip ≤1
+
+EQ(i)
+
+> W
+
+[h(ξ)] − EPi [h(ξ)] 
+
+> (b)
+
+= LξnX
+
+> i=1
+
+bαiW1(Q(i) 
+
+> W
+
+, Pi)
+
+> (c)
+
+≤ LξnX
+
+> i=1
+
+bαiWp(Q(i) 
+
+> W
+
+, Pi)
+
+≤ LξnX
+
+> i=1
+
+bαi
+
+
+
+Wp(Q(i) 
+
+> W
+
+, bPi) + Wp(bPi, Pi)
+
+
+
+> (d)
+
+≤ 2LξnX
+
+> i=1
+
+bαiεi
+
+≤ 2Lξ r, (22) where (a) holds because 1 
+
+> Lξ
+
+ℓ(bx⋆, ·) is an admissible 1-Lipschitz test function; (b) is Kantorovich–Rubinstein dual-ity [2, Theorem 3.2]; and (c) uses W1 ≤ Wp for p ≥ 1 [15, Remark 6.6]. The next step is the triangle inequality, and (d) uses Q(i) 
+
+> W
+
+∈ W i(εi) and local coverage on E. The last inequality follows from r = max i εi and bα ∈ ∆n−1. For the heterogeneity term in (21), since bα, α ⋆ ∈ ∆n−1, Lemma 3 gives 
+
+> n
+
+X
+
+> i=1
+
+(bαi − α⋆i )EPi [ℓ(bx⋆, ξ )] 
+
+≤ 12 (max  
+
+> i
+
+EPi [ℓ(bx⋆, ξ )] − min  
+
+> i
+
+EPi [ℓ(bx⋆, ξ )]) 
+
+> n
+
+X
+
+> i=1
+
+|bαi − α⋆i |≤ (max  
+
+> i
+
+EPi [ℓ(bx⋆, ξ )] − min  
+
+> i
+
+EPi [ℓ(bx⋆, ξ )]) . (23) Assumption 1 ensures sup i,j Wp(Pi, Pj ) ≤ δ. Applying Algorithm 1: BiDRO-FL 
+
+Require: Sampling distributions {bPi}ni=1 , the constraint set 
+
+X , step sizes ηx, ηα and initial points x1 ∈ X ,
+
+α1 ∈ ∆n−1 
+
+> 1:
+
+for t = 1 , . . . , T do  
+
+> 2:
+
+Server broadcasts xt and αt to each client  
+
+> 3:
+
+for client i = 1 , . . . , n do  
+
+> 4:
+
+Sample bζi,t from bPi 
+
+> 5:
+
+Find an ϵ-approximate maximizer zi,t of (29)  
+
+> 6:
+
+Construct gradient estimate gxi,t by (30a)  
+
+> 7:
+
+Construct gradient estimate gαi,t by (30b)  
+
+> 8:
+
+Update xi,t +1 by (31)  
+
+> 9:
+
+Client i sends xi,t +1 , gαi,t back to the server  
+
+> 10:
+
+end for  
+
+> 11:
+
+Server updates xt+1 by (32a) and αt+1 by (32b)  
+
+> 12:
+
+end for 
+
+Kantorovich–Rubinstein duality again gives 
+
+EPi [ℓ(bx⋆, ξ )] − EPj [ℓ(bx⋆, ξ )] ≤ Lξ Wp(Pi, Pj ) ≤ Lξ δ, 
+
+(24) which yields 
+
+> n
+
+X
+
+> i=1
+
+(bαi − α⋆i )EPi [ℓ(bx⋆, ξ )] ≤ Lξ δ. (25) Combining the two bounds (22) and (25) on the event E
+
+completes the proof. The decomposition in (21) separates data-dependent sam-pling error from structural bias. More samples reduce the former but cannot mitigate the latter. The impact of mixture-weight deviations grows with the heterogeneity level δ and vanishes when δ = 0 . Consequently, data collection is most beneficial when the sampling term dominates. Otherwise, one should focus on reducing heterogeneity or tightening the feasible weight set. IV. T RACTABLE REFORMULATION AND ALGORITHM 
+
+The separable formulation (16) still requires optimiza-tion over local probability measures. We replace each hard Wasserstein-ball constraint with a penalty and then derive an equivalent empirical representation of the resulting objective: 
+
+inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+> n
+
+X
+
+> i=1
+
+αi sup 
+
+> Qi∈M (Ξ)
+
+EQi
+
+h
+
+ℓ(x, ξ )−ρi
+
+
+
+Wp(Qi, bPi)
+
+pi
+
+(26) 
+
+Here ρi > 0 is a client-specific robustness penalty. The following reformulation specializes [16, Proposition 1] to the client-wise empirical distributions. 
+
+Proposition 6 (Finite-dimensional reformulation) . Suppose 
+
+ℓ(x, ·) is continuous on Ξ for every x ∈ X , and c is continuous on Ξ × Ξ. Then, problem (26) is equivalent to 
+
+inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+> n
+
+X
+
+> i=1
+
+αiEζ∼bPi
+
+h
+
+sup 
+
+> ξ∈Ξ
+
+ϕi(x, ζ, ξ )
+
+i
+
+, (27) 
+
+where ϕi(x, ζ, ξ ) := ℓ(x, ξ ) − ρic(ζ, ξ ) with the transporta-tion cost function c(·, ·) used in Definition 1. Proof. Fix x ∈ X and i ∈ [n]. We rewrite the local penalized objective using transport plans. Denote the local penalized value by 
+
+Li(x) := sup 
+
+> Qi∈M (Ξ)
+
+n
+
+EQi [ℓ(x, ξ )] − ρiW pp (Qi, bPi)
+
+o
+
+.
+
+Step 1: Transport-plan reformulation. By symmetry of Wp
+
+and Definition 1, 
+
+Li(x) = sup 
+
+> Qi∈M (Ξ)
+> γ∈Γ( bPi,Qi)
+
+Z
+
+> Ξ×Ξ
+
+ϕi(x, ζ, ξ ) d γ
+
+= sup   
+
+> γ:γζ=bPi
+
+Z
+
+> Ξ×Ξ
+
+ϕi(x, ζ, ξ ) d γ , 
+
+where γζ denotes the marginal of γ with respect to ζ. The first equality uses ρi > 0 to turn the infimum of transport costs into a supremum of their negatives. The second follows because the ξ-marginal is free when Qi ranges over M(Ξ) .
+
+Step 2: Empirical decomposition. By (2), every feasible coupling admits the representation 
+
+γ(d ζ, dξ) = 1
+
+NiNiX
+
+> k=1
+
+δbξki
+
+(d ζ)νk(d ξ), νk ∈ M (Ξ) ,
+
+where νk describes the destination distribution of the mass starting from sample bξki . Every such collection defines a feasible coupling. For repeated empirical atoms, one may use the same conditional measure for each occurrence to represent any given coupling. Thus 
+
+Li(x) = sup  
+
+> ν1,...,ν Ni∈M (Ξ)
+
+1
+
+NiNiX
+
+> k=1
+
+Z
+
+> Ξ
+
+ϕi(x, bξki , ξ ) d νk. (28) The distributions νk can be chosen independently, and each appears only in its corresponding summand. 
+
+Step 3: Pointwise upper bound. For every νk ∈ M (Ξ) ,
+
+Z
+
+> Ξ
+
+ϕi(x, bξki , ξ ) d νk ≤ max  
+
+> ξ∈Ξ
+
+ϕi(x, bξki , ξ ).
+
+Consequently, 
+
+Li(x) ≤ 1
+
+NiNiX
+
+> k=1
+
+max  
+
+> ξ∈Ξ
+
+ϕi(x, bξki , ξ ).
+
+Step 4: Attainment of the bound. Compactness of Ξ and continuity of ξ 7 → ϕi(x, bξki , ξ ) ensure a maximizer ξ⋆k for each summand. Choosing νk = δξ⋆k in (28) implies that the upper bound derived in Step 3 is attained. Therefore, 
+
+Li(x) = Eζ∼bPi [sup 
+
+> ξ∈Ξ
+
+ϕi(x, ζ, ξ )] .
+
+This identity holds for every x and i. Substituting it into (26) proves (27). We solve (27) using BiDRO-FL (Algorithm 1), where “Bi” refers to the two sources of uncertainty. At each round t,each client i draws a sample bζi,t ∼ bPi from its local dataset, independently of the sampling history, and uses it to compute a gradient step. Specifically, client i solves the local problem: 
+
+arg sup 
+
+> ξ∈Ξ
+
+ϕi(xt, bζi,t , ξ ) (29) to obtain an ϵ-approximate maximizer zi,t satisfying 
+
+dist( zi,t , Z⋆i,t ) ≤ ϵ. Here, dist denotes the distance from a point to the set, and Z⋆i,t denotes the set of exact maxi-mizers of (29). Using zi,t , each client i computes stochastic gradients: 
+
+gxi,t = ∇xℓ(xt, z i,t ) , (30a) 
+
+gαi,t = ℓ(xt, z i,t ) − ρic(bζi,t , z i,t ). (30b) Subsequently, client i takes the gradient-descent step 
+
+xi,t +1 = xt − ηxgxi,t , (31) with step size ηx. Then, client i broadcasts xi,t +1 and gαi,t to the server. The server updates the global parameters (xt, α t):
+
+xt+1 = Proj X
+
+ nX
+
+> i=1
+
+αi,t xi,t +1 
+
+
+
+, (32a) 
+
+αt+1 = Proj ∆n−1 (αt + ηαgαt ) , (32b) where gαt := (gα
+
+> 1,t
+
+, . . . , g αn,t ), ηα is the step size, and 
+
+Proj Y (·) denotes the Euclidean projection onto Y. Updated parameters (xt+1 , α t+1 ) are then broadcast to all clients. V. C ONVERGENCE ANALYSIS 
+
+For Algorithm 1, define 
+
+F (x, α ) := 
+
+> n
+
+X
+
+> i=1
+
+αiEζ∼bPi [fi(x, ζ )] , (33) where fi(x, ζ ) := sup ξ∈Ξ ϕi(x, ζ, ξ ). Note that the reformu-lated problem (27) for which we designed the algorithm is 
+
+inf x∈X sup α∈∆n−1 F (x, α ). We begin by stating the follow-ing assumptions. 
+
+Assumption 2. The regularity and geometry conditions are provided as follows. (i) The map (x, ξ ) 7 → ℓ(x, ξ ) is differentiable on X × Ξ. For any ξ ∈ Ξ, the map x 7 → ℓ(x, ξ ) is convex on X and it satisfies the bounds |ℓ(x, ξ )| ≤ B1 and ∥∇ xℓ(x, ξ )∥ ≤ 
+
+B2 for all x ∈ X . Finally, for any x ∈ X , the map 
+
+ξ 7 → ∇ xℓ(x, ξ ) is Lxξ -Lipschitz on Ξ.(ii) The map (ζ, ξ ) 7 → c(ζ, ξ ) is continuous on Ξ × Ξ.(iii) For any i ∈ [n] and (x, ζ ) ∈ X × Ξ, the map ξ 7 →
+
+ℓ(x, ξ ) − ρic(ζ, ξ ) is Lcξ -Lipschitz continuous. 
+
+We now establish the convergence result of Algorithm 1. 
+
+Theorem 7 (Convergence of BiDRO-FL) . Let Assumption 2 hold. With xT := 1
+
+> T
+
+PTt=1 xt, selecting ηx = ηα = 1 /√T
+
+yields 
+
+E
+
+h
+
+sup 
+
+> α∈∆n−1
+
+F (xT , α ) − inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+
+F (x, α )
+
+i
+
+= O(T −1/2 + ϵ).
+
+(34) 
+
+Proof. By the convexity-concavity of F and the minimax theorem, the duality gap is bounded by 
+
+sup 
+
+> α∈∆n−1
+
+F (xT , α ) − inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+
+F (x, α )
+
+> (a)
+
+= sup 
+
+> α∈∆n−1
+
+F (xT , α ) − sup 
+
+> α∈∆n−1
+
+inf  
+
+> x∈X
+
+F (x, α )
+
+≤ sup 
+
+> α∈∆n−1
+
+F (xT , α ) − inf  
+
+> x∈X
+
+F (x, α )
+
+> (b)
+
+= sup 
+
+> x∈X
+> α∈∆n−1
+
+n
+
+F (xT , α ) − 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+F (x, α t)
+
+o
+
+> (c)
+
+≤ sup 
+
+> x∈X
+> α∈∆n−1
+
+n 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+F (xt, α ) − 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+F (x, α t)
+
+o
+
+= 1
+
+T sup 
+
+> x∈X
+> α∈∆n−1
+
+n TX
+
+> t=1
+
+(F (xt, α ) − F (x, α t)) 
+
+o
+
+, (35) where α = 1
+
+> T
+
+PTt=1 αt. Since X and ∆n−1 are compact and convex, and F is continuous and convex–concave, Sion's minimax theorem [17, Theorem 3.4] justifies interchanging the infimum and supremum in (a). Equality (b) follows from the linearity of F (x, ·), while inequality (c) follows from the convexity of F (·, α ) and Jensen's inequality. For a given α, since the map x 7 → F (x, α ) is not necessarily differentiable, let ∂xF (x, α ) be the subdifferential of F (·, α )
+
+at x. Moreover, the convexity-concavity of F results in 
+
+F (xt, α ) − F (x, α t)= F (xt, α ) − F (xt, α t) + F (xt, α t) − F (x, α t)
+
+≤ ⟨ α − αt, g αt ⟩ + ⟨α − αt, ∇αF (xt, α t) − gαt ⟩
+
++ ⟨xt − x, g xt ⟩ + ⟨xt − x, sg xt − gxt ⟩ , (36) where gxt = Pni=1 αi,t gxi,t and sg xt ∈ ∂xF (xt, α t). Substi-tuting (36) into (35), we obtain 
+
+sup 
+
+> α∈∆n−1
+
+F (xT , α ) − inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+
+F (x, α )
+
+≤ 1
+
+T
+
+
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+
+⟨α − αt, g αt ⟩ + sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, g xt ⟩
+
++ sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+
+⟨α − αt, ∇αF (xt, α t) − gαt ⟩
+
++ sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, sg xt − gxt ⟩
+
+
+
+. (37) 
+
+The four terms in (37) represent the primal and dual updates and their estimation errors. We bound them us-ing the following four lemmas, whose proofs are deferred to Appendix A. Throughout these lemmas, Assumption 2 holds and the iterates are generated by Algorithm 1; sg xt
+
+is the exact-oracle subgradient constructed in the proof of Lemma 9. 
+
+Primal-side bounds. We first bound the primal update term and its estimation error. Lemma 8 (Primal update bound) . Almost surely, for every 
+
+x ∈ X , the primal updates satisfy 
+
+> T
+
+X
+
+> t=1
+
+⟨xt − x, g xt ⟩ ≤ D2
+
+> x
+
+2ηx
+
++ ηxT B 22
+
+2 . (38) The next lemma accounts for stochastic sampling and inexact inner maximization. 
+
+Lemma 9 (Primal estimation error) . The primal gradient-estimation error satisfies 
+
+E
+
+h
+
+sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, sg xt − gxt ⟩
+
+i
+
+≤ 2DxB2
+
+√T + T D xLxξ ϵ. (39) 
+
+Dual-side bounds. We now bound the corresponding terms for the mixture weights. Set Dα := max α,α ′∈∆n−1 ∥α − α′∥.By continuity of c and compactness of Ξ, choose Dc > 0
+
+such that |c(ζ, ξ )| ≤ Dc for all ζ, ξ ∈ Ξ, and define Ci := 
+
+B1 + ρiDc.
+
+Lemma 10 (Dual update bound) . Almost surely, for every 
+
+α ∈ ∆n−1, the dual updates satisfy 
+
+> T
+
+X
+
+> t=1
+
+⟨α − αt, g αt ⟩ ≤ D2
+
+> α
+
+2ηα
+
++ ηαT
+
+2
+
+> n
+
+X
+
+> i=1
+
+C2 
+
+> i
+
+. (40) The final lemma bounds the dual estimation error. 
+
+Lemma 11 (Dual estimation error) . The dual gradient-estimation error satisfies 
+
+E
+
+h
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+
+⟨α − αt, ∇αF (xt, α t) − gαt ⟩
+
+i
+
+≤ 2√T
+
+> n
+
+X
+
+> i=1
+
+Ci + nT L cξ ϵ. (41) Taking expectations in (37) and applying Lemmas 8–11, we obtain 
+
+E
+
+h
+
+sup 
+
+> α∈∆n−1
+
+F (xT , α ) − inf  
+
+> x∈X
+
+sup 
+
+> α∈∆n−1
+
+F (x, α )
+
+i
+
+≤ D2
+
+> x
+
+2ηxT + ηxB22
+
+2 + 2DxB2
+
+√T + DxLxξ ϵ
+
++ D2
+
+> α
+
+2ηαT + ηα
+
+2
+
+> n
+
+X
+
+> i=1
+
+C2 
+
+> i
+
++ 2
+
+√T
+
+> n
+
+X
+
+> i=1
+
+Ci + nL cξ ϵ
+
+= 2DxB2 + 2 Pni=1 Ci
+
+√T + D2 
+
+> x
+
++ D2 
+
+> α
+
++ B22 + Pni=1 C2
+
+> i
+
+2√T
+
++ ( DxLxξ + nL cξ )ϵ (42) where the last equality holds when selecting ηx = ηα = 
+
+> 1√T
+
+.VI. S IMULATION 
+
+We consider a synthetic federated linear regression set-ting with n heterogeneous clients, learning a shared linear predictor from corrupted observations and testing on clean data. The shared ground-truth coefficient vector a ∈ R3
+
+is unknown to the clients, and x ∈ R3 is the parameter vector of the predictor learned from their observed data. The clean feature vector θ ∈ R3 represents the features before observation errors are added. For client i ∈ [n], clean features 
+
+θ follow N (μi, I 3) restricted to [−500 , 500] 3, where I3 is the identity matrix. The Gaussian mean vector is μi = δivi,where δi ≥ 0 controls its magnitude and vi is a unit direction. The response is y = θ⊤a. Client i observes (¯θ, y ), with 
+
+¯θ = θ + sivi + γ, where si is a prescribed shift coefficient along vi and γ ∼ N (0 , 0.12I3) is observation noise. Thus, the label is generated from the clean feature vector, while training uses the corrupted feature vector. For ξ = ( θ, y ), we use ℓ(x, ξ ) = ( y − θ⊤x)2 and c(ζ, ξ ) = ∥ζ − ξ∥2. Applied to empirical samples (¯θ, y ), formulation (26) optimizes client weights and permits perturbations of both features and labels. We use n = 5 clients with sample sizes (30 , 40 , 80 , 150 , 300) . We set a = [1 , 0.5, −0.5] ⊤
+
+and (δi) = (3 , 1, 1, 0.5, 0.5) . The shifts are (si) =(0 .2, −0.1, 0, 0, 0) . The unit directions are constructed so that v1, v 3 are nearly aligned with a, v2 is nearly aligned with −a, and v4, v 5 are orthogonal to a. The directions are generated with this structure once per run as follows. First, let u = a/ ∥a∥. Draw two independent standard Gaussian vectors in R3, project each onto u⊥, and normalize the projections to obtain b1, b 2. The directions v1, v 2, v 3 are the normalized versions of u + 0 .2b1, −u + 0 .2b1, and 
+
+u + 0 .2b2, respectively; v4 = b1 and v5 = b2. Thus, the vi are random through b1, b 2 and are linked by this construction. In this synthetic setting, each client uses a shared direction vi for its Gaussian mean and systematic observation shift. Corrupted features and labels are clipped to [−500 , 500] coordinatewise. All methods initialize the model at zero and the mixture weights at the empirical proportions Ni/ P 
+
+> j
+
+Nj , with x ∈ [−100 , 100] 3.All methods run for 10 4 communication rounds. BiDRO-FL uses one sample per client per round and client-specific penalties. Its step sizes are ηx = ηα = 0 .01 , with penalties 
+
+ρ = (15 , 10 , 5, 4, 2.5) . The inner solver performs 30 pro-jected ascent steps of size 0.003 , followed by a random perturbation of norm 0.01 and projection. AFL [6] uses full local empirical losses. Its step sizes are 0.001 for both variables. The DRO-FL curve is a shared-penalty BiDRO-FL variant with ρi = 5 . We use 20 runs, sharing training data across methods. The data seeds are 2026 –2045 . Within each run, all methods are evaluated on a common clean test mixture using 4000 samples. The test mixture weights are obtained from the final BiDRO-FL iterate and determine the allocation of test samples across clients. Figure 2(a) shows the decrease of the numerically evaluated robust objective relative to a common reference value, with T −1/2 included for comparison. The common reference value is obtained by numerically solving the empirical minimax problem on 0 2000 4000 6000 8000 10000    
+
+> Communication rounds T
+> 10 −2
+> 10 −1
+> 10 0
+> 10 1BiDRO-FL
+> T−1/2 reference
+> Convergence metric
+
+(a) 0 2000 4000 6000 8000 10000   
+
+> Communication rounds T
+> 10 −4
+> 10 −3
+> 10 −2
+> 10 −1
+> 10 0
+> 10 1
+> Clean-test loss
+> AFL DRO-FL BiDRO-FL
+
+(b) 
+
+Fig. 2: (a) Empirical convergence metric. (b) Clean-test loss comparison. Curves show means over 20 runs; shading denotes 
+
+± one standard deviation across runs. the first run’s dataset and is reused across runs. Figure 2(b) evaluates prediction accuracy on clean test data under the common test mixture within each run. The final mean MSE is 0.00470 for BiDRO-FL, compared with 0.00569 for DRO-FL and 0.01318 for AFL. These results demonstrate that BiDRO-FL achieves better prediction accuracy than the compared methods. VII. C ONCLUSION 
+
+In this paper, we study a federated learning problem under two sources of uncertainty: within-client distributional ambiguity and cross-client mixture uncertainty. We construct a global ambiguity set by mixing local ambiguity sets, and derive a high-probability out-of-sample bound in terms of sample sizes, client heterogeneity, and mixture-weight devi-ations. To solve the resulting DRO problem efficiently, we introduce a penalty-based relaxation of the set-membership constraints and develop the BiDRO-FL algorithm with a provable convergence rate. Future work would include ex-ploring federated and distributed algorithms that are com-munication efficient and do not require a central server for coordination. APPENDIX APROOFS OF LEMMAS 8–11 Throughout this appendix, we condition on the observed local datasets. Let Ft denote the σ-algebra generated by the algorithmic history before sampling at round t, including the initial iterates. Then xt and αt are Ft-measurable. By fresh sampling, the conditional distribution of bζi,t given Ft is bPi.
+
+A. Proof of Lemma 8 Proof. By the nonexpansiveness of the projection in (32a) and the local update (31), we have 
+
+∥xt+1 − x∥2
+
+≤ ∥ xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t ηxgxi,t − x∥2
+
+= ∥xt − x∥2 + η2
+
+> x
+
+∥
+
+> n
+
+X
+
+> i=1
+
+αi,t gxi,t ∥2 − 2ηx⟨xt − x, g xt ⟩ . (43) Summing (43) over T rounds yields the following upper bound: 
+
+> T
+
+X
+
+> t=1
+
+⟨xt − x, g xt ⟩≤ 12ηxTX
+
+> t=1
+
+
+
+∥xt − x∥2 − ∥ xt+1 − x∥2 + η2
+
+> x
+> n
+
+X
+
+> i=1
+
+αi,t gxi,t 
+
+> 2
+
+
+
+≤ 12ηx
+
+∥x1 − x∥2 + ηx
+
+2
+
+> T
+
+X
+
+> t=1
+> n
+
+X
+
+> i=1
+
+αi,t gxi,t 
+
+> 2
+
+≤ D2
+
+> x
+
+2ηx
+
++ ηx
+
+2
+
+> T
+
+X
+
+> t=1
+
+ nX
+
+> i=1
+
+αi,t ∥gxi,t ∥
+
+2
+
+≤ D2
+
+> x
+
+2ηx
+
++ ηxT B 22
+
+2 ,
+
+where the third inequality holds due to the boundedness of the set X . The last inequality follows from the bounded gradients of ℓ with respect to x (see Assumption 2). 
+
+B. Proof of Lemma 9 Proof. By Assumption 2, the map x 7 → fi(x, ζ ) is convex for each i and ζ. Define the set of all inner maximizers by 
+
+Z⋆i (x, ζ ) := arg max ξ∈Ξ ϕi(x, ζ, ξ ). Danskin’s theorem [18] gives 
+
+∂xfi(x, ζ ) = conv ∇xℓ(x, ξ ) : ξ ∈ Z ⋆i (x, ζ ) . (44) Then, the subgradient of F (x, α ) with respect to x can be computed as 
+
+∂xF (xt, α t) = 
+
+> n
+
+X
+
+> i=1
+
+αi,t Eζ∼bPi [∂xfi(xt, ζ )] . (45) For the implemented approximate maximizer zi,t , choose a nearest point zopt  
+
+> i,t
+
+in Z⋆i,t = Z⋆i (xt, bζi,t ). Such a point exists because this set is nonempty and compact. The oracle accu-racy condition then gives ∥zi,t − zopt  
+
+> i,t
+
+∥ = dist( zi,t , Z⋆i,t ) ≤ ϵ.Consequently, the specific maximizer zopt  
+
+> i,t
+
+yields the follow-ing subgradients: 
+
+Gxi,t (bζi,t ) := ∇xℓ(xt, z opt  
+
+> i,t
+
+) ∈ ∂xfi(xt, bζi,t ), (46a) sg xt = E
+
+h nX
+
+> i=1
+
+αi,t Gxi,t (bζi,t ) Ft
+
+i
+
+∈ ∂xF (xt, α t), (46b) where Gxi,t (bζi,t ) is an exact subgradient of fi(·, bζi,t ). The ϵ-approximate maximizer induces a biased error exi,t := gxi,t −
+
+Gxi,t (bζi,t ), bounded by 
+
+∥exi,t ∥ = ∥∇ xℓ(xt, z i,t ) − ∇ xℓ(xt, z opt  
+
+> i,t
+
+)∥≤ Lxξ ∥zi,t − zopt  
+
+> i,t
+
+∥ ≤ Lxξ ϵ , (47) where the first inequality follows from the Lxξ -Lipschitz continuity of ∇xℓ(x, ξ ) with respect to ξ. It follows that 
+
+sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, sg xt − gxt ⟩
+
+= sup 
+
+> x∈X
+
+n TX
+
+> t=1
+
+⟨xt − x, sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )⟩
+
++
+
+> T
+
+X
+
+> t=1
+
+⟨xt − x, 
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t ) −
+
+> n
+
+X
+
+> i=1
+
+αi,t gxi,t ⟩
+
+o
+
+≤ sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )⟩
+
++
+
+> T
+
+X
+
+> t=1
+
+Dx∥
+
+> n
+
+X
+
+> i=1
+
+αi,t exi,t ∥≤ sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨− x, sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )⟩
+
++
+
+> T
+
+X
+
+> t=1
+
+⟨xt, sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )⟩ + T D xLxξ ϵ . (48) 
+
+Since xt is Ft-measurable, (46b) and the tower property imply that the expectation of the term involving xt in (48) is zero. Taking expectations in (48) yields 
+
+E
+
+h
+
+sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨xt − x, sg xt − gxt ⟩
+
+i
+
+≤ E
+
+h
+
+sup 
+
+> x∈X
+> T
+
+X
+
+> t=1
+
+⟨− x, sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )⟩
+
+i
+
++ T D xLxξ ϵ
+
+≤ DxE
+
+h TX
+
+> t=1
+
+
+
+sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )
+
+ i 
+
++ T D xLxξ ϵ
+
+≤ Dx
+
+vuutE
+
+h TX
+
+> t=1
+
+
+
+sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t )
+
+ 2i
+
++ T D xLxξ ϵ
+
+= Dx
+
+vuutE
+
+h TX
+
+> t=1
+
+sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t ) 2i
+
++ T D xLxξ ϵ
+
+≤ 2DxB2
+
+√T + T D xLxξ ϵ , 
+
+where the third inequality follows from Jensen’s inequality. The last equality follows from the conditional mean-zero property in (46b) and the tower property: the error at an earlier round is measurable with respect to the history at a later round. Thus, for all 1 ≤ t′̸ = t ≤ T ,
+
+E
+
+hD 
+
+sg xt −
+
+> n
+
+X
+
+> i=1
+
+αi,t Gxi,t (bζi,t ), sg xt′ −
+
+> n
+
+X
+
+> i=1
+
+αi,t ′ Gxi,t ′ (bζi,t ′ )
+
+Ei 
+
+= 0 ,
+
+where sg xt′ ∈ ∂xF (xt′ , α t′ ). The last inequality holds since 
+
+∥sg xt ∥ ≤ B2 and ∥Gxi,t (bζi,t )∥ ≤ B2 .
+
+C. Proof of Lemma 10 Proof. By the update rule (32b), we have 
+
+∥αt+1 − α∥2
+
+≤ ∥ αt + ηαgαt − α∥2
+
+= ∥αt − α∥2 + η2
+
+> α
+
+∥gαt ∥2 + 2 ηα⟨αt − α, g αt ⟩, (49) where the inequality follows from the nonexpansiveness of the projection. By the definition of Ci, |gαi,t | ≤ Ci. It follows that 
+
+> T
+
+X
+
+> t=1
+
+⟨α − αt, g αt ⟩≤ 12ηαTX
+
+> t=1
+
+ ∥αt − α∥2 − ∥ αt+1 − α∥2 + η2
+
+> α
+
+∥gαt ∥2
+
+≤ 12ηα
+
+∥α1 − α∥2 + ηα
+
+2
+
+> T
+
+X
+
+> t=1
+
+∥gαt ∥2
+
+≤ D2
+
+> α
+
+2ηα
+
++ ηαT
+
+2
+
+> n
+
+X
+
+> i=1
+
+C2 
+
+> i
+
+.
+
+D. Proof of Lemma 11 Proof. Define Gαi,t (ζ) := fi(xt, ζ ) = sup ξ∈Ξ ϕi(xt, ζ, ξ ).The gradient of F (x, α ) with respect to αi can be computed as 
+
+∇αi F (xt, α t) = Eζ∼bPi [fi(xt, ζ )] = Eζ∼bPi [Gαi,t (ζ)] . (50) Define the sampling error 
+
+Mi,t := ∇αi F (xt, α t) − Gαi,t (bζi,t ).
+
+Fresh sampling and (50) imply E[Mi,t | F t] = 0 . Moreover, 
+
+|Gαi,t (bζi,t )| ≤ Ci and |∇ αi F (xt, α t)| ≤ Ci, so |Mi,t | ≤ 2Ci.Similarly, define the biased error by eαi,t := gαi,t − Gαi,t (bζi,t ).It satisfies 
+
+∥eαi,t ∥ = ∥(ℓ(xt, z i,t ) − ρic(bζi,t , z i,t )) 
+
+− (ℓ(xt, z opt  
+
+> i,t
+
+) − ρic(bζi,t , z opt  
+
+> i,t
+
+)) ∥ ≤ Lcξ ϵ, (51) where zopt  
+
+> i,t
+
+∈ Z ⋆i,t is the specific optimizer used before. Moreover, we obtain 
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+
+⟨α − αt, ∇αF (xt, α t) − gαt ⟩
+
+= sup 
+
+> α∈∆n−1
+
+n TX
+
+> t=1
+> n
+
+X
+
+> i=1
+
+(αi − αi,t ) ∇αi F (xt, α t) − Gαi,t (bζi,t )
+
++
+
+> T
+
+X
+
+> t=1
+> n
+
+X
+
+> i=1
+
+(αi − αi,t ) Gαi,t (bζi,t ) − gαi,t 
+
+o
+
+≤ sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+> n
+
+X
+
+> i=1
+
+(αi − αi,t ) ∇αi F (xt, α t) − Gαi,t (bζi,t )
+
++ nT L cξ ϵ. (52) Taking expectations over the algorithm’s randomness in (52) gives 
+
+E
+
+h
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+
+⟨α − αt, ∇αF (xt, α t) − gαt ⟩
+
+i≤ E
+
+h
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+> n
+
+X
+
+> i=1
+
+(αi − αi,t ) ∇αi F (xt, α t) − Gαi,t (bζi,t )i
+
++ nT L cξ ϵ
+
+> (a)
+
+= E
+
+h
+
+sup 
+
+> α∈∆n−1
+> T
+
+X
+
+> t=1
+> n
+
+X
+
+> i=1
+
+αi
+
+ ∇αi F (xt, α t) − Gαi,t (bζi,t )i
+
++ nT L cξ ϵ
+
+≤ E
+
+h nX
+
+> i=1
+> T
+
+X
+
+> t=1
+
+ ∇αi F (xt, α t) − Gαi,t (bζi,t ) i
+
++ nT L cξ ϵ
+
+> (b)
+
+≤ 2√T
+
+> n
+
+X
+
+> i=1
+
+Ci + nT L cξ ϵ , 
+
+where equality (a) uses the tower property of conditional expectation. Since αi,t is Ft-measurable, 
+
+E[αi,t Mi,t ] = Eαi,t E[Mi,t | F t] = 0 .
+
+For each realization, the supremum is taken over α, while the iterates αt are held fixed. We can therefore take P 
+
+> t,i
+
+αi,t Mi,t 
+
+outside the supremum and apply the preceding identity to obtain (a). To prove (b), note that for s < t , Mi,s is Ft-measurable. Hence, the tower property also gives 
+
+E[Mi,s Mi,t ] = EMi,s E[Mi,t | F t] = 0 .
+
+By the Cauchy–Schwarz inequality, 
+
+E
+
+" TX
+
+> t=1
+
+Mi,t 
+
+#
+
+≤
+
+vuuutE
+
+
+
+> T
+
+X
+
+> t=1
+
+Mi,t 
+
+!2
+
+=
+
+vuut TX
+
+> t=1
+
+E[M 2
+
+> i,t
+
+] ≤ 2Ci
+
+√T , 
+
+where the equality follows because the cross terms have zero expectation, as shown above, and the last inequality uses 
+
+|Mi,t | ≤ 2Ci. Summing over clients proves (b). ACKNOWLEDGMENT 
+
+ChatGPT [19] assisted with manuscript review, proof-reading, and consistency checks. The authors retain full responsibility for all content and results. REFERENCES [1] R. S. Antunes, C. Andr´ e da Costa, A. K¨ uderle, I. A. Yari, and B. Eskofier, “Federated learning for healthcare: Systematic review and architecture proposal,” ACM Transactions on Intelligent Systems and Technology (TIST) , vol. 13, no. 4, pp. 1–23, 2022. [2] P. Mohajerin Esfahani and D. Kuhn, “Data-driven distributionally robust optimization using the Wasserstein metric: Performance guar-antees and tractable reformulations,” Mathematical Programming , vol. 171, no. 1–2, pp. 115–166, 2018. [3] D. Kuhn, P. Mohajerin Esfahani, V. A. Nguyen, and S. Shafieezadeh-Abadeh, “Wasserstein distributionally robust optimization: Theory and applications in machine learning,” in Operations Research & Manage-ment Science in the Age of Analytics , ser. INFORMS TutORials in Operations Research. INFORMS, 2019, pp. 130–166. [4] A. Cherukuri and J. Cort´ es, “Cooperative data-driven distribution-ally robust optimization,” IEEE Transactions on Automatic Control ,vol. 65, no. 10, pp. 4400–4407, 2020. [5] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentral-ized data,” in Artificial intelligence and statistics . Pmlr, 2017, pp. 1273–1282. [6] M. Mohri, G. Sivek, and A. T. Suresh, “Agnostic federated learning,” in Proceedings of the 36th International Conference on Machine Learning . PMLR, 2019, pp. 4615–4625. [7] T. Soma, K. Gatmiry, S. Gupta, and S. Jegelka, “Near-optimal al-gorithms for group distributionally robust optimization and beyond,” 
+
+arXiv preprint arXiv:2212.13669 , 2022. [8] D. Yu, Y. Cai, W. Jiang, and L. Zhang, “Efficient algorithms for empirical group distributionally robust optimization and beyond,” 
+
+arXiv preprint arXiv:2403.03562 , 2024. [9] X. Konti, Y. Shen, Z. Wang, K. H. Johansson, M. J. Pencina, N. J. Economou-Zavlanos, and M. M. Zavlanos, “Group distributionally robust machine learning under group level distributional uncertainty,” 
+
+arXiv preprint arXiv:2509.08942 , 2025. [10] Y. Rychener, A. Esteban-P´ erez, J. M. Morales, and D. Kuhn, “Wasser-stein distributionally robust optimization with heterogeneous data sources,” arXiv preprint arXiv:2407.13582 , 2024. [11] T.-A. Nguyen, T. D. Nguyen, L. T. Le, C. T. Dinh, and N. H. Tran, “On the generalization of Wasserstein robust federated learning,” arXiv preprint arXiv:2206.01432, 2022. [12] Z. Wang, X. Yi, X. Konti, M. M. Zavlanos, and K. H. Johansson, “Distributionally robust federated learning with outlier resilience,” 
+
+arXiv preprint arXiv:2509.24462 , 2025. [13] M. Ibrahim, H. Rozas, N. Gebraeel, and W. Xie, “FDR-SVM: A federated distributionally robust support vector machine via a mixture of Wasserstein balls ambiguity set,” in The 41st Conference on Uncertainty in Artificial Intelligence , 2025. [14] D. Boskos, J. Cort´ es, and S. Mart´ ınez, “High-confidence data-driven ambiguity sets for time-varying linear systems,” IEEE Transactions on Automatic Control , vol. 69, no. 2, pp. 797–812, 2024. [15] C. Villani et al. , Optimal transport: old and new . Springer, 2009, vol. 338. [16] A. Sinha, H. Namkoong, R. Volpi, and J. Duchi, “Certifying some distributional robustness with principled adversarial training,” arXiv preprint arXiv:1710.10571 , 2017. [17] M. Sion, “On general minimax theorems,” Pacific Journal of Mathe-matics , vol. 8, no. 1, pp. 171–176, 1958. [18] D. Bertsekas, Nonlinear Programming . Athena Scientific, 2016. [19] OpenAI, “ChatGPT.” [Online]. Available: https://chatgpt .com/

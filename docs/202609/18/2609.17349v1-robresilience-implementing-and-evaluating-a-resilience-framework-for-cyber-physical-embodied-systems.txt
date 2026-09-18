@@ -1,0 +1,629 @@
+Title: RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems
+
+URL Source: https://arxiv.org/pdf/2609.17349v1
+
+Published Time: Wed, 16 Sep 2026 01:39:37 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems 
+
+# Gysella Imrell 
+
+Örebro University Örebro, Sweden gysella.michelle@gmail.com 
+
+# Emanuele Miotto 
+
+Örebro University Örebro, Sweden emanuele.miotto@oru.se 
+
+# Mahya Mohammadi Kashani ✉
+
+Örebro University Örebro, Sweden mahya.mohammadi-kashani@oru.se 
+
+# Mauro Conti 
+
+Örebro University Örebro, Sweden University of Padua Padua, Italy mauro.conti@unipd.it 
+
+# Alberto Giaretta 
+
+Örebro University Örebro, Sweden alberto.giaretta@oru.se 
+
+## Abstract 
+
+In embodied cyber-physical systems, active cyberattacks pose an immediate threat not just to data, but to physical integrity and hu-man safety. While existing security approaches excel at detection, they lack the runtime mechanisms to determine whether a disrup-tion is tolerable or if performance degradation remains within safe operational bounds. This gap leaves autonomous systems vulner-able to graceful failure paralysis, where they cannot distinguish between a safe, degraded state and a catastrophic hazard during an ongoing attack. This paper presents RobResilience, an implementa-tion of a formal resilience framework for embodied cyber-physical systems in a Webots Simulator (Webots) simulation environment, using a Personal Robot 2 (PR2) robot and Robot Operating System 2 (ROS2). The framework evaluates three predicates at runtime: tolerable disruption ( 𝛿 ), tolerable degradation ( 𝛾 ), and mitigation feasibility ( 𝜇 ), over a compromised device set derived from IDS confidence scores. When resilience is lost, the framework triggers available mitigation strategies. We evaluate our implementation through eight attack scenarios that systematically cover all possible combinations of the predicate state space, varying attack targets, degradation rates, and mitigation availability. Results confirm that the runtime behaviour of the implementation is consistent with the theoretical definitions. 1
+
+## CCS Concepts 
+
+• Computer systems organization → Embedded and cyber-physical systems ; • Security and privacy → Intrusion/anomaly detection and malware mitigation ; • Theory of computation →
+
+Logic and verification .       
+
+> 1The full reproducible implementation is available at: https://github.com/ mahyamkashani/RobResilience
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> CPSIoTSec ’26, The Hague, Netherlands
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-3032-0/2026/11 https://doi.org/10.1145/3847353.3847504
+
+## Keywords 
+
+cyber-physical systems, device-level cyberattacks, simulation, adap-tive resilience framework 
+
+ACM Reference Format: 
+
+Gysella Imrell, Emanuele Miotto, Mahya Mohammadi Kashani, Mauro Conti, and Alberto Giaretta. 2026. RobResilience: Implementing and Eval-uating a Resilience Framework for Cyber-Physical Embodied Systems. In 
+
+8th Workshop on CPS&IoT Security and Privacy (CPSIoTSec ’26), November 15-19, 2026, The Hague, Netherlands. ACM, New York, NY, USA, 13 pages. https://doi.org/10.1145/3847353.3847504 
+
+## 1 Introduction 
+
+Cyber-Physical Systems (CPSs) integrate computational and physi-cal components to operate in safety and mission-critical domains, including smart grids, healthcare, autonomous vehicles, and robot-ics [11, 22, 24]. This tight integration extends the attack surface considerably: incidents such as Stuxnet, the Ukrainian power grid blackout, and the Florida water treatment attack have demonstrated that cyberattacks on CPSs can compromise physical processes, op-erational continuity, and human safety simultaneously [5, 12]. A particularly consequential subclass is embodied CPSs, au-tonomous systems that interact with humans and their environment through sensing, decision-making, and physical actuation [21]. In these systems, an attack can affect not only digital assets, but also the physical integrity and operational functionality of the robot and its surroundings, making resilience a first-order concern [23]. Cornelius et al. showed that robots like PR2 rely on commonly used Linux operating systems that are difficult to patch, leaving known vulnerabilities unaddressed in deployed systems [3]. Dudek and Szynkiewicz analysed attack vectors for mobile robots drawing on real-world scenarios spanning network, personal data, services and applications vulnerabilities [4]. A major issue with embodied CPSs is that they use AI-powered technology to make autonomous decisions while interacting with people. This creates significant risks to peoples’ daily activities if security is not considered. For example, two viral videos on social media in 2016 and similar inci-dents involving humanoid robots covered by a viral video in 2026 highlight these dangers[2, 6].Existing work on CPS security has fo-cused mainly on attack detection, intrusion detection, and anomaly analysis [5, 8, 17]. Although valuable for identifying threats, these arXiv:2609.17349v1 [cs.CR] 15 Sep 2026 CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. 
+
+Figure 1: PR2 robot is doing navigate_and_pickup task in Webots simulation. 
+
+approaches leave runtime resilience, adaptive mitigation, and grace-ful degradation comparatively under-explored [13, 20]. Intrusion response work, such as the Autonomous Response Controller of Kholidy, addresses runtime response beyond detection, but does not reason about disruption or degradation tolerability under ongoing attacks [13]. This paper addresses this gap by implementing and evaluat-ing a formal resilience framework for embodied CPSs [7]. The framework integrates IDS-derived information with task-criticality assessments, embodiment goals, and device dependencies to rea-son about disruption tolerability, degradation severity, mitigation feasibility, and operational continuity, going beyond detection to support resilient behaviour during active cyberattacks. This paper follows a Design Science Research approach, situating the framework within a simulation environment that models how different cyberattack scenarios influence system behaviour. Attacks are simulated as message-based injections over ROS2 [1], targeting a PR2 robot in Webots [16]; robot Intrusion Detection System (IDS) provides runtime input to the resilience reasoning layer. The PR2 platform is chosen for its combination of mobility and manipulation capabilities, which enables us to simulate diverse task scenarios, shown in Figure 1. Experiments are designed to verify consistency with the theoretical framework through the systematic variation of attack targets, degradation rates, and mitigation configurations. Evaluation is limited to simulation and does not extend to physical hardware deployment; in addition, attack scenarios model the ex-pected behavioural effects of cyberattacks on system components rather than real-world exploits. The paper provides three main contributions. First, it presents an executable implementation of the formal resilience framework of [7] for embodied CPSs, realising the criticality mappings, IDS in-tegration, and runtime predicate evaluation as deployable software modules within a ROS2-based Webots simulation environment. Second, it demonstrates that the implementation conforms to the expected behaviour across all realisable combinations among the tolerable disruption, tolerable degradation, and mitigation feasibil-ity predicates, confirming consistency with the formal definitions across critical and non-critical attack targets. Third, it delivers an empirical analysis of how degradation severity, task-criticality mappings, and adaptive mitigation jointly determine operational continuity and resilient system behaviour under ongoing cyberat-tacks. The remainder of this paper is organised as follows. Section 2 reviews related work on CPS security, resilience, and fault detection. Section 3 presents the formal resilience framework, defining the criticality mappings, IDS model, as well as the predicates for tol-erable disruption, tolerable degradation, mitigation feasibility, and system resilience. Section 4 describes the threat model, covering attacker goals, capabilities, knowledge assumptions, and defences. Section 5 details the proposed implementation, including the system architecture, the four framework modules, and the instantiation of the degradation function 𝜓 . Section 6 presents the evaluation: the experimental setup, eight attack scenarios covering all realisable combinations of the tolerable disruption, tolerable degradation, and mitigation feasibility predicates, and the resulting analysis. Sec-tion 8 concludes the paper and outlines directions for future work. 
+
+## 2 Related Work 
+
+We survey three bodies of work that contextualize Implementing and Evaluating a Resilience Framework for Cyber-Physical Embod-ied Systems (RobResilience). We first review intrusion detection approaches for CPSs and their limitations in providing adaptive run-time response. We then examine Fault Detection, Isolation, and Re-configuration (FDIR) methods and explain why assumptions about bounded physical faults do not transfer to adversarial compromise. Finally, we consider formal and runtime-verification approaches to cyber-resilience for CPSs and embodied systems, identifying the predicate-based framework that RobResilience implements and evaluates. 
+
+## 2.1 CPS security and intrusion detection 
+
+CPSs face a diverse and well-documented attack surface spanning both network and physical layers [5, 12]. The dominant response in the literature has been detection. Mitchell and Chen survey intru-sion detection techniques for CPSs along two design dimensions, detection technique and audit material, establishing the breadth of IDS-centric approaches [17]. Detection techniques fall into three categories. Knowledge-based (misuse) detection matches runtime features against known patterns of bad behaviour; its advantage is a low false-positive rate, but its disadvantage is that it requires a constantly updated dictionary of every known attack vector, so it cannot catch attacks not already specified. Behaviour-based de-tection instead flags runtime features that deviate from "normal," defined either from the test signal’s own history (unsupervised) or from training data (semi-supervised); its advantage is that it does not need attacks pre-specified, but it is prone to false positives and its training/profiling phase is a weakness against sophisticated attackers who target critical systems using novel (not previously disclosed) tactics that training data do not reflect. This category includes conventional statistics-based and non-parametric methods. Behaviour-specification-based detection is a distinct, potentially most-effective variant for CPS, where humans manually define legit-imate behaviour and the IDS flags deviations from it; it offers a low false-negative rate and immediate effectiveness (no training phase needed) and, like other behaviour-based methods, can catch zero-day attacks, but at the cost of the significant effort required to build RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 
+
+the formal specification [17]. However, such methods evaluate IDS without confidence score, detection-probability parameter, assigned per physical component from its task and goal criticality. Therefore, resilience evaluation and validation would be independent of any particular detection algorithm’s internals. Han et al. examine the particular constraints that CPSs impose on detection resource limits, real-time requirements, and the interplay between network and physical anomalies, noting that fault-tolerant mechanisms alone are insufficient when failures are deliberately induced rather than incidental [8]. Control-theoretic attack detec-tion methods, such as those proposed by Pasqualetti et al., provide formal conditions to identify compromised actuators and sensors, but address identification rather than runtime response [18]. In the robotic domain specifically, as Zhu and his colleagues mentioned in their book, “it is essential to see that OT-level safety and IT-level se-curity are intertwined. The ignorance of IT-security will enable an attacker to take over the control of OT and create human-induced devastating incidents”. They provide a comprehensive treatment of cybersecurity challenges including vulnerability scoring, attack quantification, and the difficulty of hardening deployed robotic sys-tems post-hoc, and identify runtime resilience as an open problem but do not provide a formal framework for reasoning about it at runtime [25]. Intrusion response work, such as the Autonomous Response Controller of Kholidy, addresses runtime response beyond detection but does not reason about disruption or degradation tolerability in terms of formal predicates [13]. RobResilience addresses this gap to determine whether a compromised system can continue operating and whether mitigation is feasible. 
+
+## 2.2 Fault tolerance and FDIR 
+
+The engineering tradition of FDIR addresses operational continuity under component failure [9]. Model-based FDIR has been applied across safety-critical domains including aerospace [27], automotive drive-by-wire systems [10], and power distribution networks [26]. However, FDIR is designed around deviations from expected physi-cal behaviour and assumes that failure modes are known, bounded, and structurally representable. It does not model adversarial intent, criticality assignments that vary by task, or the compositional degra-dation effects that arise when multiple devices are compromised simultaneously through a coordinated cyberattack. Segovia-Ferreira et al. survey cyber-resilience approaches for CPSs, noting that research efforts have concentrated on intrusion detection, with little discussion of remediation once an intrusion is detected, and that most responses are manual or hardwired with fixed, non-configurable reactions [20]. RobResilience addresses this by evaluating disruption and degradation tolerability as formally defined predicates over the compromised device set, instead of relying solely on detection output. 
+
+## 2.3 Formal methods, cyber-resilience, and embodied systems 
+
+Formal approaches to Cyber-Physical System (CPS) security have produced frameworks for modelling cyber-physical attacks using hybrid process calculus [15] and for verifying obligation-preserving behaviour in autonomous agents [21]. In the robotic systems domain, Kirca et al. propose a runtime ver-ification architecture for ROS2-based security monitoring, checking conformance to temporal logic specifications and detecting anom-alies such as Denial-of-Service (DoS)-induced packet-count drops during execution [14]. However, Kirca et al. address specification conformance and anomaly identification rather than formal predi-cate evaluation over a compromised device set with adaptive mitiga-tion. Segovia-Ferreira et al. survey cyber-resilience approaches and identify the absence of runtime predicate validation frameworks as a recurring gap in the literature [20]. On the embodied systems front, recent surveys document a rapidly expanding threat surface for autonomous platforms inter-acting with physical environments [19, 23], but neither provides a formal predicate-based runtime resilience mechanism with adaptive mitigation. Giaretta introduces exactly this: a formal framework defining tolerable disruption, tolerable degradation, and mitigation feasibility as runtime predicates for embodied CPSs under device-level cyberattacks [7]. RobResilience implements and evaluates this framework in a Webots with a PR2 robot under ROS2, providing the first empirical validation of its predicate semantics across all realisable disruption–degradation–mitigation state combinations. 
+
+## 3 Background: The Theoretical Resilience Framework 
+
+As previously stated, this paper implements the formal resilience framework described in [7]. In the framework, a robotic system 𝑅 is composed of a finite set of devices 𝐷 = {𝑑 1, 𝑑 2, . . . , 𝑑 𝑛 }. The robot can perform a finite set of tasks 𝑇 = {𝑡 1, 𝑡 2, . . . , 𝑡 𝑝 }, and must pre-serve a finite set of embodiment-related goals 𝐺 = {𝑔 1, 𝑔 2, . . . , 𝑔 𝑞 }.Each device 𝑑 ∈ 𝐷 contributes to task execution and goal preserva-tion through criticality mappings. Following the same notation, 2 𝐷 denotes the power set of 𝐷 , i.e., the set of all subsets of devices. For the sake of brevity, in this section we report only the core theoretical concepts. The reader can find the full set of definitions and proofs in the original paper [7]. 
+
+Definition 1. The task-criticality mapping is defined as a func-tion: 
+
+𝜏 : 𝐷 × 𝑇 → C ,
+
+where C = {0, 1, 2} denotes the criticality levels: 0 for none, 1 for important, and 2 for required. 
+
+Definition 2. The goal-criticality mapping is also defined as a function: 
+
+𝜀 : 𝐷 × 𝐺 → C ,
+
+where C = {0, 1, 2} denotes the previously introduced criticality levels. 
+
+Definition 3. Let 𝐷 be the set of devices present in the embodied CPS. The IDS output is a function 
+
+𝐼 : 𝐷 → [ 0, 1],
+
+where 𝐼 (𝑑 ) denotes the confidence that the device 𝑑 ∈ 𝐷 is currently compromised by an attack. CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. 
+
+Definition 4. Let 𝜅 base , 𝜅 crit ∈ [ 0, 1] be fixed thresholds such that 
+
+𝜅 crit < 𝜅 base . The device-specific threshold function 𝜅 : 𝐷 → [ 0, 1]
+
+is: 
+
+𝜅 (𝑑 ) =
+
+
+
+𝜅 crit , if ∃ 𝑡 ∈ 𝑇 active : 𝜏 (𝑑, 𝑡 ) = 2or ∃ 𝑔 ∈ 𝐺 active : 𝜀 (𝑑, 𝑔 ) = 2
+
+𝜅 base , otherwise, where 𝑇 active ⊆ 𝑇 and 𝐺 active ⊆ 𝐺 are the currently relevant tasks and embodiment-preserving goals, respectively. 
+
+Definition 5. Given the IDS function 𝐼 (𝑑 ) and the threshold func-tion 𝜅 (𝑑 ), the current set of compromised devices 𝑆 is defined as: 
+
+𝑆 = { 𝑑 ∈ 𝐷 | 𝐼 (𝑑 ) ≥ 𝜅 (𝑑 ) } .
+
+Definition 6. The tolerable disruption is described as a func-tion: 
+
+𝛿 : 2 𝐷 → { 0, 1},
+
+which evaluates whether a set of compromised devices 𝑆 ⊆ 𝐷 
+
+includes any device that is critical (i.e., strictly required) for task execution or goal preservation. Let 𝑇 active ⊆ 𝑇 and 𝐺 active ⊆ 𝐺 be as defined in Definition 4. The predicate is defined as: 
+
+𝛿 (𝑆 ) = 1 ⇐⇒ 
+
+
+
+∀ 𝑡 ∈ 𝑇 active ,  𝑑 ∈ 𝑆 : 𝜏 (𝑑, 𝑡 ) = 2
+
+
+
+∧
+
+
+
+∀𝑔 ∈ 𝐺 active ,  𝑑 ∈ 𝑆 : 𝜀 (𝑑, 𝑔 ) = 2
+
+
+
+.
+
+This condition is satisfied only if no compromised device is critical for any active task or goal. 
+
+Definition 7. Let 
+
+𝜓 : 2 𝐷 → [ 0, 1]
+
+be a monotonic non-increasing degradation function that evaluates system performance under a set of compromised devices 𝑆 ⊆ 𝐷 ,where 1 denotes full performance and 0 denotes total failure. Let 
+
+𝜃 crit , 𝜃 base ∈ [ 0, 1] be performance thresholds with 𝜃 crit > 𝜃 base .The tolerable degradation is a function: 
+
+𝛾 : 2 𝐷 → { 0, 1},
+
+which evaluates whether a system under disruption remains within acceptable performance bounds. The predicate is defined as: 
+
+𝛾 (𝑆 ) = 1 ⇐⇒ 𝜓 (𝑆 ) ≥ 𝜃 (𝑆 ),
+
+where the threshold 𝜃 (𝑆 ) depends on the presence of critical de-vices: 
+
+𝜃 (𝑆 ) =
+
+
+
+𝜃 crit , if ∃ 𝑑 ∈ 𝑆, ∃ 𝑡 ∈ 𝑇 active : 𝜏 (𝑑, 𝑡 ) = 2or ∃ 𝑑 ∈ 𝑆, ∃ 𝑔 ∈ 𝐺 active : 𝜀 (𝑑, 𝑔 ) = 2
+
+𝜃 base , otherwise. The components of this condition are interpreted as follows: 
+
+• 𝛾 (𝑆 ) = 1: performance is within acceptable bounds; 
+
+• 𝜃 crit : strict threshold applied when any critical device is af-fected; 
+
+• 𝜃 base : relaxed threshold for non-critical device disruptions. 
+
+Definition 8. Let 𝐴 be the set of symbolic mitigating actions, such as isolating compromised devices, reconfiguring system logic, or reassigning criticality to functionally equivalent non-compromised devices. Let 𝐷 𝑚 ⊆ 𝐷 denote the set of devices for which a mitigation action exists. The mitigation feasibility is defined as a function: 
+
+𝜇 : 2 𝐷 → { 0, 1},
+
+which evaluates whether a compromised set 𝑆 ⊆ 𝐷 can be mit-igated, at least partially, to restore sufficient system operability. Specifically: 
+
+𝜇 (𝑆 ) = 1 ⇐⇒ ∃ 𝑀 ⊆ 𝑆 ∩ 𝐷 𝑚 : 𝛿 (𝑆 \ 𝑀 ) = 1 ∧ 𝛾 (𝑆 \ 𝑀 ) = 1.
+
+This predicate returns true if there exists a subset of compromised devices 𝑀 for which an appropriate mitigation strategy can be applied such that both disruption and degradation become tolerable. Disruption ( 𝛿 ) and degradation ( 𝛾 ) address two different aspects, and one does not imply the other. Disruption only looks at whether a critical device, required by the active task or goal, is compromised. Degradation looks at overall performance 𝜓 (𝑆 ), which depends on every compromised device, critical or not. So several non-critical devices compromised at once can leave 𝛿 (𝑆 ) = 1 true while still pushing 𝜓 (𝑆 ) below 𝜃 base , making 𝛾 (𝑆 ) = 0: the system can still attempt the task, but no longer performs it well enough. To be resilient without mitigations, a system needs both conditions to hold. Theorem 1. Given a compromised set 𝑆 ⊆ 𝐷 , the system is resilient if and only if: 
+
+ 𝛿 (𝑆 ) = 1 ∧ 𝛾 (𝑆 ) = 1 ∨ 𝜇 (𝑆 ) = 1.
+
+Theorem 2. Let 𝑆 be the current set of compromised devices as defined in Definition 5, derived from the IDS output 𝐼 (𝑑 ) (Defini-tion 3) and the threshold function 𝜅 (𝑑 ) (Definition 4). The system’s resilience posture is evaluated according to the following cases: 
+
+(1) If 𝛿 (𝑆 ) = 1 and 𝛾 (𝑆 ) = 1, then the system tolerates the disrup-tion without degradation. 
+
+(2) Otherwise, if 𝜇 (𝑆 ) = 1, then the system is not disruption-tolerant, but a mitigation exists that restores tolerability, albeit with possible performance degradation. 
+
+(3) Otherwise, if 𝜇 (𝑆 ) = 0, then the disruption is not tolerable and the system must initiate safe-state mitigation or halt. 
+
+For the proof sketches of Theorems 1 and 2 we refer the reader to the theoretical framework paper on which this work is based on [7]. 
+
+## 4 Threat Model 
+
+We consider an embodied CPS executing a task 𝑡 ∈ 𝑇 autonomously, relying only on its navigation, manipulation, and perception sub-systems to complete the task. No human operator is involved. In addition to these operational capabilities, the system is equipped with the resilience framework described in Section 3, continuously evaluating 𝛿 , 𝛾 , and 𝜇 during execution. The adversary seeks to force 𝛿 (𝑆 ) = 0 or 𝛾 (𝑆 ) = 0 by compromis-ing one or more devices 𝑑 ∈ 𝐷 , violating the resilience guarantee of Theorem 1. Disruption may take the form of impeding naviga-tion, interfering with object acquisition, or corrupting the robot’s perception of the surrounding environment. The ultimate objective is to cause task failure, safety-relevant hazards such as collisions with nearby obstacles, or exhaustion of the available time budget. The attacker operates at the ROS2 communication layer, injecting symbolic message-based attacks targeting one or more devices RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 
+
+𝑑 ∈ 𝐷 simultaneously. For each targeted device, an attack type is selected based on its overall objective. For example, if its objective is to tamper with obstacle avoidance, it will target devices involved in that subsystem, either individually or in a specific combination, to deviate from the original execution. Once an attack is active, it remains in force until a mitigation 𝑀 ⊆ 𝑆 is deployed to resolve it, as formalised in Definition 8. The attacker is modelled as an outsider with partial system knowledge. It knows which devices 𝑑 ∈ 𝐷 exist and which at-tack types are applicable to each. However, it has no access to the criticality mappings 𝜏 and 𝜀 , the internals of the Resilience Manager, or the IDS function 𝐼 defined in Section 3. It cannot tamper with their execution or observe their outputs. The resilience framework and the IDS are assumed trusted and uncompromised, reflecting a deployment where both components run on isolated, hardened infrastructure. 
+
+Defenses: The IDS is probabilistic, providing a per-device con-fidence score 𝐼 (𝑑 ) ∈ [0, 1] that estimates the probability of an ongoing compromise. This score reflects the cybersecurity status of each device. It captures only IDS-detectable cyberthreats, such as known-malware signatures, network reconnaissance (e.g., ARP scans), or denial-of-service flooding, rather than physical wear or non-malicious faults, which an IDS is not designed to recognise. A device 𝑑 enters the compromised set 𝑆 when 𝐼 (𝑑 ) ≥ 𝜅 (𝑑 ), as defined in Definitions 3 to 5. The mitigations, when applied, are deterministic and fully resolve the ongoing attack for each targeted device, removing it from 𝑆 and restoring the evaluation of 𝛿 (𝑆 \ 𝑀 )
+
+and 𝛾 (𝑆 \ 𝑀 ).
+
+## 5 Proposed Framework Implementation 
+
+The implementation translates the formal resilience framework presented in Section 3 into an executable evaluation system for embodied CPSs. The system operates continuously during task execution, reasoning about the current resilience state of the robot under cyberattack conditions consistent with the threat model of Section 4. All the capital bold letters between round brackets in the following subsections, i.e. (A) , correspond to the connection labels in Figure 2. 
+
+## 5.1 System Architecture 
+
+The framework is organized into four modules: a simulation envi-ronment hosting the physical robot, a coordination controller that orchestrates task execution and inter-module communication, an 
+
+attack injection module responsible for delivering and applying cyber-attacks, and a resilience evaluation module that continuously assesses the system state and drives mitigation. Figure 2 illustrates the overall architecture and the data flow at runtime. During initialization, the controller loads the experiment con-figuration (A) , which specifies task type, goal activation, criticality mappings 𝜏 and 𝜀 , system thresholds 𝜅 crit , 𝜅 base , 𝜃 crit , 𝜃 base , reduc-tion coefficients 𝛼 crit and 𝛼 base , baseline execution time, and the mitigatable device set. These parameters are then distributed by the controller to the resilience evaluation module before task execution begins. During runtime, the attack injection module introduces an attack by publishing a symbolic message to the active_attacks topic (B) ,received by the Subscriber Node and forwarded to the coordination controller (C) . The controller dispatches the attack information in two directions: to the Attack Executor (D) , which immediately applies physical effects to the targeted actuators, and to the IDS 
+
+(E) , which performs probabilistic detection. The IDS returns the resulting compromised set 𝑆 to the controller (F) , which passes it to the Resilience Manager (G) . The Resilience Manager evaluates 𝛿 , 𝛾 ,and 𝜇 , returning resilience outputs together with any restored de-vices to the controller (J) . When mitigation is applied, the controller broadcasts the restored device set simultaneously to the Subscriber Node, the Attack Executor, and the IDS (K) , removing the affected devices from the active attack state across all modules. The final task result and runtime metrics are reported to the Task Output 
+
+(L) .The system is implemented in Python, using Webots as the sim-ulation environment, a PR2 robot platform, and ROS2 for attack communication. A key integration challenge arose from hardware contention: the original Webots PR2 controller continuously over-writes motor commands during task execution, silently negating attack effects. This was resolved by inserting attack-awareness checks into the low-level hardware control layer, granting the At-tack Executor temporary ownership of targeted actuators when an attack is active. 
+
+## 5.2 Framework Modules 
+
+The four modules, described below, implement the core resilience predicates defined in Section 3. 
+
+5.2.1 Simulation Environment. The simulation environment is pro-vided by Webots, which hosts the PR2 robot and executes its physics-based dynamics. The PR2 is a full-scale service robot equipped with omnidirectional wheels, two arms, grippers, and a head-mounted sensor suite. The Webots Supervisor API grants the coordination controller programmatic access to the robot’s actuators, sensors, and scene objects. 
+
+5.2.2 Coordination Controller. The PR2 Controller acts as the cen-tral orchestrator of the framework. It loads all modules from the Source Files and distributes the experiment parameters (A) , man-ages modules’ communication at each control step, and integrates mitigation commands with the robot’s physical execution. Each control step is triggered by the Task Loop invoking the resilience check during a motion primitive. At every step, it reads the cur-rent attack state from the Subscriber Node (C) , drives the Attack Executor (D) and the IDS (E) , receives the compromised set 𝑆 (F) ,forwards it to the Resilience Manager (G) , and processes the re-sulting resilience outputs (J) , including broadcasting any restored devices (K) .
+
+Task Loop. The Task Loop defines three robot behaviors: navigate to goal , pickup water bottle , and the composite navigate and pickup water bottle , which combines grasping with transport to a target table and controlled release. It is the outermost control loop of the system: each task is decomposed into smaller primitives that invoke the resilience check at every step, propagating a HALTED 
+
+signal immediately upon failure so that execution is stopped as soon as possible. A task that completes while the system is in a NOT RESILIENT state is downgraded from DONE to HALTED , making sure CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. Webots 
+
+PR2 Controller 
+
+(Orchestrator + Task 
+
+Loop) 
+
+IDS 
+
+Resilience 
+
+Manager 
+
+Attack 
+
+Executor 
+
+Subscriber 
+
+Node   
+
+> C.attack types + target
+> devices
+> B. attack message
+> Task Output
+> G. compromised
+> set S
+> J. resilience outputs +
+> restored devices
+> D. attack types +
+> target devices L. task status
+> Experiment Config
+> A. initialization
+> parameters
+
+Mitigation 
+
+Feasability 
+
+> E. attacked
+> devices
+> H. compromised
+> set S
+> I. mitigated
+> devices
+> K. restored
+> devices
+> K. restored
+> devices
+> K. restored devices
+> F. compromised set S
+> Data Flow
+> ROS2
+
+Attack Node 
+
+Source Files 
+
+> Configuration Files
+
+Figure 2: Overview of implementation and evaluation of the proposed framework. Source Files are Python modules, Data Flow depicts module’s interaction, and Configuration Files presents different configuration setups. The diagram shows logical data flows between modules; the loop execution order and conditional invocation of each component are described in Section 5. 
+
+that only genuine recoveries are counted as successes. The task result is reported to the Task Output (L) .
+
+5.2.3 Attack Injection Module. The attack injection module works both with the ROS2 communication layer and the Webots simula-tion, and is responsible for introducing, sustaining, and terminating cyber-attacks on the robot’s components. It comprises three com-ponents: the Attack Node, the Subscriber Node, and the Attack Executor. The Attack Node is a ROS2 publisher operating outside the Webots process, consistent with the external attacker model of Sec-tion 4. It publishes symbolic attack messages to the active_attacks 
+
+topic (B) , specifying the target device and attack type as a colon-separated string (e.g., "left_wheels:STOP" ). The Subscriber Node runs inside the Webots process and sub-scribes to the active_attacks topic. Each received message is parsed into a structured list of attack records and made available to the coordination controller at the next step (C) . When the controller broadcasts a restored device set (K) , the Subscriber Node removes the corresponding entries from its active attack list, preventing mitigated devices from being injected again into the pipeline. The Attack Executor receives attack types and target devices from the controller (D) and applies their physical effects to the cor-responding Webots actuators. Attacks are typed symbolically: STOP 
+
+halts the targeted device entirely, UNDERSPEED reduces actuator velocity, OVERSPEED increases actuator velocity, BACKWARD reverses navigation direction, and GRIP_WEAK reduces gripper force. During an active attack, the executor takes temporary hardware ownership of the targeted device, preventing normal task commands from overwriting attack effects. When the controller broadcasts the neu-tralized device set (K) , those devices are removed from the active attack list and their hardware ownership is released. RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 
+
+5.2.4 Resilience Evaluation Module. The resilience evaluation mod-ule runs entirely within the Webots process and is responsible for detecting compromise, evaluating the formal resilience predi-cates, and triggering mitigation. It comprises two components: the IDS, which maintains the compromised set 𝑆 , and the Resilience Manager, which evaluates the framework predicates and delegates feasibility search to its Mitigation Feasibility submodule. 
+
+IDS. The IDS is evaluated at every control step. It receives the set of currently attacked devices from the controller (E) and evaluates each device 𝑑 ∈ 𝐷 independently against its device-specific detec-tion threshold 𝜅 (𝑑 ) as in Definition 4. Devices satisfying 𝜏 (𝑑, 𝑡 ) = 2or 𝜀 (𝑑, 𝑔 ) = 2 for any active task or goal are evaluated against the stricter threshold 𝜅 crit ; all others use 𝜅 base . To mimic a real world implementation, detection rate (confidence) is modelled as a sin-gle trial per attack event: a uniform random draw is compared against 𝜅 (𝑑 ), and a device enters 𝑆 only when the draw exceeds the threshold. To prevent repeated evaluation of the same ongoing attack from artificially inflating detection confidence, a set with all the devices already tested ensures each device is assessed only once per attack event, regardless of how many steps pass while the attack persists. The resulting compromised set 𝑆 is returned to the controller (F) . When a device is restored (K) , it is removed from 𝑆 
+
+and enabled again for future detection. 
+
+Resilience Manager. The Resilience Manager is evaluated at every control step. It receives the compromised set 𝑆 from the controller 
+
+(G) and evaluates 𝛿 , 𝛾 , and 𝜇 as defined in Definitions 6 to 8. Four runtime states emerge from the combinations of 𝛿 and 
+
+𝛾 . In the base state, 𝛿 (𝑆 ) = 1 ∧ 𝛾 (𝑆 ) = 1: the system is resilient and no mitigation is required, even with an ongoing attack. When 
+
+𝛿 (𝑆 ) = 1∧𝛾 (𝑆 ) = 0, no critical device is compromised but aggregate degradation exceeds 𝜃 base ; mitigations are deployed to restore 𝛾 .When 𝛿 (𝑆 ) = 0 ∧ 𝛾 (𝑆 ) = 1, a critical device is compromised but 
+
+𝜓 (𝑆 ) still exceeds 𝜃 crit , representing an edge case where the thresh-old configuration tolerates the current degradation level. When 
+
+𝛿 (𝑆 ) = 0 ∧ 𝛾 (𝑆 ) = 0, both predicates are violated simultaneously, representing the most severe state corresponding to a significant or coordinated attack. In all states where 𝛿 (𝑆 ) = 0 ∨ 𝛾 (𝑆 ) = 0, the manager delegates to the Mitigation Feasibility submodule. When 𝜇 (𝑆 ) = 1, a mitigation timer introduces a non-instantaneous delay before the neutralized set 𝑀 ⊆ 𝑆 is returned to the controller (J) and broadcast to all active modules (K) . If no feasible mitigation exists, the task returns 
+
+HALTED .
+
+Mitigation Feasibility. Mitigation Feasibility evaluates whether the system can recover from a disrupted state by applying miti-gating actions to a subset of the compromised devices. Unlike the IDS and Resilience Manager, which are evaluated at every control step, Mitigation Feasibility is invoked conditionally: it runs only when the Resilience Manager determines that the system is not resilient and no mitigation is already pending. The Resilience Man-ager passes the compromised set 𝑆 (H) , and the submodule returns the neutralized device subset (I) . The set of actionable devices is first computed as the intersection of 𝑆 and the configured mitigatable device set. A powerset is then enumerated, where each element represents a candidate mitigation set 𝑀 . For each candidate, a resid-ual state 𝑆 ′ = 𝑆 \ 𝑀 is constructed and evaluated using both the 0 1 2 3 4 5        
+
+> number of critical devices k= | S|
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> ψ (performance)
+> αcrit = 0.2
+> αcrit = 0.3
+> αcrit = 0.4
+> αcrit = 0.5
+> θcrit = 0.8
+> θbase = 0.72
+
+Figure 3: Monotonic degradation of 𝜓 exp = 𝑒 −𝛼 𝑐𝑟𝑖𝑡 𝑘 𝑐𝑟𝑖𝑡 as the number of compromised critical devices increases, shown for three values of 𝛼 crit .
+
+disruption and degradation functions. If there exists a subset 𝑀 
+
+such that 𝛿 (𝑆 ′) = 1 and 𝛾 (𝑆 ′) = 1, mitigation is considered feasible: the submodule returns 𝜇 = 1 together with the neutralized subset. If no such subset exists, it returns 𝜇 = 0. 
+
+## 5.3 𝜓 Function 
+
+The degradation function 𝜓 : 2 𝐷 → [ 0, 1], introduced in Section 3, is required to be monotonic and non-increasing but is not specified by the framework. The instantiation choice determines how ag-gressively compromised devices reduce the computed performance score, and therefore how quickly the system transitions into the degraded state 𝛾 (𝑆 ) = 0. Let 𝑘 crit = |{ 𝑑 ∈ 𝑆 | 𝜏 (𝑑, 𝑡 ) = 2}| and 
+
+𝑘 base = |{ 𝑑 ∈ 𝑆 | 𝜏 (𝑑, 𝑡 ) = 1 ∨ 𝜏 (𝑑, 𝑡 ) = 0}| denote the number of compromised critical and non-critical devices respectively. The exponential form applies a steeper early penalty for critical device compromise as follows: 
+
+𝜓 exp (𝑆 ) = 𝑒 − ( 𝛼 crit ·𝑘 crit +𝛼 base ·𝑘 base ) (1) Because 𝐷 is finite, this instantiation produces a step function over the discrete set of device subsets regardless of the underlying continuous form. Figure 3 characterises the general behaviour of the weighted exponential degradation function 𝜓 exp (Equation (1)) across varying 𝛼 crit values. The exponential form 𝜓 exp was selected for the experiments presented in Section 6, as its steeper initial slope better reflects the disproportionate operational impact of losing the first critical device. The specific parameter configurations used in the evaluation are reported in Section 6. 
+
+## 6 Evaluation and Results 
+
+The evaluation is designed to verify the consistency between the implementation and the theoretical framework of Section 3, and to characterise how the configurable parameters introduced in Sections 3 and 5 influence runtime resilience behaviour under the attack conditions defined in Section 4. CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. 
+
+## 6.1 Experimental Setup 
+
+All experiments are conducted in a Webots simulation environ-ment using a PR2 robot platform. The simulation scene comprises the robot, two wooden boxes serving as navigation targets, one table containing a graspable object, and one empty table used as a placement target. No physical hardware is used; the evaluation is entirely simulation-based. Each experiment is configured via a JSON file loaded by the controller at initialisation, as described in Section 5.1. The con-figuration specifies task type, goal activation, baseline execution time, criticality mappings 𝜏 and 𝜀 , system thresholds 𝜅 crit and 𝜅 base ,degradation thresholds 𝜃 crit and 𝜃 base , reduction coefficients 𝛼 crit 
+
+and 𝛼 base , and the mitigatable device set. This configuration-driven design allows all parameters to be varied between experiments without modifying the framework code. Attacks are automatically triggered during task execution by publishing symbolic messages to the ROS2 active_attacks topic, consistent with the attacker capabilities of Section 4. Each attack message specifies one or more target devices 𝑑 ∈ 𝐷 and their asso-ciated attack type. The framework logs all runtime state transitions, including updates to the compromised set 𝑆 , evaluations of 𝛿 and 
+
+𝛾 , mitigation events, and task outcomes. Results are stored in CSV files for post-hoc analysis. The collected metrics per experiment are: task result ( DONE or HALTED ), execution time, degradation per-centage relative to baseline, and the compromised set 𝑆 at each evaluation step. 
+
+## 6.2 Scenario Design and Coverage 
+
+The evaluation is structured around eight attack scenarios that together cover all realisable combinations of the three runtime predicates: tolerable disruption ( 𝛿 ), tolerable degradation ( 𝛾 ), and mitigation feasibility ( 𝜇 ). Each scenario instantiates a distinct pred-icate configuration and is verified against the expected theoretical behaviour defined in Section 3. Scenarios are organised first by whether at least one critical device ( 𝜏 = 2) is compromised, de-termining whether 𝛿 = 0 or 𝛿 = 1 holds, then by degradation tolerability ( 𝛾 ), and finally by mitigation availability ( 𝜇 ). Table 1 summarises all eight scenarios; Table 2 lists the parameters used in the experiments for each scenario; Table 3 maps the (𝛿, 𝛾 ) state space to the corresponding scenario identifiers, confirming that every cell of the predicate space is covered. 
+
+## 6.3 Non-Disrupted Scenarios ( 𝛿 = 1)
+
+All scenarios in this group attack exclusively devices whose task-level criticality satisfies 𝜏 ≤ 1, ensuring that the disruption predi-cate 𝛿 remains 1 throughout. The group isolates how degradation severity and mitigation availability determine the overall resilience classification when disruption is structurally precluded by the criti-cality assignment. 
+
+Scenario 1: Resilient baseline. The left_arm and right_arm de-vices, both non-critical ( 𝜏 ≤ 1) for the active task ( navigate to goal ), are subjected to a STOP attack with a low base degradation rate (𝛼 base = 0.04, 𝜃 crit = 0.8, 𝜃 base = 0.72, no mitigation). As shown in Figure 4a, 𝜓 (𝑡 ) remains at approximately 0 .93 throughout the 160 s run, well above 𝜃 crit . With both 𝛿 = 1 and 𝛾 = 1 satisfied at all times, the system remains in the resilient state and the task completes successfully. This scenario serves as the baseline against which the effect of increasing degradation severity and enabling mitigation is measured in Scenarios 2a and 2b. 
+
+Scenario 2a: Intolerable degradation without mitigation. The same devices and attack type are repeated with a higher base degradation rate ( 𝛼 base = 0.20) and no mitigation enabled ( 𝜇 = 0). As shown in Figure 4b, 𝜓 (𝑡 ) crosses below 𝜃 base = 0.72 by 𝑡 ≈ 9 s, settling at approximately 0 .67, and the system transitions to not tolerable 
+
+(𝛾 = 0) for the remainder of the run. Listing 1 reproduces the corre-sponding Resilience Manager output, confirming that the frame-work correctly identifies the intolerable state, reports no available mitigation, and subsequently halts the task. 
+
+Scenario 2b: Mitigation restores tolerability. This scenario repeats the configuration of Scenario 2a with mitigation enabled for the attacked devices. As shown in Figure 5, 𝜓 (𝑡 ) undergoes the same initial drop to approximately 0 .67, briefly crossing below 𝜃 base . The mitigation loop then neutralises left_arm , removes it from the compromised set 𝑆 , and recovers 𝜓 (𝑡 ) to approximately 0 .81, above 
+
+𝜃 base = 0.72, where it stabilises for the remainder of the run ( 𝛾 = 1). Listing 2 confirms this recovery sequence in the Resilience Manager output. Scenarios 1–2b together confirm that the criticality gating em-bedded in 𝛿 operates correctly: no attack confined to non-critical devices triggered the disruption path in any tested configuration. The paired runs of Scenarios 2a and 2b further show that, in the non-disrupted regime, the degradation and mitigation logic resolve independently of 𝛿 as specified by the framework. These results also show that even a single non-critical device, when added to an already-degraded system, can tip 𝜓 across the baseline threshold if the degradation rate is sufficiently high. The resilience is sensitive to the cumulative composition of the compro-mised set 𝑆 , not only to the criticality of individual devices. 
+
+## 6.4 Disrupted Scenarios ( 𝛿 = 0)
+
+The remaining scenarios each compromise at least one device with 
+
+𝜏 = 2, guaranteeing 𝛿 = 0 upon attack regardless of the current degradation level. These scenarios exercise the framework’s be-haviour under confirmed disruption, including the secondary eval-uation of 𝛾 and the effect of mitigation on predicate recovery. 
+
+6.4.1 Tolerable Degradation ( 𝛾 = 1). Scenarios 3a, 3b, and 3c each produce 𝛿 = 0 without 𝛾 reaching 0. They demonstrate that disrup-tion and non-resilience are not synonymous in the framework: a system can remain within acceptable degradation bounds even after losing a critical component, and mitigation can restore 𝛿 without 𝛾 
+
+having been violated. 
+
+Scenarios 3a and 3b: Disruption with and without mitigation. The 
+
+left_wheels , defined as critical for task navigate and pick up wa-ter bottle , are subjected to a STOP attack. Figures 6a and 6b share identical task and parameter configurations but differ in mitigation scope. In Scenario 3a (Figure 6a), mitigation is unavailable; a single attack at 𝑡 ≈ 5 s leaves the robot permanently disrupted ( 𝛿 = 0), no recovery event occurs and the task runs until HALTED at 𝑡 ≈ 103 s. In Scenario 3b (Figure 6b), full mitigation coverage is enabled; four RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 
+
+Table 1: Overview of the eight evaluation scenarios. Arrow notation ( 0 → 1) denotes predicate recovery following successful mitigation. A dash in the 𝜇 column indicates that mitigation is not evaluated because the system never enters a non-resilient state. Parenthesised 𝛾 values hold by construction in the time window shown but are not the primary displayed metric. Device abbreviations: LW = left_wheels , RW = right_wheels , LA = left_arm , RA = right_arm , LG = left_gripper , RG = right_gripper .Scen. Target devices Critical 𝜹 𝜸 𝝁 Outcome Figure 
+
+1 LA, RA No 1 1 — DONE 4a 2a LA, RA No 1 0 0 HALTED 4b 2b LA, RA No 1 0 → 1 1 DONE 53a LW Yes 0 (1) 0 HALTED 6a 3b LW, RW, LG, RA, LA, RG Yes 0 → 1 (1) 1 HALTED 6b 3c LW Yes 0 1 0 HALTED 74a LW, LA Yes 0 0 0 HALTED 84b LW, LA Yes 0 → 1 0 → 1 1 DONE 90 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.72
+> ψ(t)
+
+(a) Scenario 1: 𝜓 remains well within tolerance ( 𝛾 = 1) under mild non-critical attack. 0 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.72
+> ψ(t)
+
+(b) Scenario 2a: higher degradation rate drives 𝜓 below 𝜃 base ; 𝛾 = 0
+
+persists with no mitigation available. 
+
+Figure 4: Non-disrupted scenarios ( 𝛿 = 1) under non-critical device attacks ( left_arm , right_arm ), without mitigation. Both runs share identical targets and thresholds; only 𝛼 base differs. Table 2: Parameters in experimental setup for evaluation scenarios. Scen. 𝜿 𝒄𝒓 𝒊𝒕 /𝜿 𝒃𝒂𝒔𝒆 𝜽 𝒄𝒓 𝒊𝒕 /𝜽 𝒃𝒂𝒔𝒆 𝜶 𝒄𝒓 𝒊𝒕 /𝜶 𝒃𝒂𝒔𝒆 
+
+1 0/0 0.8/0.72 0.15/0.2 2a 0/0 0.8/0.72 0.15/0.2 2b 0/0 0.8/0.72 0.15/0.2 3a 0/0 0.99/0.75 0.4/0.05 3b 0/0 0.99/0.75 0.4/0.05 3c 0/0 0.8/0.5 0.15/0.04 4a 0/0 0.8/0.72 0.15/0.2 4b 0/0 0.8/0.72 0.15/0.04 attack–recovery cycles occur within the 48.8 s baseline, the task is restored and the state is DONE . In both figures, this distinction has a decisive effect on the 𝛿 trajectory: with mitigation, 𝛿 is re-peatedly driven back to 1 within each cycle; without it, 𝛿 remains permanently at 0. 
+
+Table 3: Predicate coverage matrix. Each cell lists the scenar-ios realising the corresponding (𝛿, 𝛾 ) combination; mitigation variants are distinguished by the 𝜇 value. 
+
+𝜸 = 1 𝜸 = 0
+
+𝛿 = 1 1 2a (𝜇 =0), 2b (𝜇 =1)
+
+𝛿 = 0 3a (𝜇 =0), 3b (𝜇 =1), 3c 4a (𝜇 =0), 4b (𝜇 =1)
+
+Scenario 3c: Degradation remains tolerable under disruption. Fig-ure 7 examines a critical-device attack ( left_wheels , 𝜏 = 2, navi-gate to goal ) from the 𝜓 perspective, with 𝛼 crit = 0.15, 𝛼 base = 0.04, 
+
+𝜃 crit = 0.8, and no mitigation. Following the attack, 𝜓 sustains a single-step drop to approximately 0 .86, remaining above 𝜃 crit 
+
+throughout the run and yielding a tolerable outcome ( 𝛾 = 1). This scenario establishes that 𝛿 = 0 does not imply 𝛾 = 0: when degra-dation is mild enough to remain within the critical threshold, the system could technically continue operating in a disrupted but tol-erable degraded state. However, due to the resilience requirements defined in Section 3 with Theorem 1, 𝛿 = 0 must be restored to CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. 
+
+Listing 1: Scenario 2a: non-critical attack without mitigation. The second attack wave drives 𝜓 below 𝜃 and the task is halted. 
+
+[ RM ] System not disrupted → 𝛿 = 1[ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT ATTACK : left_arm ( STOP ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm '} ATTACK : right_arm ( STOP ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm ', 'right_arm '} [ RM ] System degraded beyond tolerance : 𝜓 =0.67 < 𝜃 =
+
+0.72 → 𝛾 = 0[ RM ] Resilience state : NOT RESILIENT [ RM ] No mitigation possible - system irreparably compromised Task result : HALTED 0 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.72
+> ψ(t)
+
+Figure 5: Scenario 2b: mitigation arrests the initial 𝜓 drop caused by non-critical device attacks and restores 𝛾 = 1.
+
+1, but no mitigation is available. For this reason, the task status is 
+
+HALTED .
+
+6.4.2 Intolerable Degradation ( 𝛾 = 0). Scenarios 4a and 4b rep-resent the most severe predicate combination: 𝛿 = 0 and 𝛾 = 0simultaneously. They verify that the framework correctly identifies irrecoverable failure states and that mitigation can resolve them when available. 
+
+Scenario 4a: Permanent non-resilience without mitigation. Figure 8 applies a two-wave attack on the navigate_to_goal task with a high degradation rate ( 𝛼 crit = 0.15, 𝛼 base = 0.20, 𝜃 crit = 0.8) and no mitigation. The first wave ( left_wheels , critical) drives 𝜓 to approximately 0.9, just above 𝜃 crit ; the second wave ( left_arm , non-critical) pushes 
+
+𝜓 further to approximately 0 .7, below 𝜃 crit , placing the system un-conditionally in the critical-device-not-tolerable region ( 𝛾 = 0). Even if the second device attacked is not critical, the threshold used is 𝜃 crit due to the presence of a critical device. Listing 3 reproduces the Resilience Manager output, confirming that both disruption and intolerable degradation are identified HALTED and the task is stopped 27.0 s before the baseline. 
+
+Scenario 4b: Mitigation under simultaneous predicate failure. Fig-ure 9 applies the same attack pattern as Scenario 4a with mitigation enabled for left wheel. The first part of the attack drives 𝜓 below 𝜃 crit 
+
+(attack both critical left_wheels and non-critical left_arm ), trig-gering 𝛾 = 0 alongside 𝛿 = 0. The mitigation loop then neutralises 
+
+Listing 2: Scenario 2b: non-critical attack with mitigation. The Resilience Manager neutralises left_arm and restores 
+
+𝛾 = 1.
+
+[ RM ] System not disrupted → 𝛿 = 1[ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT ATTACK : left_arm ( STOP ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm '} ATTACK : right_arm ( STOP ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm ', 'right_arm '} [ RM ] System degraded beyond tolerance : 𝜓 =0.67 < 𝜃 =
+
+0.72 → 𝛾 = 0[ RM ] Resilience state : NOT RESILIENT [ RM ] Mitigation pending [ RM ] Active mitigation neutralizing : {' left_arm '} [ RM ] Compromised set S updated : {' right_arm '} [ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT Task result : DONE Normal Disrupted        
+
+> 20 40 60 80 100 120
+> simulation time [s]
+> 01
+> δ (disruption)
+> Task HALTED
+> δ(t), distruption over time
+> Attack 1
+> δ(t)Normal (δ=1) Disrupted (δ=0)
+
+(a) Scenario 3a: 𝛿 over time, critical device ( left_wheels ), no mitiga-tion. 𝛿 = 0 persists until task halt. Normal Disrupted Normal Disrupted Normal Disrupted Normal Disrupted Normal       
+
+> 10 20 30 40 50
+> simulation time [s]
+> 01
+> δ (disruption)
+> Task HALTED
+> δ(t), distruption over time
+> Attack 1
+> Recovery 1
+> Attack 2
+> Recovery 2
+> Attack 3
+> Recovery 3
+> Attack 4
+> Recovery 4
+> δ(t)Normal (δ=1) Disrupted (δ=0)
+
+(b) Scenario 3b: same configuration with full mitigation. Repeated attack–recovery cycles drive 𝛿 back to 1.
+
+Figure 6: Comparison of 𝛿 over time for a critical-device attack: (a) without mitigation, 𝛿 remains permanently at 0;(b) with mitigation, the framework restores 𝛿 = 1 across repeated attack–recovery cycles. RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 0 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.5
+> ψ(t)
+
+Figure 7: Scenario 3c: 𝜓 remains above 𝜃 crit throughout ( 𝛾 = 1,
+
+𝛿 = 0). Mild degradation rate keeps the system tolerable despite disruption. 0 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.72
+> ψ(t)
+
+Figure 8: Scenario 4a: escalating wheel and arm devices attack drives 𝜓 below 𝜃 crit (𝛾 = 0, 𝛿 = 0). No mitigation is available. Listing 3: Scenario 4a: critical-device attack without mitiga-tion. Escalating wheel compromise drives both 𝛿 = 0 and 
+
+𝛾 = 0.
+
+[ RM ] System not disrupted → 𝛿 = 1[ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT ATTACK : left_wheels ( UNDERSPEED ) - CRITICAL [ RM ] Compromised set S updated : {' left_wheels '} [ RM ] System disrupted → 𝛿 = 0[ RM ] Resilience state : NOT RESILIENT [ RM ] No mitigation possible - system irreparably compromised ATTACK : left_arm ( UNDERSPEED ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm ', 'left_wheels '} [ RM ] System degraded beyond tolerance : 𝜓 =0.7 < 𝜃 =
+
+0.8 → 𝛾 = 0Task result : HALTED 
+
+the compromised device left_wheels and removes it from 𝑆 ; 𝜓 
+
+returns above 𝜃 crit , restoring both 𝛿 = 1 and 𝛾 = 1 simultaneously. 0 5 10 15 20 simulation time [s] 0.0 0.2 0.4 0.6 0.8 1.0         
+
+> ψ (performance)
+> Tolerable (γ= 1 , any attack)
+> Tolerable if non-critical attack (γ= 1 )Not tolerable if critical attack (γ= 0 )
+> Not tolerable (γ= 0 , any attack)
+
+ψ(t)  
+
+> θcrit = 0.8
+> θbase = 0.72
+> ψ(t)
+
+Figure 9: Scenario 4b: 𝜓 timeline for critical and non-critical devices attack with mitigation. The initial drop below 𝜃 crit 
+
+is arrested by the mitigation loop, which restores 𝛿 = 1 and 
+
+𝛾 = 1.Listing 4: Scenario 4b: critical-device attack with mitigation. The Resilience Manager restores 𝛿 = 1 and 𝛾 = 1 following successful device neutralisation. 
+
+[ RM ] System not disrupted → 𝛿 = 1[ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT ATTACK : left_wheels ( UNDERSPEED ) - CRITICAL [ RM ] Compromised set S updated : {' left_wheels '} [ RM ] System disrupted → 𝛿 = 0[ RM ] Resilience state : NOT RESILIENT [ RM ] Mitigation pending ATTACK : left_arm ( UNDERSPEED ) - NON - CRITICAL [ RM ] Compromised set S updated : {' left_arm ', 'left_wheels '} [ RM ] System degraded beyond tolerance : 𝜓 =0.7 < 𝜃 =
+
+0.8 → 𝛾 = 0[ RM ] Active mitigation neutralizing : {' left_wheels '} [ RM ] Compromised set S updated : {' left_arm '} [ RM ] System not disrupted → 𝛿 = 1[ RM ] Degradation within tolerance → 𝛾 = 1[ RM ] Resilience state : RESILIENT Task result : DONE Task execution time increased with 1.8 seconds Degradation : 9.0% 
+
+Listing 4 confirms this recovery sequence: the Resilience Man-ager transitions from NOT RESILIENT back to RESILIENT and the task completes with a DONE outcome. 
+
+## 6.5 Limitations 
+
+To isolate the resilience logic from IDS uncertainty, we set both 
+
+𝜅 crit and 𝜅 base to 0 across all scenarios. This choice deliberately contradicts Definition 4 in Section 3, which requires 𝜅 crit < 𝜅 base :setting both parameters to 0 violates this strict inequality. We made this choice to decouple the evaluation of 𝛿 , 𝛾 , and 𝜇 from detection variability. The practical implication is that any attacked device is guaranteed to enter the compromised set 𝑆 . While this is appropriate CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands Imrell et al. 
+
+for correctness verification, it undermines two important aspects of the framework. The first is logical. The strict inequality 𝜅 crit < 𝜅 base 
+
+encodes the requirement that the system declare a critical device compromised with less evidence than it would require for a base device. If we relaxed the inequality to 𝜅 crit ≤ 𝜅 base , critical and base devices could share the same confidence threshold, defeating the purpose of the criticality mapping. The second is practical: in realistic deployment conditions, the IDS operates with imperfect detection rates, so assuming 100% accuracy is unrealistic. 
+
+## 7 Future Work 
+
+The most immediate extension of this work would be to determine how to obtain realistic values for the thresholds and criticality mappings, rather than pre-determine them. One possibility is to learn the mappings via machine learning, calibrating parameters in simulation and then transferring them to the embodied CPS via a sim-to-real process. For example, a model could provide the values based on the type of device, its specifications, and the defined tasks and goals. The evaluation also rests on several simplifications that we leave to future work. We inject attacks symbolically rather than as real ROS2 exploits, bypass the IDS entirely by setting 𝜅 = 0, and model mitigations as deterministic. Of these, the IDS bypass is the one we view as most pressing to address. Future work should investigate the effect of varying 𝜅 crit and 
+
+𝜅 base on the runtime evaluations of 𝛿 , 𝛾 , and 𝜇 , replacing the perfect-detection assumption with a genuine probabilistic IDS. We recom-mend conducting multiple runs per scenario and reporting the mean and standard deviation of 𝜓 (𝑡 ) and the resilience state transitions over time. A reasonable hypothesis is that outcome variance in-creases as detection rate decreases: lower accuracy produces more variable compositions of 𝑆 , leading to less predictable predicate evaluations and resilience classifications. Replacing the remaining two simplifications, symbolic attack injection and deterministic mitigations, with real middleware-level attacks and realistic mitigation mechanisms would allow the full stochastic behaviour of the predicate loop to be studied across multiple runs and robot platforms. Finally, we have only tested the framework in simulation. Phys-ical deployment on a real robot would expose timing and noise constraints that Webots does not capture, and would determine whether the Resilience Manager can meet the real-time constraints imposed by embodied CPSs. 
+
+## 8 Conclusion 
+
+The results across all eight scenarios confirm that the implemented framework correctly instantiates the theoretical definitions of Sec-tion 3 at runtime. Three structural properties of the implementation can be verified from the experimental record. First, the criticality gating embedded in 𝛿 operates as specified. No attack confined to non-critical devices ( 𝜏 ≤ 1) triggered the disruption path in any scenario: Scenarios 1, 2a, and 2b each main-tained 𝛿 = 1 regardless of attack severity or mitigation status. Conversely, every attack targeting a device with 𝜏 = 2 immediately drove 𝛿 = 0, confirming that the compromised-set formation (Defi-nition 5) and the disruption check (Definition 6) are consistent with the formal definition. Second, mitigation correctly restores resilience across all predi-cate combinations in which it was evaluated. In Scenario 2b ( 𝛿 = 1, 
+
+𝛾 : 0 → 1), mitigation acted solely on the degradation predicate, neutralising the non-critical compromise and recovering 𝛾 while 𝛿 
+
+was unaffected. In Scenario 3b ( 𝛿 : 0 → 1, 𝛾 = 1), mitigation restored disruption tolerance without 𝛾 having been violated. In Scenario 4b (𝛿 : 0 → 0, 𝛾 : 0 → 1), mitigation resolved both predicates simulta-neously, producing the only case in which a doubly-failed system was fully recovered. Taken together, these three cases establish that the mitigation loop correctly traverses the predicate space as specified in Definition 8. Third, the 𝛿 and 𝛾 predicates are evaluated independently, and their combination determines the resilience classification without conflation. Scenario 3c illustrates this most directly: with 𝛿 = 0and 𝛾 = 1 simultaneously, the system operated in a disrupted but tolerable degraded state for the duration of its time budget. This is the operational distinction between degraded and non-resilient 
+
+that the framework preserves: losing a critical component does not automatically imply that performance has become unacceptable. However, per the formal definition of resilience, an unrestored crit-ical device still triggers a HALTED system state, preventing further damage. Finally, the cumulative composition of the compromised set 𝑆 is a decisive factor in the tolerability outcome, not only the criticality of individual devices. As shown in Figures 8 and 9, a non-critical device appended to an already-degraded critical one can push 𝜓 
+
+across the baseline threshold if the degradation rate is sufficiently high. This sensitivity to cumulative attack composition has practical implications for mission planning: the system’s resilience boundary is not a static property of the hardware but depends on the current parameter configuration and the evolving content of 𝑆 at each evaluation step. 
+
+## Ethics and Privacy Statement 
+
+All experiments were simulation-only (Webots, virtual PR2), involv-ing no human subjects or real systems. Data and configurations are synthetic and openly released. 
+
+## Declaration on the Use of Generative AI 
+
+The authors used Claude Code (Anthropic, USA) and Microsoft Copilot to help convert the PR2 controller from C to Python, auto-mate experiments, and draft code and text. All AI-assisted output was reviewed and verified by the authors, who remain responsible for the results presented in this paper. 
+
+## Acknowledgments 
+
+This work was supported by the Wallenberg AI, Autonomous Sys-tems and Software Program (WASP), funded by the Knut and Alice Wallenberg Foundation. 
+
+## References              
+
+> [1] Abdulrahman Al-Batati, Anis Koubaa, Khaled Gabr, Mohamed Abdelkader, and Hamad Aloqaily. 2024. ROS 2 in a Nutshell: A Survey. Comput. Surveys (2024). [2] CNN 2026. Video circulating on social media shows achild be-ing kicked by a humanoid robot during a martial arts performance in China. https://www.facebook.com/cnn/videos/video-circulating-on-social-media-shows-a-child-being-kicked-by-a-humanoid-robot/1450733383755160/.
+
+RobResilience: Implementing and Evaluating a Resilience Framework for Cyber-Physical Embodied Systems CPSIoTSec ’26, November 15-19, 2026, The Hague, Netherlands 
+
+[3] Gary Cornelius, Patrice Caire, Nico Hochgeschwender, Miguel A Olivares-Mendez, Paulo Esteves-Verissimo, Marcus Völp, and Holger Voos. 2017. A per-spective of security for mobile service robots. In Iberian Robotics conference .Springer, 88–100. [4] Wojciech Dudek and Wojciech Szynkiewicz. 2019. Cyber-security for mobile service robots–challenges for cyber-physical system safety. Journal of Telecom-munications and Information Technology 2 (2019), 29–36. [5] Wenli Duo, MengChu Zhou, and Abdullah Abusorrah. 2022. A Survey of Cyber Attacks on Cyber Physical Systems: Recent Advances and Challenges. IEEE/CAA Journal of Automatica Sinica 9, 5 (May 2022), 784–800. doi:10.1109/JAS.2022. 105548 [6] Fusion Media Group 2016. Fusion: Security robot accidentally attacks child. https://tinyurl.com/3ysmwh47. [7] Alberto Giaretta. 2026. A Formal Resilience Framework for Cyber-Physical Embodied Systems under Device-Level Cyberattacks. arXiv:2606.16467 [cs.CR] doi:10.48550/arXiv.2606.16467 [8] Song Han, Miao Xie, Hsiao-Hwa Chen, and Yun Ling. 2014. Intrusion Detection in Cyber-Physical Systems: Techniques and Challenges. IEEE Systems Journal 8, 4 (Dec. 2014), 1052–1062. doi:10.1109/JSYST.2013.2257594 [9] Inseok Hwang, Sungwan Kim, Youdan Kim, and Chze Eng Seah. 2010. A Survey of Fault Detection, Isolation, and Reconfiguration Methods. IEEE Transactions on Control Systems Technology 18, 3 (May 2010), 636–653. doi:10.1109/TCST.2009. 2026285 [10] R. Isermann, R. Schwarz, and S. Stolzl. 2002. Fault-Tolerant Drive-by-Wire Sys-tems. IEEE Control Systems Magazine 22, 5 (Oct. 2002), 64–81. doi:10.1109/MCS. 2002.1035218 [11] Stamatis Karnouskos. 2011. Cyber-Physical Systems in the SmartGrid. In 2011 9th IEEE International Conference on Industrial Informatics . 20–23. doi:10.1109/ INDIN.2011.6034829 [12] Hakan Kayan, Matthew Nunes, Omer Rana, Pete Burnap, and Charith Perera. 2022. Cybersecurity of Industrial Cyber-Physical Systems: A Review. Comput. Surveys 54, 11s (Sept. 2022), 229:1–229:35. doi:10.1145/3510410 [13] Hisham A. Kholidy. 2021. Autonomous Mitigation of Cyber Risks in the Cyber– Physical Systems. Future Generation Computer Systems 115 (Feb. 2021), 171–187. doi:10.1016/j.future.2020.09.002 [14] Yunus Sabri Kirca, Elif Degirmenci, Zekeriyya Demirci, Ahmet Yazici, Metin Ozkan, and Salih Ergun. 2023. Runtime Verification for Anomaly Detec-tion of Robotic Systems Security. Machines 11, 2 (2023), 166. doi:10.3390/ machines11020166 [15] Ruggero Lanotte, Massimo Merro, Riccardo Muradore, and Luca Viganò. 2017. A Formal Approach to Cyber-Physical Attacks. In 2017 IEEE 30th Computer Security Foundations Symposium (CSF) . 436–450. doi:10.1109/CSF.2017.12 [16] Olivier Michel. 2004. Cyberbotics Ltd. Webots™: Professional Mobile Robot Simulation. International Journal of Advanced Robotic Systems 1, 1 (2004), 5. [17] Robert Mitchell and Ing-Ray Chen. 2014. A Survey of Intrusion Detection Tech-niques for Cyber-Physical Systems. Comput. Surveys 46, 4 (March 2014), 55:1– 55:29. doi:10.1145/2542049 [18] Fabio Pasqualetti, Florian Dörfler, and Francesco Bullo. 2013. Attack Detection and Identification in Cyber-Physical Systems. IEEE Trans. Automat. Control 58, 11 (Nov. 2013), 2715–2729. doi:10.1109/TAC.2013.2266831 [19] Jared Perlo, Alexander Robey, Fazl Barez, Luciano Floridi, and Jakob Mökan-der. 2025. Embodied AI: Emerging Risks and Opportunities for Policy Action. arXiv:2509.00117 [cs.CY] doi:10.48550/arXiv.2509.00117 [20] Mariana Segovia-Ferreira, Jose Rubio-Hernan, Ana Cavalli, and Joaquin Garcia-Alfaro. 2024. A Survey on Cyber-Resilience Approaches for Cyber-Physical Systems. Comput. Surveys 56, 8 (April 2024), 202:1–202:37. doi:10.1145/3652953 [21] Colin Shea-Blymyer and Houssam Abbas. 2021. Algorithmic Ethics: Formalization and Verification of Autonomous Vehicle Obligations. ACM Transactions on Cyber-Physical Systems 5, 4 (Oct. 2021), 38:1–38:25. doi:10.1145/3460975 [22] B. Siddappaji and K. B. Akhilesh. 2020. Role of Cyber Security in Drone Technol-ogy. In Smart Technologies: Scope and Applications , K. B. Akhilesh and Dietmar P. F. Möller (Eds.). Springer Singapore, Singapore, 169–178. doi:10.1007/978-981-13-7139-4_13 [23] Wenpeng Xing, Minghao Li, Mohan Li, and Meng Han. 2026. Towards Robust and Secure Embodied AI: A Survey on Vulnerabilities and Attacks. Comput. Surveys 58, 12 (May 2026), 312:1–312:36. doi:10.1145/3806048 [24] Yin Zhang, Meikang Qiu, Chun-Wei Tsai, Mohammad Mehedi Hassan, and Atif Alamri. 2017. Health-CPS: Healthcare Cyber-Physical System Assisted by Cloud and Big Data. IEEE Systems Journal 11, 1 (March 2017), 88–95. doi:10.1109/JSYST. 2015.2460747 [25] Quanyan Zhu, Stefan Rass, Bernhard Dieber, and Víctor Mayoral-Vilches. 2021. Cybersecurity in Robotics: Challenges, Quantitative Modeling, and Practice. 
+
+Foundations and Trends in Robotics 9, 1 (2021), 1–129. doi:10.1561/2300000061 [26] Aboelsood Zidan, Mutaz Khairalla, Ahmed M. Abdrabou, Tarek Khalifa, Khaled Shaban, Atef Abdrabou, Ramadan El Shatshat, and Ahmed M. Gaouda. 2017. Fault Detection, Isolation, and Service Restoration in Distribution Systems: State-of-the-Art and Future Trends. IEEE Transactions on Smart Grid 8, 5 (Sept. 2017), 2170–2185. doi:10.1109/TSG.2016.2517620 [27] Ali Zolghadri. 2012. Advanced Model-Based FDIR Techniques for Aerospace Systems: Today Challenges and Opportunities. Progress in Aerospace Sciences 53 (Aug. 2012), 18–29. doi:10.1016/j.paerosci.2012.02.004

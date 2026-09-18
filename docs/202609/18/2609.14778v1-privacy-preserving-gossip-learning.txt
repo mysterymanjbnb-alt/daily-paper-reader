@@ -1,0 +1,1043 @@
+Title: Privacy Preserving Gossip Learning
+
+URL Source: https://arxiv.org/pdf/2609.14778v1
+
+Published Time: Tue, 15 Sep 2026 02:01:19 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> ArXiv 1–18
+
+# Privacy Preserving Gossip Learning 
+
+Erkan Bayram EBAYRAM 2@ ILLINOIS .EDU 
+
+University of Illinois Urbana Champaign, IL, USA 
+
+Mohamed-Ali Belabbas BELABBAS @ILLINOIS .EDU 
+
+University of Illinois Urbana Champaign, IL, USA 
+
+Tamer Bas ¸ar BASAR 1@ ILLINOIS .EDU 
+
+University of Illinois Urbana Champaign, IL, USA 
+
+Abstract 
+
+We propose a decentralized privacy-preserving learning algorithm in which each agent holds a single private sample and a shared model. Samples are learned sequentially, and each update must preserve the endpoint mappings at previously learned samples while protecting private data. This gives each agent three roles: (i) a learner that updates the model parameters, (ii) a teacher whose sample is learned at the current iteration, and (iii) a protected agent whose sample has already been learned. We build on Tuning without Forgetting (TwF) method to preserve previously learned mappings and show that TwF provides an indistinguishability guarantee for the learner whenever the set of protected agents contains another sample with the same label. For the teacher, we formulate a minimax optimal control problem that models the differential privacy noise as a worst-case disturbance to prevent performance loss while maintaining the same level of privacy for the gradient. For the protected agents, we compute the projections locally and aggregate them using a private push-sum gossip protocol. We prove geometric convergence of the decentralized gossip algorithm and of the distributed projection for TwF. 
+
+1. Introduction 
+
+Privacy in distributed learning is typically enforced at the level of individual gradient updates. Differential privacy (DP) techniques (1) have been proposed to mitigate gradient leakage attacks, through which private client-local training samples can be reconstructed from shared gradients (2; 3; 4; 5; 6). However, as training progresses or new agents join the network, the shared model param-eters accumulate information about previously learned samples. Consequently, per-update privacy guarantees alone may not adequately protect samples that have already been incorporated into the model. This creates a persistent privacy risk associated with the model parameters themselves (7; 8). To address this, we propose an iterative privacy-preserving training algorithm in which agents sequentially contribute to a shared model. Each agent holds a single private sample and communi-cates over a network. The role of each agent evolves over the course of training. An agent begins as the teacher agent , and the learner memorizes its sample under differential privacy. Once the teacher agent’s sample has been learned, it becomes a protected agent , ensuring that its sample is not for-gotten in subsequent model updates. We model the distributed supervised learning problem as an optimal control problem over an ensemble of points. The shared model corresponds to a controlled ODE whose open-loop control function is updated sequentially across agents. Based on the Neural    
+
+> Accepted to the 65th IEEE Conference on Decision and Control (CDC), 2026. Research was supported in part by ARO Grant W911NF-24-1-0085, ARO Grant W911NF-24-1-0105 and ARO Grant W911NF-26-1-A335
+> © E. Bayram, M.-A. Belabbas & T. Bas ¸ar. arXiv:2609.14778v1 [cs.LG] 13 Sep 2026 BAYRAM BELABBAS BAS ¸AR
+
+ODE formulation (9; 10; 11), our method is compatible with deep residual neural networks through Euler discretization. In our framework, the teacher agent first generates a differentially private update to protect its sample. However, DP noise injection degrades model performance (12). To mitigate this, we model the injected noise as a control disturbance and design an update robust to worst-case perturbations by solving a minimax optimal control problem (13). This approach provides differential privacy for the teacher agent while mitigating the performance degradation caused by DP noise. We validate the privacy–performance tradeoff numerically and compare against the non-robust approach of directly injecting DP noise under the same privacy budget. Due to the iterative nature of the algorithm, each update to the shared control affects all previ-ously learned mappings. To prevent forgetting of previously learned samples, we combine gossip consensus with Tuning without Forgetting (TwF), a recently proposed method for iterative train-ing of Neural ODEs, in which training samples are added sequentially and the control update at each step is projected onto a prescribed set to maintain previously learned mappings (11; 14). In our method, protected agents compute their local projections in parallel, and aggregate the results through a privacy-preserving gossip protocol. It ensures that the mappings at previously learned samples are preserved while maintaining privacy guarantees for the protected agents. Our main contributions in this paper are as follows: • We prove that the decentralized projection algorithm converges at a geometric rate to the projection onto the intersection of the tangent spaces of the protected agents. • We establish an explicit geometric rate for the private push-sum protocol of (15). • We show that Tuning without Forgetting prevents adversaries from uniquely identifying the learner’s sample from the shared control sequence whenever the protected set contains another sample with the same label. • We provide theoretical privacy guarantees across all three agent roles (1) the teacher agent via an (ε, δ )-DP robust control update, (2) the protected agents via a private push-sum gossip protocol, and (3) the learner agent via indistinguishability under the TwF invariance structure. 
+
+2. Preliminaries 
+
+Consider a paired dataset {(¯ xi, y i)}Ni=1 , where ¯xi ∈ R¯n are pairwise distinct input points ¯xi̸ = ¯ xj
+
+for j̸ = i and yi ∈ Rno are their corresponding labels. In the distributed setting, the dataset is partitioned across a network G = ( V, E ), where the vertex set V = {v1, · · · , v N } represents the agents and the edge set E = {e1, · · · , e |E|} represents the communication links. Each agent vi ∈ V
+
+holds a single training pair (¯ xi, y i).For any subset of C ⊂ N that indexes the agents in V , let GC = ( VC , E C ) be the subgraph of 
+
+G induced by C where VC = {vr ∈ V | r ∈ C} and Ec = {e ∈ E | both endpoints of e in VC }.For each agent r, let Nr,C be the set of neighbors in GC .
+
+Neural ODE Model: We first embed the initial states into a higher-dimensional space via the uplift map E : R¯n → Rn, E(¯ x) = (¯ x, 0, . . . , 0) = x with n ≥ ¯n. For the rest of the paper, we consider the embedded pairs (xi, y i). Let U := L2([0 , 1] , Rp).
+
+> 2
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+All agents share the following controlled dynamical system: 
+
+˙x(t) = f (x(t), u (t)) , u ∈ U , (1) where f : Rn × Rp → Rn is a smooth vector field with uniformly bounded Jacobians and smooth Jacobians. The flow of this system defines the map 
+
+φt(u, x ) : U × Rn × [0 , 1] → Rn (2) which yields the trajectory t 7 → φt(u, x ) initialized at x with control u. We denote the flow at time 1 by φ1(x, u ). We project the endpoints of flow through a readout map R : Rn → Rno
+
+that is bounded, linear, 1-Lipschitz, and of full row-rank Jacobian. Then, we call the composition 
+
+R(φ(u, x )) the end-point mapping at x.A control u is said to memorize the sample (xi, y i) if 
+
+u ∈ U i := {u ∈ U | R(φ(u, x i)) = yi}. (3) Then, we define the per-sample loss function Ji(u) as: 
+
+Ji(u) := 12 ∥R(φ(u, x i)) − yi∥2. (4) By definition, u ∈ U i if, and only if, Ji(u) = 0 . In supervised learning, the objective is to find a single open-loop control u ∈ TNi=1 U i, that is, an open-loop control u that drives all input points to their desired outputs simultaneously. 
+
+Geometry of the control set. We study the geometry of the set TNi=1 U i under three main assump-tions. First, the existence of a control u ∈ TNi=1 U i follows from a corollary of the Chow-Rashevsky theorem (16, Thm. 1). We define: 
+
+∆ij := {[x⊤ 
+
+> 1
+
+, . . . , x ⊤ 
+
+> S
+
+]⊤ ∈ RnS | xi = xj , i ̸ = j}. (5) 
+
+Assumption A.1 (14, Lem. 2.2) The N -fold control vector fields 
+
+FNX := {[f ⊤(x1, u ), . . . , f ⊤(xN , u )] ⊤ | u ∈ U} 
+
+are bracket-generating on R¯nN \ (S 
+
+> i̸=j
+
+∆ij ).
+
+Next, we linearize system (1) along the trajectory φt(u, x i). Then, we define: Aui (t) := 
+
+∂xf (φt(u, x i), u (t)) , and Bui (t) := ∂uf (φt(u, x i), u (t)) . It yields the following linear time-varying system (see (11, Lemma 1)): 
+
+˙z(t) = Aui (t)z(t) + Bui (t)δu (t), (6) where z(t) := φt(u + δu, x i) − φt(u, x i). Let Φ(u,x i)(1 , t ) be the state transition matrix of the LTV system (6). We define the operator that maps a control variation δu ∈ U to the endpoint variation of the trajectory: 
+
+L(u,x i)(δu ) := 
+
+Z 10
+
+Φ(u,x i)(1 , τ )Bui (τ )δu (τ ) dτ. (7) A control u is said to be nonsingular at xi if the operator L(u,x i) is surjective (17). Then, we have: 
+
+3BAYRAM BELABBAS BAS ¸ AR 
+
+Assumption A.2 For a given set {(¯ xi, y i)}Ni=1 , any control u ∈ ∩ Ni=1 U i is nonsingular at xi for all 
+
+i = 1 ,· · · ,N .
+
+Finally, we define the response for xi at u as follows: 
+
+mui (t) := R Φ(u,x i)(1 , t ) Bui (t) ∈ L2([0 , 1] , Rno×p). (8) Then, we have the following assumption, its prevalence is discussed in (14): 
+
+Assumption A.3 For a given set {(¯ xi, y i)}Ni=1 , the responses {mui (t)}Ni=1 are non-collinear over 
+
+R for all u ∈ TNi=1 U i.
+
+In the next section, we present the main result under Assumptions (A.1), (A.2) and (A.3). 
+
+3. Main Results 
+
+We propose an iterative algorithm to find a control function such that u ∈ ∩ Ni=1 U i without revealing the corresponding paired set. Let uk represent the control function at iteration k. We consider one agent as the learner agent ℓ, who is responsible for updating the shared control function uk at every iteration. The learner agent first memorizes its own sample (xℓ, y ℓ) by finding a control uk ∈ U ℓ. It then sequentially memorizes the samples of the remaining agents, one at a time. We call the agent whose sample is currently being learned the teacher agent q. Importantly, in this sequential method, each update must preserve the endpoint mapping at samples that have already been memorized by the learner in order to prevent forgetting of these samples. We refer to the agents associated with these samples as protected agents and denote the set of protected agents at iteration k by Ckℓ . More precisely, at each iteration k, the learner agent seeks a control update δu k = uk+1 −uk that satisfies: • Memorizing the sample of the teacher agent q:
+
+Jq(uk + δu k) ≤ Jq(uk). (9) • Preserving the endpoint mapping for protected agents: 
+
+R(φ(uk + δu k, x r)) = yr, ∀r ∈ C kℓ . (10) To achieve these objectives, we propose an algorithm called Privacy-Preserving Gossip Learn-ing in Algorithm 1, which consists of three nested iterations. In the proposed method, the learner first calls a subprocedure, i.e. Algorithm 5 (see Line 1 in Al-gorithm 1), to establish privacy in the sense of indistinguishability. Since this phase is independent of the gossip learning procedure, its details are provided later in Section 3.3. 
+
+Outer Loop (Agent Selection). At each iteration, the learner selects a teacher q ∈ V \ { ℓ}, whose sample will be memorized. Once the learner successfully memorizes the sample of the teacher q,i.e. when u ∈ U q, that agent is then added to the protected set. The learner then proceeds to the next teacher and repeats the process until all samples in the paired set across the network have been memorized. 
+
+> 4
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+Algorithm 1 Privacy-Preserving Gossip Learning 
+
+1: Initialize u0, Cℓ ← Algorithm 5( xℓ)
+
+2: for q ∈ V \ { ℓ} do 
+
+3: repeat 
+
+4: β0 ← ROBUST DP (u, x q) (Algorithm 2) 
+
+5: for s = 0 to S do 
+
+6: for all agent r ∈ C ℓ (parallel) 
+
+7: θsr ← LOCAL PROJECTION (βs) (Algorithm 3) 
+
+8: βs+1 ← PRIVATE PUSH SUM ({θsr }r∈C ℓ ) (Algorithm 4) 
+
+9: end for 
+
+10: u ← u − αβ S Control update 
+
+11: until convergence for u ∈ U q
+
+12: Cℓ ← C ℓ ∪ { q} Expand the protected set 
+
+13: end for 
+
+> v1
+> v2
+> v3
+> v4v5
+
+Sharing control u
+
+Compute Differentially-Private update for (x3, y 3) [Alg. 2] Share candidate update with other agents Private push-sum among protected agents [Alg. 4] Local projection [Alg. 3] Learner agent updates control function u
+
+Figure 1: Network illustration of one outer iteration of Algorithm 1. Nodes represent agents and self-loops denote local computation. Edges between nodes denote communication links. 5BAYRAM BELABBAS BAS ¸ AR 
+
+Middle Loop (Iterative Projection). Given a teacher agent q, it first locally computes a candidate control update by R OBUST DP (see Algorithm 2), which returns a differentially private gradient for the solution of a minimax optimal control problem, which will be detailed in Section 3.1. This candidate update β0 is shared with the protected agents. Each protected agent r ∈ C ℓ locally projects the update β0 onto the tangent space of its local invariance set of controls, i.e. U r (3) via Algorithm 3, which returns θsr . This projection will be detailed in Section 3.2. It ensures that the endpoint mapping only at individual sample xr remains unchanged. 
+
+Inner Loop (Gossip Consensus). The protected agents start to collaborate without revealing their samples (xr, y r) and their local projections θsr to find the control update that ensures (10) for all r ∈Cℓ. At each iteration s, the protected agents run a private push-sum gossip protocol via Algorithm 4 to reach a consensus over the uniform average of their locally projected updates {θsr }r∈C kℓ
+
+. Once they reach a consensus, this agreed value βs+1 is returned to the middle loop. Then, each protected agent r again projects βs+1 and gets the corresponding θs+1  
+
+> r
+
+. This alternating procedure of gossip averaging and local projection is repeated until both converge. Both iterations are shown to converge at a geometric rate in Section 3.2. Finally, the learner updates the control uk by βs, i.e. selects δu k =
+
+βS , which satisfies both (9) and (10). This control update procedure is repeated until uk ∈ U q. The implementation of Algorithm 1 is illustrated in Fig. 1. Since the roles of the agents evolve over the iterations, we provide the privacy guarantee for the teacher in Section 3.1, and those for the protected and learner agents in Section 3.3. 
+
+3.1. Privately Learning Pair of Teacher Agent 
+
+In this section, we provide privacy guarantees for the teacher agent using differential privacy (DP), and recover the performance loss introduced by DP noise through a robust optimal control formu-lation. Directly releasing the gradient ∇Jq(uk) to satisfy (9) may reveal the private pair (xq, y q) (4). To prevent this, we employ differential privacy (DP) inspired by (1). Intuitively, a randomized mechanism satisfies differential privacy if its output distribution changes negligibly when a single private sample is added or removed from the dataset. Two datasets are said to be adjacent if they differ in exactly one sample. Since each agent holds a single sample in our framework, we say that D = ( xq, y q) and D′ = ( xq′
+
+, y q′
+
+) are adjacent ,written D ∼ D′, whenever both are single-sample datasets. Under this adjacency relation, we define 
+
+local differential privacy as follows (18): 
+
+Definition 1 [Differential Privacy] A randomized function M : D → A satisfies (ε, δ )-differential privacy on the subspace A if for all adjacent datasets D ⊂ D and D′ ⊂ D and all measurable sets 
+
+S ⊆ A, it holds that 
+
+Pr[ M(D) ∈ S ] ≤ eε Pr[ M(D′) ∈ S ] + δ. (11) 
+
+Robustness against DP noise: DP can be achieved by injecting Gaussian noise into the gra-dient (1). However, noise injection perturbs the descent direction and degrades model perfor-mance (12). We address this through a robust optimal control formulation inspired by (13). We model the injected noise as a worst-case control disturbance and design an update direction that is 
+
+> 6
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+robust to such perturbations. This leads to the following minimax objective: 
+
+min 
+
+> u∈U
+
+
+
+max 
+
+> γ∈U ρ
+
+(Jq(u + γ) − λ∥γ∥)
+
+
+
+(12) where Uρ = {γ ∈ U | ∥ γ∥ ≤ ρ} is the disturbance set and λ > 0 is a regularization parameter. From (13, Lem. 2), if a control u ∈ U q, it minimizes both (4) and (12), so both objectives serve to memorize the sample of agent q.To solve (12), we follow the steps in (13). We first solve the inner maximization problem. To this end, we define the bounded linear operator: 
+
+Kuq : U → U , γ 7 →
+
+Z 10
+
+muq (t)⊤muq (τ ) γ(τ ) dτ. (13) From (13, Prop. 1), the closed-form solution of the inner maximization in (12) for sufficiently large 
+
+λ > 0 is 
+
+γ∗
+
+> q,u
+
+(t) = ρ (Kuq − λI )−1muq (t)⊤ruq
+
+∥(Kuq − λI )−1muq (t)⊤ruq ∥2
+
+(14) where ruq = R(φ(u, x q)) − yq is the residual at endpoint. Then, we plug γ∗
+
+> q,u
+
+(t) into (12), which yields the minimization problem: min u∈U Jq
+
+ u + γ∗
+
+> q,u
+
+, which can be solved iteratively. The cor-responding gradient at perturbed control ¯u := u + γ∗ 
+
+> q,u
+
+can be found as 
+
+∇Jq(¯ u) = m¯uq (t)⊤ r¯uq
+
+where m¯uq (t) is given in (8) (14). Then, we clip ∇Jq(¯ u) to bound its norm by B > 0:
+
+gq, ¯u(t) := ∇Jq
+
+ u + γ∗
+
+> q,u
+
+)max(1 , ∥∇ Jq
+
+ u + γ∗
+
+> q,u
+
+)∥/B ) (15) 
+
+Noise process in function space: Although gq, ¯u(t) lies in U, white noise does not lie in U and therefore cannot be added directly to the clipped gradient. Hence, we use a finite Karhunen–Lo` eve expansion to construct a noise process. Let Λ be a finite d-dimensional subspace of U with orthonor-mal basis {ζi}di=1 . Let PΛ : U → Λ be the orthogonal projection onto Λ. We define a Gaussian noise process on Λ by 
+
+WΛ(t) := 
+
+> d
+
+X
+
+> l=1
+
+χl ζl(t), χl iid 
+
+∼ N (0 , σ 2B2), (16) where N (0 , σ 2B2) denotes a Gaussian random variable with variance σ2B2. We then have the following privacy guarantee for teacher q on a given subspace Λ at given iteration k.
+
+Proposition 2 Let g be the clipped gradient associated with sample (xq, y q) in (15) , and let Λ be a finite d-dimensional subspace of U. Consider the mechanism 
+
+MΛ(xq, y q) := PΛ(g) + WΛ, (17) 
+
+where WΛ is given in (16) . For any ε > 0 and δ ∈ (0 , 1) , if 
+
+σ ≥
+
+p8 log(1 .25 /δ )
+
+ε , (18) 
+
+then MΛ satisfies local (ε, δ )-DP for the teacher agent q on Λ.
+
+7BAYRAM BELABBAS BAS ¸ AR 
+
+See Section 4 for a proof of Proposition 2. The given mechanism in (17) is applied once per control update while q is the teacher, and the sample (xq, y q) is used at no other iteration. Let Kq denote the number of control updates in the teacher phase of agent q, that is, the number of times Line 10 of Algorithm 1 is executed before u ∈ U q holds. The total privacy budget scales linearly with the number of control updates; that is, agent q satisfies (Kqε, K qδ)-DP (1, Thm. 3.16). The projected gradient PΛ(gq, ¯u) is protected in the sense of Definition 1 on the subspace Λ,while the gradient components outside Λ are released without protection. To minimize the un-protected components and implement the mechanism in (17), we introduce a time discretization. For a fixed number of discretization steps T ∈ N with ∆t = 1 /T , grid points tj = j/T for 
+
+j = 0 , . . . , T − 1, we define the piecewise-constant functions: 
+
+el(t) := √T ˆeb1[tj , t j+1 )(t), l = pj + b, b = 1 ,. . ., p (19) where ˆeb ∈ Rp denotes the b-th standard basis vector and 1[tj , t j+1 )(t) is the indicator function of the interval [tj , t j+1 ).Next, we define the subspace of U spanned by the basis of discretization (19), i.e. {el}dl=1 with 
+
+d := pT and we denoted it by ΛT . The teacher agent releases the update at iteration k via the mechanism MΛT in (17) on the subspace ΛT as follows: 
+
+ξ(t) := PΛT (gq, ¯u(t)) + WΛT (t). (20) By Proposition 2, the update ξ (20) satisfies (ε, δ )-DP for the teacher agent q on the subspace 
+
+ΛT , provided that (18) holds. Since ξ ∈ ΛT , its coefficient vector ¯ξ ∈ Rd with respect to the basis 
+
+{el}dl=1 is well-defined and satisfies 
+
+ξ(t) = 
+
+> d
+
+X
+
+> l=1
+
+¯ξl el(t).
+
+In Algorithm 2, we compute the coefficient vector ¯ξ ∈ Rd as follows. First, muq is approximated using Lq by (11, Algorithm 1). Then, the disturbance γ∗ 
+
+> q,u
+
+is obtained via Kuq ≈ L⊤ 
+
+> q
+
+Lq from (13, Algorithm 1). Finally, the released update ¯ξ is returned. Therefore, by abuse of notation, we write ξ
+
+for both the continuous released update (20) and the output of Algorithm 2 for the rest of the paper. From this construction, the norm of the unprotected component, i.e., the component of gq, ¯u(t)
+
+outside ΛT , equals the interpolation error due to discretization, which decreases as T increases. 
+
+Algorithm 2 ROBUST DP-C OMPUTATION  
+
+> 1:
+
+Input: u ∈ RpT , (xq, y q) 
+
+> 2:
+
+Lq ← R L(u,x q )
+
+ see Algorithm 1 in (11)  
+
+> 3:
+
+γ ←  L⊤ 
+
+> q
+
+Lq − λI −1 ∇Jq(u) 
+
+> 4:
+
+ξ ← clip( ∇uJq
+
+ u + ρ γ
+
+> ∥γ∥
+
+, B )+ N (0 ,σ 2B2∆tI pT ) 
+
+> 5:
+
+Return: ξ
+
+3.2. Preservation of end-point mapping (Not Forgetting) 
+
+We consider the set of control functions that satisfy the invariance equation in (10), i.e. the set 
+
+∩r∈C ℓ U r. Tuning without Forgetting (TwF) provides a way to select updates δu k such that uk + δu k
+
+> 8
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+lies in that set (11). For sake of notational simplicity, we suppress the iteration index k from uk and 
+
+Ckℓ when it is clear from the context. Under (A.1-A.3), (14, Theorem 1) states that this set forms a Banach submanifold of U of finite codimension. Thus, TwF relies on this geometric structure and selects the update δu that lies in the tangent space of this submanifold, 
+
+δu ∈ Tu(∩r∈C ℓ U r), (21) then the updated control u+δu remains on the manifold T 
+
+> r∈C ℓ
+
+U r. Hence, it preserves the endpoint mappings at all previously learned samples. If the control update δu k is selected in (21), then the control uk+1 is said to be tuning for 
+
+Ckℓ ∪ { q} without forgetting Ckℓ (11, Definition 1). To explicitly characterize the tangent space in (21), we define: 
+
+ker( u, Cℓ) := δu ∈ U | R(L(u,x r )(δu )) = 0 , ∀r ∈ C ℓ . (22) This set consists of all variations δu whose corresponding variational equation (6) yields zero end-point variation at initial point xr for all r ∈ C ℓ. From (14, Corollary 1), this space admits the following characterization: 
+
+ker( u, Cℓ) = Tu(∩r∈C ℓ U r). (23) Hence, we propose to select the update δu by projecting the released update ξ (20) onto ker( u, Cℓ)
+
+to satisfy (21): 
+
+δu := P u 
+
+> Cℓ
+
+(ξ), where P u 
+
+> Cℓ
+
+(ξ) := argmin 
+
+> w∈ker( u, Cℓ)
+
+∥ξ − w∥2. (24) However, this projection operator requires access to all samples of the protected agents in Cℓ,which violates their privacy. To address this, we first define the local projection operator P ur : U → 
+
+TuU r associated with each protected agent r ∈ C ℓ for a given update β ∈ U :
+
+P ur (β) := argmin w∈ker( u, {r}) ∥β − w∥2 (25) If the control u is nonsingular at xr (see A.2), this operator admits a closed-form solution (14, Prop. 1). Algorithm 3 computes P ur (·) for a protected agent r. It characterizes the local tangent space TuU r as the kernel of the operator R(L(u,x r )(·)) and approximates this kernel by the right null space of the matrix Lr ∈ Rno×pT .
+
+Algorithm 3 LOCAL PROJECTION  
+
+> 1:
+
+Input: u ∈ RpT , (xr, y r), β s ∈ RpT  
+
+> 2:
+
+Lr ← R L(u,x r )
+
+ see Algorithm 1 in (11)  
+
+> 3:
+
+θ ← (I − L†
+
+> r
+
+Lr)βs Computation of P ur (βs) 
+
+> 4:
+
+Return: θ
+
+Using these local operators, we propose a decentralized method to compute the projection onto the intersection ker( u, Cℓ)(= ∩r∈C ℓ ker( u, {r})) without revealing samples to other protected agents. 
+
+9BAYRAM BELABBAS BAS ¸ AR 
+
+3.2.1. A VERAGE CONSENSUS FOR PROJECTED UPDATES 
+
+For a given middle loop iterate βs, we reformulate the uniform averaging of {P ur (βs)}r∈C ℓ as a consensus problem over a subgraph GCℓ (19). Each protected agent initializes its gossip states 
+
+πr ∈ RpT at iteration s as: 
+
+πr[0] := P ur (βs), r ∈ C ℓ, (26) Agents then exchange information over M gossip iterations and update their states πr[m] at every iteration m to compute the uniform average of the initial value. To preserve privacy, we adopt the push-sum protocol of (15) for distributed averaging in Algorithm 4, which prevents revealing the initial states {πr[0] }r∈C ℓ . Consequently, the private samples which are encoded in the local projections P ur (βs) are protected. To introduce privacy, during the first K iterations of the gossip process, each agent r generates two independent nonnegative stochastic vectors pir for i ∈ { 1, 2} such that 
+
+pirj =
+
+(
+
+≥ κ, j ∈ Nr, Cℓ ∪ { r},
+
+0, j / ∈ Nr, Cℓ ∪ { r}, 
+
+> |V|
+
+X
+
+> j=1
+
+pirj = 1 , (27) 
+
+κ > 0 is a lower bound on the entries corresponding to neighbor agents. After the masking horizon 
+
+K, each agent switches to a single stochastic vector pr satisfying (27). These random weights at the first K iterations mask the exchanged auxiliary variables, so that neighboring agents only observe scaled versions of the transmitted states with unknown coefficients. Each agent then updates its local state with the information collected from its neighbors (Lines 14 and 15 in Algorithm 4). At the final gossip round M , each agent computes the elementwise estimate: ˆπr,s = πr[M ]/ω r[M ].Then, we have the following convergence theorem for Algorithm 4, in which we extend the asymptotic convergence result of (15, Thm. 1) by establishing an explicit geometric convergence rate for the non-masking phase m > K :
+
+Theorem 3 Suppose that the subgraph GCℓ induced by a nonempty Cℓ is connected. Let ˆπr,s [m] = 
+
+πr[m]/ω r[m] denote the estimate at agent r produced by Algorithm 4 with κ > 0 at iteration m.Let ¯π = 1
+
+> |C ℓ|
+
+P 
+
+> r∈C ℓ
+
+πr[0] . Then, ˆπr,s [m] converges to ¯π at a geometric rate. 
+
+Corollary 4 If each agent r ∈ C ℓ initializes πr[0] := P ur (βs) for a fixed iteration βs, then the estimate ˆπr,s [m] converges geometrically to 1
+
+> |C ℓ|
+
+P 
+
+> r∈C ℓ
+
+P ur (βs).
+
+See Section 4 for a proof of Theorem 3. This result establishes the convergence of the inner loop. The convergence rate in Theorem 3 depends on the graph topology. A denser graph yields a faster rate, which is discussed in Section 5. 3.2.2. I TERATIVE PROJECTION 
+
+We study the convergence of the middle loop. To this end, we define the simultaneous projection operator ˜T u : U → U , which is the one step of the middle loop and also s-fold composition of ˜T u
+
+˜T us (·) := ˜T u ◦ · · ·◦ ˜T u
+
+| {z } 
+
+> stimes
+
+(·) where ˜T u(·) := 1
+
+|C ℓ|
+
+X
+
+> r∈C ℓ
+
+P ur (·) (28) From Algorithm 4 and Corollary 4, it follows that βs = ˜T us (β0). Then, we have the following Theorem for the geometric convergence of ˜T us :
+
+> 10
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+Algorithm 4 PRIVATE PUSH -S UM (15)  
+
+> 1:
+
+Input: θsr , u 
+
+> 2:
+
+For all agent r ∈ C ℓ (parallel)  
+
+> 3:
+
+πr ← θsr where θsr = P ur (βs) from Algorithm 1 and Algorithm 3  
+
+> 4:
+
+ωr ← 1pT where 1pT is vector of all ones  
+
+> 5:
+
+for m = 0 to M − 1 in parallel ∀r ∈ C ℓ do  
+
+> 6:
+
+if m < K then  
+
+> 7:
+
+Generate p1 
+
+> r
+
+, p 2 
+
+> r
+
+∈ ∆|V | (see (27)),  
+
+> 8:
+
+else  
+
+> 9:
+
+Generate pr ∈ ∆|V | with κ > 0 (see (27))  
+
+> 10:
+
+p1 
+
+> r
+
+← pr and p2 
+
+> r
+
+← pr 
+
+> 11:
+
+end if  
+
+> 12:
+
+Send p1 
+
+> rj
+
+πr and p2 
+
+> rj
+
+ωr to all j ∈ Nr, Cℓ 
+
+> 13:
+
+Collect p1 
+
+> jr
+
+πj and p2 
+
+> jr
+
+ωj from all j ∈ Nr, Cℓ . 
+
+> 14:
+
+πr ← P  
+
+> j∈Nr, Cℓ∪{ r}
+
+p1 
+
+> jr
+
+πj 
+
+> 15:
+
+ωr ← P  
+
+> j∈Nr, Cℓ∪{ r}
+
+p2 
+
+> jr
+
+ωj 
+
+> 16:
+
+end for  
+
+> 17:
+
+Each node r computes local estimation: ˆπr,s ← πr 
+
+> wr
+> 18:
+
+Return: ˆπr,s 
+
+Theorem 5 Suppose (A.1-A.3) hold and the protected agent set Cℓ is a nonempty. Let u ∈ T 
+
+> r∈C ℓ
+
+U r.Then, the sequence of projection operators ˜T us induced by (28) converges geometrically in operator norm to P u
+
+> Ckℓ
+
+.
+
+Now, we can extend this result to the released update ξ via the following Corollary: 
+
+Corollary 6 If β0 in (28) is set to ξ in (20) , then ξ is projected onto ker( u, Cℓ) as s → ∞ at a geometric rate. 
+
+See Section 4 for a proof of Theorem 5. Since both inner and middle loops converge geometrically from Corollaries 4 and 6, their nested execution converges at a geometric rate for a sufficiently large 
+
+M , which is discussed in Section 5. 
+
+3.3. Privacy Guarantees for Protected and Learner Agent 
+
+In this section, we establish privacy guarantees for the remaining agent roles. The privacy guarantees for the protected agents and the learner agent are established in Propositions 7 and 9, respectively. Then, we discuss an edge case and our proposed solution to it. 
+
+Privacy of the Protected Agents: We adopt the honest-but-curious adversary model from (15, Definition 1), in which each agent follows the protocol correctly but attempts to infer the initial states of other agents from received messages, without collusion. Then, the privacy of the initial states πr[0] in Algorithm 4, depends on the topology of the graph. 
+
+11 BAYRAM BELABBAS BAS ¸ AR 
+
+Proposition 7 Suppose GCkℓ
+
+is connected and all agents are honest-but-curious for all k. Then, for any protected agent r ∈ C kℓ such that |Nr, Ckℓ
+
+| ≥ 2, no other agent running Algorithm 4 can uniquely determine the initial state of agent r and cannot determine a finite range for πr[0] .
+
+Proof. We first construct a directed graph GCℓ from GCℓ by replacing each undirected edge with two directed edges. Under this construction, GCℓ is strongly connected. All nodes follow Algorithm 4. Then, from (15, Theorem 2), the privacy of a node r is preserved if the cardinality of the union of its in-neighbors and out-neighbors is greater than one, i.e. |N in r, Cℓ ∪ N out r, Cℓ | ≥ 2. By construction, the in-neighbor and out-neighbor sets of every agent r coincide in GCℓ , from which 
+
+|Nr, Cℓ | ≥ 2 follows. □
+
+Privacy of the Learner Agent: To formalize privacy of the learner agent, we adopt the notion of indistinguishability because it depends on whether an adversary can uniquely recover its sample xℓ
+
+from the shared sequence of controls in the network. To this end, for a sequence of control Γ and a label yi, we define the indistinguishability set of xi over Γ:
+
+IΓ(xi) := {x ∈ R¯n | R(φ(u, x )) = yi, ∀u ∈ Γ}. (29) 
+
+Definition 8 For a given control sequence Γ, the learner agent preserves privacy over Γ if 
+
+card( IΓ(xℓ)) > 1.
+
+In words, if the control sequence produces the same output yi under R(φ(u, ·)) for more than one initial point, the learner agent preserves privacy over Γ. To this end, we define the sequence of controls Γq 
+
+> Cℓ
+
+that is shared with the network during the outer iteration in which the learner memorizes the sample of teacher agent q with a nonempty set Cℓ. The following proposition shows that TwF inherently provides indistinguishability under Γq 
+
+> Cℓ
+
+:
+
+Proposition 9 If there exists m ∈ C ℓ with m̸ = ℓ and ym = yℓ, then card  IΓq
+
+> Cℓ
+
+(xℓ) > 1.
+
+Proof. Since m ∈ C kℓ for all k during the teacher phase of agent q, TwF restricts each update δu k
+
+to Tu(T
+
+> r∈C kℓ
+
+U r). Hence the sequence Γq 
+
+> Cℓ
+
+remains in the submanifold T
+
+> r∈C kℓ
+
+U r. Since ym = yℓ,it holds that R(φ(u, x m)) = yℓ for all u ∈ Γq 
+
+> Cℓ
+
+. Hence the indistinguishability set of xℓ over Γq
+
+> Cℓ
+
+contains at least the two elements {xm, x ℓ}, where xm̸ = xℓ. □
+
+Both Proposition 9 and Proposition 7 require Cℓ to be large enough for privacy of the learner. At initialization, when Cℓ = {ℓ}, neither condition is guaranteed. To resolve this, before the main loop via Algorithm 5, the learner introduces a fictitious sample for a fictitious agent ℓ′:
+
+xℓ′
+
+s.t. 0 < ∥xℓ′
+
+− xℓ∥2 ≤ κ, yℓ′
+
+= yℓ, (30) and memorizes it. Thus, the learner sets Cℓ ← { ℓ, ℓ ′} before Algorithm 1 begins. The fictitious agent ℓ′ participates in the gossip process as an additional node connected to ℓ and its neighbors. This construction satisfies |Nℓ, Cℓ | ≥ 2 for Proposition 7 and the label co-occurrence condition for Proposition 9 so that the privacy of the learner agent is guaranteed. Once Cℓ expands sufficiently, all fictitious samples are removed. Removing a fictitious sample enlarges ker( u, Cℓ) and thus relaxes the constraint on subsequent updates. Since TwF subsequently forgets any sample removed from 
+
+Cℓ, this removal does not affect model performance. 
+
+> 12
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+Remark 10 Any other agent r ∈ C kℓ with |Nr, Ckℓ
+
+| < 2 may apply the same construction by Algo-rithm 5 to satisfy Proposition 7 for any given connected graph. 
+
+Algorithm 5 Fictitious Sample For Agent r 
+
+> 1:
+
+Select xr′
+
+s.t. 0 < ∥xr′
+
+− xr∥2 ≤ κ and yr′
+
+= yr 
+
+> 2:
+
+for j ∈ { r, r ′} do  
+
+> 3:
+
+repeat  
+
+> 4:
+
+u ← u − α P u
+
+> C
+
+ ∇Jj (u + γ∗
+
+> j,u
+
+) 
+
+> 5:
+
+until convergence for sample j 
+
+> 6:
+
+C ← C ∪ { j} 
+
+> 7:
+
+end for  
+
+> 8:
+
+Return: u, C
+
+4. Proofs 
+
+Proof of Proposition 2. We fix the control u at the current iteration. Let D = ( xq, y q) and let D′ = ( xq′
+
+, y q′
+
+) be an adjacent dataset of D. The released update ξ in (17) is computed in two sequential steps, each depending on the private sample (xq, y q). The clipped gradient gq, ¯u is evaluated at ¯u = u + γ∗
+
+> q,u
+
+, and γ∗ 
+
+> q,u
+
+is a deterministic function of D that is never released. Hence 
+
+D 7 → PΛ(gq, ¯u) is a deterministic query of the dataset, and MΛ is the Gaussian mechanism applied to it. Let {ζl}dl=1 be the orthonormal basis for given Λ. Then, Gaussian process coefficients from (16) satisfy ⟨W Λ, ζ l⟩ = χl where χl ∼ N (0 , σ 2B2), and are mutually independent. Then, we have the released vector (17): 
+
+ ⟨M Λ(D), ζ l⟩dl=1 = hD +  ⟨W Λ, ζ l⟩dl=1 ∈ Rd (31) where hD :=  ⟨gq, ¯u, ζ l⟩dl=1 ∈ Rd. Let f := gq, ¯u − gq′,¯u′ . Since the basis {ζl}dl=1 is orthonormal, Parseval’s identity gives: 
+
+sup 
+
+> D∼D′
+
+∥hD − hD′ ∥22 = sup 
+
+> D∼D′
+> d
+
+X
+
+> l=1
+
+|⟨ f, ζ l⟩| 2 ≤ 4B2, (32) where the last bound follows from the clipping (15), which gives ∥gq, ¯u∥ ≤ B for every admissible dataset. By (1, Thm. A.1), a Gaussian mechanism with diagonal covariance Σ = σ2B2I satisfies 
+
+(ε, δ )-DP if 
+
+sup 
+
+> D∼D′
+
+∥Σ−1/2(hD − hD′ )∥2 ≤ ε
+
+p2 log(1 .25 /δ ) . (33) From (32), the condition (33) holds if σ satisfies (18), from which the result follows. Since D and 
+
+D′ range over all admissible single-sample datasets, the guarantee is local (ε, δ )-DP on Λ. □
+
+13 BAYRAM BELABBAS BAS ¸ AR 
+
+Proof of Theorem 3. We follow the construction of the directed graph GCℓ given in the proof of Proposition 7. Under this construction, the in-neighbor and out-neighbor sets of every agent r
+
+coincide and GCℓ is strongly connected. Then, from (15, Theorem 1), the private push-sum protocol ensures that the estimate of each participating agent ˆπr,s [m] converges to the average of the initial states of participating agents ¯π if each agent follows Algorithm 4 with κ > 0 and finite K. It remains to establish the geometric rate. Without loss of generality, we take πr ∈ R and let a := |C ℓ|, the general case follows from component-wise scaling. Then, we collect the states of all protected agents into a state vector 
+
+π[m] := [ πr1 [m], . . . , π ra [m]] ∈ Ra,
+
+where r1, . . . , r a is any fixed indexing of Cℓ. For m ≥ K + 1 , we define the communication matrix P [m] ∈ Ra×a with entries [P [m]] rirj := prirj [m], which are generated by (27). P [m] is row-stochastic by P 
+
+> rj
+
+prirj [m] = 1 . Then, the update rules in Lines 14 −15 of Algorithm 4 follow: 
+
+π[m + 1] = π[m]P [m] ω[m + 1] = ω[m]P [m] (34) Let ˆπ[m] ∈ Ra be the estimate vector at iteration m, whose r-th entry is ˆπr[m] := πr[m]/ω r[m].Let ¯π := 1
+
+> a
+
+P 
+
+> r
+
+πr[0] , where we have ωr[0] = 1 for all r. Then, we define the error vector as follows: 
+
+e[m] := π[m] − ¯π ω [m] ∈ Ra.
+
+Since both π and ω evolve by the same matrix in (34) for m > K , the error e also evolves by the same matrix P [m]:
+
+e[m + 1] = e[m] P [m], m > K. 
+
+By row-stochasticity and ωr[0] = 1 , mass is conserved: P 
+
+> r
+
+ωr[m] = a and P 
+
+> r
+
+πr[m] = P 
+
+> r
+
+πr[0] 
+
+for all m, which gives P 
+
+> r
+
+er[m] = 0 for all m. Since ωr[0] = 1 and p2
+
+> rr
+
+[m] ≥ κ > 0 for all 
+
+m ≥ 0, each agent retains a positive fraction of its own mass at every iteration, so ωr[m] > 0 for all 
+
+m ≥ 0 and all r. Combined with mass conservation P 
+
+> r
+
+ωr[m] = a, there exists cω > 0 such that 
+
+ωr[m] ≥ cω for all m > K and all r.Since ωr[m] ≥ cω > 0, we have the following upper bound for each r:
+
+|ˆπr[m] − ¯π| = |πr[m] − ¯π ω r[m]|
+
+ωr[m] = |er[m]|
+
+ωr[m] ≤ ∥e[m]∥∞
+
+cω
+
+. (35) It therefore suffices to establish geometric decay of ∥e[m]∥∞.Since GCℓ is connected and priri [m] ≥ κ > 0 for all ri, P [m] is irreducible with positive diagonal entries for each m > K . By (20, Lemma 12), the product of any l ≥ ⌊ a/ 2⌋ irreducible row-stochastic matrices of dimensions a × a with positive diagonal entries is a scrambling matrix. Let υ = ⌊a/ 2⌋. Hence Q := Qm0+υ−1 
+
+> t=m0
+
+P [t] is scrambling for any m0 ≥ K + 1 , with all entries bounded below by κυ > 0. Then, the ergodicity coefficient satisfies μ(Q) ≤ 1 − κυ. We then apply the submultiplicative inequality ∥B1B2∥S ≤ μ(B1)∥B2∥S for any two stochastic matrices 
+
+B1 and B2 (21) over consecutive blocks of length υ. This yields the geometric rate for each r when 
+
+m > K . □
+
+Proof of Theorem 5. Let M := T
+
+> r∈C kℓ
+
+TuU r and let PM : U → M denote the orthogonal projection onto M . Under Assumptions (A.1)-(A.3), (14, Corollary 1) ensures that M is a nonempty 
+
+> 14
+
+PRIVACY PRESERVING GOSSIP LEARNING 
+
+Figure 2: (Left) The error ∥βs − P u 
+
+> Cℓ
+
+(ξ)∥∞ measures the distance between the current iterate βs and the projection onto the intersection of tangent spaces P u 
+
+> Cℓ
+
+(ξ) over inner steps s. (Right) Evolution of per-agent loss Jr (u) during sequential training for circle classifier. Solid and dashed lines show each agent during its teacher and protected phases, respectively. Circle (◦) marks Cℓ expansion iterations. Shaded bands indicate memorized ( Jr < 0.1), tolerance, and forgotten ( Jr > 0.2) regions. The hyperparameters are: α = 0 .01 , ρ =0.1, λ = 0 .2, ε = 3 , κ = 0 .01 , S = 500 , M = 500 , K = 10 .
+
+closed subspace of U. Under the nonsingularity assumption (A.2), by (14, Proposition 2), the set 
+
+U r is a finite-codimension Hilbert submanifold of U for each r ∈ C ℓ. Hence TuU r is a closed linear subspace of finite codimension, its orthogonal complement T ⊥ 
+
+> u
+
+U r is finite-dimensional and closed. Since Cℓ is finite, the sum P 
+
+> r∈C ℓ
+
+T ⊥ 
+
+> u
+
+U r is a finite sum of closed subspaces and is therefore closed. By (22, Theorem 1.2), the closedness of P
+
+> r∈C kℓ
+
+T ⊥ 
+
+> u
+
+U r implies that the sequence { ˜T us }s≥0 in (28) converges geometrically in operator norm to the PM . □
+
+5. Numerical Studies 
+
+We consider two experimental settings. For memory preservation and convergence of the distributed projection, we use a 2D circle classification task , in which initial points ¯xi ∈ R2 are classified as inside or outside the unit disk, with uplift E : R2 → R10 and a readout map R projecting onto the last two coordinates (2-class one-hot). For the privacy-performance tradeoff, we use MNIST image classification (23), in which each image is flattened to R784 , uplifted to R834 . We consider a readout map R projecting onto the last 10 coordinates (10-class one-hot). 
+
+Neural ODE: We consider a 100-layer residual neural network for both tasks, which is an Euler discretization of the following controlled ODE over [0 , 1] with ∆t = 0 .01 :
+
+˙x(t) = tanh( W (t)x(t) + b(t)) (36) where tanh acts component-wise and u(t) = ( W (t), b (t)) ∈ L2([0 , 1] , Rn×n × Rn).
+
+Sequential memorization: The right panel of Fig. 2 depicts the per-agent loss Jq(u) over global control update iterations k for the first 20 agents over the fully connected network. Each agent’s sample is successfully memorized during its teacher phase, i.e Jq(u) ≤ 0.1. Then, each agent’s loss remains below τmem throughout all subsequent protected phases (shown in dashed lines). This confirms that the distributed computation of the projection P u 
+
+> Cℓ
+
+prevents forgetting. 
+
+Convergence of private gossip: Fig. 3 depicts the error ∥ˆπr[m] − 1
+
+> |C ℓ|
+
+P 
+
+> r∈C ℓ
+
+πr[0] ∥∞ as a function of gossip iteration m for fully connected (FC) and ring topologies. In both cases, the error decreases at a geometric rate, which verifies Theorem 3. However, the ring network converges slower than 
+
+15 BAYRAM BELABBAS BAS ¸ AR             
+
+> Figure 3: The error ∥ˆπr[m]−1
+> |C ℓ|
+> P
+> r∈C ℓπr[0] ∥∞measures the distance between the current estimate ˆπr[m]
+> and the uniform average of initial states as a function of gossip round m. The shaded region m < K marks privacy phase. (Left) Fully Connected network. (Right) Ring network.
+
+the FC network. Privacy is preserved in both cases because each agent has at least two neighbors. As expected, convergence becomes faster for smaller |C ℓ|. Since weights p1 
+
+> r
+
+and p2 
+
+> r
+
+are randomly resampled for privacy, the convergence is delayed by K steps. 
+
+Convergence of distributed projection: The left panel of Fig. 2 depicts ∥βs − P u 
+
+> Cℓ
+
+(ξ)∥∞ as a function of the middle loop iteration s, for the first and the 100th control updates for various teacher agents q. In both cases, the error decreases at a geometric rate, which confirms Theorem 5. The convergence slows down as |C ℓ| grows and the intersection of tangent spaces becomes more con-strained. 
+
+Privacy-performance trade-off: We evaluate the proposed methods under different privacy bud-gets ε ∈ { 1, 2, 3} and non-private update ε = ∞. The teacher phase of an agent takes Kq ≈ 10 3
+
+control updates in these experiments. Thus, the budget over a full teacher phase follows from the composition bound in Section 3.1. Figure 4 depicts the test accuracy on MNIST dataset and circle classification task as a function of privacy budget for 10 different runs. For Robust DP (R-DP), we use the proposed release vector in (20) with ρ = 0 .1. For DP, we clip the gradient ∇uJq(uk)
+
+and add the Gaussian noise process. As ε increases, the privacy reduces. Robust DP mitigates the performance loss across all privacy budgets, achieving better accuracy than DP while preserving the same privacy guarantee in both MNIST and circle classification. 
+
+6. Conclusion and Future Work 
+
+In this work, we have introduced a privacy-preserving distributed training algorithm that combines gossip consensus with Tuning without Forgetting. We have provided theoretical privacy guarantees for all three agent roles. We have shown that the robust formulation recovers the performance loss due to noise injection. We have proved geometric convergence of the distributed TwF projection scheme.          
+
+> 16 PRIVACY PRESERVING GOSSIP LEARNING
+> Figure 4: Mean test accuracy as a function of privacy budget εfor DP and R-DP on MNIST (left) and Circle (right). Markers show the mean over runs and shaded bands show one standard deviation. The shaded region at ε=∞is the non-private baseline.
+
+Future work will focus on modeling the injected noise in a distributional framework rather than under a worst-case perturbation assumption. We will also investigate how the geometric conver-gence rate depends on the underlying graph topology. 
+
+References 
+
+[1] Cynthia Dwork and Aaron Roth. The algorithmic foundations of differential privacy. Founda-tions and Trends in Theoretical Computer Science , 9(3-4):211–487, 2014. [2] Luca Melis, Congzheng Song, Emiliano De Cristofaro, and Vitaly Shmatikov. Exploiting unintended feature leakage in collaborative learning. In 2019 IEEE symposium on security and privacy (SP) , pages 691–706. IEEE, 2019. [3] Yangsibo Huang, Samyak Gupta, Zhao Song, Kai Li, and Sanjeev Arora. Evaluating gra-dient inversion attacks and defenses in federated learning. Advances in neural information processing systems , 34:7232–7241, 2021. [4] Ligeng Zhu, Zhijian Liu, and Song Han. Deep leakage from gradients. Advances in Neural Information Processing Systems , 32, 2019. [5] Kang Wei, Jun Li, Ming Ding, Chuan Ma, Hang Su, Bo Zhang, and H Vincent Poor. User-level privacy-preserving federated learning: Analysis and performance optimization. IEEE Transactions on Mobile Computing , 21(9):3388–3401, 2021. [6] Ahmed El Ouadrhiri and Ahmed Abdelhadi. Differential privacy for deep and federated learn-ing: A survey. IEEE access , 10:22359–22380, 2022. [7] Reza Shokri, Marco Stronati, Congzheng Song, and Vitaly Shmatikov. Membership inference attacks against machine learning models. In 2017 IEEE Symposium on Security and Privacy (SP) , pages 3–18. IEEE, 2017.    
+
+> 17 BAYRAM BELABBAS BAS ¸AR
+
+[8] Xiyuan Yang, Wenke Huang, and Mang Ye. Dynamic personalized federated learning with adaptive differential privacy. Advances in Neural Information Processing Systems , 36:72181– 72192, 2023. [9] Ricky TQ Chen, Yulia Rubanova, Jesse Bettencourt, and David K Duvenaud. Neural ordinary differential equations. Advances in Neural Information Processing Systems , 31, 2018. [10] Emilien Dupont, Arnaud Doucet, and Yee Whye Teh. Augmented neural ODEs. Advances in Neural Information Processing Systems , 32, 2019. [11] Erkan Bayram, Shenyu Liu, Mohamed-Ali Belabbas, and Tamer Bas ¸ar. Control theoretic approach to fine-tuning and transfer learning. In Systems Theory in Data and Optimization ,pages 197–212. Springer Nature Switzerland, 2025. [12] Jinseong Park, Hoki Kim, Yujin Choi, and Jaewook Lee. Differentially private sharpness-aware training. In ICML , pages 27204–27224. PMLR, 2023. [13] Erkan Bayram, Mohamed-Ali Belabbas, and Tamer Bas ¸ar. Control disturbance rejection in neural odes. In 2025 IEEE 64th Conference on Decision and Control (CDC) , pages 5660– 5665. IEEE, 2025. [14] Erkan Bayram, Mohamed-Ali Belabbas, and Tamer Bas ¸ar. Geometric foundations of tuning without forgetting in neural ODEs. arXiv preprint arXiv:2509.03474 , 2025. [15] Huan Gao, Chunlei Zhang, Muaz Ahmad, and Yongqiang Wang. Privacy-preserving average consensus on directed graphs using push-sum. In 2018 IEEE CNS , pages 1–9. IEEE, 2018. [16] Andrei Agrachev and Andrey Sarychev. Control in the spaces of ensembles of points. SIAM Journal on Control and Optimization , 58(3):1579–1596, 2020. [17] Eduardo D Sontag. Universal nonsingular controls. Systems & Control Letters , 19(3):221– 224, 1992. [18] Shiva Prasad Kasiviswanathan, Homin K Lee, Kobbi Nissim, Sofya Raskhodnikova, and Adam Smith. What can we learn privately? SIAM Journal on Computing , 40(3):793–826, 2011. [19] Erkan Bayram and Mohamed-Ali Belabbas. Constructing stochastic matrices for weighted averaging in gossip networks. IFAC-PapersOnLine , 59(4):85–90, 2025. ISSN 2405-8963. 10th IFAC NECSYS 2025. [20] Erkan Bayram, Mohamed-Ali Belabbas, and Tamer Bas ¸ar. Vector-valued gossip over w-holonomic networks. arXiv preprint arXiv:2311.04455 , 2023. [21] Roger A Horn and Charles R Johnson. Matrix analysis . Cambridge University Press, 2012. [22] Simeon Reich and Rafał Zalas. Error bounds for the method of simultaneous projections with infinitely many subspaces. Journal of Approximation Theory , 272:105648, 2021. [23] Yann LeCun, L´ eon Bottou, Yoshua Bengio, and Patrick Haffner. Gradient-based learning applied to document recognition. Proceedings of the IEEE , 86(11):2278–2324, 1998.

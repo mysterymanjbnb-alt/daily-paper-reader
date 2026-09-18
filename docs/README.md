@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-17</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-18</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 26 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>11</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-17 22:49:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-18 21:40:56 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日筛选 26 篇文献，精读 11 篇、速读 15 篇，重点覆盖 LLM 智能体安全与鲁棒联邦学习两大主线。最值得看的是两篇 9.0 分工作：一是面向工具调用型 LLM 智能体的通用对抗攻击防御，二是部分参与场景下抗拜占庭的切片-Wasserstein 重心聚合方法。普通读者可先从智能体安全防御入手，再顺着速读中的 6G 具身智能联邦学习与不可靠无线网络联合优化，理解联邦学习在真实部署中的隐私与通信约束。</p>
+<p>2026-09-18 日报精选 25 篇，精读 10 篇、速读 15 篇，聚焦 AI 安全与智能体评测。最值得看的是 9.0 分的《InceptionRAG》揭示的 RAG 投毒攻击，以及 8.0 分的多机器人 CBF 安全过滤器可行性认证；速读中《RideWay》的工具型语言智能体评测和《ASLEval》的 LLM 智能体会话隐私位移也值得关注。普通读者可优先了解 RAG 系统的投毒风险与智能体隐私暴露问题，再按兴趣跟进机器人与多模态安全方向。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">11 篇</strong>
+    <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Universal Defenses for Tool-Integrated LLM Agents Against Adversarial Attacks">Universal Defenses for Tool-Integrated LLM Agents Against Adversarial Attacks</span></li><li><span class="dpr-home-dashboard-paper-title" title="SWB-DM: A Calibrated Sliced-Wasserstein-Barycenter Aggregator with Delayed-Momentum Caching for Byzantine-Robust Federated Learning under Partial Participation">SWB-DM: A Calibrated Sliced-Wasserstein-Barycenter Aggregator with Delayed-Momentum Caching for Byzantine-Robust Federated Learning under Partial Participation</span></li><li><span class="dpr-home-dashboard-paper-title" title="BLINDSPOT: A Benchmark for Safety and Refusal Calibration in Long-Horizon Tool-Using Agents">BLINDSPOT: A Benchmark for Safety and Refusal Calibration in Long-Horizon Tool-Using Agents</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="InceptionRAG: Stealthy Poisoning Attack Against Retrieval-Augmented Generation">InceptionRAG: Stealthy Poisoning Attack Against Retrieval-Augmented Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Exact Feasibility Certification and Optimal Responsibility Allocation for Multi-Robot CBF Safety Filters">Exact Feasibility Certification and Optimal Responsibility Allocation for Multi-Robot CBF Safety Filters</span></li><li><span class="dpr-home-dashboard-paper-title" title="BusMA: A Bus Communication Substrate for Multi-Agent Systems">BusMA: A Bus Communication Substrate for Multi-Agent Systems</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>8</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G">Modality-Decoupled Federated Learning for Privacy-Preserving Embodied Intelligence in 6G</span></li><li><span class="dpr-home-dashboard-paper-title" title="An Efficient and Modular Framework for Targeted Harm Mitigation in LLMS">An Efficient and Modular Framework for Targeted Harm Mitigation in LLMS</span></li><li><span class="dpr-home-dashboard-paper-title" title="Joint Optimization for Federated Learning and Transmission over Unreliable Wireless Networks with Heterogeneous Data">Joint Optimization for Federated Learning and Transmission over Unreliable Wireless Networks with Heterogeneous Data</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="RideWay: Benchmarking Efficient Task Completion for Tool-Using Language Agents">RideWay: Benchmarking Efficient Task Completion for Tool-Using Language Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Stealthy in Semantics, Antagonistic in Space: Attacking Visible-Infrared Object Detectors via Object-Level Misalignment">Stealthy in Semantics, Antagonistic in Space: Attacking Visible-Infrared Object Detectors via Object-Level Misalignment</span></li><li><span class="dpr-home-dashboard-paper-title" title="ASLEval: Measuring Privacy Exposure Displacement in LLM Agent Sessions">ASLEval: Measuring Privacy Exposure Displacement in LLM Agent Sessions</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
 </section>
 </div>
 
