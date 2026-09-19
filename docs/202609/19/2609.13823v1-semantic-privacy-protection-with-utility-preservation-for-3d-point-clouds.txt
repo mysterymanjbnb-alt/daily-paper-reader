@@ -1,0 +1,911 @@
+Title: Semantic Privacy Protection with Utility Preservation for 3D Point Clouds
+
+URL Source: https://arxiv.org/pdf/2609.13823v1
+
+Published Time: Tue, 15 Sep 2026 00:37:27 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# Semantic Privacy Protection with Utility Preservation for 3D Point Clouds 
+
+Jinchang Zhang 1, Jiakai Lin 1, David Crandall 1, Guoyu Lu 1* 
+
+> 1*
+
+Department of Computer Science, Indiana University, Bloomington, IN, 47405, USA. *Corresponding author(s). E-mail(s): guoyulu62@gmail.com; 
+
+Abstract 
+
+Point cloud data face serious semantic privacy risks during acquisition, transmission, and cross-institutional sharing. Existing methods mostly rely on geometric perturbation or destructive encryption, which can reduce the recognizability of the original class but often impair downstream usability. This paper proposes a class-transfer-based semantic encryption framework for point clouds, aiming to conceal original class information while preserving task utility and supporting authorized recovery. Specifically, we construct a unified latent space with a shared-backbone Normalizing Flow, and combine LoRA and FiLM to achieve parameter-efficient class-conditional adaptation. We further introduce diffusion-guided flow alignment to regularize the latent distribution, construct an energy-based category transition graph, and obtain an optimal class-transfer table through global matching. Then, a latent-space Neural ODE continuously evolves source-class latents into target-class latents, which are decoded into target-class point clouds through the inverse flow. We adopt attacker-oriented metrics, including New-Class Recognition Rate (NCRR), Original-Class Leakage Rate (OCLR), and Original Label Recovery Rate (OLRR), to evaluate privacy and utility. Experiments on classification and segmentation benchmarks show that the proposed method achieves controllable semantic trans-formation, effectively reduces original-class semantic leakage, preserves downstream learnability in the protected domain, and supports reliable authorized reconstruction.  
+
+> Keywords: 3D point cloud privacy, Semantic encryption, Normalizing flow, Latent-space Neural ODE
+
+# 1 Introduction 
+
+In recent years, three-dimensional (3D) point cloud deep learning has made rapid progress in tasks such as autonomous driving, robotic percep-tion, industrial inspection, and 3D reconstruction. With the development of 3D sensing technologies such as LiDAR, modern sensing devices are now capable of capturing high-precision point clouds of real-world environments [1, 2]. As a result, point clouds have become a core representation for tasks including classification, segmentation, local-ization, and 3D reconstruction [3, 4]. Despite their value in 3D vision, point clouds often contain a large amount of sensitive information, such as pedestrians, vehicles, and detailed environmental structures. Once such data are uploaded to the cloud, shared with third-party platforms, or used in cross-institution collaborative training, unau-thorized access, analysis, or retraining may lead to privacy leakage and exposure of commercial infor-mation [5, 6]. Therefore, how to reduce original semantic leakage while preserving the downstream utility of point cloud data has become a key chal-lenge in 3D vision. In the 2D image domain, 1arXiv:2609.13823v1 [cs.CV] 12 Sep 2026 extensive research has been conducted on privacy-preserving learning [7, 8], including removing sen-sitive attributes or replacing features to protect content [9, 10], constructing adversarial examples to disrupt model learning [11, 12], and adopting cryptographic techniques such as differential pri-vacy and homomorphic encryption [13]. However, due to fundamental differences in data repre-sentation, these methods are difficult to transfer directly to 3D point clouds. Point clouds are not only discrete and unordered 3D geometric sam-ples, but their privacy risks also often arise not merely from local pixels or local attributes, but from the overall object category semantics and their spatial structure. Existing point cloud privacy protection meth-ods mainly reduce the recognizability of orig-inal point clouds through coordinate shuffling, noise injection, optical chaotic encryption, or hybrid-key mechanisms [14–16]. However, such methods usually damage geometric structure, thereby weakening the usability of the protected data for downstream tasks. [17] introduces an unlearnability-oriented design, making protected point clouds harder for unauthorized models to exploit. Although these methods can suppress original-class recognition to some extent, they often sacrifice the structural stability and down-stream utility of the protected data, and con-trollable, reversible semantic-level protection for point clouds remains underexplored. However, in many real-world scenarios, data owners do not need to “destroy point clouds so thoroughly that they become unusable,” but rather to “prevent the exposure of original sensitive semantics while still allowing the shared point clouds to be used for authorized tasks.” For example, in collabora-tive autonomous driving development, point cloud data may need to be shared with third-party per-ception model providers for continued training of detection or segmentation modules; in industrial inspection and warehouse logistics, 3D scanned data may need to be shared with collaborators for scene understanding, defect recognition, or robotic grasping; in robotic perception and 3D recon-struction, shared point clouds often still need to retain downstream learnability. If only strongly destructive geometric perturbations or local occlu-sion are applied, the original class may indeed become harder to recognize, but the shared data may simultaneously lose geometric interpretability and training value. Therefore, when the privacy risk comes from overall category semantics rather than local attributes, merely relying on attribute suppression, local occlusion, or destructive geo-metric transformations is insufficient. Motivated by this, we study a semantic-level privacy pro-tection problem: given an original point cloud sample, we aim to transform it into another reasonable target-category representation without exposing its original category semantics, while preserving downstream utility as much as possible and supporting authorized recovery of the orig-inal representation. In other words, our goal is not to make the data entirely unlearnable, but to reduce the risk of original-category seman-tic leakage while retaining the value of the data for tasks such as classification and segmentation. Our adopts a reversible class-to-class transfor-mation because, if what must be concealed is the overall category identity of an object, merely deleting local regions or perturbing local geome-try is often insufficient to eliminate global cate-gory cues; meanwhile, unguided strong geometric destruction may effectively reduce original-class recognition, but usually cannot guarantee that the transformed sample remains a semantically coherent and learnable point cloud. In contrast, class-to-class semantic transformation moves asample from the original class semantic mani-fold to another reasonable target-class semantic manifold. This both weakens the direct seman-tic correspondence between the shared sample and its original class, thereby reducing the risk of original semantic leakage, and preserves the structural plausibility and learnability of the sam-ple in the protected domain. To the best of our knowledge, this is the first semantic encryp-tion framework for 3D point clouds that achieves semantic-level privacy protection through class-conditioned reversible transformations. Specifi-cally, we first construct a Normalizing-Flow-based latent representation framework that maps point clouds into a shared latent space, and intro-duce LoRA [18] and FiLM [19] into the Flow backbone to enable parameter-efficient multi-class modeling and lightweight adaptation. Based on this, we define a Category Transition Energy between every pair of classes and formulate cat-egory assignment as a minimum-cost matching problem to obtain an optimal category mapping table. Finally, we introduce a Neural-ODE-based 2continuous reversible flow in the latent space, allowing samples to migrate smoothly between class-specific manifolds and be decoded back into point cloud space through the inverse Flow, thereby generating encrypted point clouds with transformed categories. Our framework explicitly pursues three objectives simultaneously: suppress-ing original-category semantic leakage, preserving downstream utility in the protected domain, and supporting authorized recovery. This paper is directly relevant to the theme of the special issue, “Trustworthy Open-World Visual Recognition.” The special issue explicitly highlights privacy and security risks in visual recognition systems, and specifically welcomes research on privacy-preserving techniques and adaptation to open environments. This work stud-ies the problem of semantic privacy protection in 3D point cloud sharing scenarios. Its core objective is to reduce the risk of original-class semantic leakage while preserving the learnability and recoverability of the protected representation, which makes it highly consistent with the privacy-preserving techniques direction emphasized by the special issue. In addition, the proposed frame-work further considers the incremental adaptation capability to unseen categories, which also res-onates with the need for dynamic expansion in open environments. Overall, this paper provides a new semantic-level solution for trustworthy pri-vacy protection in 3D vision. We summarize our contributions as follows: 1. To the best of our knowledge, we propose the first semantic encryption framework for 3D point clouds, which achieves semantic-level privacy pro-tection by applying class-conditioned reversible transformations to point cloud samples. 2. We integrate LoRA and FiLM into the Flow model to enable parameter-efficient fine-tuning with shared weights. 3. We employ a Normalizing Flow to con-struct the latent representation of point clouds and compute a Category Energy Graph. 4. A Neu-ral ODE Flow is adopted to realize continuous class-to-class transformations in latent space. Our framework is showed in Fig. 1. 
+
+# 2 Related work 
+
+2.1 Visual Privacy Protection 
+
+With the rapid development of computer vision, privacy protection for 2D images and videos has been extensively investigated. Early work by Sweeney [20] systematically defined the notion of data privacy and highlighted potential pri-vacy risks inherent in visual data such as images and videos. More recently, a range of repre-sentative studies [9, 21] have focused on facial privacy protection, aiming to conceal identity-related attributes while preserving the usability of visual data for downstream tasks including detec-tion, recognition, and tracking. For instance, GAN approaches [9, 22] synthesize faces with controlled identity characteristics. Adversarial methods [12] protect privacy by introducing carefully designed perturbations that mislead recognition systems. Overall, prior work has convincingly demonstrated the feasibility of privacy protection in the 2D visual domain. Nevertheless, most existing meth-ods are inherently tailored to 2D data, and privacy protection for 3D point clouds remains compar-atively underexplored. Unlike images, 3D point clouds encode geometric structures, leading to fundamentally different privacy risks and protec-tion requirements. Recent point cloud understand-ing methods have focused on jointly modeling global context and local geometry, as demon-strated by GPSFormer [23]. Dynamic acoustic field fitting [24] further improves local geometric representation for point cloud understanding. For few-shot point cloud semantic segmentation, Tay-lorSeg [25] formulates the task as a local polyno-mial fitting problem and captures multi-order geo-metric structure. DyPolySeg [26] extends this idea through dynamic polynomial fitting for stronger few-shot segmentation performance. Reasoning Beyond Points [27] further enhances few-shot 3D segmentation through a visual introspective rea-soning framework beyond point-level matching. For example, [28] introduce a flow-based genera-tive framework that perturbs point cloud geome-try while retaining categorical semantics, thereby striking a trade-off between geometric distortion and semantic preservation. [14] proposed a point cloud privacy protection method based on optical chaotic encryption. [15] further proposed a point cloud encryption method based on hybrid key 3Flow (Shared Weight)     
+
+> Latent Space
+> Inverse Target Flow Latent feature (Source) diffusion feature Point Cloud Point Cloud Feature Category
+> Transition Table Latent feature (Target) Pointnet++ FiLM
+> LoRA
+> Class
+> Embeding diffusion feature (Class 2) diffusion feature (Class 1) diffusion feature (Class n) diffusion feature (Class n-1) diffusion feature (Class 3)
+> Neural ODE Transition
+> Source Class Target Class
+> Target Point Cloud
+> Semantic-Contrastive Loss
+> Dispersion Regularization Loss
+> Dual-Level Scale Control
+> Diffusion Guided Flow Alignment
+> Distribution Alignment Loss Reversibility Consistency Loss
+> Local Energy Smoothness Loss
+> Forward
+
+Fig. 1 Overview of the framework. First, the input point cloud is encoded by PointNet++ into point cloud features, which are fed into a shared-weight Flow model together. Under the modulation of class embeddings, LoRA and FiLM jointly provide dual-level scale control, yielding the source latent representation. In the latent space, the corresponding target class is determined by the category transition table, and a neural ODE is used to continuously evolve the source latent into the target latent representation. Finally, the target latent is decoded into a target-class point cloud via the inverse target Flow, achieving semantic-level point cloud encryption and class-wise transformation. 
+
+and spatial maintenance. These methods mainly reduce the recognizability of the original point cloud through geometric perturbation, but do not consider the task usability of the protected point cloud after encryption. By contrast, UMT [17] constructs “unlearnable” 3D point clouds through class-related transformations, making it difficult for unauthorized users to train effective models on the protected data; however, its perfor-mance in the transformed domain largely depends on a fixed transformation-label correspondence. In contrast, our method explicitly models inter-class relationships and controlled migration pro-cesses at the semantic level. The key point is that relying only on geometric perturbation can usually reduce the recognizability of the origi-nal category, but it is difficult to simultaneously guarantee the stability and usability of the pro-tected representation. Methods that depend on a fixed transformation-label correspondence are also often constrained by predefined transformation rules in their transformed-domain performance. In this work, we formulate the protection process as a category-level semantic redirection, so that the point cloud can suppress leakage of the original class semantics while still forming a protected rep-resentation with stable organizational structure. Therefore, compared with existing methods, the main characteristic of our approach is that it not only focuses on making the original point cloud unrecognizable, but also further emphasizes mak-ing the protected representation still learnable and usable after encryption, which makes it more suit-able for application scenarios where both privacy protection and downstream task usability must be considered simultaneously. 
+
+2.2 Normalizing Flow Models 
+
+Normalizing Flow models constitute a class of generative models with strictly invertible architec-tures, which transform complex data distributions into more tractable latent distributions through bijective mappings. Representative models such as RealNVP [29] and Glow [30] employ affine coupling layers and invertible 1 ×1 convolutions, respectively, enabling efficient modeling of high-dimensional distributions while maintaining exact invertibility. Owing to these properties, normaliz-ing flows have been widely applied to image gen-eration, speech modeling, and three-dimensional point cloud generation, including PointFlow [31]. To further improve controllability, Conditional Normalizing Flows [32] incorporate auxiliary conditions into the flow mapping, thereby sup-porting conditional generation and multimodal reversible transformations. With the advent of continuous-time dynamical systems, flow-based models have been reformulated within continuous frameworks, such as Neural Ordinary Differen-tial Equations [33], which learn smooth vector fields connecting noise and data distributions and often lead to more stable training and conver-gence. Building on these developments, Diffusion Flow [34] integrates diffusion noise scheduling with flow models, combining robustness with computational efficiency. Despite these advances, most existing flow-based approaches are primarily designed for generation tasks, and their poten-tial for semantic-level encryption of point clouds remains largely unexplored. In this work, we therefore formulate the flow transformation as an invertible encryption process that enables category-level conversion of point clouds, thereby providing effective semantic privacy protection. 43 Method 
+
+3.1 Problem Definition 
+
+This paper does not merely focus on point cloud encryption, but rather studies a semantic pri-vacy protection problem that better aligns with practical point cloud sharing needs. Given an orig-inal point cloud sample, our goal is to transform it into another plausible target-class representa-tion without exposing its original class semantics, while preserving as much utility as possible for downstream tasks and supporting recovery of the original representation under authorized condi-tions. In other words, our objective is not to make the data completely unlearnable, but to reduce the risk of original class semantic leakage while retain-ing its value for classification, segmentation, and subsequent modeling tasks. This problem is moti-vated by clear real-world scenarios. In applications such as autonomous driving, industrial inspec-tion, warehouse logistics, robotic perception, and 3D scanning, point cloud data often need to be shared across different organizations, platforms, or algorithmic modules. However, these point clouds usually contain sensitive class-level semantic infor-mation, such as specific equipment, goods, vehicle types, facility categories, or environmental seman-tics. If the original point clouds are shared directly, the receiving party may recover these sensitive semantics through training or inference, thereby causing privacy leakage or exposure of commer-cially sensitive information. Therefore, the practi-cal need is not to destroy the data completely, but to ensure that the shared data remain usable for downstream tasks without revealing the original sensitive semantics. Under this setting, we assume that the data owner only releases semantically transformed point clouds and does not disclose the original point clouds. An attacker can access the transformed samples and attempt to recover or infer their original class semantics. Accordingly, the “privacy” considered in this paper means that the original class semantics should not be directly identifiable or effectively recoverable from the shared point clouds. Category transfer can mitigate privacy risk because it controllably moves a sample from the semantic manifold of its orig-inal class to that of another target class. After transformation, the sample no longer maintains a direct semantic correspondence with the origi-nal class, which reduces the attacker’s ability to identify or recover the original semantics. At the same time, because the sample remains within a plausible target-class semantic space, its struc-tural interpretability and task learnability can be preserved as much as possible. 
+
+3.2 Conditional Flow for Reversible Mapping 
+
+This section presents a point cloud encryption and reversible transformation framework built upon Conditional Normalizing Flows. The pro-posed model jointly takes point clouds and their associated features as input, and learns a class-conditioned reversible mapping of point cloud distributions. By enforcing class-conditional constraints in the latent space, the framework achieves stable intra-class representations while ensuring clear separability across different classes, enabling effective encrypted transformations. 
+
+Conditional Flow Model: Given an input point cloud X = {xi}Ni=1 and semantic features 
+
+F = {fi}Ni=1 extracted by a Transformer encoder, each point is represented as: ui = [ xi, f i] ∈ R3+ df .
+
+To achieve class-level reversible control, the dis-crete category label y ∈ { 1, . . . , C } is represented as a continuous embedding vector ey ∈ Rdy . We define a trainable class embedding matrix E =[e1, . . . , e C ], where each ey corresponds to a learn-able parameter for class y. To inject semantic information, we further introduce textual embed-dings e(text)  
+
+> y
+
+from pretrained language models (e.g., CLIP). The two embeddings are fused via a MLP: ey = MLP  [ e(train)  
+
+> y
+
+, e (text)  
+
+> y
+
+]. The con-ditional flow model fθ(·| ey ) learns a bijective mapping between input and latent spaces: zi =
+
+fθ(ui|ey ), ui = f −1 
+
+> θ
+
+(zi|ey ), where zi ∼ N (0 , I ). This ensures both reversibility and information preservation. The Flow model consists of multiple affine coupling layers, where each layer performs a reversible transformation between two partitions of the input feature vector. In our framework, the Flow is feature-guided: each point representation 
+
+ui = [ xi, f i] is split into two parts, denoted by (ua, u b), and transformed into ( va, v b) as va =
+
+ua, v b = ub ⊙ exp  s(ua, e y ) + t(ua, e y ), with the inverse transformation ua = va, u b =  vb −
+
+t(va, e y ) ⊙ exp   − s(va, e y ), where s(·) and t(·)5denote the scale and translation functions, respec-tively. In practice, both s(·) and t(·) are imple-mented as MLPs that take the first partition x1
+
+and the class embedding ey as inputs. Each MLP consists of hidden layers producing intermediate feature activations h(l): h(l+1) = σ W (l)h(l) +b(l),
+
+where σ(·) denotes a non-linear activation func-tion GELU. The coupling guarantees invertibility, and its log-likelihood is analytically computable. This design maintains strict reversibility while supporting end-to-end optimization. 
+
+LNLL = − log p(z) − X
+
+> i
+
+log det ∂f θ (ui|ey )
+
+∂u i
+
+. (1) 
+
+3.3 Parameter Sharing 
+
+In multi-class point cloud modeling, training an independent set of Normalizing Flow parame-ters for each category would result in a linear growth of model size, increasing both training and storage costs. Moreover, such an approach ignores the underlying geometric commonality shared across classes, making it difficult to achieve semantic-level generalization. To address these issues, we propose a Dual Modulation Mecha-nism based on parameter sharing, built upon a shared Flow backbone; our architecture and the original Flow design are jointly illustrated in Fig. 2, enabling lightweight cross-class adapta-tion while maintaining strict reversibility of the Flow model. (1) LoRA Parameter Modula-tion. In an invertible Flow, each affine coupling layer contains a scale network s(·) and a trans-lation network t(·), parameterized by learnable weights Ws and Wt. Training an independent pair (Ws, W t) for each class would cause the model size to grow linearly with the number of cate-gories. To mitigate this issue, we adopt LoRA to enable parameter-efficient class adaptation by applying low-rank updates to the shared weights: 
+
+W ′ 
+
+> s
+
+= Ws + αs(ey ) BsAs, W ′ 
+
+> t
+
+= Wt + αt(ey ) BtAt,
+
+where ( As, B s) and ( At, B t) are globally shared low-rank matrices, and αs(ey ) and αt(ey ) are class-conditioned modulation coefficients pre-dicted from the class embedding ey (lightweight MLP). This design achieves class-specific parame-ter adaptation through low-rank perturbations on shared weights, substantially reducing the over-all parameter budget while retaining multi-class modeling capacity. (2) FiLM Feature Modu-lation. Beyond parameter adaptation, we further introduce FiLM to achieve semantic control at the feature level. Given an intermediate feature h and the class embedding ey , FiLM generates scaling and shifting coefficients ( γ, β ) and applies feature-wise modulation: h′ = γ([ h, e y ]) ⊙ h + β([ h, e y ]) .
+
+Within each affine coupling layer, FiLM is com-bined with LoRA to modulate the outputs of the scale and translation subnetworks. Let ua and ub
+
+denote the two partitions of the input point rep-resentation, and let ha denote the intermediate feature used for FiLM conditioning in the coupling subnetwork.                 
+
+> s′(ua, e y) = γs([ ha, e y]) ⊙sLoRA (ua, e y) + βs([ ha, e y]) ,t′(ua, e y) = γt([ ha, e y]) ⊙tLoRA (ua, e y) + βt([ ha, e y]) .
+> (2)
+
+The resulting class-conditional affine coupling transformation is          
+
+> vb=ub⊙exp  s′(ua, e y)+t′(ua, e y).(3)
+
+This design preserves the affine coupling form, and thus maintains strict invertibility while enabling class control at both parameter and feature levels. 
+
+Dual-Level Scale Control: Since there exist significant geometric and semantic scale differences among classes and instances, direct reversible mapping may lead to latent space degra-dation and unstable decoding. We introduce a dual-level scale control module to ensure consis-tency and reversibility. For each point, the joint scale factor is defined as: 
+
+si = αg (ey )∥xi − μX ∥ + αs(ey )∥fi − μF ∥, (4) where αg , α s are class-dependent geometric and semantic scaling weights, and μX , μ F are sam-ple means. Inputs as: ˜ xi = xi−μX 
+
+> si
+
+, ˜fi = fi−μF 
+
+> si
+
+,
+
+ensuring comparability across categories in adimensionless space. During the inverse transfor-mation: xi = si · ˜xi + μX , fi = si · ˜fi + μF , thus restoring the geometric structure. 
+
+Semantic-Contrastive and Dispersion Regularization: To further enhance structural consistency of the class-conditional latent space, we introduce a semantic contrastive loss and a class embedding dispersion regularizer. The for-mer enforces intra-class compactness and inter-class separation, while the latter prevents embed-ding collapse and ensures disentangled class mod-ulation directions. For each latent variable zi =
+
+fθ(ui|eyi ), the class center as: cy = 1
+
+> Ny
+
+P 
+
+> i:yi=y
+
+zi.
+
+The semantic contrastive loss is:            
+
+> Lcontrast =−X
+> i
+> log exp(sim( zi, c yi)/τ )
+> P
+> y′exp(sim( zi, c y′)/τ ).(5)
+
+Class embedding dispersion regularization as: 6Class          
+
+> Embeding
+> x1 x2
+> t(x1) s(x1)
+> y2 y1
+> exp
+> Input Output
+> Affine Coupling Layer
+> f( )h
+> Wt,bt
+> Ws,bs
+> x1 x2
+> t(x1)
+> s(x1)
+> y2 y1
+> exp Input Output Affine Coupling Layer (Shared Weight) f( )h'
+> Wt, bt Ws, bs FiLM
+> Wt', bt
+> Ws', bs
+> Flow (Class1,2, ,m)
+> Shared Weight e(y) e(y) LoR
+> A
+> hFig. 2 Comparison between the proposed parameter-efficient conditional Flow and the standard Glow model. The proposed model (left) freezes the shared Flow backbone and introduces dual modulation for lightweight adaptation across classes: LoRA performs parameter-level low-rank fine-tuning, while FiLM provides feature-level semantic modulation. In contrast, the standard Glow (right) trains an independent Flow model for each class.
+
+Ldisp = 1
+
+C(C − 1) 
+
+X
+
+> i̸=j
+
+max(0 , τ e − ∥ eyi − eyj ∥22). (6) 
+
+These regularizers shape the CNF model to form reversible latent distributions that are compact within classes and separable across classes, achiev-ing semantically consistent geometric mappings. 
+
+3.4 Diffusion Flow Alignment 
+
+Although our Flow model fθ(x | ey ) possesses strict invertibility and explicit density estimation capability, its latent space lacks explicit semantic constraints, leading the class-conditional distribu-tions pθ(z | y) to exhibit unstable intra-class struc-tures and overlapping inter-class regions, which in turn weakens both the separability of point cloud representations and the robustness of the encryption process. To address this issue, we pro-pose a Diffusion–Guided Flow Alignment (DGFA) framework, where the Diffusion model acts as a semantic regularizer for the Flow model. Through a temporally continuous noise diffusion process, the Diffusion module models the dynamic mani-fold of the latent distribution: it not only captures intra-class structural continuity but also implicitly learns the inter-class distribution gradient field (score field). Consequently, the Diffusion model learns a globally smooth and semantic distribution prior pϕ(z|y), which serves as a structural regu-larizer for the Flow latent space. Specifically, we first train a Flow model to obtain the latent rep-resentation z = fθ(x|ey ), and then train a class-conditional Diffusion model pϕ(z|y) within this Flow latent space to learn and stabilize the class-conditional structure of the latent distributions. This design anchors the Diffusion process within the Flow’s invertible mapping domain, thereby providing smoothness and semantic kernel align-ment as regularization constraints. The forward and reverse diffusion processes are formulated as: 
+
+z0 = fθ(x|ey ), zt = √αtz0 + √1 − αt ϵ, (7) where ϵ ∼ N (0 , I ), z0 denotes the latent variables produced by the Flow model, and zt represents the noisy intermediate states. Thus, the Diffusion learning domain is strictly confined within the Flow’s latent space, ensuring consistency between the two models. The Diffusion model aims to pre-dict the injected noise ϵϕ(zt, t, e y ), thereby learn-ing the structural manifold of the Flow’s latent distribution: Ldiff = Ez0,t,ϵ,y [∥ϵ − ϵϕ(zt, t, e y )∥22].
+
+Training Strategy: To prevent the Diffusion module from interfering with the early conver-gence of the Flow model, we adopt a three-stage progressive training strategy to achieve stable co-optimization of geometric and semantic struc-tures. In the first stage, the Flow model fθ(x|ey )is independently pretrained to establish a stable and reversible geometric mapping between point clouds and latent space. In the second stage, the parameters of the Flow model are frozen, and a class-conditional Diffusion model pϕ(z|y) is trained in the Flow’s latent space. Through the noise perturbation and denoising reconstruction processes, the Diffusion model learns a smooth and semantically consistent class-conditional dis-tribution, forming a global structural prior for the latent space. In the third stage, joint fine-tuning is performed by introducing a Distribution Alignment Loss to enforce probabilistic consis-tency between Flow and Diffusion. Specifically, we employ the symmetric KL divergence as the alignment objective:           
+
+> Lalign =DKL (pθ(z|y)∥pϕ(z|y)) + DKL (pϕ(z|y)∥pθ(z|y)) .
+> (8)
+
+where, pθ (z|y) denotes the class-conditional latent distribution modeled by Flow, while pϕ(z|y) rep-resents the semantic kernel distribution learned by Diffusion within the same latent space. This alignment mechanism forces the latent structure of the Flow model to gradually converge toward 7the smooth semantic kernels defined by the Dif-fusion model. Although Diffusion is trained on latent samples from Flow, its objective based on global noise smoothing and score alignment induces a distribution in latent space that is smoother and more semantically organized than Flow itself, and regularizes Flow through the alignment loss, thereby improving semantic con-sistency and linear separability while preserving geometric invertibility. 
+
+3.5 Category Transition Energy 
+
+Building on the latent space and parameter sharing established by the conditional Flow model—further aligned via diffusion—we intro-duce a measurable criterion to assess semantic/-geometric proximity between classes and to guide source to target pairing and evolution. To this end, we define the Category Transition Energy to quan-tify the migration cost in latent space from class a to b: intuitively, the energy is lower when the two classes are more similar in latent distribution and geometry, and higher when they differ substan-tially or exhibit pronounced geometric distortion. 
+
+Integral Form Definition. Let the latent energy field be defined as Eϕ(z, y ) = − log pϕ(z|y),
+
+where pϕ(z|y) denotes the latent distribution of class y learned by the diffusion model. Then, the energy transition from class a to b as a path integral over the energy gradient:       
+
+> Ea→b=Ez∼pϕ(z|ya)
+> "Z10
+> ∥∇ zEϕ(γ(t), y t)∥22dt
+> #
+> ,(9)
+
+where Eϕ(z, y ) = − log pϕ(z|y) is the latent energy potential defined by the diffusion model, 
+
+γ(t) denotes the continuous latent trajectory from class a to b, and yt is the interpolated class label along the path. This integral mea-sures the expected squared gradient of the energy potential along the trajectory, representing the “energy flow cost” between two latent distribu-tions. Center–Distribution Approximation 
+
+Since directly computing the path integral is computationally expensive, it can be approxi-mated under two reasonable assumptions: Local Quadratic Assumption. The energy function of class y around its latent center can be approxi-mated by a quadratic potential: 
+
+Eϕ(z, y ) ≈ 12 (z − μy )⊤Σ−1 
+
+> y
+
+(z − μy ), (10) where μy and Σ y denote the mean and covariance of class y in the latent space, respectively. Lin-ear Transition Path. The trajectory between categories can be approximated as a linear inter-polation: γ(t) = (1 − t)μa + tμ b. Under these conditions, the gradient term can be written as; 
+
+∇z Eϕ(γ(t), y t) ≈ Σ−1 
+
+> y
+
+(γ(t) − μy ). (11) Squaring and integrating along the path yields a term proportional to the geometric center differ-ence: R 10 ∥∇ z Eϕ(γ(t), y t)∥22dt ≈ ∥ μa − μb∥22.
+
+Covariance Stability and Distributional Difference. If the covariance difference between classes is small, its variation can be absorbed as a distributional regularization term, measured by the Kullback–Leibler divergence:     
+
+> DKL (pϕ(z|ya)∥pϕ(z|yb)) =
+> Z
+> pϕ(z|ya) log pϕ(z|ya)
+> pϕ(z|yb)dz.
+> (12)
+
+This term captures the shape discrepancy between the latent distributions of different categories as learned by the diffusion model. Combining the above approximations, the Category Transition Energy defined as:         
+
+> Ea→b≈ ∥ μa−μb∥22+λEDKL
+>  pϕ(z|ya)∥pϕ(z|yb)
+> (13)
+
+where λE is a weighting coefficient that balances the relative influence of geometric center differ-ence and distributional discrepancy. ∥μa − μb∥22
+
+represents the geometric distance between latent centers, while the DKL captures the distributional energy difference between category shapes. 
+
+3.6 Category Transition Energy Approximation 
+
+To better understand the definition of inter-class energy, this section derives a closed-form approx-imation of the category transition energy from a path integral formulation, expressed as the sum of a center difference and a distribution difference term. We first define the complete integral form of the Category Transition Energy in Equ 9. 
+
+Local Quadratic Expansion and Gradi-ent Form: Under the local smoothness assump-tion in the latent space, the energy function can be approximated by a quadratic form: 
+
+Eϕ(z, y ) ≈ 12 (z − μy )⊤Σ−1 
+
+> y
+
+(z − μy ), (14) where μy and Σ y denote the mean and covariance of class y in the latent space, respectively. The 8gradient term is thus: ∇z Eϕ(z, y ) = Σ −1 
+
+> y
+
+(z − μy ).
+
+Substituting into the integral yields: 
+
+∥∇ z Eϕ(γ(t), y t)∥22 = ( γ(t)−μyt )⊤Σ−2 
+
+> yt
+
+(γ(t)−μyt ).
+
+(15) 
+
+Emergence of the Center Difference Term: If the covariance matrix Σ yt varies only slightly along the path, it can be treated as a con-stant or its expectation ¯Σ. Then, the path integral can be approximated as: 
+
+Z 10
+
+∥∇ z Eϕ(γ(t), y t)∥22 dt ≈ (μa−μb)⊤ ¯Σ−2(μa−μb).
+
+(16) Equ 16 ∝ ∥μa − μb∥22. This yields the center difference term , which represents the geomet-ric energy distance between class means in the latent space. Covariance Variation Term and Distribution Difference Approximation: To further account for the variation of the covariance Σyt along the trajectory, the energy integral can be expanded as: 
+
+Z 10
+
+tr Σ−2 
+
+> yt
+
+(Σ a − Σb) dt +( μa −μb)⊤Σ−1 
+
+> yt
+
+(μa −μb).
+
+(17) The first term reflects energy shifts induced by covariance variation, while the second term corre-sponds to the geometric energy difference caused by mean displacement. However, directly com-puting the above integral is expensive and esti-mating the continuous covariance variation along the path is difficult. Therefore, we introduce a statistically tractable and semantically equiv-alent measure—the Kullback–Leibler (KL) divergence —to quantify the overall discrepancy between the two latent distributions:      
+
+> DKL
+>  pϕ(z|ya)∥pϕ(z|yb)=
+> Z
+> pϕ(z|ya) log pϕ(z|ya)
+> pϕ(z|yb)dz.
+> (18)
+
+Physically, this represents the expected “extra energy cost” incurred when samples from class a
+
+are explained by the latent distribution of class 
+
+b, i.e., it measures the energy asymmetry between the two distributions. Assuming both latent dis-tributions are approximately Gaussian, the KL divergence has a closed-form solution:              
+
+> DKL
+>  pϕ(z|ya)∥pϕ(z|yb)=12
+> 
+> tr(Σ −1
+> bΣa)+( μb−μa)⊤Σ−1
+> b(μb−μa)−k+ log det Σ b
+> det Σ a
+> 
+> .
+> (19)
+
+where k denotes the dimensionality of the latent space. In this expression: tr(Σ −1 
+
+> b
+
+Σa) captures the covariance-induced energy difference; ( μb −
+
+μa)⊤Σ−1 
+
+> b
+
+(μb − μa) corresponds to the geometric energy from mean displacement; the remaining terms are dimensional and normalization correc-tions. Thus, the covariance variation component can be absorbed into a KL-based distribution dif-ference regularization term, replacing the original covariance energy offset in the integral, making the category transition energy more stable and statistically interpretable. 
+
+Final Approximate Expression: Combin-ing the above derivations, the Category Transi-tion Energy can be approximated as: 
+
+Ea→b ≈ ∥ μa − μb∥22 + λE DKL 
+
+ pϕ(z|ya) ∥ pϕ(z|yb)
+
+(20) where λE is a balancing coefficient controlling the relative contributions of geometric center differ-ence and distributional shape discrepancy. The first term ∥μa −μb∥22 corresponds to the geometric center offset of the energy field; The second term 
+
+DKL captures the distributional energy difference induced by covariance variation. This hybrid form serves as a computationally tractable approxima-tion of the original energy integral, preserving geo-metric interpretability while reflecting semantic distributional variation— an effective formulation for measuring class-wise energy distance under the Flow–Diffusion framework. 
+
+3.7 Category Energy Graph 
+
+Category Energy Graph: After computing the category transition energy Ea→b, all inter-class energy relations can be organized into a directed weighted graph: G = ( V, E), where the node set 
+
+V = {v1, v 2, . . . , v C } represents all categories, and the directed edge set E ⊆ V × V indicates possible category transitions. Each directed edge ( vi, v j ) is assigned a weight: wij = Ei→j , representing the energy required for transitioning from category i
+
+to category j. Due to the inherent asymmetry of the KL divergence in energy:          
+
+> DKL
+>  pϕ(z|yi)∥pϕ(z|yj)̸=DKL
+>  pϕ(z|yj)∥pϕ(z|yi),
+> (21)
+
+it follows that Ei→j̸ = Ej→i. Hence, the system is formulated as an asymmetric energy graph. Each edge in the latent space represents a one-way energy flow between categories, reflecting the irre-versibility of energy propagation. For computa-tional convenience, all inter-category energy rela-tionships are organized into an asymmetric energy 9matrix E, where each row denotes the energy dis-tribution from one category to all others, and each column represents the energy accumulation received from all other categories. 
+
+Solving for the Optimal Mapping: Once the energy graph is constructed, the next goal is to find, for each category i, a unique target category 
+
+j∗ that minimizes the transition energy without repetition across the entire set. Formally, this can be expressed as: min π∈S C
+
+PCi=1 Ei→π(i), where π
+
+denotes a mapping permutation among categories, and SC is the set of all possible permutations. This optimization corresponds to the minimum-weight perfect matching problem. To efficiently obtain the globally optimal matching, the Hungar-ian Algorithm is employed, with a time complexity of O(C3), ensuring an exact optimal solution. The algorithm takes the energy matrix E as input and outputs an optimal matching matrix M defined as a binary mapping matrix M ∈ { 0, 1}C×C , where 
+
+Mij = 1 if category i is mapped to category j,and Mij = 0 otherwise. The matching matrix satisfies the constraints: P 
+
+> i
+
+Mij =1, P 
+
+> j
+
+Mij =1, ensuring that each category is uniquely mapped to one target category without duplication. Through the optimal matching result, the final energy map-ping relationship can be expressed as: i → π(i), energy = Ei→π(i).
+
+3.8 Category Transition Flow 
+
+We established the globally optimal category matching set M = {(ya, y b)} through the con-struction of the category transition energy graph. We now aim to build a continuous, reversible, and structurally stable transformation mechanism in the latent space. To this end, we introduce a continuous flow modeling approach based on Ordinary Differential Equations (ODEs), which dynamically describes the category transition pro-cess while keeping the energy variation along the flow path as small as possible. Traditional cate-gory transformations are often based on discrete mappings or conditional generation, which ignore the continuous geometric structure of the latent space. To achieve smooth inter-category transi-tions, we adopt an ODE-based continuous flow:  
+
+> dz t
+> dt
+
+= gψ (zt, e yt ), t ∈ [0 , 1] , where zt ∈ Rd
+
+is latent variable at time t; gψ (·) is neural net-work–parameterized flow field function; eyt : the class-conditioned embedding, obtained via lin-ear interpolation between the source and target embeddings: eyt = (1 − t)eya + te yb ; t denotes continuous time parameter controlling the tran-sition degree between categories. By integrating over time, the continuous mapping from A to B:
+
+Ta→b(za) = za +
+
+Z 10
+
+gψ (z(t), e yt ) dt. (22) This ODE formulation ensures continuity, reversibility, and physical interpretability, since the transformation can be exactly recovered via backward integration: Tb→a(Ta→b(za)) = za.
+
+However, without additional physical constraints, the unconstrained neural flow field gθ may cause undesired energy drift or distribution shift, as different categories may have distinct energy landscapes, leading to semantic drift or struc-tural distortion. Therefore, we introduce a local energy smoothness constraint to regularize the flow dynamics. Given Eϕ(z, y ), we require that during category transitions, the energy variation along the trajectory remains minimal: 
+
+dz dt = gψ (z, e yt ), s.t. Eϕ(z(t), y t) ≈ const. (23) This condition implies that, during the transfor-mation from category A to B, the sample’s energy in latent space should change as little as possi-ble. In other words, the direction of gψ should be approximately orthogonal to the energy gradient field ∇z Eϕ, allowing the flow to slide smoothly along iso-energy surfaces. This ensures that the category transition adheres to the principle of minimal energy perturbation.        
+
+> ddt Eϕ(zt, y t) = ∇zEϕ(zt, y t)⊤gψ(zt, e yt)≈0.(24)
+
+Continuous Category Mapping: Under the above constraint, the continuous category transformation is defined:             
+
+> Ta→b(za) = za+
+> Z10
+> gψ(z(t), e yt)dt,
+> s.t. ∇zEϕ(zt, y t)⊤gψ(zt, e yt)≈0.
+> (25)
+
+During inference, the original category can be recovered by backward integration: 
+
+Tb→a(zb) = zb −
+
+Z 10
+
+gψ (z(t), e y1−t ) dt, (26) thus satisfying strict reversibility: Tb→a(Ta→b(za)) = za. That ensures that the category transition follows continuous dynamic laws while maintain-ing energy balance throughout the process. 10 3.8.1 Energy Conservation Constraint 
+
+In the reversible flow modeling of category tran-sitions, the evolution of the latent space is driven by the neural flow field gθ (zt, e yt ). However, due to structural discrepancies among category dis-tributions, different categories often correspond to distinct energy landscapes Eϕ(z, y ). Without proper constraints, the model may produce local energy oscillations, trajectory distortions, or gra-dient explosions during inter-category mapping, which can break reversibility and global stability. To address this, we introduce an energy conser-vation constraint during training to regulate the relationship between the flow direction and the energy gradient, ensuring that the latent dynamics remain balanced and smooth in the energy space. 
+
+Motivation. During the transition from cat-egory ya → yb, the category energy function 
+
+Eϕ(z, y ) characterizes the statistical potential landscape of samples in the latent space. Since the energy difference between categories inher-ently exists, i.e., Eϕ(z, y a)̸ = Eϕ(z, y b), the cat-egory transformation must involve global energy variation. However, the purpose of the energy conservation constraint is not to eliminate this dif-ference, but rather to ensure that the transition path itself does not introduce extra energy dissi-pation or artificial energy amplification. In other words, the model should perform smooth energy-level sliding along iso-energy surfaces, instead of chaotic traversal across different energy layers. Let 
+
+Eϕ(zt, y t) denote the potential energy of latent state zt under category yt. Its time derivative is: 
+
+ddt Eϕ(zt, y t) = ∇z Eϕ(zt, y t)⊤ dz t
+
+dt 
+
+= ∇z Eϕ(zt, y t)⊤gθ(zt, e yt ).
+
+(27) To achieve energy conservation, we constrain this temporal derivative to approach zero through-out the flow process: 
+
+∇z Eϕ(zt, y t)⊤gθ(zt, e yt ) ≈ 0. (28) Accordingly, the energy conservation reg-ularization term is defined as: 
+
+Lenergy = Ezt
+
+ ∇z Eϕ(zt, y t)⊤gθ (zt, e yt ) . (29) This regularization suppresses the component of the flow field along the energy gradient direction, forcing samples to move primarily along iso-energy surfaces, thereby maintaining local equilibrium in the latent energy structure. From a latent-space geometric perspective, different category distribu-tions p(z|y) can be viewed as manifolds lying on distinct energy surfaces Eϕ(z, y ) = cy . If the direc-tion of gθ is not orthogonal to the energy gradient 
+
+∇z Eϕ, the flow trajectories will frequently cross energy layers, causing disordered fluctuations and density compression in the energy domain. The model is encouraged to learn energy-level sliding directions that satisfy: gθ(zt, e yt ) ⊥ ∇ z Eϕ(zt, y t),
+
+allowing samples to deform continuously along work-free paths on the energy landscape. This flow behavior preserves the stability of the energy structure and prevents geometric distortion or density collapse in the latent evolution. 
+
+Effect on ODE Integration. The energy conservation constraint acts as a smooth regular-izer in the ODE integration process. When gθ fre-quently aligns with ∇z Eϕ, the local gradient mag-nitude ∥∇ z Eϕ∥ becomes excessively large, causing abrupt step-size variations in the ODE solver. This leads to unstable adaptive step-size reduc-tion, reduced training efficiency, and compromised reversibility. By applying the constraint, the inter-action between ∥gθ∥ and ∇z Eϕ is smoothed, thereby improving the following properties: Inte-gration Stability: Reduced energy fluctuations allow consistent step sizes in both forward and backward integration. Gradient Smoothness: 
+
+Prevents the flow field from exhibiting gradi-ent explosion or vanishing between energy layers. 
+
+Reversible Consistency: Ensures that back-ward integration trajectories numerically recon-struct the forward paths, enhancing the overall reversibility of the mapping. 
+
+3.8.2 Neural Flow Field 
+
+The flow field function gψ is implemented via an MLP that learns the free-flow dynamics in the latent space. Its input consists of the current latent variable zt, category embedding eyt , and time t:
+
+gψ : ( zt, e yt , t ) 7 → vt = dz t
+
+dt . (30) This neural structure learns a vector field satis-fying the energy conservation constraint, ensuring that sample trajectories slide along inter-category energy manifolds rather than jumping between them. Distribution Alignment Loss.         
+
+> Ldist =Eza∼pza [ϕ(Ta→b(za))] −Ezb∼pzb[ϕ(zb)] 22,
+> (31)
+
+11 where ϕ(·) denotes the embedding function that measures the discrepancy between the trans-formed and target distributions. Reversibility Consistency Loss. This term ensures strict numer-ical reversibility of the bidirectional mappings: 
+
+Lrev = Eza∼pza 
+
+∥Tb→a(Ta→b(za)) − za∥22
+
+ . (32) Local Energy Smoothness Loss is as: 
+
+Lenergy = Ezt
+
+|∇ z Eϕ(zt, y t)⊤gψ (zt, e yt )|, (33) which constrains the neural flow field to be nearly orthogonal to the energy gradient, prevent-ing oscillations or collapses caused by excessive energy dependence. This ensures minimal energy variation, yielding a smooth, reversible, and phys-ically consistent flow. The weighting coefficients 
+
+λ1, λ 2, λ 3 control the relative importance of dis-tribution alignment, reversibility, and energy bal-ance. The locally energy-conservative category transition flow maintains continuous and mini-mally perturbed energy evolution in the latent space: ddt Eϕ(zt, y t) ≈ 0, E ϕ(z1, y b) − Eϕ(z0, y a) is smooth and controlled. This formulation realizes a continuous transformation along energy sur-faces, making the category transition semantically coherent, geometrically reversible, and stable. 
+
+3.8.3 Neural Flow Field Fitting 
+
+During the category transition stage, the latent distributions of categories ya and yb have already been globally aligned through category energy matching. To further enable reversible mapping at the sample level, we introduce a neural net-work–parameterized flow field function gθ, which learns the temporal evolution of latent variables in continuous time. This process can be viewed as fitting a time-continuous, differentiable, and invertible dynamical system in the latent space. We define the latent flow equation as: 
+
+dz t
+
+dt = gθ (zt, e yt ), t ∈ [0 , 1] , (34) where: zt ∈ Rd: the latent state at time t; gθ (·): the neural network–parameterized velocity field function; θ: learnable network parameters; dz t 
+
+> dt
+
+: the instantaneous flow velocity in the latent space. The objective of the neural network is to learn a continuous and reversible vector field such that, when integrated from t = 0 (category A) to t = 1 (category B), the pushed-forward distribution sat-isfies: pzb = ( Ta→b)pza , z b = za + R 10 gθ (zt, e yt ) dt. 
+
+Network Architecture. The neural flow field gθ is implemented as a MLP to ensure con-tinuity and differentiability of the input–output mapping. The input consists of the current latent variable zt, the conditional embedding eyt , and the scalar time t, forming: gθ : ( zt, e yt , t ) 7 → vt,
+
+where vt = dz t 
+
+> dt
+
+denotes the local flow direction and speed of the sample in the latent space. The network includes three linear mappings and sev-eral residual modules. The first layer performs a linear transformation and layer normalization on the input vector [ zt, e yt , t ] ∈ Rd+dy +1 ; The second layer continues hidden-to-hidden mapping to cap-ture nonlinear potential structures in the latent field; N residual blocks are stacked to stabilize gradient propagation and maintain the smooth-ness of the continuous flow field; The final output layer projects features into Rd, producing the flow vector gθ (zt, e yt ), which describes local dynamic behavior in the latent space. Training Objec-tives. The parameters of gθ are jointly optimized by minimizing the following combined objective: 
+
+Ltotal = λ1Ldist + λ2Lrev + λ3Lenergy , (35) 
+
+Distribution Alignment Loss. 
+
+Ldist = MMD( Ta→b(za), z b)= ∥Eza [ϕ(Ta→b(za))] − Ezb [ϕ(zb)] ∥22 .
+
+(36) which enforces transformed distribution to align with the target category’s latent distribution. 
+
+Reversibility Constraint. 
+
+Lrev = Eza ∥Tb→a(Ta→b(za)) − za∥22, (37) ensuring that gθ remains bijective under bidirec-tional integration. 
+
+Energy Conservation Constraint. 
+
+Lenergy = Ezt
+
+ ∇z Eϕ(zt, y t)⊤gθ(zt, e yt )  , (38) which enforces orthogonality between the flow direction and the energy gradient, preventing local oscillations and trajectory drift. 
+
+Optimization Process. During training, the neural flow field gθ is fitted via the following steps: 
+
+Sampling. Sample starting and target points from the latent distributions of categories A and 
+
+B: za ∼ pza , zb ∼ pzb . Forward Integra-tion. Using an ODE solver (e.g., Dormand–Prince or Runge–Kutta), integrate based on the current network-predicted gθ: zt+∆ t = zt + gθ(zt, e yt ) ∆ t. 
+
+Loss Computation. Compute the transformed 12 result z′ 
+
+> b
+
+= Ta→b(za), and evaluate Ldist , Lrev , and 
+
+Lenergy . Backpropagation. Compute gradients using the adjoint sensitivity method: 
+
+dL
+
+dθ = −
+
+Z 10
+
+a⊤
+
+> t
+
+∂g θ(zt, e yt )
+
+∂θ dt, (39) where at is the adjoint state defined as: 
+
+da t
+
+dt = −a⊤
+
+> t
+
+∂g θ(zt, e yt )
+
+∂z t
+
+. (40) The parameters θ are updated using the Adam. 
+
+Iteration Until Convergence. When the dis-tribution alignment loss converges and the bidi-rectional reconstruction error stabilizes, gθ is con-sidered successfully fitted to the latent flow from category A to category B. During optimization: 
+
+Ldist drives alignment at the distributional level; 
+
+Lrev maintains numerical stability and reversibil-ity; Lenergy enforces smoothness and local energy conservation. Through their joint optimization, the neural network forms a smooth, energy-balanced, and reversible latent flow, achieving a stable mapping between categories. After con-vergence, gθ accurately captures the latent-space dynamics from category A to category B.
+
+3.9 Encryption Decryption Process 
+
+Encryption Process. In the encryption phase, the original point cloud xa and its extracted feature fa are combined into a unified represen-tation ua = [ xa, f a] , which is encoded by the reversible flow model into the latent space as: 
+
+za = fθ(ua|ya), where ya denotes the original class label. Subsequently, based on the globally opti-mal category mapping table M∗ obtained through the energy graph, the corresponding target class is determined as: yb = M∗(ya). To achieve latent-space migration from class a to class b, the sample evolves along an energy-conservative flow defined by Equ 25. Finally, the transformed latent vari-able is decoded back into the point cloud space through the inverse mapping function f −1 
+
+> θ
+
+: ub =
+
+f −1 
+
+> θ
+
+(zb|yb), yielding the encrypted point cloud xb.
+
+Key Set Definition. Before performing decryption, the receiver must obtain the complete key set, which is defined as: K = {θ, ψ, E θ, M∗},
+
+where: θ: parameters of the normalizing flow, responsible for the bijective mapping between the point cloud and the latent space; ψ: param-eters of the neural ODE flow, governing the continuous dynamic evolution of different cate-gories in the latent space; Eϕ: parameters of the energy function; M∗: the category mapping table, which determines the one-to-one correspondence between encryption and decryption categories. 
+
+Decryption Process. The decryption pro-cess strictly follows the system’s reversibil-ity assumption, recovering the original point cloud data through time-reversed integration and inverse category mapping. For the received encrypted point cloud xb and its feature fb. The 
+
+ub = [ xb, f b] is encoded by the same reversible flow model to obtain its latent variable: zb =
+
+fθ(ub|yb), where the encoding process is identi-cal to that used in the encryption phase and relies on the same flow parameters θ. Based on the known optimal category mapping table 
+
+M∗, the original category corresponding to the encrypted one is determined as: ya = M∗− 1(yb),
+
+ensuring semantic determinism of the decryption process. By leveraging the reversibility of the ordinary differential equation (ODE), the latent variable is reconstructed via time-reversed inte-gration Equ 26. Since the flow evolves under local energy-conservation constraints, the integra-tion path remains stable and continuous, ensuring: 
+
+Tb→a(Ta→b(za)) = za, which guarantees strict invertibility of the decryption process in the latent space. The recovered latent variable za is then decoded back into the point cloud space through the inverse mapping function of the reversible flow: ua = f −1 
+
+> θ
+
+(za|ya), yielding the reconstructed original point cloud xa.
+
+# 4 Experiment 
+
+4.1 Settings 
+
+ModelNet40. [35] is a widely used benchmark for 3D object classification, consisting of 12,311 synthetic CAD models from 40 object categories. With the official split providing 9,843 models for training and 2,468 for testing. ScanObjectNN. 
+
+[36] is a real-world indoor object dataset con-structed from 3D scans of cluttered indoor scenes, such as those from SceneNN and ScanNet. In con-trast to synthetic CAD datasets, point clouds in ScanObjectNN are cropped from noisy scans and often exhibit background clutter, partial obser-vations, and occlusions. The benchmark contains approximately 15,000 objects from 15 categories, 13 corresponding to 2,902 unique object instances, making it substantially more challenging than ModelNet40. ShapeNetPart. [37] is a part-level segmentation benchmark derived from the ShapeNetCore collection of 3D CAD models. It contains 16,881 shapes from 16 object categories, where each point cloud is annotated with 2–6 semantic part labels, yielding more than 50 fine-grained part types in total. Each shape typically consists of approximately 1,000 to 3,000 points. 
+
+Transformed ShapeNetPart. Since ShapeNetPart adopts category-specific part anno-tations, semantically transformed point clouds do not have directly corresponding ground-truth part labels for the target category. Therefore, we select, for each category, the top four perform-ing models from five segmentation architectures trained on the dataset, namely PointMLP, PointCNN, MaskFeat3D, PointNet++, and PointMeta, and use them as independent evalua-tors. For each transformed point cloud sample, we obtain four point-wise segmentation predictions. If at least three models assign the same seg-mentation label to a point, we regard that label as a high-consensus pseudo-label for that point. Otherwise, the point is treated as an inconsistent point, which is considered an unreliable region in the target semantic space and counted as a failed point in the segmentation statistics. The category-specific ratios of inconsistent points are: aero 6%, bag 10%, cap 4%, car 13%, chair 2%, earphone 15%, guitar 5%, knife 16%, lamp 7%, laptop 2%, motor-bike 16%, mug 4%, pistol 12%, rocket 25%, skateboard 12%, and table 10%. 
+
+Evaluation Metrics. In the evaluation set-ting of this paper, we consider two types of attack-ers. The first is a fixed attacker, who can only use a classifier trained on the original data and directly apply it to the transformed point clouds to deter-mine whether these samples still retain sufficiently strong cues of their original classes. The second is a stronger adaptive attacker, who not only has access to the transformed samples but can also retrain a new classifier on the transformed train-ing data with the goal of recovering the original labels. Based on these two attack scenarios, we evaluate the proposed method from three aspects: target-class recognizability, original semantic leak-age under fixed attacks, and original semantic recovery under adaptive attacks.We adopt the following metrics: New-Class Recognition Rate (NCRR), Original-Class Leakage Rate (OCLR), and Original Label Recovery Rate (OLRR). We first train a standard classifier on the original point cloud dataset and keep this classifier fixed in all experiments. We then apply the class-transfer procedure to the test samples and compute both metrics only on the transformed point clouds. Let the original class of the i-th sample be yorig  
+
+> i
+
+, and its corresponding target class in the class-transfer table be ytgt  
+
+> i
+
+. Denote by ˆ y(after)  
+
+> i
+
+the prediction of the fixed classifier on the transformed sample. The New-Class Recognition Rate is defined as NCRR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1ˆy(after)  
+
+> i
+
+= ytgt 
+
+> i
+
+, (41) which measures, from an attacker’s perspective, the proportion of transformed samples that are classified as their designated target class, reflect-ing the utility of the class-transfer procedure in effectively aggregating source samples into the target class. The Original-Class Leakage Rate as OCLR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1ˆy(after)  
+
+> i
+
+= yorig 
+
+> i
+
+, (42) which quantifies the proportion of transformed samples that are still recognized as their original class by the fixed classifier. This can be interpreted as a measure of residual identity/semantic infor-mation leakage, where lower OCLR values indicate stronger privacy protection. To further evaluate whether the original class information in semanti-cally encrypted point clouds can still be recovered by an adaptive attacker, we introduce the OLRR. We assume that the attacker has access to the encrypted training data and retrains a classifier using their corresponding original class labels as supervision. We then measure the success rate of recovering the original labels on the encrypted test set. Let xenc  
+
+> i
+
+denote the i-th encrypted sample, 
+
+yorig  
+
+> i
+
+denote its corresponding original class label, and fadv denote the attack classifier retrained on the encrypted training set. The OLRR as OLRR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+h
+
+fadv (xenc  
+
+> i
+
+) = yorig 
+
+> i
+
+i
+
+, (43) A lower OLRR indicates that less original seman-tic information remains in the encrypted samples. 
+
+Inference: Our method has low inference overhead. The diffusion module is used only dur-ing training for distribution alignment in the 14 Dataset Method PointNet [38] PointNet++ [39] DGCNN [40] PointCNN [41] GBNet [42] Point Trans [43] PointMLP [44] ScanObjectNN Acc 0.682 / 0.664 0.779 / 0.759 0.781 / 0.771 0.785 / 0.775 0.805 /0. 785 0.828 / 0.808 0.854 / 0.840 NCRR 0.651 0.746 0.748 0.752 0.772 0.794 0.820 OCLR 0.172 0.120 0.119 0.117 0.106 0.094 0.080 OLRR 0.198 0.146 0.141 0.138 0.126 0.112 0.098                              
+
+> ModelNet40 Acc 0.892 / 0.881 0.909 / 0.903 0.929 / 0.918 0.925 / 0.914 0.938 / 0.927 0.929 / 0.918 0.941 / 0.929 NCRR 0.850 0.860 0.875 0.872 0.885 0.876 0.890 OCLR 0.090 0.085 0.075 0.077 0.070 0.074 0.065 OLRR 0.112 0.105 0.096 0.092 0.085 0.082 0.078
+
+Table 1 Comparison of classification performance on the ScanObjectNN [36] and ModelNet40 datasets [35] . In the acc column, the value before the slash represents the accuracy on the original data, while the value after the slash indicates the acc obtained by training the model on the encrypted (category-transformed) data. Sink Toilet Category Mapping:  Toilet → Sink         
+
+> Display Door Category Mapping: Door →Display
+> Chair Sofa Category Mapping: Sofa →Chair
+
+Fig. 3 Visual point clouds of class transfer on the ScanOb-jectNN [36]. Each triplet shows, from left to right: the target, the source, and the result after encryption 
+
+shared latent space and is not executed at infer-ence time. In addition, the diffusion process oper-ates in a low-dimensional latent space, which keeps its training cost within a manageable range. The construction of the class energy maps and the Hungarian matching are both offline procedures and only need to be precomputed once, intro-ducing no online inference overhead. From the perspective of scalability, the Flow module intro-duces only class-conditional modulation param-eters, while latent diffusion models the shared latent space, so the additional overhead does not grow linearly with the number of classes. The Neural ODE at inference time operates only on category transfer in the latent space, and its com-putational complexity is independent of the total number of classes. On an RTX 4090, the total inference time for encrypting and decrypting a single sample is about 100 ms, among which the ODE-based latent migration accounts for about 30 ms. During training, each epoch takes about 2 hours, and the model typically converges after around 20 epochs. 
+
+4.2 Downstream Task Evaluation 
+
+Classification Tasks: Table 1 compares the performance of various point cloud classification models on semantically encrypted versions of the ScanObjectNN [36] and ModelNet40 datasets [35]. The results show that stronger classifiers are gen-erally more capable of recognizing the target categories on encrypted data while avoiding mis-classification back to the original categories, and therefore tend to achieve higher NCRR and lower OCLR. Furthermore, OLRR is consistently higher than OCLR, indicating that adaptive retraining attacks are indeed stronger than fixed classifiers; however, its value still remains at a relatively low level, suggesting that the original class infor-mation in semantically encrypted point clouds is still difficult to recover effectively. This trend is consistent across different datasets and back-bone models, further demonstrating the stability and interpretability of our metrics under cross-backbone and cross-dataset settings. As shown in Fig.3, each triplet from left to right presents a tar-get data, a source data, and the result obtained by applying the transfer table. Although a few residual features of the source class are still visible locally (e.g., certain edge lines or small parts not suppressed), the point cloud structure is highly consistent with the target class: the body propor-tions, the relative positions of key components, and the geometric contours align with the target. 
+
+The Segmentation Tasks. Table 2 presents the segmentation results across multiple categories on the ShapeNetPart dataset [37] using our class-transferred (encrypted) point clouds. Overall, the results show that our privacy-preserving transfor-mation maintains high segmentation performance, with only a slight drop in accuracy compared to the original point clouds. This verifies that the proposed method effectively preserves the usabil-ity of point cloud data while achieving privacy protection. For categories with relatively fewer 15 Method aero bag cap car chair aerphone guitar knife lamp laptop motor-bike mug pistol rocket skateboard table Mean PointNet 83.4/81.53 78.7/80.0 82.5/84.27 74.9/73.18 89.6/87.83 73.0/71.19 91.5/89.97 85.9/84.06 80.8/82.51 95.3/93.99 65.2/63.31 93.0/94.47 81.2/79.34 57.9/56.48 72.8/71.02 80.6/78.71 81.2/79.95 PointNet++ 82.3/80.93 79.0/77.57 87.7/86.46 77.3/75.52 90.8/92.05 71.8/70.79 91.0/89.88 85.0/83.03 83.7/84.86 95.3/94.05 71.6/70.38 94.1/92.9 81.3/80.0 58.7/56.75 76.4/75.0 82.6/84.38 82.7/81.47 Kd-Net 74.3/73.28 73.3/72.27 70.3/69.29 88.6/87.06 88.6/87.13 71.9/70.29 90.2/88.86 87.2/86.19 81.0/79.94 94.9/93.86 57.4/56.34 86.7/85.67 78.1/76.31 51.0/49.0 82.3/84.08 80.3/78.54 78.4/77.05 SO-Net 88.0/86.21 81.1/79.29 88.0/86.16 90.6/88.85 90.6/89.44 73.5/72.5 90.7/88.78 83.9/81.97 83.9/82.27 94.8/92.99 69.1/67.75 92.4/91.33 80.9/79.81 53.1/51.28 72.9/71.35 83.0/81.11 82.6/80.98 PCNN 85.5/84.32 79.5/78.1 79.5/77.78 73.2/72.0 90.9/89.55 73.2/71.3 90.3/88.9 90.0/88.04 86.9/85.45 95.8/93.9 69.0/67.04 92.1/90.64 86.3/84.5 51.0/49.88 83.1/81.55 83.3/85.14 82.5/80.96 DGCNN 86.7/85.21 77.8/75.93 86.7/88.35 77.8/76.6 90.6/88.74 74.7/72.98 91.2/89.49 87.5/86.32 86.8/85.01 95.7/94.35 66.3/64.95 81.1/82.85 81.1/79.63 63.5/62.17 74.5/75.76 82.6/81.36 82.0/80.91 P2Sequence 80.6/79.03 80.0/78.9 80.0/78.25 90.0/88.85 91.7/90.37 70.0/68.6 90.5/91.72 88.3/86.68 85.9/84.58 96.0/94.38 69.3/67.41 93.4/91.52 79.3/77.84 58.1/56.71 73.1/71.25 82.0/80.37 82.0/80.44 PointCNN 86.0/84.77 80.0/78.37 86.0/84.39 80.8/79.67 91.6/90.07 79.7/77.94 92.3/90.48 88.4/87.04 86.3/84.4 96.1/94.44 77.2/75.43 95.2/93.54 84.2/82.83 63.0/61.37 75.8/74.66 81.0/79.72 84.4/82.86 PointASNL 87.9/86.57 79.7/78.19 79.7/77.74 92.2/90.81 92.2/90.85 73.7/72.38 91.0/89.84 84.2/82.87 84.2/82.5 95.8/94.64 74.4/72.5 95.2/93.65 81.0/79.56 63.0/61.94 73.3/72.01 83.2/82.01 83.5/81.97 RS-CNN 84.0/85.58 86.2/88.02 81.2/79.68 81.1/79.4 91.2/89.91 81.1/79.73 91.2/89.71 91.1/89.99 86.7/85.27 96.3/97.65 73.7/72.39 94.7/92.99 83.5/81.86 60.5/59.2 77.7/76.38 83.2/81.38 84.0/82.72 CurveNet 81.9/83.61 75.2/73.9 74.9/72.98 74.9/73.7 93.0/91.89 74.9/73.21 93.0/91.48 86.1/84.96 84.7/83.69 95.6/96.85 66.7/67.86 92.7/93.99 81.6/80.18 63.4/62.01 82.3/80.82 82.1/80.75 81.1/80.22 SPLATNet 89.1/87.27 80.3/79.07 80.3/78.66 80.3/78.38 93.9/95.0 75.5/77.0 92.1/90.96 83.4/82.39 83.4/84.65 96.3/94.46 75.6/74.21 93.6/91.9 83.4/81.92 63.4/61.67 75.5/73.69 81.8/80.35 83.3/81.99 SpiderCNN 84.7/82.83 77.2/75.23 81.7/80.56 84.7/83.04 91.2/89.38 73.3/71.8 90.3/88.91 86.3/85.17 83.3/85.23 95.8/97.62 70.3/69.18 94.3/92.73 80.3/78.55 59.7/58.56 73.9/71.99 81.3/79.84 82.4/81.06 KPConv 87.2/85.93 81.1/79.77 81.1/79.86 81.1/83.09 91.1/89.34 76.2/74.92 88.4/87.14 88.4/87.01 82.0/80.45 96.2/94.34 78.1/76.15 95.9/97.7 85.4/83.97 69.2/67.6 80.2/78.69 83.0/81.26 84.0/82.58 PA-DGC 90.4/88.5 79.7/78.01 90.6/88.76 80.8/79.22 90.8/89.09 73.9/72.72 92.0/90.17 88.7/90.59 82.9/81.64 95.9/94.31 73.9/72.86 94.7/93.0 84.7/83.15 65.9/64.64 81.4/79.47 84.0/82.48 85.3/83.77 PointMLP 87.5/85.65 80.54/82.2 90.3/88.65 78.2/76.63 90.3/88.93 78.2/76.85 92.0/90.91 88.1/86.98 82.6/81.23 96.2/94.84 77.5/76.35 95.8/94.69 85.4/83.68 64.6/63.31 83.3/82.21 84.3/83.0 85.0/83.64 
+
+Table 2 Segmentation results on the ShapeNetPart dataset [37]. 
+
+Method PointNet [38] PointNet++ [39] DGCNN [40] PointCNN [41] GBNet [42] Point Trans [43] PointMLP [44] 
+
+Clean data 0.682 0.779 0.781 0.785 0.805 0.828 0.854 optical chaotic[14] † 0.041/0.081 0.048/0.084 0.052/0.087 0.056/0.089 0.062/0.092 0.070/0.096 0.079/0.099 hybrid key [15] † 0.214/0.272 0.258/0.284 0.271/0.296 0.286/0.307 0.294/ 0.321 0.306/0.336 0.314/0.349 UMT [17] (Class-wise test set) 0.421/0.852 0.438/0.871 0.447/0.884 0.455/0.893 0.466/0.907 0.481/ 0.924 0.493/0.939 UMT [17] ( Permuted-wise test set) 0.421/0.214 0.438/0.232 0.447/0.246 0.455/0.257 0.466/0.281 0.481/0.307 0.493/0.329 Ours 0.071 / 0.664 0.078 / 0.759 0.084 / 0.771 0.089 / 0.775 0.098 /0.785 0.109/ 0.808 0.119/ 0.840 
+
+Table 3 Comparison of different encryption methods in the original and encrypted domains on the ScanObjectNN [36]. For each entry, the value before “/” denotes the classification accuracy when the classifier is trained on the original dataset and tested on the encrypted dataset; the value after “/” denotes the classification accuracy when the classifier is both trained and tested within the same protected/encrypted domain. † indicates results implemented by ourselves. 
+
+samples, a slightly larger performance fluctuation is observed, which can be attributed to the uneven distribution of shape priors in the latent space. 
+
+4.3 Comparison with Point Cloud Encryption Methods 
+
+Table 3 compares the classification performance of different encryption methods under two tasks. Task 1 corresponds to training on the original data and testing on the encrypted data, and is used to evaluate the encryption effectiveness of each method. Task 2 corresponds to train-ing and testing on the encrypted data, and is used to examine whether the encrypted point clouds still retain learnability. If only Task 1 were considered, geometry-destructive methods would naturally have an advantage, since their objec-tive is precisely to reduce the recognition rate of the original categories as much as possible. How-ever, this alone cannot answer another equally important question: whether the encrypted point cloud can still serve as a protected representation for subsequent downstream tasks. Therefore, we further introduce Task 2 to evaluate the down-stream usability of the encrypted data. To enable a fairer comparison with existing geometric point cloud encryption methods, we further construct a reversible destructive variant of our framework for Task 1, while the standard model is used for Task 2. This variant no longer treats “stable transfer to a designated target category” as the primary optimization objective. Instead, it enhances the destruction of the original semantics by weak-ening the target-category alignment constraint, strengthening the original-category suppression term, and moderately relaxing the smoothness and structure-preservation constraints. Mean-while, we still retain the reversible backbone of the framework, so this variant remains areversible encryption mode. From the experimen-tal results, geometry-based encryption methods, such as optical chaotic and hybrid key, usu-ally achieve lower classification accuracy under Task 1, indicating that they are more advanta-geous in point cloud encryption. However, these methods also obtain low accuracy under Task 2, suggesting that their encrypted outputs are closer to unusable perturbation-like representa-tions and are difficult to support for subsequent downstream processing. In contrast, although our method may not always outperform the strongest geometry-destructive encryption methods under purely destructive metrics, its reversible destruc-tive variant can likewise significantly reduce the recognizability of the original categories in Task 1, while the standard model maintains high classifi-cation performance in Task 2. This indicates that the output of our method is not a semantically meaningless point cloud, but rather a protected representation that still preserves stable orga-nizational structure and learnability. For UMT, although it achieves relatively high accuracy in classification after encryption, its performance depends strongly on the correspondence between transformations and labels. Once this correspon-dence is disrupted at test time, its accuracy drops noticeably. This suggests that the high accuracy of UMT stems more from learning a fixed corre-spondence between transformation patterns and 16 Setting ScanObjectNN ModelNet40 PointNet PointNet++ PointMLP PointNet PointNet++ PointMLP                                                                                                                                                                                                
+
+> ANORANORANORANORANORANOR1024 66.41 0.651 0.172 0.301 75.95 0.746 0.120 0.204 84.02 0.820 0.080 0.116 88.10 0.850 0.090 0.162 90.30 0.860 0.085 0.145 92.90 0.890 0.065 0.094 768 65.20 0.631 0.184 0.321 74.80 0.728 0.132 0.223 83.10 0.805 0.089 0.129 87.30 0.839 0.098 0.173 89.60 0.850 0.092 0.156 92.10 0.881 0.071 0.103 512 63.40 0.602 0.201 0.349 72.90 0.701 0.149 0.247 81.20 0.781 0.103 0.149 85.90 0.821 0.111 0.190 88.20 0.836 0.103 0.171 90.90 0.868 0.081 0.118 clean 66.41 0.651 0.172 0.301 75.95 0.746 0.120 0.204 84.02 0.820 0.080 0.116 88.10 0.850 0.090 0.162 90.30 0.860 0.085 0.145 92.90 0.890 0.065 0.094 0.005 65.90 0.642 0.178 0.311 75.40 0.738 0.126 0.214 83.70 0.813 0.085 0.123 87.80 0.844 0.094 0.168 89.90 0.855 0.089 0.151 92.50 0.885 0.069 0.100 0.01 64.90 0.625 0.189 0.327 74.30 0.721 0.137 0.229 82.90 0.798 0.093 0.134 87.00 0.833 0.102 0.178 89.20 0.846 0.095 0.160 91.80 0.876 0.075 0.108 0.02 63.10 0.598 0.206 0.356 72.60 0.694 0.153 0.251 81.00 0.774 0.107 0.153 85.80 0.816 0.114 0.194 88.00 0.832 0.106 0.175 90.60 0.863 0.084 0.121
+
+Table 4 Robustness analysis under varying point densities and noise levels. A: Acc, N: NCRR, O: OCLR, R: OLRR. 
+
+labels, rather than from modeling a stable seman-tic representation itself. In contrast, our method explicitly models inter-class relationships and a controllable transfer process. Overall, this com-parative experiment shows that the advantage of semantic-level methods over geometry-level meth-ods does not lie in pursuing the strongest pos-sible destructive encryption alone, but rather in achieving a more reasonable balance between sup-pressing the original semantics and preserving usability in the protected domain. In this way, the encrypted point cloud is not only protected, but can also continue to serve as a protected representation for downstream systems. 
+
+4.4 Robustness under Point Density and Noise Variations 
+
+Table 4 presents the robustness analysis under different point cloud densities and noise levels using different classifiers on ScanObjectNN and ModelNet40. Overall, as the point cloud density decreases from 1024 to 768 and 512, or the input noise increases from clean to σ = 0 .005 , 0.01 , 0.02, metrics consistently decline. This indicates that when the geometric information becomes sparser or more corrupted, the transformed target seman-tics become less distinguishable, and the original semantics are more likely to remain or be recov-ered. Nevertheless, the degradation is generally gradual rather than abrupt, suggesting that the proposed method maintains good stability under moderate density reduction and noise perturba-tion. Comparing different classifier backbones, PointMLP consistently achieves better results across both datasets and perturbation settings, indicating that stronger classifiers can better pre-serve target-category discriminability while sup-pressing original semantic leakage under degraded input conditions. In contrast, PointNet is more sensitive to point cloud sparsification and noise corruption, showing the most noticeable perfor-mance drop, while PointNet++ lies in between.                                       
+
+> Setting box display door
+> ANORANORANORFull Joint Training 75.8 0.742 0.123 0.208 74.9 0.731 0.129 0.217 76.2 0.748 0.118 0.201 Incremental Adaptation 74.2 0.721 0.136 0.226 73.1 0.708 0.145 0.239 74.8 0.728 0.132 0.221
+
+Table 5 Incremental adaptation results on unseen classes of ScanObjectNN using PointNet++. We treat 
+
+box , display , and door as unseen categories. A: Acc, N: NCRR, O: OCLR, R: OLRR. 
+
+This consistent trend across both datasets sug-gests that the proposed method preserves a stable privacy–utility trade-off across different classifier backbones. From the dataset perspective, the per-formance degradation on ScanObjectNN is gen-erally larger than that on ModelNet40, which is consistent with the fact that real-world scanned data are more complex. Even so, the variations of metrics on the more challenging ScanObjectNN remain within a reasonable range, without severe fluctuations, further demonstrating the robust-ness of the proposed method under different point cloud quality conditions. 
+
+4.5 Incremental Adaptation to Unseen Classes 
+
+Table 5 reports the experimental results on unseen classes in ScanObjectNN, where box , display , and 
+
+door are treated as unseen classes, and Point-Net++ is adopted as the classifier. Here, Full Joint Training means that the unseen classes are included in the global training together with the other classes from the very beginning. In con-trast, Incremental Adaptation means that after the shared backbone has been fully trained, only the modules related to the new classes are locally adapted, without retraining the entire global framework. Full Joint Training achieves the best performance, because under this set-ting the unseen classes participate in the global joint optimization of the shared latent represen-tation, inter-class energy relationships, and ODE-conditioned transitions from the start of training, and can therefore be regarded as the upper-bound performance. By comparison, the results of Incre-mental Adaptation are slightly lower than those of Full Joint Training, but the gap between them remains generally small. This indicates that even 17 Method Params (M) NCRR ↑ OCLR ↓ Acc ↑              
+
+> 15 ×Flow 159.75 0.71 0.18 0.8554 Shared + LoRA 20.51 0.75 0.12 0.8769 Shared + LoRA + FiLM 21.12 0.81 0.08 0.9032
+> Table 6 Comparison of parameter counts and privacy/utility metrics for different Flow models on the ModelNet40 datasets [35].
+
+if the unseen classes are not involved in the initial closed-set global training, competitive per-formance can still be achieved by locally adapting only the class-specific modules while keeping the shared backbone and shared latent space fixed. The reason is that, in our method, the compo-nents that truly depend on category differences are mainly the class embeddings, conditional mod-ulation parameters, and the energy relationships between the new classes and the existing ones, whereas the Flow backbone, shared latent rep-resentation, and the main ODE dynamics learn generic structural representations in a category-shared space. Therefore, when introducing new classes, it is unnecessary to re-optimize the entire global framework; instead, effective integration can be achieved by only supplementing and updat-ing these class-related components. Overall, this experiment shows that although the primary set-ting of the current framework is closed-set cate-gory mapping, its backbone, latent representation, and main ODE dynamics are all shared struc-tures. As a result, new classes can be incorporated through local incremental adaptation, without requiring full retraining of the entire framework. 
+
+4.6 Flow Parameter Efficiency 
+
+Table 6 compares per-class independent flow mod-els with the proposed shared-backbone flow aug-mented by LoRA and FiLM, in terms of parameter size as well as privacy and utility metrics on the ScanObjectNN dataset [36]. Here, Acc denotes the classification accuracy obtained by retrain-ing a classifier on the transformed point clouds. Compared to the baseline that trains a sepa-rate flow model for each class, introducing ashared backbone with LoRA reduces the total number of parameters from 159.75M to 20.51M, corresponding to an 87% reduction, while simul-taneously improving all three evaluation metrics. This result indicates that even with a substantially compressed model, both new-class recognizability and privacy protection can be enhanced. Fur-ther incorporating FiLM modulation increases the parameter count by only approximately 3%, yet yields the best overall performance. 
+
+4.7 Analysis of Class Transfer Table 
+
+Fig. 4 illustrates the effectiveness of the proposed class-transfer table on the ScanObjectNN dataset. We define an energy function Eij to quantify the conversion cost from a source class i to a target class j, and derive a one-to-one class-transfer table through global minimum-cost matching. As shown in the energy heatmap, semantically and geomet-rically related class pairs (e.g., {chair }↔{ sofa },
+
+{sink }↔{ toilet }) consistently exhibit low-energy paths, which align well with the thick-line cor-respondences in the resulting mapping diagram. Applying this class-transfer table for semantic transformation leads to a clear structural change in the confusion matrix. Specifically, each source-class row displays a pronounced peak at the designated target-class column, while responses at the original-class column are strongly suppressed. This behavior directly corresponds to an increase in NCRR and a decrease in OCLR. By con-trast, random class mappings lack energy-based constraints, resulting in more diffuse prediction distributions, reduced aggregation toward tar-get classes, and consequently lower NCRR and higher OCLR. Overall, the energy-driven global matching strategy enables stable and consistent “source →target” aggregation while inducing only minimal latent-space deformation. In compari-son, random transfer strategies fail to reliably guide samples toward target classes and are more prone to reverting to original-class predictions, underscoring the effectiveness of the proposed energy-based class-transfer table. 
+
+4.8 Encryption Reconstruction 
+
+As shown in Fig. 5, we compare different mod-els on three representative objects to evaluate the geometric fidelity after the “encryption →
+
+decryption” process. Red points denote the orig-inal shapes before encryption, while blue points indicate the decrypted results; ideally, the two should overlap almost perfectly. The PointNet-based scheme, which relies heavily on global pooling, fails to capture fine-grained local geom-etry, leading to noticeable misalignment and col-lapse artifacts between the original and recovered 18 (a)  (b)               
+
+> (c) (d) Fig. 4 Energy and effectiveness of the class-transfer table on the ScanObjectNN dataset. (a) Energy matrix heatmap: each entry Eij denotes the conversion energy from source class ito target class j(lighter color = lower energy). (b) Source →target pairs obtained by energy-based one-to-one matching; thicker lines indicate lower energy (better pairs). (c) Confusion matrix after applying the transfer table. (d) Confusion matrix under random mapping.
+> Fig. 5 Qualitative comparison of encryption–decryption reconstruction fidelity across different backbones. Red points denote the original point clouds before encryption, while blue points denote the decrypted point clouds.
+
+shapes (the overlap between red and blue points is clearly limited). Point Transformer recovers the overall contour more accurately, but still exhibits deviations on object boundaries and thin struc-tures (e.g., chair legs and the guitar neck). The vanilla Flow model is able to reproduce most of the global geometry, yet minor local deformations and noise remain visible. In contrast, ours method yields decrypted point clouds that almost per-fectly coincide with the originals; red and blue points are visually indistinguishable, indicating that the learned class-conditional invertible map-ping achieves much higher geometric fidelity in both global structure and local details. 
+
+4.9 Analysis of LoRA and FiLM 
+
+LoRA: Table 7 reports the results of using differ-ent LoRA ranks under the shared Flow backbone. We observe that when increasing the rank from 
+
+r = 4 to r = 8, the NCRR improves from 0.74 to 0.75, the OCLR decreases from 0.13 to 0.12, and the Acc rises from 0.8720 to 0.8769, while the num-ber of parameters grows from 15.58M to 20.51M. Overall, this configuration leads to a stable perfor-mance gain. However, when further increasing the rank to r = 16, although results still show slight improvements, the marginal benefits become very limited, whereas the parameter count increases further to 30.37M. Taken together, a medium-sized LoRA configuration ( r = 8) achieves a better trade-off between parameter efficiency and the privacy–utility metrics, indicating that LoRA is highly parameter-efficient for this task and that overly large ranks are unnecessary. 
+
+FiLM: Table 7 further investigates the impact of different FiLM insertion positions under the shared Flow + LoRA framework. Compared with the Shared+LoRA baseline without any FiLM, inserting FiLM only in the latter half of the coupling blocks (last 10 blocks) increases the num-ber of parameters by merely about 0.31M (from 20.51M to 20.82M), yet significantly boosts NCRR to 0.79, reduces OCLR to 0.09, and raises Acc to 0.8990. This indicates that channel-wise mod-ulation applied to higher-level features is already sufficient to capture most of the semantic informa-tion. When FiLM is further applied to all coupling blocks, the parameter count slightly grows to 21.12M, while results are further and Acc reaches 0.9032. Overall, with limited parameter overhead, FiLM-based fine-grained modulation of the Flow latents makes a clear contribution to improving new-class recognizability and suppressing original-class leakage, and inserting FiLM only into asubset of critical layers is already able to capture the majority of these benefits. 19 Method Params (M) NCRR ↑ OCLR ↓ Acc ↑                           
+
+> Shared + LoRA ( r= 4) 15.58 0.74 0.13 0.8720 Shared + LoRA ( r= 8) 20.51 0.75 0.12 0.8769 Shared + LoRA ( r= 16) 30.37 0.76 0.11 0.8785 Shared + LoRA (no FiLM) 20.51 0.75 0.12 0.8769 Shared + LoRA + FiLM (last 10 blks) 20.82 0.79 0.09 0.8990 Shared + LoRA + FiLM (all blks) 21.12 0.80 0.08 0.9032
+
+Table 7 Ablation studies on LoRA rank and FiLM placement under the shared Flow setting. 
+
+Fig. 6 Comparison of latent trajectories with and with-out energy constraint. The figure visualizes class transitions from Class A to B in latent space. The energy-constrained flow (blue curve) evolves smoothly along low-energy val-leys, while the unconstrained flow (orange path) exhibits irregular and unstable motion across high-energy regions. 
+
+4.10 Energy Constraint in ODEs 
+
+The visualization of latent trajectories in Fig 6 demonstrates the stabilizing effect of the pro-posed energy conservation constraint during class-wise transformation. As shown in the figure, the unconstrained flow (red trajectory) exhibits oscil-latory and irregular transitions in latent space, frequently crossing energy levels and resulting in non-smooth mappings. In contrast, the energy-constrained flow (blue) follows a much smoother and shorter path between the source and target classes, maintaining consistent energy levels along the trajectory. This indicates that the constraint effectively regularizes the neural ODE dynamics, preventing gradient explosion and ensuring that the transformation evolves along iso-energy sur-faces, leading to stable and reversible mappings. 
+
+4.11 Module Loss Analysis 
+
+On the ModelNet40 dataset [35], we perform a detailed analysis of each module. Diffusion Module: Table 8 presents the analysis of diffusion module. First, without any diffusion alignment, the result shows that latent distribution of the transformed point clouds still exhibits a clear mis-match from that of the true target class. When we                               
+
+> Module Setting NCRR ↑OCLR ↓Acc ↑
+> w/o Diffusion 0.78 0.11 0.8910 Diffusion 0.79 0.09 0.8985 Diffusion + Lalign 0.81 0.08 0.9032
+> Scale 0.77 0.11 0.8875 Scale + Lcontrast 0.79 0.09 0.8984 Scale + Lcontrast +Ldisp 0.81 0.08 0.9032
+
+Table 8 Ablation studies on the diffusion module and dual-level scale control. 
+
+introduce the standard noise-reconstruction loss in latent space result indicates that denoising and smoothing in the latent space help enhance target-class recognizability while attenuating residual information from the original class. However, this denoising process does not explicitly enforce dis-tribution alignment, so its benefits remain limited. Building on the denoising loss, further adding an alignment term with respect to the Flow target distribution yields the best performance. The alignment loss drives the diffusion-generated latents closer to the true target-class manifold, thereby improving new-class recognition while fur-ther suppressing leakage of the original class. This module is used only during training as a latent-space distribution alignment regularizer; no diffusion steps are performed during encryption or decryption at inference time. Dual-Level Scale Control Losses: Table 8 presents the analy-sis of the Dual-Level Scale Control module. We introduce only the scale normalization term (row 1). The result shows that the class-conditional latent space exhibits significant inter-class over-lap. Further adding the semantic contrastive loss 
+
+Lcontrast (row 2) leads to a continued improve-ment. The contrastive loss pulls each sample closer to its own class center while pushing it away from other class centers, so that the class-conditional latent space exhibits a “compact-within-class and separable-across-classes” structure. Finally, after incorporating the class embedding dispersion reg-ularizer Ldisp (row 3), all metrics reach best result. The dispersion regularizer enforces sufficient dis-tances between different class embeddings, pre-venting them from collapsing to similar directions and further strengthening inter-class separability. 
+
+Category Transition Flow. In Table 9, base-line (first row), these results indicate that relying solely on ODE fitting is insufficient to achieve satisfactory semantic encryption. When we add 
+
+Lalign (second row), the result shows the loss explicitly forces the ODE terminal distribution to approach the true target-class latent distribution, 20 Lalign Lrev Lenergy NCRR ↑ OCLR ↓ Acc ↑              
+
+> 0.78 0.11 0.8920
+> ✓0.79 0.10 0.8965
+> ✓✓0.80 0.09 0.9008
+> ✓✓✓0.81 0.08 0.9032
+
+Table 9 Ablation study on the ODE-related losses. distribution alignment loss Lalign , reversibility consistency loss Lrev , and local energy smoothness loss Lenergy .Flow Diffusion Dual Cate Trans Flow NCRR ↑ OCLR ↓ Acc ↑                           
+
+> 0.71 0.18 0.8554,
+> ✓0.74 0.14 0.8695
+> ✓✓0.75 0.12 0.8769
+> ✓✓✓0.76 0.12 .8830.
+> ✓✓✓✓0.78, 0.10 0.8905
+> ✓✓✓✓✓0.81 0.08 0.9032
+
+Table 10 Ablation study on the ModelNet40 dataset [35]. Dual: DDual-Level Scale Control. Cate: Category Transition Table. Trans Flow: Category Transition Flow. 
+
+making the transformed samples more “similar” to the desired target category. In the third row, we further add Lrev by constraining the round-trip consistency from source to target and back to source. Lrev encourages the ODE trajectories to be more reversible while preserving geomet-ric structure, thereby reducing extreme paths and numerical instability. Finally, after including 
+
+Lenergy (last row), by penalizing sharp variations in the local energy field, Lenergy guides the ODE trajectories to traverse low-energy regions pref-erentially and avoid high-energy, high-risk areas, which further suppresses original-class leakage. 
+
+4.12 Sensitivity Analysis of Loss 
+
+Diffusion Module: Loss Design and Sen-sitivity. As shown in Fig. 7(a), we study the sensitivity of the proposed metrics with respect to the alignment loss weight λalign . When λalign is very small (e.g., 0 .01–0 .02), the alignment effect is weak, leading to degraded performance. As 
+
+λalign increases to the range of 0 .05–0 .2, the met-rics improve and form a relatively stable plateau: NCRR rises to about 0 .81, OCLR decreases to 0.08, and Acc reaches its peak of approximately 0.9032 at λalign = 0.1. When λalign is fur-ther increased (0 .4–1 .0), the performance gain becomes very limited, and the metrics even grad-ually decline, while 1 − OCLR remains nearly flat, indicating mild over-regularization. Overall, these results suggest that our default setting lies in a relatively flat and near-optimal region, and the method is not highly sensitive to λalign . Dual-Level Scale Control: Loss Design and Sen-sitivity. We further investigate the sensitivity of (a) alignment loss weight (b)  dispersion loss  weight     
+
+> score score
+> score score
+> (c) reversibility loss weight (d) energy loss weight
+
+Fig. 7 Sensitivity analysis of the loss weights. For (a) and (b), we vary λalign and λdisp from 0.01 to 0.1. For (c) and (d), we vary λrev and λenergy within [0 .1, 10], while keeping the other loss weights fixed. 
+
+the Dual-Level Scale Control to the dispersion weight λdisp . As shown in Fig. 7 (b), when λdisp 
+
+is too small (e.g., 0 .01–0 .02), the class embed-ding dispersion is under-regularized: NCRR stays around 0 .79–0 .802, OCLR remains relatively high (0 .10–0 .089), and Acc is below 0 .90. Increasing 
+
+λdisp to 0 .05 yields the best overall performance, indicating that a moderate dispersion strength is beneficial for pushing class embeddings apart and reducing original-class leakage without harming utility. Beyond this point, further enlarging λdisp 
+
+(0 .1–1 .0) leads to only mild but consistent degra-dation, suggesting that overly strong dispersion may over-penalize class proximity and introduce unnecessary distortion to the latent structure. Overall, the curve exhibits a clear peak around 
+
+λdisp = 0 .05, while still showing that the method is reasonably robust in the nearby range. Cat-egory Transition Flow: Loss Design and Sensitivity. To further understand the behav-ior of the ODE-based category transition module, we conduct a weight sensitivity analysis on the reversibility loss and the energy smoothness loss. Fig. 7(c) varies the reversibility weight λrev while keeping the other loss weights fixed. When λrev 
+
+is too small (e.g., 0 .1–0 .5), the reversibility con-straint is insufficient and the metrics remain low, indicating that the learned trajectories are more likely to drift and cannot guarantee a stable round-trip mapping between source and target latents. As λrev increases to a moderate range (around λrev ≈ 2), all three metrics consistently improve and reach their peak, showing that an appropriate reversibility regularization helps the 21 ODE preserve geometric structure and reduce original-class semantic leakage. Further increasing 
+
+λrev leads to a slight decline in the metrics, sug-gesting that overly strong constraints over-restrict the flow and weaken its ability to adapt to com-plex category transitions. Fig. 7(d) presents asimilar analysis for the energy smoothness weight 
+
+λenergy with λrev fixed. When λenergy is very small, the ODE trajectories are not sufficiently guided by the energy field and may pass through high-energy, high-risk regions, resulting in poor metric values. As λenergy increases to a moderate value (around λenergy ≈ 5), all metrics reach their best levels. This indicates that energy regulariza-tion can effectively guide the trajectories along smoother, lower-energy paths, allowing them to better match the target-class manifold. However, when λenergy becomes too large, the excessive smoothness constraint starts to over-regularize the flow and slightly harms downstream performance. Overall, these two sensitivity curves verify that our chosen weights lie near a stable “sweet spot.” 
+
+4.13 Sensitivity Analysis of Module 
+
+In Fig 8, We further investigate the weight sensi-tivity of the overall loss of the three modules—diff loss, dual loss, and ODE loss—by varying one weight at a time in the range [0 .01 , 0.40] while keeping the other two fixed at their optimal values, in order to analyze their impact on the behav-ior of the encryption model. Diff loss weight. 
+
+When the weight of the diff loss λdiff varies around its optimal value (0 .03), the three metrics change only slightly and form a relatively broad plateau. This indicates that the model is quite robust to moderate perturbations of λdiff : the diff term improves the structure of the encrypted represen-tations, but as long as its weight is not too large, the influence on metrics remains mild. When λdiff 
+
+becomes relatively large (e.g., ≥ 0.25), all three metrics start to decrease, suggesting that over-emphasizing this term constrains the latent distri-bution too strongly and degrades both recognition and privacy. Dual loss weight. In contrast, the curves for the dual loss show much sharper sen-sitivity. As the weight λdual deviates from its optimal value (0 .05), all metrics drop more notice-ably, and 1 − OCLR decreases the fastest. This means the dual loss is the most critical term for controlling category leakage: if λdual is too small, the transformation is not sufficiently regularized and the original class information leaks out; if it is too large, the mapping becomes over-constrained and hurts metrics. Therefore, λdual must be tuned in a relatively narrow range. ODE loss weight. 
+
+The ODE loss weight λode exhibits an intermedi-ate behavior between the above two. Around the optimal value (0 .10), all three metrics remain high and change smoothly, forming a wide but clearly peaked region. When λode is too small, the latent trajectories become less well-behaved and perfor-mance degrades; when it is too large, the dynamics are overly restricted, which also leads to a gradual drop in metrics. This shows that the ODE loss sta-bilizes the transformation, but its effective range is wider than that of the dual loss. 
+
+4.14 Ablation Study 
+
+We conduct ablation studies on the ModelNet40 dataset [35]. Table 10 shows the stepwise abla-tion results. The first row reports the performance of a conventional normalizing flow baseline, which exhibits limited effectiveness for semantic encryp-tion of point clouds. The second row corresponds to the shared-backbone Flow augmented with LoRA and FiLM. Despite a substantial reduction in the number of trainable parameters, this con-figuration already alleviates inter-class entangle-ment, indicating that a shared backbone combined with lightweight conditional modulation provides a strong baseline. In the third setting, the diffusion module is further introduced. By denoising and smoothing the target latent space during training, this module leads to a more stable and better-aligned target latent distribution generated by the flow. The fourth row incorporates the Dual-Level Scale Control mechanism, which calibrates geometric and semantic scale discrepancies across categories within a dimensionless latent space. As a result, intra-class representations become more compact, while inter-class separation is fur-ther enhanced. In the fifth configuration, we introduce the Category Transition Table. The explicitly defined category mapping yields seman-tically meaningful and energy-efficient source– target pairs, encouraging transformed samples to aggregate toward the intended target categories. Finally, the full model adds the Category Tran-sition Flow. Compared to linear interpolation, the Neural ODE learns a continuous latent flow 22 Fig. 8 Sensitivity of the three module loss weights. We vary one weight within [0 .01 , 0.40] while fixing the other two at their optimal values. The left figure corresponds to the diff module loss, the middle figure corresponds to the dual module loss, and the right figure corresponds to the ODE module loss. 
+
+field that enables adaptive and smooth transitions from source to target classes, bypassing high-energy regions and following more geometrically and semantically coherent trajectories. 
+
+# 5 Limitations 
+
+Although our model achieves promising results for semantic-level privacy protection of point clouds, several limitations still remain. First, the cur-rent framework mainly operates under a closed-set category setting. Although we further verify its incremental adaptation capability to unseen cate-gories, the stability and scalability of the method under fully open-set scenarios, where a large num-ber of new categories are continuously introduced, still require more systematic investigation. Sec-ond, our method is not designed to maximize the destruction of original-class recognizability; instead, it emphasizes the balance among sup-pression of original semantics, protected-domain learnability, and authorized recoverability. There-fore, under evaluation criteria that focus solely on extreme destructiveness, it may not always achieve the lowest original-class recognition rate. Finally, this work mainly focuses on category-level seman-tic privacy, while protection of instance-level iden-tity, local attributes, or finer-grained sensitive scene information has not yet been explicitly mod-eled. This also represents an important direction for future extension. 
+
+# 6 Conclusion 
+
+In this paper, we presented a semantic encryp-tion framework for 3D point clouds that enables privacy protection through category-conditioned reversible transformation. Our framework reduces the risk of original-class semantic leakage while preserving the usability of protected representa-tions for downstream tasks and allowing autho-rized recovery. Through a shared flow-based latent space, Category Transition Energy, and Neu-ral ODE-based reversible dynamics, our model achieves semantic transfer between classes and provides controllable protection in the semantic domain. Extensive experiments demonstrate that the proposed method effectively suppresses orig-inal semantic leakage while maintaining strong downstream learnability for tasks such as classi-fication and segmentation. These results suggest that semantic encryption offers a promising alter-native to destructive perturbation-based protec-tion. We provides a new paradigm for making shared 3D point cloud simultaneously private, reusable, and recoverable, and opens a practical direction for trustworthy 3D data sharing. 
+
+# 7 Data Availability Statement 
+
+This study uses two types of publicly avail-able point cloud benchmark datasets: point cloud classification datasets and point cloud semantic/-part segmentation datasets. The specific dataset names, versions, and citations are provided in the Experimental Setup and Datasets section. No new raw point cloud data were collected in this work, and all original data were obtained from official public sources and used in accordance with their respective licenses. This study does not involve any personally identifiable information. Its privacy risk mainly lies in the potential leakage of point cloud semantic class information, which is sys-tematically evaluated in the paper using relevant privacy-related metrics. 
+
+# Acknowledgement 
+
+This work is supported by NSF Grants NO. 2340882, 2334624, 2334246, and 2334690. 
+
+# References 
+
+[1] Zhang, J., Reddy, P.K., Wong, X.-I., Aloi-monos, Y., Lu, G.: Embodiment: Self-supervised depth estimation based on camera 23 models. In: IROS (2024) [2] Zhang, J., Lu, G.: Vision-language embod-iment for monocular depth estimation. In: CVPR (2025) [3] Zhang, J., Lu, G.: Underground mapping and localization based on ground-penetrating radar. In: ACCV (2024) [4] Lin, J., Zhang, J., Jin, G., Song, W., Liu, T., Lu, G.: 3d plant root skeleton detection and extraction. In: IROS (2025) [5] Guzman, J.A.d., Seneviratne, A., Thi-lakarathna, K.: Unravelling spatial privacy risks of mobile mixed reality data. ACM IMWUT (2021) [6] De Guzman, J.A., Thilakarathna, K., Senevi-ratne, A.: A first look into privacy leakage in 3d mixed reality data. In: ESORICS (2019) [7] Liu, S., Wang, Y., Gao, X.-S.: Game-theoretic unlearnable example generator. In: AAAI (2024) [8] Liu, Y., Xu, K., Chen, X., Sun, L.: Stable unlearnable example: Enhancing the robust-ness of unlearnable examples via stable error-minimizing noise. In: AAAI (2024) [9] Barattin, S., Tzelepis, C., Patras, I., Sebe, N.: Attribute-preserving face dataset anonymiza-tion via latent code optimization. In: CVPR (2023) [10] Dave, I.R., Chen, C., Shah, M.: Spact: Self-supervised privacy preservation for action recognition. In: CVPR (2022) [11] Liu, J., Lau, C.P., Chellappa, R.: Diffprotect: Generate adversarial examples with diffusion models for facial privacy protection. arXiv preprint arXiv:2305.13625 (2023) [12] Shamshad, F., Naseer, M., Nandakumar, K.: Clip2protect: Protecting facial privacy using text-guided makeup via adversarial latent search. In: CVPR (2023) [13] Yonetani, R., Naresh Boddeti, V., Kitani, K.M., Sato, Y.: Privacy-preserving visual learning using doubly permuted homomor-phic encryption. In: ICCV (2017) [14] Liu, B., Liu, Y., Xie, Y., Jiang, X., Ye, Y., Song, T., Chai, J., Liu, M., Feng, M., Yuan, H.: Privacy protection for 3d point cloud classification based on an optical chaotic encryption scheme. Optics Express (2023) [15] Li, X., Li, J., Di, X., Guan, H., Zhang, M., Gao, M., Ibrahim, M.: 3d point cloud encryption algorithm based on hybrid key and spatial maintenance. JISA (2024) [16] Jia, C., Yang, T., Wang, C., Fan, B., He, F.: Encryption of 3d point cloud using chaotic cat mapping. 3D Research (2019) [17] Wang, X., Li, M., Liu, W., Zhang, H., Hu, S., Zhang, Y., Zhou, Z., Jin, H.: Unlearnable 3d point clouds: Class-wise transformation is all you need. NeurIPS (2024) [18] Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. ICLR (2022) [19] Perez, E., Strub, F., De Vries, H., Dumoulin, V., Courville, A.: Film: Visual reasoning with a general conditioning layer. In: AAAI (2018) [20] Sweeney, L.: k-anonymity: A model for pro-tecting privacy. IJUFKS (2002) [21] Jiang, B., Bai, B., Lin, H., Wang, Y., Guo, Y., Fang, L.: Dartblur: Privacy preserva-tion with detection artifact suppression. In: CVPR (2023) [22] Maximov, M., Elezi, I., Leal-Taix´ e, L.: Ciagan: Conditional identity anonymization generative adversarial networks. In: CVPR (2020) [23] Wang, C., Wu, M., Lam, S.-K., Ning, X., Yu, S., Wang, R., Li, W., Srikanthan, T.: Gpsformer: A global perception and local structure fitting-based transformer for point cloud understanding. In: ECCV (2024) [24] Wang, C., He, S., Fang, X., Han, J., Liu, Z., 24 Ning, X., Li, W., Tiwari, P.: Point clouds meets physics: Dynamic acoustic field fitting network for point cloud understanding. In: CVPR (2025) [25] Wang, C., He, S., Fang, X., Wu, M., Lam, S.-K., Tiwari, P.: Taylor series-inspired local structure fitting network for few-shot point cloud semantic segmentation. In: AAAI (2025) [26] Wang, C., Fang, X., Tiwari, P.: Dypoly-seg: Taylor series-inspired dynamic polyno-mial fitting network for few-shot point cloud semantic segmentation. In: ICML (2025) [27] Wang, C., He, S., Fang, X., Hu, Z., Huang, J.-H., Shen, Y., Tiwari, P.: Reason-ing beyond points: A visual introspective approach for few-shot 3d segmentation. In: NeurIPS (2025) [28] Izmailov, P., Kirichenko, P., Finzi, M., Wil-son, A.G.: Semi-supervised learning with nor-malizing flows. In: ICML (2020) [29] Dinh, L., Sohl-Dickstein, J., Bengio, S.: Den-sity estimation using real nvp. arXiv preprint arXiv:1605.08803 (2016) [30] Kingma, D.P., Dhariwal, P.: Glow: Gener-ative flow with invertible 1x1 convolutions. NeurIPS (2018) [31] Yang, G., Huang, X., Hao, Z., Liu, M.-Y., Belongie, S., Hariharan, B.: Pointflow: 3d point cloud generation with continuous normalizing flows. In: ICCV (2019) [32] Ardizzone, L., Kruse, J., L¨ uth, C., Bracher, N., Rother, C., K¨ othe, U.: Conditional invert-ible neural networks for diverse image-to-image translation. In: GCPR (2020) [33] Xia, H., Suliafu, V., Ji, H., Nguyen, T., Bertozzi, A., Osher, S., Wang, B.: Heavy ball neural ordinary differential equations. NeurIPS (2021) [34] Liu, X., Gong, C., Liu, Q.: Flow straight and fast: Learning to generate and trans-fer data with rectified flow. arXiv preprint arXiv:2209.03003 (2022) [35] Wu, Z., Song, S., Khosla, A., Yu, F., Zhang, L., Tang, X., Xiao, J.: 3d shapenets: Adeep representation for volumetric shapes. In: CVPR (2015) [36] Uy, M.A., Pham, Q.-H., Hua, B.-S., Nguyen, T., Yeung, S.-K.: Revisiting point cloud clas-sification: A new benchmark dataset and classification model on real-world data. In: ICCV (2019) [37] Chang, A.X., Funkhouser, T., Guibas, L., Hanrahan, P., Huang, Q., Li, Z., Savarese, S., Savva, M., Song, S., Su, H., et al.: Shapenet: An information-rich 3d model repository. arXiv preprint arXiv:1512.03012 (2015) [38] Qi, C.R., Su, H., Mo, K., Guibas, L.J.: Pointnet: Deep learning on point sets for 3d classification and segmentation. In: CVPR (2017) [39] Qi, C.R., Yi, L., Su, H., Guibas, L.J.: Point-net++: Deep hierarchical feature learning on point sets in a metric space. NeurIPS (2017) [40] Wang, Y., Sun, Y., Liu, Z., Sarma, S.E., Bronstein, M.M., Solomon, J.M.: Dynamic graph cnn for learning on point clouds. ACM ToG (2019) [41] Li, Y., Bu, R., Sun, M., Wu, W., Di, X., Chen, B.: Pointcnn: Convolution on x-transformed points. NeurIPS (2018) [42] Qiu, S., Anwar, S., Barnes, N.: Geomet-ric back-projection network for point cloud classification. TMM (2022) [43] Zhao, H., Jiang, L., Jia, J., Torr, P.H., Koltun, V.: Point transformer. In: ICCV (2021) [44] Ma, X., Qin, C., You, H., Ran, H., Fu, Y.: Rethinking network design and local geom-etry in point cloud: A simple residual mlp framework. In: ICLR (2022) 25

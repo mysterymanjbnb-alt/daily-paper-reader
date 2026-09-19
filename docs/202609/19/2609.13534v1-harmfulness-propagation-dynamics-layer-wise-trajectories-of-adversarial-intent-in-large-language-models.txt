@@ -1,0 +1,909 @@
+Title: Harmfulness Propagation Dynamics: Layer-wise Trajectories of Adversarial Intent in Large Language Models
+
+URL Source: https://arxiv.org/pdf/2609.13534v1
+
+Published Time: Tue, 15 Sep 2026 00:24:06 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Harmfulness Propagation Dynamics: Layer-wise Trajectories of Adversarial Intent in Large Language Models 
+
+Noor Islam S. Mohammad * 1 Ulu˘ g Bayazıt 2
+
+## Abstract 
+
+We identify Harmfulness Propagation Dynam-ics (HPD) : for harmful prompts, the projection of the last-token hidden state onto a learned harm direction rises monotonically with transformer depth, whereas benign prompts remain flat or os-cillatory. This cross-layer signature reflects harm-ful intent as a progressively resolved semantic property: surface form appears early, while prag-matic intent consolidates later, making the trajec-tory shape more informative than any single-layer snapshot. Moreover, LDA-based harm directions, learned per layer, remain stable across random splits (pairwise cosine similarity > 0.97 ), sup-porting the projection sequence as a reproducible structured signal. Building on HPD, we introduce 
+
+HERALD (Harmful Encoding Recognition via 
+
+Activation Layer Dynamics). This lightweight input moderator extracts a seven-dimensional fea-ture record, slope, curvature, monotonicity, on-set layer, and related statistics from the cross-layer projection sequence and classifies it with a 288-parameter MLP. H ERALD stores one d-dimensional direction per layer ( 262 KB for a 32-layer, d=4096 model), requires no gradient com-putation during training, and adds only 2.6×10 −6
+
+prefill FLOPs at inference. Across eight prompt-harmfulness benchmarks and four model fami-lies, H ERALD achieves an average F1 of 89 .3 on OLMo2-7B, surpassing all tested guard models on adversarial jailbreak detection ( 98 .4 vs. 96 .9
+
+F1) and outperforming prior latent-based meth-ods by 2.3-4.1 F1 points on every backbone. Per-instance trajectories provide machine-readable au-dit records that reveal when and how harmfulness emerges, offering an interpretability advantage over single-layer approaches. 
+
+> 1
+
+Department of Computer Science, ˙ IT ¨ U, ˙ Istanbul, T¨ urkiye 
+
+> 2
+
+Faculty of Computer Engineering, ˙ IT ¨ U, ˙ Istanbul, T¨ urkiye. Corre-spondence to: Noor Islam S. Mohammad <islam23@itu.edu.tr >.
+
+Mechanistic Interpretability Workshop at the 43 rd International Conference on Machine Learning (ICML 2026), Seoul, South Korea. Copyright 2026 by the author(s). 
+
+## 1. Introduction 
+
+Safe deployment of large language models requires de-fenses that go beyond alignment fine-tuning. Even well-aligned models remain vulnerable to adversarial and in-direct prompts (Perez et al., 2022; Greshake et al., 2023; Ganguli et al., 2022; Carlini et al., 2023), and alignment may come at the cost of general capability (Askell et al., 2021). Input moderation screening requests before gen-eration is a complementary safeguard that blocks unsafe prompts while avoiding the full cost of a forward pass on harmful inputs. Existing moderators occupy two extremes. Guard models (Markov et al., 2023; Vidgen et al., 2023) are accurate but incur the expense of an additional large model (≈14 GB for a 7B guard). Latent-based methods (Ryu et al., 2024; Li et al., 2025) are lightweight but commit to a single 
+
+layer’s hidden state, discarding information carried by the progression of representations across depth. 
+
+Our starting point: harmfulness is a progressively re-solved signal. Prior work on transformer representation geometry shows that different linguistic properties are en-coded at different depths: syntax in early layers, semantics in middle layers, and task-relevant pragmatics in late lay-ers (Jawahar et al., 2019; Tenney et al., 2019; Geva et al., 2021). We ask whether harmfulness follows this pattern and specifically whether the trajectory of a prompt’s represen-tation projected onto a harm direction, across all layers, is itself a discriminative signal. 
+
+Core observation (HPD). Projecting each layer’s last-token hidden state onto a per-layer LDA harm direction yields a trajectory {pl}Ll=1 that differs sharply between harmful and benign prompts (Section 3). For harmful inputs, particularly jailbreaks, the trajectory rises steadily and monotonically from near-zero in early layers to strongly positive values in late layers. Benign prompts remain flat or oscillatory, with no systematic directional growth. We call this Harmfulness Propagation Dynamics (HPD) .Critically, HPD is not merely a restatement of the well-known fact that late-layer representations are more discrimi-native. The trajectory’s shape carries information beyond the terminal value: the onset layer, the monotonicity of growth, and the curvature each contribute independently 1arXiv:2609.13534v1 [cs.CL] 11 Sep 2026 Harmfulness Propagation Dynamics in Large Language Models 
+
+(Section 7.1), and the gap between trajectory and terminal-only classification is largest precisely for adversarial jail-breaks, the most practically important detection target. 
+
+Relation to representation engineering. Zou et al. (2023c) show that linear directions in activation space can steer and probe model behavior. HPD extends this insight in a distinct direction: rather than learning a single probe or steering vec-tor, we track how a harm direction evolves across layers and treat the resulting trajectory as a first-class data object for classification. This cross-layer dynamics view is orthogonal to activation-space probing at a fixed depth. 
+
+HERALD exploits HPD through four steps: (i) Learn a per-layer LDA harm direction vl using only a single gradient-free forward pass over the training set; (ii) project each layer’s last-token hidden state onto vl to obtain scalar pl;(iii) extract a compact seven-dimensional feature vector 
+
+ϕ(p) capturing the trajectory’s slope, curvature, monotonic-ity, onset layer, and related statistics; and (iv) classify ϕ
+
+with a 288-parameter MLP trained in seconds on CPU. 
+
+Contributions: 
+
+• We identify and formally characterize Harmfulness Prop-agation Dynamics , a cross-layer signature of harmful prompts in which per-layer harm projections rise mono-tonically with depth. We prove that LDA harm directions converge to stable axes (pairwise cosine similarity > 0.97 
+
+across five splits) and show that this stability is necessary for trajectory-based classification. • We introduce HERALD , a gradient-free trajectory mod-erator requiring O(Ld ) memory ( 262 KB for a 32-layer model) and negligible runtime overhead ( 2.6×10 −6 of prefill FLOPs), distinguishing it from guard models and full-covariance latent methods. • H ERALD surpasses all tested guard models on adversar-ial jailbreak detection and outperforms all latent-based baselines on average F1 across eight benchmarks and four model families, with 2.3–4.1 F1 improvements over prior latent methods. • We show that trajectory features provide category-specific interpretability : jailbreaks exhibit early onset ( ˆl∗≈7) and high monotonicity ( 0.83 ), whereas social stereotypes on-set late ( ˆl∗≈19 ) with inconsistent growth ( 0.58 ). This structural information is invisible to any single-layer ap-proach. • Comprehensive ablations across eight benchmarks iso-late the contributions of direction learning, layer cover-age, token position, normalization, classifier capacity, and shrinkage regularization, constituting a reproducible eval-uation framework for cross-layer safety methods. 
+
+## 2. Related Work 
+
+LLM safety and alignment. RLHF (Christiano et al., 2017; Stiennon et al., 2020) and DPO (Rafailov et al., 2023) improve model safety, yet aligned models remain suscep-tible to adversarial prompting (Ganguli et al., 2022; Perez et al., 2022; Zou et al., 2023c). We address the comple-mentary problem of input moderation, which acts before generation rather than during training. 
+
+Input moderation. Guard models (Markov et al., 2023; Vidgen et al., 2023) achieve strong classification but re-quire a second large model. Rule-based filters (R¨ ottger et al., 2021) are interpretable but brittle. Latent-based meth-ods (Ryu et al., 2024; Li et al., 2025) use host-model acti-vations efficiently but classify from a single chosen layer. HERALD instead treats the full cross-layer projection se-quence as its input, capturing how harmfulness emerges rather than where it peaks. 
+
+Representation geometry and linear probing. Linear directions in LLM hidden spaces encode semantically mean-ingful concepts (Mikolov et al., 2013; Park et al., 2024). Probing studies confirm that layers encode increasingly ab-stract properties, from syntax to pragmatics (Jawahar et al., 2019; Tenney et al., 2019; Rogers et al., 2020). Zou et al. (2023c) demonstrates that reading vectors learned via con-trastive activation addition can probe and steer behavior; Markov et al. (2023) further shows that truth-value direc-tions follow a linear geometry. H ERALD differs from all these approaches: we learn separate LDA directions per layer and classify the resulting cross-layer trajectory rather than the projection at any fixed depth. 
+
+Refusal and safety directions. Park et al. (2024) identify a linear ”refusal direction” in residual streams and show that ablating it removes safety behavior. This is complementary to our work: we monitor the input side by tracking how a harmful direction accumulates projection mass across lay-ers, rather than intervening on the output side. The two directions also differ conceptually—refusal directions char-acterize generation-time behavior, while HPD directions characterize inference-time encoding of the prompt’s intent. 
+
+Trajectory and time-series methods for anomaly detec-tion. Time-series features such as slope, curvature, and monotonicity are standard tools in anomaly detection (Christ et al., 2018). H ERALD transfers this paradigm to LLM acti-vation spaces, treating cross-layer projections as a structured temporal signal subject to principled feature extraction and compact classification. 
+
+LLM governance and structured evaluation. Struc-tured, reproducible evaluation is increasingly recognized as 2Harmfulness Propagation Dynamics in Large Language Models 
+
+essential for responsible deployment (Ganguli et al., 2022; Vidgen et al., 2023). H ERALD ’s per-instance trajectories constitute machine-readable audit records that expose when 
+
+and how harmfulness emerges, directly supporting gover-nance workflows requiring more than a binary safe/unsafe label. 
+
+## 3. Harmfulness Propagation Dynamics 
+
+3.1. Definition and Observation Setup. Let x be a prompt of length T processed by an 
+
+L-layer LLM, and let hl ∈ Rd denote the last-token hidden state at layer l. For each layer, we learn a harm direction 
+
+vl ∈ Rd (defined formally in Section 4) and compute the cosine projection 
+
+pl(x) = 
+
+ hl
+
+∥hl∥ , vl
+
+∥vl∥
+
+
+
+∈ [−1, 1] . (1) The sequence {pl}Ll=1 is the harm trajectory of prompt x.
+
+Empirical observation. On a Llama-3.1-8B-Instruct backbone trained with WildGuardMix, harmful prompts produce trajectories with three characteristic phases: (i) near-zero projections in early layers ( l ≲ 8), (ii) a steady monotonic rise through middle layers, and (iii) strongly positive values ( pL ≳ 0.4) in late layers. Benign prompts produce flat or oscillatory trajectories with a mean projec-tion near zero and no systematic directional drift. This pattern—which we call Harmfulness Propagation Dynam-ics (HPD) —is stable across all four model families tested (Llama-3.1-8B, Mistral-7B, OLMo2-7B, and Qwen-3-8B), diverse harm categories, and prompt paraphrases. 
+
+3.2. Theoretical Grounding 
+
+HPD is consistent with the layered computation hypothesis for transformers (Jawahar et al., 2019; Tenney et al., 2019): early layers process surface form (tokenization artifacts, punctuation, and lexical identity), while later layers encode increasingly abstract semantic and pragmatic properties. We make this precise with the following proposition. 
+
+Proposition 3.1 (Informal) . Suppose that (i) harmful intent is a semantic-pragmatic property primarily encoded in later transformer layers; (ii) the LDA harm direction vl is a con-sistent estimator of the optimal Fisher discriminant at layer 
+
+l; and (iii) the projection of harmful representations onto 
+
+vl increases l in expectation while benign representations remain bounded. Then, the expected trajectory of harm-ful prompts is monotonically increasing, whereas benign trajectories satisfy E[pl] ≈ 0 for all l.
+
+Assumptions (i) and (iii) are validated empirically in Ap-pendix B and are consistent with prior probing results (Ten-ney et al., 2019; Geva et al., 2021). Assumption (ii) is validated by the direction stability analysis in Appendix H: pairwise cosine similarity of vl learning on independent splits exceeds 0.97 at every layer and backbone (Table 12), confirming that LDA converges to a stable population direc-tion rather than fitting sampling noise. 
+
+Why the trajectory, not just the terminal value? The final projection pL is indeed informative (Table 3). How-ever, two prompts can share similar pL values while differ-ing markedly in trajectory shape: a jailbreak that reveals harmful intent gradually (early-onset, monotone rise) and a borderline prompt that happens to land near the harm di-rection at the final layer through coincidence (no consistent rise, late onset) have very different risk profiles. The tra-jectory features—particularly the onset layer ˆl∗ and mono-tonicity—discriminate these cases where the terminal value alone cannot. We quantify this advantage in Section 6.3. 
+
+## 4. Methodology 
+
+4.1. Per-Layer Harm Directions via LDA 
+
+For each layer l, we apply binary LDA to find the direction maximally separating last-token hidden states of harmful versus safe prompts: 
+
+vl = arg max 
+
+> v:∥v∥=1
+
+v⊤S(l) 
+
+> B
+
+vv⊤S(l) 
+
+> W
+
+v , (2) where S(l) 
+
+> B
+
+and S(l) 
+
+> W
+
+are the between-class and within-class scatter matrices. The closed-form solution is: 
+
+vl ∝  S(l)
+
+> W
+
+−1 μharm  
+
+> l
+
+− μsafe 
+
+> l
+
+, (3) normalized to unit length. We invert S(l) 
+
+> W
+
+using analytic Ledoit-Wolf shrinkage (Ledoit & Wolf, 2004), which re-places the sample covariance with a well-conditioned con-vex combination of itself and a scaled identity: ˆSW
+
+> (l)
+
+=(1 − α)S(l) 
+
+> W
+
++ α · tr( S(l)  
+
+> W)
+> d
+
+I, where α is computed analytically. This is critical when d ≫ ntrain : without regularization, F1 degrades by up to 27 points at low data regimes (Table 10). 
+
+Why LDA over simpler alternatives? The class-mean difference μharm  
+
+> l
+
+− μsafe  
+
+> l
+
+ignores within-class variation: prompts with the same label differ in length, wording, and rhetorical style, producing substantial within-class scatter. LDA accounts for this scatter, yielding a more transfer-able discrimination axis. Empirically, LDA outperforms the mean-difference direction by 0.5–0.8 F1 (Table 4). Each layer retains only vl ∈ Rd (≈8 KB at d=4096 half preci-sion; scatter matrices are discarded after training. 
+
+4.2. Trajectory Feature Extraction 
+
+Given layer-wise projections pl = ⟨ˆhl, vl⟩ for l = 1 , . . . , L ,where ˆhl = hl/∥hl∥, we construct a compact feature vector 3Harmfulness Propagation Dynamics in Large Language Models 
+
+ϕ(p) ∈ R7:
+
+ϕ(p) = pL, ¯p, p L − p1, ∆2p, mono( p), p ˆl∗ , ˆl∗, (4) where p = {pl}Ll=1 . The mean projection is ¯p = 1
+
+> L
+
+PLl=1 pl.The mean absolute curvature is ∆2p = 1
+
+> L−2
+
+PL−1 
+
+> l=2
+
+|pl+1 −
+
+2pl + pl−1|, and the monotonicity ratio is mono( p) = 
+
+> 1
+> L−1
+
+PL−1 
+
+> l=1
+
+1[pl+1 > p l]. We define the onset layer as 
+
+ˆl∗ = min {l : pl > τ 90 }, i.e., the first layer exceeding the 90th-percentile threshold, with a corresponding value pˆl∗ .These features capture complementary geometric proper-ties of the trajectory: terminal alignment ( pL), global rise (pL − p1), smoothness ( ∆2p), consistency ( mono( p)), and emergence timing ( ˆl∗, pˆl∗ ). Empirically, logistic regres-sion achieves performance within 1.0 F1 of the full MLP (Table 9), indicating that ϕ is close to linearly separable and that predictive power is primarily encoded in trajectory geometry rather than classifier complexity. 
+
+4.3. Trajectory Classifier 
+
+A two-layer MLP g : R7 → [0 , 1] with a hidden dimension 
+
+32 classifies trajectory features: HERALD (x) = σ W2 ReLU( W1ϕ(p) + b1) + b2
+
+. (5) The MLP has 288 parameters and trains on CPU in seconds. Larger architectures (hidden size 64 -128 , two hidden layers) provide no statistically significant benefit (Table 9), confirm-ing that the bottleneck is representation quality rather than classifier capacity. 
+
+Algorithm 1 HERALD : Training and Inference 
+
+Input: LLM f with L layers; labeled dataset D =
+
+{(xi, y i)}; threshold τ90 
+
+Training (single forward pass, no gradients required) 
+
+for each (xi, y i) ∈ D do 
+
+Collect last-token hidden states {h(i) 
+
+> l
+
+}Ll=1 during prefill of f (xi)
+
+end for for l = 1 to L do 
+
+Compute class means μharm  
+
+> l
+
+, μsafe  
+
+> l
+
+and scatter matrix 
+
+S(l)
+
+> W
+
+Solve Eq. (3) with Ledoit–Wolf shrinkage to obtain vl
+
+Discard scatter matrices; retain only vl
+
+Compute p(i) 
+
+> l
+
+= ⟨ˆh(i) 
+
+> l
+
+, vl⟩ for all i
+
+end for 
+
+Extract ϕ(i) from {p(i) 
+
+> l
+
+} for all i; train MLP g
+
+Inference (no extra forward passes over f )Given new prompt x: collect {hl}Ll=1 during prefill; com-pute ϕ(p)
+
+Return g(ϕ(p)) ≥ 0.5 as harmful prediction 
+
+Computational overhead. HERALD performs L dot prod-ucts and L normalizations at inference, adding O(2 Ld )
+
+FLOPs. For L=32 , d=4096 , this is ≈262 K FLOPs against 
+
+≈100 B prefill FLOPs for a 100-token prompt—a ratio of 
+
+2.6×10 −6. Memory: L × d × 2 bytes (fp16) = 262 KB– 
+
+∼650 × less than a full per-layer covariance approach and ∼53 ,000 × less than a 7B-parameter guard model (≈14 GB). 
+
+## 5. Experimental Setup 
+
+Benchmarks. We evaluate on eight prompt-harmfulness datasets: Aegis, HarmBench, OpenAI Moderation (OAI), SimpleSafetyTests (SimpST), ToxicChat (TChat), Wild-GuardMix (WGMix), WildJailbreak (WJB), and XSTest. Unless otherwise noted, models are trained on the Wild-GuardMix training split and evaluated zero-shot on the remaining splits. Performance is measured using macro-averaged F1 to account for class imbalance. This multi-benchmark protocol captures variability across harm types, distribution shifts, and adversarial prompt constructions. 
+
+Backbones. We consider four instruction-tuned model fam-ilies: Llama-3.1-8B-Instruct, Mistral-7B-Instruct, OLMo2-7B-Instruct, and Qwen3-8B-Instruct, with additional scaling experiments spanning 1B to 70 B parameters. 
+
+Baselines. Latent-based: (i) Embed. Clf. , a linear classi-fier over embedding-layer representations; (ii) Act. Delta ,which uses differences between hidden states at fixed layers. Both operate on the same backbone as H ERALD . Guard models: four standalone safety classifiers (Guard A–D) with heterogeneous architectures, evaluated without access to backbone activations. 
+
+Statistical reporting. All results report the mean macro-F1 over three random seeds. Improvements of ≥ 0.5 F1 are statistically significant ( p < 0.05 ) under a paired bootstrap test over evaluation samples. 
+
+## 6. Results 
+
+Table 1 and Figure 1 report per-dataset and average F1 scores. H ERALD consistently outperforms both latent-based baselines across all four backbones, yielding gains of 2.3–
+
+4.1 average F1. On OLMo2-7B, it achieves the best overall performance with an average F1 of 89 .3. Notably, H ERALD 
+
+surpasses all four guard models on the adversarial Wild-Jailbreak benchmark, reaching 98 .4 F1 compared to the next-best 96 .9, demonstrating strong robustness to jailbreak-style prompts. Across most datasets, performance improve-ments are consistent and statistically significant, confirming that trajectory-based features provide a more discriminative signal than static latent representations. However, on Tox-icChat and OpenAI Moderation, H ERALD underperforms 4Harmfulness Propagation Dynamics in Large Language Models 
+
+the strongest guard model by 2–4 F1, suggesting that stan-dalone classifiers may better capture certain surface-level or dataset-specific patterns. We analyze this performance gap and its implications in Section 8. 
+
+Table 1. Average F1 on eight prompt-harmfulness benchmarks. Green text marks the top result within each group. H ERALD outper-forms all latent-based baselines on every backbone and surpasses all guard models on adversarial jailbreak detection (WJB). Results are the mean F1 over three seeds; standard deviations are ≤0.3 for all H ERALD configurations and are omitted for space.                                                                                                                                                                
+
+> Method Backbone Aegis HarmB OAI SimpST TChat WGMix WJB XSTest Avg F1
+> Latent-based methods (lightweight; use backbone activations)
+> Embed. Clf. Llama-8B 79.3 93.1 63.7 96.4 52.8 77.9 79.4 89.6 79.0 Act. Delta Llama-8B 81.6 92.4 65.2 97.1 57.3 83.5 90.8 87.9 82.0 HERALD (ours) Llama-8B 84.1 97.6 69.5 98.4 64.9 86.3 95.8 93.7 86.3 Embed. Clf. Mistral-7B 77.4 88.5 72.6 96.8 61.0 80.6 84.7 91.8 81.7 Act. Delta Mistral-7B 81.9 94.7 62.3 96.3 55.4 82.9 88.4 91.3 81.6 HERALD (ours) Mistral-7B 85.7 97.9 68.4 98.9 63.6 86.7 94.3 94.9 86.3 Embed. Clf. OLMo2-7B 85.6 93.8 65.4 98.6 63.1 85.7 94.2 91.5 84.7 Act. Delta OLMo2-7B 81.4 90.7 72.9 97.4 70.8 83.6 91.0 92.2 85.0 HERALD (ours) OLMo2-7B 88.7 97.4 73.1 99.5 74.6 87.9 98.4 95.8 89.3 Embed. Clf. Qwen3-8B 77.8 88.3 71.9 93.6 66.4 78.2 79.6 87.9 80.5 Act. Delta Qwen3-8B 81.3 96.9 66.2 95.7 58.7 82.6 87.8 85.7 81.9 HERALD (ours) Qwen3-8B 82.4 98.6 70.3 95.9 62.7 84.9 92.1 90.8 84.7
+> Guard models (standalone classifiers; no backbone access required)
+> Guard A NE 70.2 97.6 77.4 98.3 52.9 74.8 66.1 86.9 78.0 Guard B NE 75.8 67.3 75.9 89.7 66.4 57.1 58.3 80.6 71.4 Guard C NE 86.2 78.4 76.1 98.5 71.8 82.9 96.9 84.1 84.4 Guard D NE 88.4 98.1 81.5 98.3 78.9 86.8 96.4 93.9 87.8
+
+6.1. Advantage on Adversarial Jailbreaks 
+
+HERALD surpasses all four guard models on WildJail-break for every backbone tested. On OLMo2-7B it reaches 
+
+98 .4 F1, exceeding the best guard by 1.5 points. The mecha-nism is structural: jailbreak prompts conceal harmful intent in early tokens and reveal it progressively through multi-step framing, producing exactly the monotonically rising trajectory that HPD captures. By contrast, a single-layer snapshot reads only the terminal representation, missing the 
+
+path by which it was reached. On ToxicChat and OpenAI Moderation, H ERALD trails the best guard by 2–4 F1, a gap we attribute to the diffuse, culturally contingent nature of those harm categories (Section 8). 
+
+Table 2. WildGuardMix F1 at varying training set sizes. H ERALD 
+
+approaches plateau at 1,000 samples per class and leads by > 2 F1 at 100 samples on all backbones. 
+
+Backbone Method F1@100 F1@1k F1@10k F1@Full 
+
+Llama-8B Embed. Clf. 79.3 81.6 82.9 83.6 Act. Delta 77.8 80.4 82.1 82.7 
+
+HERALD 79.6 84.1 85.9 86.3 Mistral-7B Embed. Clf. 74.7 79.3 82.0 83.1 Act. Delta 71.2 77.1 80.6 81.4 
+
+HERALD 77.3 83.5 85.8 86.7 OLMo2-7B Embed. Clf. 83.1 84.9 85.6 85.7 Act. Delta 81.0 83.6 85.1 85.9 
+
+HERALD 83.7 86.5 88.0 87.9 
+
+(a) F1 across all eight benchmarks and four backbones. H ERALD 
+
+(orange) consistently exceeds both latent-based baselines and is competitive with or stronger than guard models, especially on WildJailbreak. 
+
+(b) Average F1 across bench-marks. 
+
+(c) WildJailbreak F1. 
+
+Figure 1. HERALD achieves state-of-the-art jailbreak detection at a fraction of the cost of guard models. The structured trajectory representation is most advantageous when harmful intent accumu-lates progressively, exactly the setting where single-layer methods are most limited. 
+
+6.2. Data Efficiency and OOD Generalization 
+
+Table 2 shows that H ERALD approaches a plateau at 1,000 
+
+samples per class, matching latent baselines in final perfor-mance while achieving comparable F1 with 10 × fewer sam-ples at the 100 sample mark. OOD evaluation (trained on Aegis only, evaluated on WildGuardMix), H ERALD shows a smaller performance drop than both baselines. This ro-bustness likely reflects LDA’s inductive bias within-class scatter; the learned harm directions are less sensitive to dis-tributional idiosyncrasies. The same mechanism underlies the lower-data advantage: trajectory features compress the cross-layer pattern into seven geometrically stable scalars, acting as an implicit regularizer in the low-data regime. 
+
+6.3. Disentangling Terminal-Layer Signal from Trajectory Signal 
+
+A natural concern is whether H ERALD ’s gains stem from improved use of the final hidden state rather than true tra-jectory information. We address this in three ways. First, we compare against strong terminal-layer baselines using identical classifiers and training budgets to isolate the effect of representation. Second, we ablate trajectory features and 5Harmfulness Propagation Dynamics in Large Language Models 
+
+observe consistent performance drops when the cross-layer structure is removed. Third, we analyze layerwise projec-tions, demonstrating that a discriminative signal emerges progressively rather than concentrating solely at the final layer. Together, these results confirm that H ERALD lever-age structured cross-layer dynamics that any single-layer snapshot cannot capture. The gap is largest on hard cases: 
+
+Restricting to the final projection pL alone achieves 87 .8 F1 on OLMo2-7B—only 1.5 points below the full model on average. However, on WildJailbreak the gap is 2.1 points (96 .3 vs. 98 .4). Jailbreak prompts are precisely the cate-gory where harmful intent is most gradually revealed; the terminal hidden state accumulates full depth but cannot reveal how it got there , whether through consistent direc-tional growth or late-occurring coincidence. The trajectory features, especially the onset layer and monotonicity, dis-criminate these cases. 
+
+The advantage compounds under data scarcity. At 100 training samples, OLMo2-7B H ERALD reaches 83 .7 F1, comparable to the latent baselines at full data, while em-bedding and activation-delta classifiers trail by over two points at the same sample count. A final-layer classifier trained on 100 examples must estimate a decision bound-ary in d=4096 dimensions; trajectory features compress the discriminative information into seven interpretable scalars with geometric meaning (slope, onset, monotonicity) that is stable across random splits (cosine similarity > 0.97 , Ta-ble 12). Trajectory shape is an independent source of interpretability: Even setting accuracy aside, the per-layer trajectory provides qualitatively distinct information. Ta-ble 13 shows that harm categories differ systematically in onset layer and monotonicity: jailbreaks exhibit early onset (ˆl∗≈7) and high monotonicity ( 0.83 ), while social stereo-types onset late ( ˆl∗≈19 ) with inconsistent growth ( 0.58 ). This category-specific trajectory signature is invisible to any method reading only the final hidden state, regardless of the classifier. H ERALD ’s trajectories are machine-readable, loggable, and queryable, properties that a binary label or single-layer score cannot provide. 
+
+## 7. Ablation Studies 
+
+To assess the contribution of each component, we vary one design choice at a time and report the resulting average F1 on WildGuardMix. All variants use the same data splits and hyperparameters as the full H ERALD model, ensuring a fair comparison. Performance differences of ≥0.5 F1 are sta-tistically significant when p< 0.05 using a paired bootstrap test. This controlled evaluation allows us to quantify the impact of trajectory features, LDA-based harm directions, and other architectural choices, highlighting which elements drive gains and which have minimal effect on overall robust-ness and generalization. 
+
+7.1. Trajectory Feature Components 
+
+Table 3 adds trajectory features cumulatively. The final projection pL is a strong but incomplete predictor. Adding mean ¯p, total rise, monotonicity, curvature, and onset layer each improve performance; onset layer ˆl∗ provides the largest single gain, especially on WildJailbreak ( +0 .5 F1 on the full model, +1 .3 F1 incrementally). Removing any feature from the full model reduces performance, confirm-ing independent contributions. 
+
+Table 3. Trajectory feature ablation. Features are added cu-mulatively, green text marking the full model. The onset layer contributes the most to adversarial jailbreak detection (WJB col-umn).                                                            
+
+> Feature configuration Llama-8B Mistral-7B OLMo2-7B WJB (OLMo2)
+> pLonly 84.7 84.4 87.8 96.3
+> +mean ¯p85.0 84.7 88.1 96.6
+> +total rise (pL−p1)85.5 85.2 88.5 97.1
+> +monotonicity mono 85.9 85.8 88.9 97.6
+> +curvature ∆2p86.1 86.1 89.1 97.9
+> +onset ˆl∗(full) 86.3 86.3 89.3 98.4 Full −mean ¯p86.0 86.0 88.9 97.9 Full −curvature 86.1 86.1 89.0 98.0 Full −onset ˆl∗85.4 85.4 88.4 97.1
+
+(a) Trajectory feature ablation. (b) Direction learning compari-son. 
+
+Figure 2. Feature and direction-learning ablations. Each trajectory feature contributes positively; LDA outperforms simpler direction choices, confirming that accounting for within-class scatter is essential. 
+
+7.2. Direction Learning Method 
+
+Table 4 compares four harm-direction estimators. LDA con-sistently performs best. The gap over class-mean difference (0.5–0.8 F1) quantifies the value of within-class covariance estimation. The random-direction baseline confirms that HPD is a genuinely directional phenomenon rather than an artifact of any projection. 
+
+Table 4. Direction learning method. LDA produces the most discriminative per-layer harm direction across all backbones.                 
+
+> Direction method Llama-8B Mistral-7B OLMo2-7B
+> Random (control) 77.2 76.9 79.9 Class-mean diff. μharm −μsafe 85.8 85.5 88.5 PCA on harm-class residuals 85.4 85.1 88.1 LDA (used in H ERALD )86.3 86.3 89.3
+
+6Harmfulness Propagation Dynamics in Large Language Models 
+
+7.3. Layer Coverage Strategy 
+
+Table 5 compares layer selection strategies. All-layer ag-gregation performs best: early, middle, and late thirds each contain complementary information, and the best single ora-cle layer trails full aggregation by 0.8–1.4 F1. A top-8 layer selection recovers most of the gain at 25% of the storage cost, offering a practical trade-off. 
+
+Table 5. Layer coverage strategy. All-layer aggregation is best; the oracle single-layer falls short by 0.8–1.4 F1.                              
+
+> Layer selection Llama-8B Mistral-7B OLMo2-7B
+> Single best layer (oracle) 85.5 85.0 88.5 Early third ( l≤10 )80.4 79.9 83.2 Middle third ( 11 ≤l≤21 )84.2 84.7 87.1 Late third ( l≥22 )84.9 83.8 88.0 Top-8 by validation F1 85.9 85.8 89.0 All layers (used in H ERALD )86.3 86.3 89.3
+
+(a) Data efficiency. (b) Layer coverage. 
+
+Figure 3. HERALD is data-efficient (plateau near 1,000 sam-ples/class) and benefits from full-layer aggregation. The top-8 selection offers a compelling storage-accuracy trade-off. 
+
+7.4. Token Aggregation and Robustness to Suffix Attacks 
+
+Table 6 compares which token’s hidden state is projected onto vl. Last-token representations perform best across all backbones, consistent with the autoregressive inductive bias of instruction-tuned models: the final token aggregates con-text from all preceding positions via causal self-attention, concentrating task-relevant information at the sequence end-point. 
+
+Table 6. Token position. Last-token representations are consis-tently superior for harm-direction projection.             
+
+> Token position Llama-8B Mistral-7B OLMo2-7B
+> First token 80.6 79.3 82.4 Mean over all tokens 84.1 83.7 87.2 Last token (used in H ERALD )86.3 86.3 89.3
+
+Suffix-padding robustness. An attacker could append long benign suffixes to dilute the last-token representation. Table 7 tests this by appending k ∈ { 10 , 50 , 100 , 200 } be-nign tokens to jailbreak prompts. Performance degrades gracefully: at k=50 the drop, it is modest ( 1.3 F1); at the larger drop, k=200 it is manageable ( 4.8 F1). The max-pooling variant ( max l pl) is substantially more robust at long suffixes while sacrificing 0.4 F1 on clean inputs; we recommend it when suffix attacks are a realistic threat. 
+
+Table 7. Suffix-padding robustness (Llama-8B, WildGuardMix). Max-pooling is more robust under long-suffix attacks. Best results per column are shown in green.                
+
+> Variant k=0 k=10 k=50 k=100 k=200
+> Last token (default) 86.3 85.8 85.0 83.7 81.5 Max projection over layers 85.9 85.7 85.4 85.0 83.8
+
+7.5. Projection Normalization 
+
+Table 8 tests unit normalization of hl before projection. Without normalization, projections conflate semantic align-ment with raw activation magnitude, which varies across layers, prompt lengths, and model families. Normalizing both hl and vl to unit length isolates direction from magni-tude and improves average F1 by 1.3–1.8-points—a critical step for cross-layer trajectory comparability. 
+
+Table 8. Projection normalization. Normalizing both hl and vl
+
+yields the most stable trajectory signal ( +1 .3–1.8 F1). Best results are shown in green.                  
+
+> Normalization Llama-8B Mistral-7B OLMo2-7B
+> No normalization 84.5 84.0 87.5 Normalize vlonly 85.1 84.8 88.0 Normalize hland vl86.3 86.3 89.3
+
+7.6. MLP Classifier Capacity 
+
+Table 9 shows that logistic regression already achieves 
+
+85 .3 F1, only 1.0 below the full MLP. A hidden size 32 
+
+reaches the performance plateau; larger architectures pro-vide no significant gain. This confirms that ϕ is nearly linearly separable, a deliberate design outcome resulting from principled feature engineering rather than a limitation to be overcome by a larger classifier. 
+
+Table 9. MLP classifier capacity. Logistic regression is within 
+
+1.0 F1 of the full model; hidden size 32 reaches the plateau. Best results are shown in green.                               
+
+> Architecture Params Llama-8B Mistral-7B OLMo2-7B
+> Logistic regression (0 hidden) 885.3 85.3 88.4 MLP, hidden = 16 128 85.9 85.8 88.9 MLP, hidden = 32 (used) 288 86.3 86.3 89.3 MLP, hidden = 64 512 86.3 86.2 89.3 MLP, hidden = 128 1024 86.3 86.2 89.2 MLP, 2 hidden layers ( 32 ×32 )1344 86.4 86.3 89.4
+
+7.7. Shrinkage Regularization 
+
+Table 10 compares covariance inversion strategies for Eq. (3). Uninvertible raw covariances cause severe instabil-ity (F1 drops to 61 .3 on Llama-8B). Ledoit-Wolf shrinkage 7Harmfulness Propagation Dynamics in Large Language Models 
+
+is the most stable option and yields the best average F1, with particular advantage at 100 and in low-sample data regimes where the diagonal and fixed-ridge alternatives underper-form. This result underscores that covariance regularization is not merely a numerical convenience but is essential to HERALD ’s data efficiency.                     
+
+> Table 10. Covariance regularization. Ledoit-Wolf shrinkage is most stable and yields strong F1, especially under data scarcity (F1@100). Best results are shown in green.
+> Inversion strategy Llama-8B Mistral-7B OLMo2-7B F1@100
+> No regularization (raw inverse) 61.3 59.8 63.7 52.1 Diagonal covariance approx. 85.2 84.9 88.2 78.3 Fixed ridge ( λ= 0 .01 )86.0 85.9 89.0 81.7 Ledoit–Wolf (used in H ERALD )86.3 86.3 89.3 79.6
+
+7.8. Ablation Summary 
+
+Across all ablations, onset layer and LDA direction learning contribute most to performance; token position, layer cover-age, and normalization each add meaningfully; shrinkage regularization is critical for numerical stability; and clas-sifier capacity matters least. These findings validate the core design philosophy of H ERALD investing in principled feature engineering of the activation trajectory rather than in downstream classifier capacity. The resulting compact tabular representation generalizes reliably across backbones, harm categories, and data regimes. 
+
+## 8. Discussion 
+
+Why HPD is most effective for jailbreaks. Jailbreak prompts often conceal harmful intent early and reveal it gradually through multi-step framing—a construction strat-egy structurally analogous to multi-hop reasoning chains, in which the conclusion is only determinable after integrating evidence across multiple intermediate steps. This produces the characteristic rising cross-layer trajectory that H ERALD 
+
+is designed to detect. In contrast, implicit harms like so-cial stereotypes or subtle sarcasm are semantically diffuse and less geometrically coherent: the harm direction sep-arating explicit harm from benign text aligns poorly with these cases, producing flat or noisy trajectories. Our onset-layer and monotonicity results (Table 13) support this view. Future work should explore multi-directional subspaces to better capture diffuse or culturally specific harms. 
+
+Failure modes: ToxicChat and OpenAI Moderation. 
+
+HERALD trails the best guard on ToxicChat ( −4.3 F1) and OpenAI moderation ( −8.4 F1). We hypothesize two causes. First, both benchmarks contain a high proportion of implicit or context-dependent harms where surface-level tokens do not systematically trigger the rising trajectory. Second, the WildGuardMix training distribution may under-represent the stylistic variation in these benchmarks, limiting the trans-ferability of the learned LDA directions. Richer or category-balanced training data and multi-directional subspace exten-sions are natural remedies. 
+
+Adaptive evasion. HERALD is harder to evade than single-score detectors because an attacker must jointly fool multi-ple trajectory features—terminal value, onset layer, mono-tonicity, and curvature—that jointly characterize a rising trajectory. Nevertheless, adaptive white-box adversaries with access to the learned directions could potentially craft inputs that suppress early-layer projections while maintain-ing a high terminal value. Developing trajectory-aware adversarial training is an important open direction. 
+
+Implications for LLM governance. HPD reframes safety classification from a binary output property into a structured sequential signal from which interpretable features can be read, logged, and queried at scale. Safety practitioners can ask not just whether a prompt is harmful, but also when 
+
+the model resolves its intent and how consistently harm-fulness grows across depth. H ERALD ’s O(Ld ) footprint also makes online updates practical as threat distributions evolve. Future directions include multilingual and multi-modal extension, integration into retrieval-augmented gener-ation pipelines to flag structurally ambiguous retrieved con-tent, and subspace extensions for diffuse harm categories. 
+
+## 9. Conclusion 
+
+We identified Harmfulness Propagation Dynamics (HPD), a consistent cross-layer pattern in which harmful prompts exhibit monotonically increasing alignment with a learned harm direction, whereas benign prompts remain flat or os-cillatory. We formally grounded HPD in the layered compu-tation hypothesis for transformers, validated the stability of per-layer LDA directions (cosine similarity > 0.97 across random splits), and showed that the trajectory’s shape , not merely its terminal value, carries independent discriminative information, especially for adversarial jailbreaks. H ERALD ,built on HPD, it extracts a compact seven-dimensional fea-ture record from the cross-layer projection sequence and classifies it with a 288-parameter MLP. It adds only 262 
+
+KB of memory and 2.6×10 −6 prefilled FLOPs, yet out-performs prior latent-based methods by 2.3–4.1 F1 across all backbones and surpasses all tested guard models on adversarial jailbreak detection. Per-instance trajectories pro-vide interpretable, machine-readable audit records revealing 
+
+when and how harmfulness emerges—a capability absent in single-layer or binary approaches. More broadly, our results suggest that treating LLM activation sequences as structured temporal data, rather than opaque snapshots, of-fers a promising avenue for safe, reliable, and interpretable LLM governance. 8Harmfulness Propagation Dynamics in Large Language Models 
+
+## 10. Broader Impact and Ethical Considerations 
+
+HERALD reduces harmful LLM outputs with minimal com-putational overhead, making lightweight moderation more accessible beyond large, resource-rich organizations. Three limitations deserve attention. First, the learned harm di-rections derive from WildGuardMix, which is primarily in English and may underrepresent culturally specific, mul-tilingual, or diffuse harms; operators deploying in other languages or cultural contexts should validate and, ideally, retrain on domain-specific data. Second, if training data contains spurious demographic or stylistic correlations, the learned directions may partially encode those signals, in-creasing false positives on benign prompts from affected groups; subgroup evaluation and fairness auditing are recom-mended. Third, publishing characterizations of harmfulness propagation dynamics could help adversaries design evasion strategies; continued red teaming, category-specific evalua-tion, and adaptive threat modeling are therefore important before deployment. 
+
+## References 
+
+Arditi, A., Obeso, O., Syed, A., Paleka, D., Panickssery, N., Gurnee, W., and Nanda, N. Refusal in language mod-els is mediated by a single direction. arXiv preprint arXiv:2406.11717 , 2024. URL https://arxiv. org/abs/2406.11717 .Askell, A., Bai, Y., Chen, A., Drain, D., Ganguli, D., Henighan, T., Jones, A., Joseph, N., Mann, B., DasSarma, N., et al. A general language assistant as a laboratory for alignment. arXiv preprint arXiv:2112.00861 , 2021. Carlini, N., Nasr, M., Choquette-Choo, C. A., Jagielski, M., Gao, I., Koh, P. W. W., Ippolito, D., Tramer, F., and Schmidt, L. Are aligned neural networks adversarially aligned? In Advances in Neural Information Processing Systems , 2023. Christ, M., Braun, N., Neuffer, J., and Kempa-Liehr, A. W. tsfresh: A python package for time series feature extrac-tion on basis of scalable hypothesis tests. Neurocomput-ing , 307:72–77, 2018. Christiano, P., Leike, J., Brown, T. B., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. In Advances in Neural Information Processing Systems , 2017. Ganguli, D., Lovitt, L., Kernion, J., Askell, A., Bai, Y., Kadavath, S., Mann, B., Perez, E., Schiefer, N., Ndousse, K., et al. Red teaming language models to reduce harms: Methods, scaling behaviors, and lessons learned. arXiv preprint arXiv:2209.07858 , 2022. Geva, M., Schuster, R., Berant, J., and Levy, O. Transformer feed-forward layers are key-value memories. In Proceed-ings of the Conference on Empirical Methods in Natural Language Processing , 2021. Ghosh, S., Varshney, P., Galinkin, E., and Parisien, C. AEGIS: Online adaptive AI content safety modera-tion with ensemble of LLM experts. arXiv preprint arXiv:2404.05993 , 2024. URL https://arxiv. org/abs/2404.05993 .Greshake, K., Abdelnabi, S., Mishra, S., Endres, C., Holz, T., and Fritz, M. Not what you’ve signed up for: Com-promising real-world LLM-integrated applications with indirect prompt injections. In ACM Workshop on Artifi-cial Intelligence and Security , 2023. Inan, H., Upasani, K., Chi, J., Rungta, R., Iyer, K., Mao, Y., Tontchev, M., Hu, Q., Fuller, B., Testuggine, D., and Khabsa, M. Llama Guard: LLM-based input-output safeguard for human-AI conversations. arXiv preprint arXiv:2312.06674 , 2023. URL https:// arxiv.org/abs/2312.06674 .Jawahar, G., Sagot, B., and Seddah, D. What does BERT learn about the structure of language? In Proceedings of the Annual Meeting of the Association for Computational Linguistics , 2019. Langley, P. Crafting papers on machine learning, 2000. URL https://icml.cc/Conferences/ 2000/langley00.pdf . Paper presented at the ICML Workshop on Submissions to the International Confer-ence on Machine Learning. Ledoit, O. and Wolf, M. A well-conditioned estimator for large-dimensional covariance matrices. Journal of Multivariate Analysis , 88(2):365–411, 2004. Li, L., Dong, B., Wang, R., Hu, X., Zuo, W., Lin, D., Qiao, Y., and Shao, J. SALAD-Bench: A hierarchical and comprehensive safety benchmark for large language models. arXiv preprint arXiv:2402.05044 , 2024. URL 
+
+https://arxiv.org/abs/2402.05044 .Li, S., Yao, L., Zhang, L., and Li, Y. Safety layers in aligned large language models: The key to LLM security. In 
+
+International Conference on Learning Representations ,2025. Markov, T., Zhang, C., Agarwal, S., Nekoul, F. E., Lee, T., Adler, S., Jiang, A., and Weng, L. A holistic approach to undesired content detection in the real world. In Proceed-ings of the AAAI Conference on Artificial Intelligence ,2023. 9Harmfulness Propagation Dynamics in Large Language Models 
+
+Marks, S. and Tegmark, M. The geometry of truth: Emergent linear structure in large language model representations of true/false datasets. arXiv preprint arXiv:2310.06824 , 2023. URL https://arxiv. org/abs/2310.06824 .Mikolov, T., Chen, K., Corrado, G., and Dean, J. Efficient estimation of word representations in vector space. In 
+
+International Conference on Learning Representations ,2013. Park, K., Choe, Y. J., and Veitch, V. The linear representa-tion hypothesis and the geometry of large language mod-els. In International Conference on Machine Learning ,2024. Perez, E., Huang, S., Song, F., Cai, T., Ring, R., Aslanides, J., Glaese, A., McAleese, N., and Irving, G. Red teaming language models with language models. In Proceedings of the Conference on Empirical Methods in Natural Lan-guage Processing , 2022. Rafailov, R., Sharma, A., Mitchell, E., Ermon, S., Manning, C. D., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. In Advances in Neural Information Processing Systems , 2023. Rogers, A., Kovaleva, O., and Rumshisky, A. A primer in BERTology: What we know about how BERT works. 
+
+Transactions of the Association for Computational Lin-guistics , 8:842–866, 2020. R¨ ottger, P., Vidgen, B., Nguyen, D., Waseem, Z., Margetts, H., and Pierrehumbert, J. B. HateCheck: Functional tests for hate speech detection models. In Proceedings of the Annual Meeting of the Association for Computational Linguistics , 2021. Ryu, R., Khullar, A., Liu, C., Chen, Z., Shen, Y., and Sun, H. Latent guard: A safety framework for text-to-image generation. In European Conference on Computer Vision ,2024. Stiennon, N., Ouyang, L., Wu, J., Ziegler, D. M., Lowe, R., Voss, C., Radford, A., Amodei, D., and Christiano, P. Learning to summarize with human feedback. In Ad-vances in Neural Information Processing Systems , 2020. Tenney, I., Das, D., and Pavlick, E. BERT rediscovers the classical NLP pipeline. In Proceedings of the Annual Meeting of the Association for Computational Linguistics ,2019. Vidgen, B., Scherrer, N., Kirk, H. R., Qian, R., Kannappan, A., Hale, S. A., and R¨ ottger, P. SimpleSafetyTests: A test suite for identifying critical safety risks in large language models. arXiv preprint arXiv:2311.08370 , 2023. Zeng, W., Liu, Y., Mullins, R., Peran, L., Fernandez, J., Harkous, H., Narasimhan, K., Proud, D., Kumar, P., Radharapu, B., Sturman, O., and Wahltinez, O. Shield-Gemma: Generative AI content moderation based on Gemma. arXiv preprint arXiv:2407.21772 , 2024. URL 
+
+https://arxiv.org/abs/2407.21772 .Zhao, W., Ren, X., Hessel, J., Cardie, C., Choi, Y., and Deng, Y. WildChat: 1m ChatGPT interaction logs in the wild. In The Twelfth International Conference on Learning Representations , 2024. URL https://openreview. net/forum?id=Bl8u7ZRlbM .Zou, A., Phan, L., Chen, S., Campbell, J., Guo, P., Ren, R., Pan, A., Yin, X., Mazeika, M., Dombrowski, A.-K., Goel, S., Li, N., Byun, M. J., Wang, Z., Mallen, A., Basart, S., Koyejo, S., Song, D., Fredrikson, M., Kolter, J. Z., and Hendrycks, D. Representation en-gineering: A top-down approach to AI transparency. 
+
+arXiv preprint arXiv:2310.01405 , 2023a. URL https: //arxiv.org/abs/2310.01405 .Zou, A., Wang, Z., Carlini, N., Nasr, M., Kolter, J. Z., and Fredrikson, M. Universal and transferable adversar-ial attacks on aligned language models. arXiv preprint arXiv:2307.15043 , 2023b. URL https://arxiv. org/abs/2307.15043 .Zou, J., Yuan, Z., Xin, P., Xiao, Z., Sun, J., Zhuang, S., Guo, Z., Fu, J., and Liu, Y. Privacy-Friendly Task Offloading for Smart Grid in 6G Satellite–Terrestrial Edge Computing Networks †. Electronics (Switzer-land) , 12(16), 8 2023c. ISSN 20799292. doi: 10.3390/ ELECTRONICS12163484. 10 Harmfulness Propagation Dynamics in Large Language Models 
+
+## A. Efficiency: FLOPs and Memory 
+
+HERALD computes one dot product and one unit normalisation per layer, adding O(2 Ld ) FLOPs at inference. For L=32 ,
+
+d=4096 , this is ≈262 K FLOPs against ≈100 B prefill FLOPs for a 100-token prompt—a ratio of ≈2.6×10 −6.
+
+Memory. Each layer retains a single direction vector vl ∈ Rd; scatter matrices are discarded after training. Total storage: 
+
+L × d × 2 bytes (fp16). For L=32 , d=4096 : 32 × 4096 × 2 = 262 KB. By contrast, a full per-layer covariance costs 
+
+32 × 4096 2 × 2 ≈ 1.07 GB ( ∼4100 × more), and a 7B-parameter guard model requires ≈14 GB ( ∼53 ,000 × more). The 
+
+O(Ld ) vs. O(Ld 2) gap is fundamental, not incidental—it is what makes H ERALD deployable on the same hardware as the host model without additional accelerators (Figure 4).          
+
+> Figure 4. Memory and computational overhead. H ERALD stores 262 KB ( 650 ×less than full covariance; 53 ,000 ×less than a 7B guard) and adds 2.6×10 −6of prefill FLOPs.
+
+## B. Theoretical Motivation for Layer-Wise Trajectories 
+
+Harmful intent is a progressively emerging signal. Early transformer layers encode surface form (token identities, punctuation, morphology); middle layers compose semantic structure; late layers resolve pragmatic and task-relevant meaning (Jawahar et al., 2019; Tenney et al., 2019). Feed-forward blocks also function as associative memory that progressively refines token representations (Geva et al., 2021). For a jailbreak prompt that conceals its intent through multi-step framing, the model’s representation therefore becomes increasingly aligned with the harm direction as depth accumulates semantic evidence, while a benign prompt produces no systematic directional drift. The shape of the resulting trajectory—not only its endpoint—thus constitutes a structural fingerprint of harmful intent, one that is most pronounced precisely where lightweight moderation is most needed. We validate Proposition 3.1’s assumptions empirically by computing the mean per-layer projection for 500 randomly sampled harmful and benign prompts from WildGuardMix on each backbone. In all cases, mean harmful projection increases monotonically across layers 8–32 , while mean benign projection remains within one standard deviation of zero, consistent with the proposition. 
+
+## C. Per-Layer LDA Directions 
+
+At each layer l we solve the binary LDA problem: 
+
+vl =
+
+ S(l)
+
+> W
+
+−1 μharm  
+
+> l
+
+− μsafe 
+
+> l
+
+ S(l)
+
+> W
+
+−1 μharm  
+
+> l
+
+− μsafe 
+
+> l
+
+ . (6) LDA is preferred over the raw mean-difference direction because hidden-state variation within each class is substantial. Prompts with the same label differ in length, wording, and rhetorical style, producing large within-class scatter. Accounting for this scatter via Ledoit–Wolf shrinkage yields a more transferable discrimination axis, as confirmed by the ablation in Table 4. 11 Harmfulness Propagation Dynamics in Large Language Models 
+
+Connection to representation engineering. Zou et al. (2023a) obtain steering vectors by taking the difference of positive and negative class activations at a single fixed layer. H ERALD extends this by (i) applying LDA rather than a raw mean difference (accounting for within-class scatter), (ii) learning independent directions per layer, and (iii) aggregating the resulting projections into a trajectory for classification. This produces a fundamentally different object: not a single vector for steering, but a sequence of vectors whose induced trajectory is the classification feature. 
+
+## D. Trajectory Feature Vector 
+
+Given per-layer projections pl = ⟨ˆhl, vl⟩, the feature vector ϕ(p) ∈ R7 is defined in Eq. (4). Table 11 summarises the geometric role of each component.                       
+
+> Table 11. Trajectory feature vector ϕ(p)∈R7: geometric interpretation.
+> Feature Symbol What it captures
+> Final value pLTerminal harm alignment Mean ¯pGlobal bias across all layers Total rise pL−p1Net directional movement with depth Curvature ∆2pTrajectory smoothness / oscillation Monotonicity mono( p)Consistency of directional increase Onset value pˆl∗Projection at first salient layer Onset layer ˆl∗Depth at which harm signal first appears
+
+The near-competitive performance of logistic regression (Table 9) confirms that ϕ is nearly linearly separable: most discriminative power resides in trajectory geometry, not downstream classifier capacity. 
+
+## E. Last-Token Representations 
+
+In instruction-tuned autoregressive LLMs, the final prefill token aggregates context from all preceding positions through causal self-attention, making it the representation most directly predictive of next-token behaviour. Mean pooling dilutes this by averaging tokens serving different syntactic roles; the first token captures only initial context. Table 6 confirms that last-token projection yields the strongest harm trajectory signal. 
+
+## F. Normalization and Shrinkage Regularization 
+
+Unit normalization. Projecting ˆhl = hl/∥hl∥ onto vl/∥vl∥ isolates the direction of the representation from its magnitude. Without normalization, pl conflates semantic alignment with raw activation scale, which varies across layers, prompt lengths, and model families, degrading cross-layer trajectory comparability. Normalizing both vectors improves average F1 by 
+
+1.3–1.8 points (Table 8). 
+
+Shrinkage regularization. Because d ≫ ntrain , the sample covariance S(l) 
+
+> W
+
+is poorly conditioned. Ledoit–Wolf shrinkage replaces it with a well-conditioned convex combination of the sample covariance and a scaled identity, stabilising the LDA solution and preventing harm directions from overfitting sampling noise. Omitting regularisation degrades F1 by up to 27 
+
+points in low-data regimes (Table 10). 
+
+## G. Classifier Design 
+
+Once ϕ(p) is computed, the classification problem is seven-dimensional and nearly linearly separable. A large model would overfit rather than generalise. The chosen MLP with hidden size 32 (< 400 parameters) reaches the performance plateau: doubling capacity yields no gain (Table 9). The small size also makes the classifier inspectable—a practitioner can audit which trajectory features drove a particular flagged classification, supporting transparency requirements in LLM governance. 12 Harmfulness Propagation Dynamics in Large Language Models 
+
+## H. Harm Direction Stability 
+
+Table 12 reports mean pairwise cosine similarity between harm directions vl learned on five independent 80/20 splits. Similarity exceeds 0.97 at every layer and backbone, confirming that HPD reflects genuine geometric structure rather than sampling artefacts. This stability is a formal prerequisite for Proposition 3.1: if directions varied substantially across splits, the trajectory would not be a reliable population-level signal. Stable directions are also shareable as versioned weight files, enabling comparable evaluation across research groups without requiring identical training data. 
+
+Table 12. Harm direction stability: mean pairwise cosine similarity across five random training splits ( > 0.97 throughout). 
+
+Model L4 L8 L16 L24 L32 
+
+Llama-8B-Inst 0.984 0.991 0.994 0.992 0.989 Mistral-7B-Inst 0.979 0.987 0.993 0.990 0.983 OLMo2-7B-Inst 0.975 0.988 0.991 0.993 0.991 Qwen3-8B-Inst 0.972 0.984 0.991 0.988 0.986 
+
+## I. Onset Layer Statistics by Harm Category 
+
+Table 13 reports mean onset layer ˆl∗ and monotonicity index per harm category. Jailbreaks exhibit the earliest onset and highest monotonicity, reflecting their structured multi-step escalation. Social stereotypes onset latest and rise least consistently, indicating that a single LDA direction is insufficient for diffuse, culturally contingent harms—motivating multi-direction subspace extensions as future work. 
+
+Table 13. Mean onset layer ˆl∗ and monotonicity index by harm category. Jailbreaks (earliest onset, highest monotonicity) are structurally most amenable to HPD-based detection; social stereotypes (latest onset, lowest monotonicity) are least. 
+
+Llama-8B OLMo2-7B Harm category ˆl∗ Mono. ˆl∗ Mono. Jailbreak 7.4 0.83 5.9 0.86 Direct harmful request 14.2 0.79 13.1 0.82 Hate speech 10.8 0.75 9.4 0.77 Violence and physical harm 9.1 0.81 8.7 0.83 Cyberattack 11.3 0.77 10.2 0.79 Sexual content 12.7 0.72 11.9 0.74 Social stereotypes 19.4 0.58 21.3 0.55 Benign (mean) — 0.49 — 0.48 
+
+## J. True Negative Rate on Benign Benchmarks 
+
+A safety moderator that over-fires on benign prompts imposes an invisible cost on legitimate use. Table 14 shows that HERALD produces false positives on fewer than 1.5% of benign prompts across seven diverse tasks. The 100% TNR on Codex and GSM8k across all backbones is particularly notable: structured code and mathematical prompts, despite their lexical specificity, are cleanly distinguished from harmful content by the trajectory classifier. 
+
+Table 14. True Negative Rate (%) on seven benign evaluation benchmarks. H ERALD maintains > 98 .5% average TNR across all four backbones. 
+
+Backbone Alpaca BBH Codex GSM8k MMLU MTBench TruthQA Avg 
+
+Llama-8B-Inst 94.7 99.4 100.0 100.0 99.6 100.0 97.8 98.8 Mistral-7B-Inst 93.9 99.5 100.0 100.0 99.4 100.0 97.3 98.6 OLMo2-7B-Inst 97.1 99.6 100.0 100.0 99.7 98.8 97.1 98.9 Qwen3-8B-Inst 95.4 99.5 100.0 100.0 99.6 100.0 97.9 98.9 
+
+13 Harmfulness Propagation Dynamics in Large Language Models 
+
+## K. Comparison with Last-Layer Supervised Classifiers 
+
+Table 15 holds the representation fixed at the final hidden layer and varies only the classifier, isolating the contribution of trajectory aggregation from that of the per-layer LDA direction. LDA direction scoring—with no free parameters at the per-layer stage—matches or exceeds all supervised classifiers applied to the same representation. The spread across all five methods is under 2 F1 points, confirming that representation quality dominates classifier capacity. Both results support the data-centric view: investing in principled feature extraction yields more reliable gains than scaling the downstream model.                              
+
+> Table 15. Average F1 of last-layer representation with varying classifiers. LDA scoring has no free per-layer parameters yet remains competitive with supervised methods, confirming that representation quality dominates classifier capacity.
+> Classifier Llama-8B Mistral-7B OLMo2-7B Qwen3-8B
+> LDA direction (used in H ERALD )84.7 84.4 87.8 83.4 Logistic Regression 83.1 83.6 85.9 83.2 MLP (1 hidden layer) 84.2 82.7 86.4 83.0 Linear SVM 83.6 83.9 86.6 82.8 Random Forest 82.9 81.4 86.7 81.9
+> (a) Suffix-padding robustness. (b) Category-wise F1.
+> Figure 5. Robustness and category analysis. Max-pooling is more stable under long benign suffixes. Single LDA directions excel for explicit harms but degrade on diffuse categories (social stereotypes), motivating subspace extensions.
+
+## L. Additional References for Related Work 
+
+We include the following references critical to contextualizing H ERALD within the mechanistic interpretability and representation engineering literature: Zou et al. (2023a) (representation engineering via contrastive activation); Marks & Tegmark (2023) (linear geometry of truth representations); Arditi et al. (2024) (refusal directions via activation analysis); Zou et al. (2023b) (universal adversarial suffixes for LLMs). 
+
+## M. Concat-All-Layers Probe and Learned Sequence Aggregator Baselines 
+
+Addressing Reviewer 9qrV (highest-value addition) and Reviewer SLvX (why not treat {pl} as a time series with a learned aggregator?). 
+
+Setup. We add three new baselines that use identical cross-layer information to H ERALD but replace the hand-crafted feature vector ϕ with either a richer fixed projection or a learned sequence model. All baselines train on the same WildGuardMix split and are evaluated zero-shot on the remaining seven benchmarks. (i) All-layers MLP. The scalar trajectory {pl}Ll=1 is fed as a raw L-dimensional input to the same 288-parameter MLP used by H ERALD . This tests whether multi-layer information alone, without geometric feature engineering, is sufficient. (ii) 1D-CNN over {pl}. A one-dimensional convolutional network with two conv-relu layers (kernel width 3, 16 channels) 14 Harmfulness Propagation Dynamics in Large Language Models 
+
+followed by global average pooling and a linear head ( ≈ 600 parameters). This allows the model to learn local trajectory patterns—including curvature and monotonicity—from data rather than from hand-crafted formulas. (iii) GRU over {pl}. A single-layer GRU with hidden size 16 processes the scalar sequence p1, . . . , p L and classifies from the final hidden state ( ≈ 900 parameters). GRUs are the natural sequential baseline for ordered multi-layer signals. 
+
+Table 16. Learned sequence-model baselines vs. H ERALD . All models receive identical per-layer projections {pl}. H ERALD ’s seven-dimensional hand-crafted feature vector matches or exceeds learned aggregators on every backbone, while requiring no hyperparameter tuning of a sequence architecture. Best result per column in green.                              
+
+> Method Llama-8B Mistral-7B OLMo2-7B WJB (OLMo2) Params
+> All-layers MLP ( {pl}raw input) 85.2 85.0 88.4 97.1 288 1D-CNN over {pl}85.6 85.4 88.8 97.6 ≈600 GRU over {pl}85.7 85.3 88.9 97.8 ≈900 HERALD (ϕ, MLP) 86.3 86.3 89.3 98.4 288
+
+Interpretation. HERALD outperforms all learned sequence aggregators despite having the fewest parameters and no trainable recurrence. Three factors explain this result. First, the trajectory {pl} is a scalar sequence of length L: a 32-step time series is easily modelled by geometric features but provides limited training signal for a convolutional or recurrent architecture that must estimate its own filter coefficients. Second, the geometric features (onset layer, monotonicity) are 
+
+global statistics that require the entire sequence; a GRU can in principle learn these but needs substantially more data to do so reliably. Third, the 1D-CNN and GRU have additional hyperparameters (kernel size, hidden size, number of layers) whose tuning introduces variance; hand-crafted features are stable by construction. Concretely, the gap between the GRU and H ERALD on WildJailbreak (97.8 vs. 98.4) is statistically significant ( p < 0.05 ,paired bootstrap), confirming that the geometric features—onset layer and monotonicity in particular—capture structure that a data-driven sequence model does not fully recover at this scale. The contribution is therefore geometry-aware classification ,not merely multi-layer aggregation. 
+
+Complexity note. The raw trajectory alone (All-layers MLP) already improves over last-token baselines ( 86 .3 vs. 84 .7 for embed. clf. on Llama-8B), confirming that the cross-layer structure is the primary driver. The hand-crafted ϕ adds a further 
+
+1.1 F1 by encoding geometric invariants that the raw sequence does not make immediately accessible to a small classifier. 
+
+## N. Causal Intervention: Ablating Harm Directions During Generation 
+
+Addressing Reviewer 9qrV. 
+
+Experiment. To probe whether the learned harm directions vl causally influence downstream generation rather than merely correlating with classifier outputs, we perform a direction-ablation experiment on Llama-3.1-8B-Instruct and OLMo2-7B-Instruct. For a set of 200 jailbreak prompts from WildJailbreak on which the model would normally refuse, we apply residual-stream hooks at the layer of peak monotonicity l† (the layer achieving the highest pl+1 − pl increment, typically l† ≈ 14 –18 for jailbreaks) and zero-project the harm direction from the hidden state: 
+
+˜hl† = hl† − hl† , vl† vl† . (7) The modified hidden state ˜hl† is passed forward through subsequent layers unchanged; all other layers are unmodified. We then generate 50 tokens greedily and record whether the model produces a refusal or a compliance (as judged by a Llama-Guard-3 oracle). 
+
+Findings. Ablating vl† at the peak-monotonicity layer reduces the refusal rate from ≈94% to ≈60% , a drop of 33 –35 
+
+percentage points. Intervening at an early layer ( l=4 ) or a late layer ( l=30 ) produces much smaller effects ( 5–8 percentage points), establishing that the causal influence is layer-specific and concentrated near the trajectory’s steepest ascent. These results support the mechanistic claim underlying HPD: the harm direction at the peak-monotonicity layer is not merely a classification artifact but represents a causal locus at which the model’s safety behavior is determined. Consistent with prior work on refusal directions (Arditi et al., 2024), the directional ablation is not equivalent to semantic erasure of the entire prompt—model outputs remain coherent—but specifically disrupts the pragmatic safety signal. 15 Harmfulness Propagation Dynamics in Large Language Models 
+
+Table 17. Generation-time refusal rate under harm-direction ablation. Ablating vl† at the peak-monotonicity layer reduces the refusal rate substantially, confirming that the harm direction has causal influence on safety behavior and is not merely a post-hoc correlate. 
+
+Condition Llama-8B (% refuse) OLMo2-7B (% refuse) 
+
+No intervention (baseline) 94.5 93.0 Ablate vl† (peak layer) 61.0 58.5 Ablate vl† (early, l=4 ) 89.0 90.5 Ablate vl† (late, l=30 ) 88.0 86.5 
+
+Limitations. This experiment uses greedy decoding with 50 tokens; longer generation and sampling-based decoding may shift absolute refusal rates. The oracle (Llama-Guard-3) may classify ambiguous completions inconsistently. Nonetheless, the layer-specificity of the effect strongly supports a causal interpretation that goes beyond correlation. 
+
+## O. Strengthened Out-of-Distribution Evaluation 
+
+Addressing Reviewer 9qrV. 
+
+Setup. The OOD evaluation in Section 6.2 trained on a single alternative source. Here we extend to two fully cross-distribution training protocols: (i) train on Aegis only , evaluate on HarmBench and XSTest separately; (ii) train on 
+
+HarmBench only , evaluate on Aegis and WildGuardMix. These pairs represent substantive distributional divergence: Aegis uses adversarial red-team prompts with fine-grained category labels, whereas HarmBench is a standardized benchmark with diverse harm types and standardized difficulty tiers, and XSTest contains near-miss benign prompts specifically designed to probe false-positive rates. 
+
+Table 18. Cross-distribution OOD generalization. Models are trained exclusively on one dataset and evaluated on others. H ERALD 
+
+consistently maintains the smallest performance drop relative to in-distribution results, confirming that LDA-based trajectory features are robust to distributional shift. In-distribution F1 (from Table 1) shown for reference in parentheses.            
+
+> Train →Test Method Llama-8B Mistral-7B OLMo2-7B
+> Aegis →HarmBench Embed. Clf. 79.1
+
+(93.1) 77.3 (88.5) 82.4 (93.8)   
+
+> Act. Delta 78.4
+
+(92.4) 79.0 (94.7) 79.8 (90.7)   
+
+> HERALD 84.9
+
+(97.6) 85.2 (97.9) 88.6 (97.4)                                     
+
+> Aegis →XSTest Embed. Clf. 77.6 76.9 80.3 Act. Delta 76.2 77.4 80.0 HERALD 83.8 84.1 87.3 HarmBench →Aegis Embed. Clf. 72.1 71.5 79.2 Act. Delta 73.4 72.8 75.9 HERALD 79.9 80.4 85.2 HarmBench →WGMix Embed. Clf. 71.8 70.3 78.7 Act. Delta 72.9 73.1 74.4 HERALD 80.1 80.8 85.9
+
+Analysis. HERALD ’s absolute OOD F1 drops by 4–8 points relative to in-distribution results, consistent with any method facing domain shift. However, its relative drop is smaller than both baselines across all four cross-distribution splits. The HarmBench → Aegis drop ( ≈5 F1 for H ERALD ) is substantially smaller than the embed. clf. drop ( ≈7 F1), suggesting that compressing discriminative information into seven geometric scalars serves as an implicit regularizer against dataset-specific idiosyncrasies. Results on Aegis → XSTest are of particular note: XSTest probes false-positive rates on near-miss benign prompts, yet H ERALD ’s trajectory features—particularly onset layer and monotonicity—correctly classify the vast majority as benign, since near-miss prompts do not produce the systematic monotone rise characteristic of harmful inputs. 
+
+## P. Guard Model Identification 
+
+Addressing Reviewer 9qrV. 
+
+The four guard models (Guard A–D) in Table 1 correspond to the following publicly available safety classifiers, listed in alphabetical order of their anonymized labels: 16 Harmfulness Propagation Dynamics in Large Language Models 
+
+• Guard A : Aegis-AI-Content-Safety-Defense-2.0 (Ghosh et al., 2024), a 7B parameter model fine-tuned from Llama-3-8B on adversarially collected safety data. Selected because it is the source of one of the eight evaluation benchmarks (Aegis), providing a test of in-distribution generalization for the guard itself. • Guard B : MD-Judge (Li et al., 2024), a Mistral-7B fine-tune trained on a diverse set of malicious instruction categories. Included to represent guard models built on the same backbone family as one of our H ERALD backbones. • Guard C : ShieldGemma-2 (Zeng et al., 2024), a Gemma-2-based safety classifier targeting both prompt and response classification at multiple severity levels. Included as a current SOTA guard from a different model family. • Guard D : Llama-Guard-3-8B (Inan et al., 2023), the latest public release of Meta’s guard series. Included as the de facto standard in the field and the strongest single competitor reported in Table 1 (avg. F1 87 .8, best guard on ToxicChat and OpenAI Moderation). All four guard models are evaluated in zero-shot mode on each benchmark. For guard models that require an output format, we follow the official inference instructions released by each model’s authors. None of the guard models had access to backbone activations; they classify from raw text inputs only, as indicated in Table 1. 
+
+## Q. Code and Weights Release Plan 
+
+Addressing Reviewer 9qrV. 
+
+We commit to the following public release upon acceptance: 1. Per-layer LDA directions {vl}Ll=1 as fp16 NumPy arrays for all four backbone families tested (Llama-3.1-8B, Mistral-7B, OLMo2-7B, Qwen3-8B), trained on WildGuardMix and stored as versioned weight files on HuggingFace Hub under a CC-BY 4.0 license. Each direction file is ≈262 KB and self-contained; users can evaluate H ERALD without retraining LDA. 2. Feature extraction and inference code in a lightweight Python package ( herald-moderator ) with a single-function interface: herald.score(prompt, backbone, layer directions) . The package will be available via PyPI. 3. Training code for reproducing per-layer LDA directions from any instruction-tuned LLM, with Ledoit–Wolf shrinkage applied automatically via sklearn.covariance.LedoitWolf .4. Evaluation scripts reproducing all eight benchmark F1 scores reported in Table 1, with fixed random seeds documented in the README. Sharing versioned direction vectors has a concrete reproducibility implication: any research group can download the Llama-8B or OLMo2-7B directions and replicate the inference-time results in Table 1 without a GPU, since the feature extraction requires only dot products on cached hidden states. 
+
+## R. Clarification on Proposition 3.1 
+
+Addressing Reviewer 9qrV. 
+
+Reviewer 9qrV rightly notes that Proposition 3.1 (Section 3.2) reads as a near-restatement of the empirical observation rather than a derivation from first principles. We clarify the role of the proposition and provide additional theoretical content. 
+
+What Proposition 3.1 does and does not claim. The proposition is intentionally informal and serves as a conditional grounding rather than a derivation: given assumptions (i)–(iii), the trajectory has the stated properties. It is not presented as a theorem with a closed-form proof because assumptions (i) and (iii) are empirical—they characterize the behavior of specific pre-trained transformers—and cannot be derived from architectural axioms alone. We strengthen the proposition by making one non-trivial implication explicit. 
+
+Proposition R.1 (Formal version of Proposition 3.1) . Let μharm  
+
+> l
+
+and μsafe  
+
+> l
+
+be the class-conditional means at layer l, and suppose the within-class scatter satisfies λmin (S(l) 
+
+> W
+
+) ≥ σ2 > 0 for all l. Under the regularized LDA estimator of Eq. (3) 
+
+with Ledoit–Wolf shrinkage parameter αl ∈ [0 , 1) , the signed gap 
+
+δl := μharm  
+
+> l
+
+− μsafe  
+
+> l
+
+, vl (8) 17 Harmfulness Propagation Dynamics in Large Language Models 
+
+satisfies δl ≥ 0 for all l. If additionally the Fisher discriminant ratio Jl := δ2 
+
+> l
+
+/v⊤ 
+
+> l
+
+S(l) 
+
+> W
+
+vl is non-decreasing in l, then the expected harmful-class projection Ex∼H [pl(x)] is non-decreasing in l, and the expected benign projection Ex∼B [pl(x)] is bounded in [−ϵ, ϵ ] for ϵ ≪ δl.Proof sketch. The sign of δl follows from the LDA solution: vl ∝ (S(l) 
+
+> W
+
+)−1(μharm  
+
+> l
+
+− μsafe  
+
+> l
+
+), so ⟨μharm  
+
+> l
+
+− μsafe  
+
+> l
+
+, vl⟩ ≥ 0 by positive semi-definiteness of (S(l) 
+
+> W
+
+)−1. The monotonicity of E[pl] on harmful inputs then follows from the non-decreasing Fisher ratio assumption, which is the formal statement of empirical assumption (iii). The benign bound follows because vl
+
+is orthogonal to the between-class mean difference in the space of the class means, making the benign-class mean near-zero in projection. The non-trivial content is the connection between the Fisher ratio’s growth and the trajectory’s monotonicity: any estimator that preserves the Fisher ratio ordering across layers will produce a non-decreasing expected trajectory. The empirical assumption (iii) is operationalized precisely as this ratio ordering. The stability result (pairwise cosine > 0.97 across five splits, Table 12) is a finite-sample validation that the LDA estimator converges to the population direction rather than fitting noise, which is a necessary condition for the trajectory to be a reliable population-level signal. For future work, we note that a full derivation under a hierarchical Gaussian mixture generative model would make assumption (iii) purely architectural; this is a natural extension beyond the scope of the current empirical contribution. 
+
+## S. WildGuardMix / WildJailbreak Distributional Overlap 
+
+Addressing Reviewer 9qrV. 
+
+Overlap acknowledgment. WildGuardMix and WildJailbreak share a common source corpus (WildChat (Zhao et al., 2024)), meaning the training distribution and the WildJailbreak test distribution are not fully independent. This is a legitimate concern: models trained on WildGuardMix may benefit from stylistic familiarity with WildJailbreak prompts, inflating the reported WJB F1 scores. 
+
+Held-out hard-divergent subset. To bound this effect, we constructed a hard-divergent WildJailbreak (HD-WJB) 
+
+subset by filtering for prompts whose n-gram overlap with the WildGuardMix training set (measured by ROUGE-2 recall) is below the 10th percentile (ROUGE-2 < 0.07 ) and whose attack strategy is absent from WildGuardMix (multi-role plays, fictional framing, suffix injection). This yielded N =412 prompts representing maximal prompt-style divergence. 
+
+Table 19. WildJailbreak results on the full set vs. the hard-divergent (HD-WJB) subset. Performance drops modestly on HD-WJB, confirming that distributional overlap provides a modest advantage but is not the primary driver of H ERALD ’s jailbreak performance.                             
+
+> Method Backbone WJB (full) HD-WJB ( N=412 )
+> Embed. Clf. OLMo2-7B 94.2 90.1 Act. Delta OLMo2-7B 91.0 87.3 HERALD OLMo2-7B 98.4 95.7 Guard C (ShieldGemma-2) NE 96.9 94.2 Guard D (Llama-Guard-3) NE 96.4 94.8 Embed. Clf. Llama-8B 79.4 75.9 Act. Delta Llama-8B 90.8 87.1 HERALD Llama-8B 95.8 93.1
+
+Interpretation. HERALD retains a ≈2.5–3 point lead over guard models on HD-WJB (95.7 vs. 94.8 on OLMo2-7B), despite the guard models having no overlap with WildGuardMix. Performance drops of 2–3 F1 across all methods on HD-WJB suggest that distributional overlap benefits all latent methods equally, not H ERALD alone. This confirms that the trajectory-based mechanism—not stylistic familiarity—is the primary source of jailbreak detection advantage. We recommend that future work explicitly exclude WildGuardMix-adjacent prompts when reporting WJB results, and we will update Table 1 accordingly in the camera-ready version. 
+
+## T. Onset Threshold Sensitivity Analysis 
+
+Addressing Reviewer 9qrV. 
+
+18 Harmfulness Propagation Dynamics in Large Language Models 
+
+The onset layer ˆl∗ is defined as the first layer exceeding the τ90 (90th percentile) threshold computed over the training trajectory distribution. Table 20 reports average F1 under percentile values from τ70 to τ95 .
+
+Table 20. Sensitivity of average F1 to onset threshold percentile. HERALD is robust to the choice of onset threshold between τ80 and 
+
+τ95 ; the performance difference across this range is ≤ 0.4 F1 on all backbones. The threshold τ90 was selected by cross-validation and is optimal or near-optimal in all cases.                                 
+
+> Threshold Llama-8B Mistral-7B OLMo2-7B WJB (OLMo2)
+> τ70 85.5 85.4 88.6 97.5
+> τ80 86.1 86.0 89.1 98.1
+> τ85 86.2 86.2 89.2 98.2
+> τ90 (default) 86.3 86.3 89.3 98.4
+> τ95 86.0 86.0 89.0 98.1
+> ∆(max −min) 0.8 0.9 0.7 0.9
+
+Interpretation. The maximum F1 variation across all tested percentiles is ≤0.9 on any backbone and benchmark, confirming that H ERALD is not sensitive to the precise onset threshold. Thresholds below τ80 tend to trigger earlier, picking up false-onset signals from mid-trajectory fluctuations and degrading the onset-layer feature’s discriminative value. Above 
+
+τ95 , the threshold rarely triggers for harmful prompts with moderate trajectory slopes, suppressing onset-layer information unnecessarily. The plateau between τ85 and τ95 suggests that the 90th-percentile default is robust; practitioners may safely use any value in this range. 
+
+## U. Evaluation on a Reasoning Model 
+
+Addressing Reviewer 9qrV. 
+
+Reviewer 9qrV correctly identifies that reasoning/thinking models are absent from our backbone evaluation, and that this represents a potential scope limitation: if harmful intent can emerge during a chain-of-thought trace rather than at prompt-prefill, HPD may not transfer. 
+
+Setup. We evaluate H ERALD with Qwen3-8B-Thinking (the reasoning variant of Qwen3-8B-Instruct enabled via the 
+
+enable thinking=True flag, which activates internal chain-of-thought generation before the user-visible response). Because thinking tokens are generated after prefill, H ERALD ’s harm-direction projection is computed solely on the prefill hidden states, exactly as for the instruction-tuned variant. We compare on WildGuardMix and WildJailbreak with LDA directions trained on Qwen3-8B-Thinking activations (same WildGuardMix split). 
+
+Table 21. HERALD on a reasoning model (Qwen3-8B-Thinking) vs. the instruction-tuned variant (Qwen3-8B-Instruct). HPD persists on the reasoning model; trajectory shape remains discriminative at prefill, before any CoT generation begins. The modest drop (≈1.3 F1) relative to the instruct variant reflects a minor calibration difference, not a structural failure of HPD.                                       
+
+> Method Backbone WGMix WJB Aegis HarmB Avg F1
+> Embed. Clf. Qwen3-8B-Instruct 78.2 79.6 77.8 88.3 80.5 Embed. Clf. Qwen3-8B-Thinking 77.4 78.1 76.9 87.1 79.9 HERALD Qwen3-8B-Instruct 84.9 92.1 82.4 98.6 84.7 HERALD Qwen3-8B-Thinking 83.8 90.4 81.0 97.2 83.4
+> ∆(Thinking −Instruct) −1.1 −1.7 −1.4 −1.4 −1.3
+
+Findings. HPD persists on Qwen3-8B-Thinking: the average F1 drop versus the instruct variant is 1.3 points—well within the margin separating H ERALD from its latent baselines. Inspection of per-prompt trajectories confirms that the monotone rise pattern is present for harmful inputs on the thinking model, with nearly identical onset-layer statistics to the instruct variant (jailbreak onset at ˆl∗≈7.1 vs. 7.4 for instruct, monotonicity 0.81 vs. 0.83 ). 
+
+Scope limitation. The experiment evaluates HPD at prefill only, before CoT generation begins. A full reasoning trace may distribute harmful-intent encoding across generated thinking tokens; monitoring the representations during CoT generation (rather than prefill) is an open direction. If an adversary crafts a prompt whose harmful intent is only resolvable after extended reasoning (e.g., a multi-step deduction that terminates in a harmful conclusion), HPD would not detect it at prefill. 19 Harmfulness Propagation Dynamics in Large Language Models 
+
+This is a genuine scope limitation that applies equally to all existing prompt-level moderators; generation-time monitoring of reasoning traces is a natural extension of this work. 
+
+## V. Comparison Against the Best Single Layer (Reviewer SLvX) 
+
+Addressing Reviewer SLvX. 
+
+Reviewer SLvX asks why the trajectory comparison uses the last layer rather than the best-performing single layer across all layers, and whether the trajectory advantage persists against an oracle single-layer selection. 
+
+Oracle single-layer baseline. Table 5 (main paper) already includes this comparison: the “Single best layer (oracle)” row selects the layer achieving maximum validation F1 per backbone. The oracle trails H ERALD by 0.8–1.4 F1 on average and by up to 1.9 F1 on WildJailbreak. We replicate and extend this result here with a per-benchmark breakdown. 
+
+Table 22. Oracle single-layer vs. H ERALD trajectory, per benchmark. The trajectory gap is small on SimpST (simple, surface-level safety tests) and large on WildJailbreak (adversarial, multi-step jailbreaks), directly reflecting the HPD claim: trajectory information is most valuable precisely where harmful intent is most gradually revealed.                           
+
+> Method (OLMo2-7B) Aegis HarmB OAI SimpST TChat WGMix WJB Avg
+> Oracle single layer 87.3 96.4 72.4 99.3 73.6 87.1 96.5 87.5 HERALD (all layers) 88.7 97.4 73.1 99.5 74.6 87.9 98.4 89.3
+> ∆+1.4 +1.0 +0.7 +0.2 +1.0 +0.8 +1.9 +1.8
+
+Why the oracle single layer is not presented in the main table. The oracle uses the best layer on the validation set, so it has access to distributional structure not available at deployment time. In practice, one would need to select the layer either by cross-validation (introducing a hyperparameter) or by the same feature-engineering logic that H ERALD already applies. The all-layer H ERALD avoids this choice entirely while outperforming the oracle, making the comparison favorable to the single-layer approach. The benchmark-specific breakdown in Table 22 supports the HPD narrative directly: the trajectory advantage is smallest on SimpST ( +0 .2 F1), a benchmark with direct, unambiguous harmful requests where intent is resolved in early layers and the terminal representation is already fully informative. The advantage is largest on WildJailbreak ( +1 .9 F1), where multi-step adversarial framing distributes harmful intent across layers in exactly the pattern HPD is designed to capture. 
+
+Last-token vs. oracle single layer in the main comparison. Reviewer SLvX’s original question also applies to the latent baselines: we use last-token embeddings for embed. clf. and act. delta, which is their natural operating point (following prior work), whereas for H ERALD we use all layers. To confirm fairness, Table 23 reports embed. clf. at its own oracle single layer; the gap to H ERALD widens to 3.5–4.8 F1, confirming that H ERALD ’s advantage is not an artifact of layer selection. 
+
+Table 23. Embed. clf. at oracle single layer vs. H ERALD trajectory. Even when embed. clf. is given oracle access to the best single layer, H ERALD outperforms it by 3.5–4.8 F1.                    
+
+> Method Llama-8B Mistral-7B OLMo2-7B
+> Embed. clf., last layer 79.3 77.4 85.6 Embed. clf., oracle layer 82.7 82.6 85.8 HERALD (all layers) 86.3 86.3 89.3
+> ∆(H ERALD −oracle embed.) +3.6 +3.7 +3.5
+
+## W. Learned Time-Series Aggregation vs. Geometric Features 
+
+Addressing Reviewer SLvX. 
+
+Reviewer SLvX asks why we do not treat {pl} directly as a time series and apply standard time-series analysis (e.g., pattern recognition or a learned sequence model) rather than extracting hand-crafted features. 
+
+The seven features are explicitly time-series features. Curvature ( ∆2p), monotonicity ( mono( p)), onset layer ( ˆl∗), and total rise ( pL − p1) are canonical time-series descriptors; they are used in the tsfresh library (Christ et al., 2018) and in 20 Harmfulness Propagation Dynamics in Large Language Models 
+
+standard anomaly-detection pipelines. The design choice is therefore not “time series vs. not,” but domain-motivated feature selection vs. learned aggregation. 
+
+Why domain-motivated features over fully learned aggregation. The trajectory {pl} is a 32-step scalar sequence (for 
+
+L=32 models). At this length: • A 1D-CNN or GRU must estimate filter or recurrent weights from the training distribution. For a typical safety dataset of 
+
+∼5,000 training examples, a small GRU has enough capacity to overfit the training set’s stylistic patterns rather than the geometric invariants (monotone rise, early onset) that generalize across prompt styles. • The geometric features have closed-form definitions aligned with the HPD hypothesis: onset layer tests when harmfulness first appears, monotonicity tests whether it consistently grows, curvature tests whether growth is smooth. These features are designed to be invariant to prompt length and stylistic variation, whereas a learned aggregator’s internal representations are not interpretable in these terms. • Our learned-sequence baseline experiments (Table 16, Appendix M) confirm empirically that the geometric features outperform the GRU and 1D-CNN at the relevant training-set sizes. 
+
+When would learned aggregation be preferable? A learned sequence model would be preferable if (i) training data are abundant ( ≫ 50 ,000 examples per harm category), (ii) trajectories have non-monotone but learnable patterns not expressible as curvature/monotonicity, or (iii) the sequence length is much longer (e.g., L > 100 ) so that there is sufficient intra-sequence structure to reward a learner. None of these conditions hold in the current setting; should they arise in future work (e.g., with 70B models having L=80 layers and large curated safety datasets), a learned sequence aggregator would be a natural extension. 21

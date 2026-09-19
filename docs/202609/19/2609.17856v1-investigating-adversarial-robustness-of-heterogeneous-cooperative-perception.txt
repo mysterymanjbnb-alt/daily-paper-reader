@@ -1,0 +1,525 @@
+Title: Investigating Adversarial Robustness of Heterogeneous Cooperative Perception
+
+URL Source: https://arxiv.org/pdf/2609.17856v1
+
+Published Time: Thu, 17 Sep 2026 00:17:39 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Investigating Adversarial Robustness of Heterogeneous Cooperative Perception 
+
+## Chenyi Wang, Yutong Liu, Qingzhao Zhang, Ming F. Li 
+
+School of Electrical, Computing, and Software Engineering University of Arizona Tucson, AZ 85721 USA 
+
+{chenyiw, yutongl, qzzhang, lim}@arizona.edu 
+
+Abstract 
+
+Heterogeneous cooperative perception (CP) enables con-nected vehicles with diverse sensor setups to share spatial awareness via compact feature maps, where receivers recon-cile these maps using learned translation modules for fusion and inference. Prior attacks against CP in a homogeneous set-ting reveal that the data exchange introduces a critical attack surface: a single malicious agent can transmit crafted features that erase real objects from a neighbor’s fused scene. Yet, it is widely hypothesized that heterogeneity naturally defends against these attacks, as the attacker lacks knowledge of the victim’s detector and the translation module scrambles adver-sarial gradients. We demonstrate that this protection is largely an illusion. Using a matched-objective harness to standard-ize the perturbation budget, objective, and forward path, we show that properly tuned iterative attacks close or reverse the apparent robustness gap. However, these optimization-based attacks require ground-truth labels and iterative backpropa-gation, meaning they do not represent a practical field threat running in real-time. To bridge this gap, we introduce HetPoi-son, a learned generator that crafts a removal perturbation in a single, label-free forward pass. HetPoison transfers across major heterogeneous designs without requiring access to the victim’s detector, matching or exceeding the effectiveness of expensive optimizer-based attacks. Since heterogeneity itself is not a defense, we propose HetShield, a lightweight trust layer that validates the spatiotemporal consistency across fea-tures, recovering 83–95% of the accuracy degraded by attacks, outperforming prior art. 
+
+## 1 Introduction 
+
+A self-driving car sees only what its own sensors can reach, where a parked truck or a building corner can easily obscure a crossing pedestrian. Cooperative perception (CP) eliminates these blind spots by allowing connected vehicles and road-side units to share perceptual data over wireless V2X links (Xu et al. 2022b). By exchanging compact feature maps, the receiver fuses these representations for inference. This shared perception, however, creates a critical vulner-ability. A single compromised or malicious agent can broad-cast crafted features that force neighbors to ignore a real object—such as a stopped vehicle—even if all other agents report it correctly (Tu et al. 2021; Zhang et al. 2024; Wang et al. 2025; Tao et al. 2026a). Understanding when these at-tacks succeed and how to stop them is a foundational safety requirement for any V2X deployment. 
+
+Does heterogeneity defend the system for free? On the surface, it appears to. Real-world autonomous fleets are heterogeneous, carrying diverse sensor setups and model backbones, where a learned translation module is applied to reconcile differences (Lu et al. 2024; Gao et al. 2025; Hu et al. 2024; Zhou et al. 2025). However, prior CP attacks largely assume a homogeneous setting with white-box access to the victim’s detector (Tu et al. 2021; Wang et al. 2025). Hetero-geneity breaks this assumption: the attacker no longer knows the victim’s detector, and the translation module acts as a buffer. The compression, denoising, or discretization within this module scrambles the gradients that standard attacks rely upon. Empirically, a standard sign-PGD attack that compro-mises homogeneous fusion (V2VAM (Li et al. 2023a) AP 0.608) is weakened by these modules (HEAL (Lu et al. 2024) 0.740, CodeFilling (Hu et al. 2024) 0.795). Consequently, de-signs like discrete codebooks and diffusion channels (Zhou et al. 2025) are widely hypothesized to offer “free robust-ness”, even though they were designed for communication efficiency and heterogeneity adaptation rather than security. 
+
+The Obfuscated Gradients Trap. We reveal that this as-sumed protection is mostly an artifact of weak attacks. Draw-ing on the obfuscated-gradients trap (Athalye, Carlini, and Wagner 2018; Carlini et al. 2019), we construct a matched-objective harness (Sec. 3.2) that fixes the perturbation bud-get, objective, and forward path, isolating the optimizer as the sole variable. By applying a rigorous adaptive-attack check-list, we show that a properly tuned iterative attacker closes or reverses the apparent robustness gap across most designs. Notably, it collapses the “robust” diffusion channel to near-zero accuracy. Only one design, a discrete codebook (Hu et al. 2024), survives strong adaptive attacks. 
+
+The Practical Threat: HetPoison . While our tuned per-frame optimizer exposes architectural vulnerabilities, it is not a practical threat. Like prior attacks, it requires ground-truth labels, white-box access to the victim’s detector, and tens of iterations per frame. To realize this threat under realistic field constraints, we introduce HetPoison , a learned pertur-bation generator that requires no labels or victim-detector access at deployment, executes in a single forward pass, and transfers across heterogeneous designs. HetPoison matches or exceeds the effectiveness ceiling of expensive per-frame optimization-based attacks, proving that this vulnerability is a concrete safety problem, not just a theoretical issue. arXiv:2609.17856v1 [cs.CV] 15 Sep 2026 Our contributions are as follows: 1. A matched-objective harness and the illusion of ro-bustness (Sec. 3.2): We demonstrate that heterogeneity’s apparent defense is primarily a weak-attack illusion. A tuned iterative attacker can reverse the seemingly robust performance from heterogeneous CP models. 2. A defense taxonomy of translation modules (Sec. 4.3): We evaluate bottleneck designs against strong adaptive at-tacks, showing that only a discrete codebook resists tested per-frame attacks, while diffusion channels fail entirely. We explain these outcomes through loss geometry. 3. HetPoison (Sec. 4.2): A practical, label-free, single-forward adversarial perturbation generator that transfers across designs, marking the first deployable attack demon-strated across heterogeneous CP families. 4. HetShield (Sec. 4.5): A lightweight trust layer that re-covers 83–95% of clean accuracy against HetPoison , out-performing existing SOTA defenses like LUCIA (Wang et al. 2025) and ROBOSAC (Li et al. 2023b) with minimal computational overhead. 
+
+## 2 Background and Related Work 
+
+Heterogeneous Cooperative Perception. To overcome the physical line-of-sight limitations of individual sensors, co-operative perception allows vehicles to share spatial in-formation. Rather than broadcasting bandwidth-heavy raw point clouds or images, agents compress their sensor data into bird’s-eye-view (BEV) feature maps—top-down grids of learned features summarizing the surrounding scene (Xu et al. 2022b,a; Hu et al. 2022). While early CP benchmarks as-sumed homogeneous fleets sharing identical feature spaces, real-world deployments must support diverse sensor modal-ities and network architectures. Because a LiDAR-equipped vehicle and a camera-only vehicle produce fundamentally incompatible feature maps, the receiver cannot fuse them directly. To bridge this gap, heterogeneous CP introduces a learned translation module to reconcile the feature mismatch before fusion (Lu et al. 2024). We refer to this component as the bottleneck, since all incoming shared information must pass through it (Fig. 1a). Consequently, this bottleneck is exactly what an attacker manipulates. By controlling a sin-gle agent’s transmitted map, an adversary can manipulate the ego’s fused scene, exploiting the public translation and fusion stack while the ego’s detection heads remain private. We evaluate the four translation designs that dominate re-cent heterogeneous CP literature (Fig. 1b), selected for their mechanistically distinct approaches to feature reconciliation: 
+
+• Reverter (HEAL) : Maps each agent’s features back into one common reference space (Lu et al. 2024). 
+
+• Adapter/Reverter (STAMP) : Uses deterministic pairs of small networks to convert features out of and back into the shared space (Gao et al. 2025). 
+
+• Discrete Codebook (CodeFilling) : Maps each feature location to the nearest entry in a commonly learned dic-tionary (Hu et al. 2024). 
+
+• Diffusion Channel (GenComm) : Transmits compact diffusion seeds and reconstructs the full map via a de-noising process (Zhou et al. 2025). 
+
+Adversarial Attacks on CP. Multi-agent perception vul-nerabilities have been explored through two primary threat models, both of which face steep barriers to real-world de-ployment. Test-time evasion attacks (Tu et al. 2021; Zhang et al. 2024; Wang et al. 2025; Lin et al. 2025; Wang et al. 2026; Tao et al. 2026a) assume white-box access to a homo-geneous victim’s detector at inference time, alongside per-frame ground-truth labels for iterative optimization—neither of which a fielded adversary can access. Conversely, training-time attacks such as BadMDA (Chen et al. 2025) inject backdoors during the domain adaptation phase to collapse reverter-based heterogeneous CP. However, this approach of-fers limited practical threat potential in fielded systems, as it strictly requires the adversary to successfully poison the victim’s training data before the model is ever deployed. Het-Poison differs fundamentally from both paradigms to maxi-mize deployability: it operates entirely at test-time with only a single forward pass, requiring neither ground-truth labels nor access to the victim’s private architecture. 
+
+Evaluating and Defending Robustness. A central challenge in adversarial machine learning is avoiding false claims of ro-bustness caused by obfuscated or masked gradients (Athalye, Carlini, and Wagner 2018; Carlini et al. 2019). To prevent this trap, standard methodology prescribes a rigorous adaptive evaluation battery, including Backward Pass Differentiable Approximation (BPDA), Expectation Over Transformation (EOT) (Athalye et al. 2018), parameter-free optimization (APGD/AutoAttack) (Croce and Hein 2020), and gradient-free sanity checks (Uesato et al. 2018; Andriushchenko et al. 2020). We systematically instantiate this checklist within the CP domain. On the defense front, existing CP countermea-sures are designed for homogeneous architectures (Li et al. 2023b; Wang et al. 2025; Hu et al. 2025; Tao et al. 2026b; Zhao et al. 2024). Consequently, we evaluate HetPoison 
+
+against the two most directly adaptable baselines: LUCIA (Wang et al. 2025) and ROBOSAC (Li et al. 2023b). Finally, our evaluation accounts for domain-specific deployment fac-tors. We integrate quantization-aware attacks (Yang et al. 2024; Fan et al. 2024; Guesmi, Ouni, and Shafique 2025) to mirror feature quantization in production V2X pipelines (Zhao et al. 2025), and we assess GenComm’s diffusion chan-nel under diffusion purification principles (Ankile, Midgley, and Weisshaar 2023; Chen, Xue, and Chen 2024; Yuan et al. 2025), where no CP-specific purification defense currently exists. 
+
+## 3 Threat Model and Method 
+
+3.1 Threat Model 
+
+Capabilities. The attacker controls a single malicious col-laborating agent within the network. This models an authen-ticated participant with a compromised software stack or a man-in-the-middle on the communication link—a vulnera-bility that standard channel signing cannot prevent (Zhang et al. 2024). The adversary intercepts its own clean, sensor-derived bird’s-eye-view (BEV) feature map, fatt , and trans-Heterogenous 
+
+> bottleneck
+
+(a) Heterogeneous cooperative perception  (b) Bottleneck designs Φ      
+
+> Heterogeneous agents
+> CAV 1
+> 64-beam LiDAR
+> Private Encoder
+> CAV 2
+> Camera Rig
+> Private Encoder
+> Ego (receiver)
+> 32-beam LiDAR
+> Local Encoder
+> Different sensors
+> ⇒Incompatible features
+> Feature
+> Translation Φ
+> reconcile remote features
+> into a common space
+> Unified
+> protocol
+> space
+> Four designs instantiate Φ
+> (see panel b)
+> Ego:
+> fusion + detection
+> Fusion Network
+> Inference Head
+> Fused Detection Results
+> Reverter — HEAL
+> Map features back to one reference space
+> Rₖ
+> reference space
+> Adapter / Reverter — STAMP
+> Paired nets in/out of a shared space
+> AₖRₖ
+> protocol space base space
+> Discrete Codebook — CodeFilling
+> Quantize to nearest protocol codeword
+> codebook
+> idx
+> reassembled
+> Diffusion Channel — GenComm
+> Send compact seeds; rebuild by denoising
+> seed denoise ×T BEV map
+
+Figure 1: Illustration of the heterogeneous CP framework and the bottlenecks it is built around. (a) Agents carry different sensors and backbones, so the BEV maps they broadcast live in incompatible spaces. A shared translation module Φ reconciles every remote map into one representation before the ego fuses it with its own features and runs detection. Since all shared information passes through Φ, it is also the surface a compromised collaborator controls (Sec. 3.1). (b) The four designs instantiate Φ in mechanistically distinct ways, from a single learned reverter to a discrete codebook and a diffusion channel. mits a fabricated map, xadv att . To remain stealthy and avoid basic anomaly detection, this perturbation is bounded by a relative-ε budget, which restricts the magnitude of the adver-sarial modifications based on the scale of the clean features. 
+
+Knowledge. We assume a threat model that reflects a fielded heterogeneous deployment. The attacker has white-box ac-cess to the public interoperability components (the shared translation bottleneck and the fusion stack). However, the attacker has strictly black-box access (no knowledge) to the ego vehicle’s private, proprietary backbones. 
+
+Objective. We focus on object removal attacks . The adver-sary’s goal is to induce targeted false negatives by suppress-ing ground-truth objects—such as erasing a pedestrian from the ego vehicle’s fused scene—that would otherwise be per-ceivable. This constitutes the most immediate, safety-critical threat to autonomous navigation (Wang et al. 2025). 
+
+Evaluation Postures. To separate theoretical vulnerabilities from realistic field threats, we evaluate the system under two distinct adversarial postures: 1. Worst-Case Per-Frame Op-timizer : An iterative, label-aware attack that assumes full white-box access (including the ego’s private heads) and requires tens to hundreds of optimization steps per frame. While impractical for a fielded adversary to execute, this establishes a theoretical upper bound for architectural vul-nerability. 2. Deployable Attacker ( HetPoison ): A practical threat operating under realistic field constraints. It requires neither ground-truth labels nor access to the ego’s detection heads, executing its perturbation via a learned generator in a single, inference-time forward pass. 
+
+3.2 Matched-Objective Attack Harness 
+
+To rigorously test whether heterogeneous architectures pro-vide true security or merely obfuscate gradients, we intro-duce a matched-objective attack harness that acts as a strict experimental control. For a given frame and a fixed victim, every attack within the harness shares three strict constraints: (1) The Ball , a bounded perturbation region 
+
+|δ| ≤ ε · max( |fego |, |fego |) centered on the clean attacker feature; (2) The Objective , the ground-truth removal loss computed on the ego vehicle’s real detection heads; and (3) The Forward Path , the specific method’s true translation bottleneck and fusion stack. By these contraints constant, the harness guarantees that any difference in attack success is solely attributable to the optimization strategy, separating genuine architectural robustness from optimizer failures. With these variables fixed, we evaluate our deployable generator HetPoison against four distinct instantiations of the worst-case per-frame optimizer introduced in Sec-tion 3.1: (1) sign-PGD , a per-frame sign-gradient ascent serving as the standard baseline in prior CP attacks (Tu et al. 2021; Zhang et al. 2024; Wang et al. 2026, 2025); (2) Adam-PGD (R restarts), a per-frame Adam with ran-dom restarts acting as our fair iterative ceiling (in the spirit of APGD (Croce and Hein 2020)); (3) EOT-PGD (Atha-lye et al. 2018), which averages the Adam-PGD gradient over K stochastic forward passes to defeat randomized re-ceivers (Athalye et al. 2018); and (4) BPDA and SPSA ,a deterministic differentiable surrogate (Athalye, Carlini, and Wagner 2018) and a gradient-free finite-difference at-tack (Uesato et al. 2018) used specifically to evaluate the discrete codebook. To quantify the gap between our deploy-able threat and these theoretical upper bounds, we report the 
+
+ceiling residual ∆ = AP PGD − AP HetPoison . A positive 
+
+∆ indicates that the deployable generator outperforms the per-frame iterative ceiling despite a massive computational disadvantage ( ∼ 10 3–10 4× fewer passes). 3.3 HetPoison : A Deployable Attack Generator 
+
+To move beyond per-frame diagnostic attacks, we need a threat model that operates under realistic field constraints.  
+
+> HetPoison
+
+achieves this by amortizing the computationally heavy per-frame search into the offline weights of a U-Net generator ( Gθ ∼5 M parameters) (Ronneberger, Fischer, and Brox 2015). At inference, it attacks any new frame in a sin-gle forward pass. More importantly, it escapes the flat and shattered loss surfaces that stall per-frame sign-PGD by av-eraging gradient signals over the training distribution, rather than fighting a single frame’s geometry. 
+
+Perturbation Model. The generator must dynamically adapt to each new V2X scene. Let fatt be the attacker’s clean BEV feature, fego the ego’s shared feature, and {fk} the features of the remaining neighbors. Rather than relying on a fixed uni-versal direction, the generator conditions on the full context observable by an on-channel adversary: 
+
+c =  fatt ∥ fego ∥ max k fk
+
+. (1) The permutation-invariant max-pool over neighbors ensures the input remains independent of the number or order of other agents. Thus, a single network produces a content-conditioned perturbation that transfers across designs where fixed universal perturbations fail. The attacker then transmits: 
+
+xadv att = fatt + Π ε
+
+ ε · tanh( Gθ (c)) , (2) where Πε projects the output into the relative-ε ball. The tanh 
+
+activation and projection guarantee that every output is a valid, in-budget feature by construction, eliminating the need for a feasibility penalty. (On GenComm, which transmits a 2-channel latent message rather than a full feature map, Gθ
+
+acts directly on those two channels). 
+
+Training Objective. To bypass the translation bottleneck, the perturbation must masquerade as valid feature content. 
+
+Gθ is trained offline against the public bottleneck and fusion stack to minimize a two-term objective: 
+
+min  
+
+> θ
+
+Lrem 
+
+ xadv att 
+
+ + λadv Ladv 
+
+ xadv att 
+
+. (3) Crucially, because the attacker lacks access to the ego ve-hicle’s private detection heads (as defined in Sec. 3.1), the 
+
+removal loss Lrem is computed on the detection heads of a sur-rogate CP stack that the attacker holds offline. It suppresses the objectness scores at anchors covering ground-truth ob-jects on those surrogate heads, relying on the transferability of the generated perturbations to deceive the ego’s unknown detector. In the white-box posture the surrogate is a copy of the victim design, which makes the generator column an 
+
+amortized upper bound directly comparable to the per-frame optimizers beside it. In the transfer posture (Sec. 4.4) the surrogate is a different heterogeneous family altogether, so the victim’s bottleneck, fusion stack and heads are never seen during training. The adversarial loss Ladv is a least-squares GAN term (Xiao et al. 2018). A discriminator D tries to separate clean from perturbed features while Gθ learns to fool it. This term is critical: it ensures the perturbation looks like plausible scene content that survives compression, dis-cretization, or denoising, rather than obvious noise that gets filtered. Ground-truth labels and the surrogate architecture are used solely during this offline training phase. 
+
+Deployment and Quantization. At attack time, HetPoison 
+
+requires only on-channel features and executes in a single forward pass, entirely avoiding expensive and iterative back-propagation through large networks. Furthermore, because production V2X pipelines quantize transmitted features to INT4–INT8 (Zhao et al. 2025; Shenkut and Vijaya Kumar 2026), we train a quantization-aware variant with a straight-through quantizer before fusion, teaching Gθ to successfully attack through the rounding step. 
+
+3.4 HetShield: A Lightweight Trust Layer 
+
+Since deployed receivers cannot rely solely on their transla-tion bottlenecks to stop an attacker, they require a lightweight, explicit defense to counter. Our design principle is to exploit the unavoidable signatures of CP attack perturbations: to suc-cessfully manipulate object detections, a malicious feature must both contradict its own recent past (temporal consis-tency) and disagree with what the benign vehicles currently perceives at the same location (spatial consistency). Het-Shield is a post-bottleneck, pre-fusion hook that translates these two signatures into a per-agent trust score. 
+
+Temporal Consistency. An adversarially perturbed feature map diverges sharply from natural temporal correlation pat-terns. To detect this anomaly, a self-supervised ConvGRU predictor P forecasts each agent’s next feature map based on its recent history (Ballas et al. 2016). For agent k at time 
+
+t, the temporal inconsistency τk is the per-cell normalized deviation from this forecast: 
+
+τk = f tk − P  f t−H:t−1
+
+> k
+
+ . (4) Because benign ego-motion is exactly what P is trained to predict, honest agents score low, while malicious features trigger high inconsistency. 
+
+Spatial Consistency. An attacker must also suppress co-visible objects, forcing their feature map to disagree with the ego’s own perception over their shared field-of-view overlap (Ok). We measure this alignment using a cosine-consistency check: 
+
+σk = 1
+
+|O k|
+
+X
+
+> p∈O k
+
+cos  fk(p), f ego (p). (5) A map that attempts to erase a co-visible object is pulled to-ward a low σk exactly in the regions where the ego’s physical evidence contradicts it. 
+
+Trust Gate and Blend. These two signatures are combined via a sigmoid function into a scalar trust weight gk ∈ (0 , 1) ,which is high only when temporal inconsistency is low and spatial consistency is high: 
+
+gk = sigmoid  wτ (τ0 − τk) + wσ (σk − σ0) + b. (6) This trust score then gates an ego-anchored blend applied right before fusion: 
+
+˜fk = gk fk + (1 − gk) fego . (7) A highly trusted agent ( gk → 1) passes through nearly unchanged, costing almost no clean accuracy ( −0.003 to Table 1: Matched-objective white-box AP@0.5: sign-PGD (50-step) vs. Adam-PGD (5 restarts ×100) vs. HetPoison .                       
+
+> Algorithm Clean Sign PGD Adam PGD HetPoison
+> V2VAM (homo) 0.928 0.608 0.109 0.036
+> HEAL 0.866 0.740 0.405 0.209
+> STAMP 0.899 0.685 0.246 0.072
+> CodeFilling 0.876 0.795 0.823 0.601
+> GenComm 0.880 0.628 0.501 0.599
+
+−0.037 AP). Conversely, a suspicious agent is pulled toward the ego feature in proportion to its inconsistency. This neu-tralizes the injected attack without forcing the receiver to completely discard a potentially useful collaborator. Oper-ating at ∼1ms per frame with only 0.90 M parameters, Het-Shield provides a highly efficient mitigation against attacks from fabricated features. 
+
+## 4 Evaluation 
+
+4.1 Experimental Setup 
+
+We evaluate using OPV2V (Xu et al. 2022b) and its het-erogeneous variant (OPV2V-H, m1=LiDAR-PointPillar-64, m2=Camera-LSS-EfficientNet) (Lu et al. 2024). Victim pairs are HEAL m1m2, STAMP m0m1 (m0 is STAMP’s proto-col LiDAR backbone, meaning this pair is LiDAR–LiDAR), CodeFilling m1m2, and GenComm m1m2. We include the homogeneous architecture V2VAM (single-modality Li-DAR) as a baseline control. We report AP@0.5 across the full test set. Full implementation details are provided in Ap-pendix A and B. 
+
+4.2 Attack Effectiveness 
+
+Does heterogeneity actually defend the fusion system? Ta-ble 1 answers this in three steps. First, heterogeneity appears to provide genuine defense against existing sign-PGD at-tacks (Tu et al. 2021; Zhang et al. 2024; Wang et al. 2025). A standard sign-PGD attack that degrades homogeneous CP (V2VAM AP 0.608 ) is blunted by a cross-modality bottle-neck (HEAL 0.740 , STAMP 0.685 ). On the surface, this supports the widely held belief that heterogeneity provides partial robustness against attacks. Second, most of that protection is a weak-attack illu-sion. Swapping sign-PGD for Adam with a few restarts—at the exact same budget and objective—collapses the residual robustness on homogeneous CP (V2VAM drops from 0.608 
+
+to 0.109 ) and significantly degrades the continuous hetero-geneous translation modules (HEAL drops from 0.740 to 
+
+0.405 ). Increasing sign-PGD steps ( 50 → 400 ) does noth-ing, proving that the standard baseline attack stalls on flat or shattered gradients. The apparent robustness reflects the weakness of the optimizer, not architectural security. Against the fair Adam-PGD ceiling, HetPoison maintains a positive residual advantage on the continuous reverter and adapter (HEAL, STAMP) and the discrete codebook (CodeFilling). The exception is the diffusion channel (GenComm), where the tuned PGD attacker induced lower AP than HetPoison .Table 2: Adaptive attacks on the two stochastic bottlenecks (100-step, eot=1 baselines CodeFilling 0.736 and GenComm 0.101). AP@0.5, clean ≈ 0.82 /0.84 .                    
+
+> Algorithm Adaptive Attack AP@0.5 Reading CodeFilling EOT-8 0.730 survives CodeFilling BPDA ( τ1) 0.743 survives CodeFilling SPSA (grad-free) 0.811 weak probe ‡
+> GenComm EOT-8 0.054 collapses
+> ‡Our gradient-free SPSA also fails to break a non-masking control (homogeneous V2VAM AP 0.95 vs. 0.11 for Adam-PGD), so its high AP here is uninformative about masking.
+
+Third, HetPoison poses a strong and practical threat. 
+
+Operating under strict field constraints (a single forward pass, no labels, no access to ego heads), the learned generator achieves more damage than the standard sign-PGD base-line, plummeting HEAL to 0.209 and STAMP to an abysmal 
+
+0.072 AP. Notably, on these continuous architectures, Het-Poison significantly outperforms even the computationally expensive Adam-PGD ceiling. Furthermore, while the dis-crete codebook (CodeFilling) appears relatively resilient by capping the attack at 0.601 AP, we stress that this still con-stitutes substantial damage to the perception output. A 16 .6
+
+point drop in AP from clean accuracy means that critical, safety-relevant objects can likely be impacted and removed from the fused scene, proving that even the most architec-turally robust designs suffer meaningful degradation. Figure 2 provides qualitative visualization of the attack results. Under sign-PGD, only a few objects are removed, where as Adam-PGD induces more overlooked objects. On the other hand, HetPoison achives similar or better removal results compared with Adam-PGD. The two bottlenecked designs behave as their AP suggests: the codebook visibly caps the damage, and the diffusion channel keeps most of its detections yet introduced unwanted false positives. 
+
+4.3 A Defense Taxonomy 
+
+Under the tuned ceiling, no design is robust in absolute terms (HEAL falls to 0.40 , STAMP to 0.24 ). We therefore ask a sharper question: which bottlenecks resist the full adaptive-attack checklist? We probe the two stochastic bottlenecks with EOT-PGD ( K=8 ) (Athalye et al. 2018) for Gumbel 
+
+stochasticity , BPDA for non-differentiability (Athalye, Car-lini, and Wagner 2018), a gradient-free SPSA attack (Uesato et al. 2018), and an unbounded-ε sweep (Table 2). BPDA replaces the straight-through quantizer with a deterministic differentiable surrogate. SPSA estimates the gradient from forward evaluations only, never touching the surrogate. 
+
+The diffusion channel’s robustness is illusory. Strong PGD breaks GenComm ( 0.501 ), and EOT-PGD drives it to 
+
+0.054 , essentially wipes out all perception utility. Therefore, its apparent robustness came entirely from stochastic aver-aging in the denoising process, where averaging the gradient over forward passes completely removes this barrier. 
+
+The discrete codebook resists per-frame attacks. Code-Filling withstands sign-PGD, Adam, restarts, EOT, and 
+
+BPDA at every surrogate temperature (EOT-8, the strongest □ ground truth □ fused detection ▲ ego (victim) ⊗ attacker • benign collaborator Benign sign-PGD Adam-PGD HetPoison + LUCIA + ROBOSAC + HetShield HEAL                         
+
+> 12/12 12/12 6/12 0/12 1/12 0/12 12/12
+> STAMP
+> 17/26 16/26 8/26 0/26 5/26 0/26 17/26
+> CodeFilling
+> 28/33 27/33 26/33 16/33 15/33 15/33 26/33
+> GenComm
+> 11/12 9/12 1/12 8/12 8/12 8/12 11/12
+
+Figure 2: Qualitative visualization of attacks and the defenses, seen on the fused scene by victim. One attacker (agent 1) perturbs its transmitted feature under the matched-objective harness. Counts are ground-truth objects recovered at IoU 0.5 over those in view. sign-PGD barely dents the scene, Adam-PGD removes much more, and HetPoison , with one label-free forward pass, erases more detections. HetShield restores most of the benign scene while LUCIA and ROBOSAC recover little. per-frame attacker, still leaves AP at 0.730 ). This provides strong evidence against simple gradient masking. Crucially, 
+
+HetPoison trains through the same straight-through surro-gate that BPDA uses, yet reaches AP 0.710 where per-frame BPDA-PGD stalls. This persistent residual advantage indi-cates that amortizing the attack over the training data allows the generator to bypass the discrete obstruction more effec-tively than per-frame optimization, though the codebook still safely caps the damage. 
+
+4.4 Cross-Method Transferability 
+
+Does the perturbation crafted on one transfer to another? Ta-ble 3 reports source →victim AP@0.5 over the architectures (ε=1 .0). We compare against a random-δ floor —drawn uniformly from that same ball instead of optimized—which separates the degradation produced by transferred attack from what random noise at the same magnitude can achieve. A perturbation has transferred only if it drives the victim clearly below its own floor, whereas a cell sitting at the floor was worth no more than noise. The noise floor for HEAL, STAMP, CodeFilling is 0.68, 0.68, and 0.83, respectively. Appendix C gives the protocol.Three clear readings emerge: 1. sign-PGD does not transfer. Its white-box diagonal is already weak—on HEAL it lands above that victim’s floor (0.74 vs. 0.68 ), so 50 steps of sign ascent do less damage than an unoptimized draw from the same ball—and every off-diagonal result sits at or above the victim’s floor as well (e.g., HEAL →STAMP 0.65 ≈ floor 0.68 ). 2. A strong fixed δ transfers, but only into susceptible victims. Adam-PGD transfers strongly into STAMP’s continuous adapter (HEAL →STAMP 0.30 , −0.38 below floor), partially into HEAL, but not at all into the discrete codebook (CodeFilling remains at 0.82 ≈ floor). 3. HetPoison transfers broadly and with devastating ef-fect. HetPoison almost entirely obliterates the contin-uous architectures, dropping AP to a near-zero 0.03 –
+
+0.04 across HEAL and STAMP in both directions. However, the codebook resists transfer as a target (HEAL →CodeFilling 0.79 ), even though it transfers out effectively as a source (CodeFilling →STAMP 0.04 ). 
+
+4.5 Defense Effectiveness 
+
+We measure defense effectiveness (DE) as the fraction of the attack’s damage undone: DE = (AP def − AP atk )/(AP clean −
+
+AP atk ). Against HetPoison , HetShield recovers 78 .6% –
+
+84 .5% of clean AP across the continuous heterogeneous families, beating LUCIA and ROBOSAC (Table 4). This suc-ceeds because the perturbations are structured and content-conditioned—exactly the signatures that HetShield ’s spa-tiotemporal checks are designed to flag—while costing al-most zero clean accuracy. The right-hand columns of Figure 2 show the same ordering frame by frame: LUCIA returns few objects, the ROBOSAC recovers erratically because its ran-dom subset sampling may keep the attacker inside the consen-sus set, and HetShield restores most of the benign detections. Meanwhile, HetShield as a single layer in the CP stack in-curs only ∼1 ms runtime additional overhead on RTX 5090, while ROBOSAC requires multiple full CP forward passes, violating real-time constraints (Wang et al. 2025). 
+
+## 5 Discussion 
+
+Does heterogeneity defend, and why was it over-credited? 
+
+Heterogeneity barely provides any innate defense. It was largely over-credited because prior evaluations relied on Table 3: Cross-method transfer, AP@0.5 (row = surrogate source, column = victim; diagonal = white-box).                                              
+
+> Target (column) (a) sign-PGD (fixed δ, 50 step) (b) Adam-PGD (fixed δ,5×100 )(c) HetPoison (learned generator) Source (row) HEAL STAMP CodeFill. HEAL STAMP CodeFill. HEAL STAMP CodeFill. HEAL 0.74 0.65 0.83 0.40 0.30 0.82 0.21 0.03 0.79 STAMP 0.76 0.69 0.83 0.58 0.25 0.83 0.20 0.07 0.79 CodeFilling 0.80 0.87 0.80 0.61 0.52 0.82 0.17 0.04 0.60
+> ‡GenComm is excluded because its 2-channel diffusion message is dimensionally incompatible with the 128-channel BEV grid exposed by the other designs.
+
+Table 4: Defense effectiveness (DE %) against HetPoison ,and per-frame cost of the defense.                        
+
+> Defense HEAL STAMP Code Fill. Gen Comm ms/frame LUCIA 14.6 39.8 17.6 49.1 0.545 ±0.003
+> ROBOSAC 39.4 46.5 37.6 38.4 K×fwd
+> HetShield 78.6 84.5 46.2 82.1 1.207 ±0.010
+
+weak sign-PGD baselines, which inherently stall on flat loss surfaces (continuous reverters) or shattered gradients (dis-crete and stochastic bottlenecks). As we have demonstrated, both a properly tuned per-frame optimizer and HetPoison 
+
+escape these superficial barriers. The interoperability ma-chinery itself is the actual attack surface, relying on shared representations that adversaries can exploit. 
+
+The mechanics of vulnerability: content and generators. 
+
+To isolate the source of transferability, we conducted addi-tional experiments orthogonal to our primary architectural contributions: we trained Universal Adversarial Perturba-tions (UAPs) and evaluated the cross-method transferability of both per-frame fixed-δ PGDs and HetPoison on homoge-neous CP systems. The results reveal why a learned generator transfers to new frames across different architectures while a fixed perturbation fails. A single dataset-optimized UAP is uniformly weak ( ∆ from -0.002 to -0.078), proving the ad-versarial advantage is not a single fixed direction. Instead, the attack subspace is determined by scene content than by persistent architectural traits.The transferable structure is therefore a content-conditioned direction. Furthermore, our homogeneous control tests confirm that broad transfer-ability is not an inherent weakness unique to heterogeneity but a property of the learned generator that HetPoison is designed upon. A fixed-δ PGD does not transfer across ho-mogeneous LiDAR models (off-diagonal AP remains near clean levels), while HetPoison transfers seamlessly (e.g., ho-mogeneous CoAlign (Lu et al. 2023) →V2VAM drops by 89 pp). Therefore, HetPoison poses as a practical threat even for black-box transfer attacks in homogeneous CP. 
+
+Defense scope and the adaptive attacker. While alightweight trust layer like HetShield is effective against the deployable HetPoison , it is not a worst-case architec-tural guarantee. If an adversary shifts from a realistic field constraint to a theoretical worst-case posture—acting as a fully adaptive, white-box attacker with full knowledge of the trust layer and hundreds of iterations—they can optimize through the defense, as with neural network based defenses in general. HetShield provides a necessary, immediate miti-gation against practical field threats, but it does not solve the fundamental theoretical vulnerability that the data exchange introduces, which remains as an open question. 
+
+Design and defense guidance. We offer four practical guide-lines for perception security: (1) Prefer discrete bottlenecks over diffusion channels. Diffusion robustness is an illusion that quantization only amplifies, whereas the discrete code-book is the only architectural choice that actively resists adap-tive attacks. (2) Demand adaptive evaluation. Always report an adaptive-optimizer ceiling (Adam/APGD with restarts, EOT for stochastic receivers, BPDA for non-differentiable ones) before claiming a module is robust. (3) Update the threat baseline. Treat the learned attack generator HetPoison 
+
+as the standard deployable threat and strictly stress-test new defenses against it. 
+
+## 6 Conclusion 
+
+Heterogeneous cooperative perception relies on translation modules widely assumed to naturally defend against fea-ture perturbation attacks by scrambling adversarial gradients. We demonstrate this protection is an illusion. A matched-objective harness reveals that tuned iterative attacks bypass these modules. Because expensive, label-dependent opti-mization is impractical in the field, we introduce HetPoison :a learned generator that crafts label-free removal perturba-tions in a single forward pass. HetPoison affects all four major heterogeneous architectures without victim access, matching the damage of computationally heavy optimizers. To counter this deployable threat, we propose HetShield , a lightweight spatiotemporal trust layer that recovers 83–95% of degraded accuracy and outperforms prior defenses. 
+
+## Ethics and Broader Impact 
+
+In align with prior CP attacks (Tu et al. 2021; Zhang et al. 2024; Wang et al. 2025), all experiments use the simulated OPV2V benchmark; no physical vehicle or person was in-volved. We study attacks on safety-critical perception to in-form defenses, and release our defense HetShield alongside the attack to counter its impact. 
+
+## References 
+
+Andriushchenko, M.; Croce, F.; Flammarion, N.; and Hein, M. 2020. Square Attack: A Query-Efficient Black-Box Ad-versarial Attack via Random Search. In European Confer-ence on Computer Vision (ECCV) , 484–501. Ankile, L. L.; Midgley, A.; and Weisshaar, S. 2023. De-noising Diffusion Probabilistic Models as a Defense against Adversarial Attacks. arXiv preprint arXiv:2301.06871 .Athalye, A.; Carlini, N.; and Wagner, D. 2018. Obfuscated Gradients Give a False Sense of Security: Circumventing De-fenses to Adversarial Examples. In International Conference on Machine Learning (ICML) , 274–283. Athalye, A.; Engstrom, L.; Ilyas, A.; and Kwok, K. 2018. Synthesizing Robust Adversarial Examples. In International Conference on Machine Learning (ICML) , 284–293. Ballas, N.; Yao, L.; Pal, C.; and Courville, A. C. 2016. Delv-ing Deeper into Convolutional Networks for Learning Video Representations. In Bengio, Y.; and LeCun, Y., eds., 4th In-ternational Conference on Learning Representations, ICLR 2016, San Juan, Puerto Rico, May 2-4, 2016, Conference Track Proceedings .Carlini, N.; Athalye, A.; Papernot, N.; Brendel, W.; Rauber, J.; Tsipras, D.; Goodfellow, I.; Madry, A.; and Kurakin, A. 2019. On Evaluating Adversarial Robustness. arXiv preprint arXiv:1902.06705 .Chen, T.; Du, B.; Zhao, J.; Xia, H.; Wang, H.; and Wang, J. 2025. BadMDA: Towards Backdoor Injection during Do-main Adaptation to Collapse Multi-Agent Perception. In 
+
+Proceedings of the ACM International Conference on Multi-media (ACM MM) , 975–983. Chen, Y.; Xue, H.; and Chen, Y. 2024. Diffusion Policy Attacker: Crafting Adversarial Attacks for Diffusion-based Policies. In Advances in Neural Information Processing Sys-tems (NeurIPS) . ArXiv:2405.19424. Croce, F.; and Hein, M. 2020. Reliable Evaluation of Adver-sarial Robustness with an Ensemble of Diverse Parameter-free Attacks. In International Conference on Machine Learn-ing (ICML) , 2206–2216. Fan, H.; Qin, X.; Chen, S.; Shum, H. P. H.; and Li, M. 2024. One-Index Vector Quantization Based Adversarial Attack on Image Classification. Pattern Recognition Letters , 186: 47– 56. ArXiv:2409.01282. Gao, X.; Xu, R.; Li, J.; Wang, Z.; Fan, Z.; and Tu, Z. 2025. STAMP: Scalable Task- And Model-agnostic Collaborative Perception. In International Conference on Learning Rep-resentations (ICLR) . Adapter–reverter heterogeneous CP framework; arXiv:2501.18616. Guesmi, A.; Ouni, B.; and Shafique, M. 2025. Breaking the Limits of Quantization-Aware Defenses: QADT-R for Ro-bustness Against Patch-Based Adversarial Attacks in QNNs. 
+
+arXiv preprint arXiv:2503.07058 .Hu, S.; Tao, Y.; Xu, G.; Deng, Y.; Chen, X.; Fang, Y.; and Kwong, S. 2025. CP-Guard: Malicious Agent Detection and Defense in Collaborative Bird’s Eye View Perception. In AAAI Conference on Artificial Intelligence , volume 39, 23203–23211. ArXiv:2412.12000. Hu, Y.; Fang, S.; Lei, Z.; Zhong, Y.; and Chen, S. 2022. Where2comm: Communication-Efficient Collaborative Per-ception via Spatial Confidence Maps. In Advances in Neural Information Processing Systems (NeurIPS) .Hu, Y.; Peng, J.; Liu, S.; Ge, J.; Liu, S.; and Chen, S. 2024. Communication-Efficient Collaborative Perception via Infor-mation Filling with Codebook. In IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . Vector-quantized codebook bottleneck for HCP; arXiv:2405.04966. Li, J.; Xu, R.; Liu, X.; Ma, J.; Chi, Z.; Ma, J.; and Yu, H. 2023a. Learning for Vehicle-to-Vehicle Cooperative Perception Under Lossy Communication. IEEE Transac-tions on Intelligent Vehicles , 8(4): 2650–2660. V2VAM; arXiv:2212.08273. Li, Y.; Fang, Q.; Bai, J.; Chen, S.; Juefei-Xu, F.; and Feng, C. 2023b. Among Us: Adversarially Robust Collaborative Perception by Consensus. In IEEE/CVF International Con-ference on Computer Vision (ICCV) , 186–195. ROBOSAC defense; arXiv:2303.09495. Lin, H.; Pan, D.; Xia, Q.; Wu, H.; Wang, C.; Shen, S.; and Wen, C. 2025. Pretend Benign: A Stealthy Adversarial Attack by Exploiting Vulnerabilities in Cooperative Perception. In 
+
+IEEE/CVF International Conference on Computer Vision (ICCV) .Lu, Y.; Hu, Y.; Zhong, Y.; Wang, D.; Wang, Y.; and Chen, S. 2024. An Extensible Framework for Open Heterogeneous Collaborative Perception. In International Conference on Learning Representations (ICLR) . Introduces the OPV2V-H dataset; arXiv:2401.13964. Lu, Y.; Li, Q.; Liu, B.; Dianati, M.; Feng, C.; Chen, S.; and Wang, Y. 2023. Robust Collaborative 3D Object De-tection in Presence of Pose Errors. In IEEE International Conference on Robotics and Automation (ICRA) . CoAlign; arXiv:2211.07214. Ronneberger, O.; Fischer, P.; and Brox, T. 2015. U-Net: Convolutional Networks for Biomedical Image Segmenta-tion. In International Conference on Medical Image Com-puting and Computer-Assisted Intervention (MICCAI) , 234– 241. Springer. Shenkut, D.; and Vijaya Kumar, B. V. K. 2026. Residual Vector Quantization For Communication-Efficient Multi-Agent Perception. In IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) .ArXiv:2509.21464; 273x compression at 30 bpp to 1365x at 6 bpp. Tao, Y.; Hu, S.; An, H.; Fang, Z.; Cao, H.; and Fang, Y. 2026a. Learning Mutual View Information Graph for Adaptive Ad-versarial Collaborative Perception. In IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) .ArXiv:2602.19596; concurrent learned/adaptive attacker on collaborative perception. Tao, Y.; Hu, S.; Hu, Y.; An, H.; Cao, H.; and Fang, Y. 2026b. GCP: Guarded Collaborative Perception with Spatial-Temporal Aware Malicious Agent Detection. IEEE Transac-tions on Dependable and Secure Computing (TDSC) , 23(4): 9535–9548. ArXiv:2501.02450. Tu, J.; Wang, T.; Wang, J.; Manivasagam, S.; Ren, M.; and Urtasun, R. 2021. Adversarial Attacks on Multi-Agent Com-munication. In IEEE/CVF International Conference on Com-puter Vision (ICCV) , 7768–7777. Uesato, J.; O’Donoghue, B.; Kohli, P.; and van den Oord, A. 2018. Adversarial Risk and the Dangers of Evaluating Against Weak Attacks. In International Conference on Ma-chine Learning (ICML) , 5025–5034. Wang, C.; Muller, R.; Song, R.; Monteuuis, J.-P.; Petit, J.; Man, Y.; Gerdes, R.; Celik, Z. B.; and Li, M. 2025. From Threat to Trust: Exploiting Attention Mechanisms for At-tacks and Defenses in Cooperative Perception. In USENIX Security Symposium . Introduces both the SOMBRA attack and the LUCIA defense. Wang, C.; Song, R.; Muller, R.; Monteuuis, J.-P.; Celik, Z. B.; Petit, J.; Gerdes, R.; and Li, M. 2026. CP-FREEZER: Latency Attacks Against Vehicular Cooperative Perception. In AAAI Conference on Artificial Intelligence , volume 40, 1114–1122. ArXiv:2508.01062. Xiao, C.; Li, B.; Zhu, J.-Y.; He, W.; Liu, M.; and Song, D. 2018. Generating Adversarial Examples with Adversarial Networks. In International Joint Conference on Artificial Intelligence (IJCAI) , 3905–3911. Xu, R.; Xiang, H.; Tu, Z.; Xia, X.; Yang, M.-H.; and Ma, J. 2022a. V2X-ViT: Vehicle-to-Everything Cooperative Per-ception with Vision Transformer. In European Conference on Computer Vision (ECCV) , 107–124. Xu, R.; Xiang, H.; Xia, X.; Han, X.; Li, J.; and Ma, J. 2022b. OPV2V: An Open Benchmark Dataset and Fusion Pipeline for Perception with Vehicle-to-Vehicle Communication. In 
+
+IEEE International Conference on Robotics and Automation (ICRA) , 2583–2589. Also introduces the Attentive Interme-diate Fusion baseline (AttFuse in the OpenCOOD codebase). Yang, Y.; Lin, C.; Li, Q.; Zhao, Z.; Fan, H.; Zhou, D.; Wang, N.; Liu, T.; and Shen, C. 2024. Quantization Aware At-tack: Enhancing Transferable Adversarial Attacks by Model Quantization. IEEE Transactions on Information Forensics and Security , 19: 3265–3278. ArXiv:2305.05875. Yuan, C.; Pang, J.; Fei, J.; Li, X.; and Xia, Z. 2025. AT-diff: An adversarial diffusion model for unrestricted adver-sarial examples generation. Knowledge-Based Systems , 320: 113645. Zhang, Q.; Jin, S.; Zhu, R.; Sun, J.; Zhang, X.; Chen, Q. A.; and Mao, Z. M. 2024. On Data Fabrication in Collaborative Vehicular Perception: Attacks and Counter-measures. In USENIX Security Symposium , 6309–6326. ArXiv:2309.12955. Zhao, S. Z.; Zhang, H.; Li, Z.; Peng, J.; Chui, A.; Zhou, Z.; Meng, Z.; Xiang, H.; Huang, Z.; Wang, F.; Tian, R.; Xu, C.; Zhou, B.; and Ma, J. 2025. QuantV2X: A Fully Quantized Multi-Agent System for Cooperative Perception. 
+
+arXiv preprint arXiv:2509.03704 . UCLA; first fully quan-tized V2X system; INT4 weights with INT8 activations retain up to 99.8% of full-precision accuracy. Zhao, Y.; Xiang, Z.; Yin, S.; Pang, X.; Wang, Y.; and Chen, S. 2024. MADE: Malicious Agent Detection for Robust Multi-Agent Collaborative Perception. In IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) ,13817–13823. ArXiv:2310.11901. Zhou, J.; Dai, P.; Wei, Q.; Liu, B.; Wu, X.; and Wang, J. 2025. Pragmatic Heterogeneous Collaborative Perception via Gen-erative Communication Mechanism. In Advances in Neu-ral Information Processing Systems (NeurIPS) . Conditional-diffusion message bridge for HCP; arXiv:2510.19618. A HetPoison : Architecture, Hyperparameters, and Surrogate Training 
+
+A.1 Generator and Discriminator Architecture 
+
+The generator Gθ is a three-scale U-Net over BEV feature maps. The conditioning tensor c ∈ R3C×H×W of Eq. (1) en-ters an encoder of three Conv–InstanceNorm–ReLU blocks with 3 × 3 kernels ( 3C → 64 at stride 1, 64 → 128 at stride 2,
+
+128 → 256 at stride 2), followed by three residual blocks at 
+
+256 channels, and a decoder of two transposed convolutions (4 × 4, stride 2) with skip concatenations from the matching encoder scales, closed by a 3×3 convolution back to C chan-nels and a tanh . Decoder activations are bilinearly resized to the skip tensor’s spatial size before concatenation, so one architecture accepts the different BEV grids the modalities produce (LiDAR 64 × 128 , camera 64 × 64 ). The discriminator D is a PatchGAN: four convolutions (C → 64 → 128 → 256 → 1), the first three at stride 2 with LeakyReLU( 0.2) and InstanceNorm on layers 2–3, emitting a patch-wise real/fake map over the attacker’s feature. Pa-rameter counts are given in Table 5. We use C=128 for HEAL, STAMP and CodeFilling, which put a 128 -channel BEV map on the channel, and C=2 for GenComm, whose attacker controls only the two-channel diffusion message. 
+
+A.2 Perturbation Parameterization 
+
+The transmitted feature is xadv att = fatt + δ with 
+
+δ = tanh  Gθ (c) ⊙ ε · max  |fego |, |fego |, (8) where |fego | is the scalar mean absolute ego activation (floored at 10 −6) and the max is taken elementwise. This is exactly the relative-ε ball the harness fixes for every attacker (Sec. 3.2). Because | tanh | ≤ 1, δ is feasible by construc-tion: the projection Πε of Eq. (2) never clips at deployment, and no feasibility penalty is needed in the objective. 
+
+A.3 Training Objective and Loss Weights 
+
+The implemented objective is 
+
+LG = λrem Lrem + λgan Ladv + λhinge Lhinge , (9) which is Eq. (3) rescaled by λrem , so the λadv of the main text equals λgan /λ rem . The three terms are: 
+
+Removal loss. Lrem = 1
+
+> |P|
+
+P 
+
+> a∈P
+
+sigmoid( cls a), the mean objectness confidence over the anchors P that ground truth marks positive. No regression-confusion term is used (its weight is 0), so the generator is optimized purely to suppress detections rather than to displace boxes. 
+
+Adversarial loss. A least-squares GAN term (Xiao et al. 2018): Ladv = 12 E[( D(xadv att ) − 1) 2] for the generator, against 
+
+LD = 12 E[( D(fatt ) − 1) 2] + 12 E[D(xadv att )2] for the discrimi-nator, with one D step per G step. 
+
+Hinge guard. Lhinge = ReLU( ∥δ∥2 − ∥ε ·
+
+max( |fego |, |fego |)∥2) penalizes a perturbation whose 
+
+ℓ2 norm exceeds the budget implied by the elementwise ball. It is a safety net only: it measured exactly 0 at every logged step of every run, because the tanh parameterization of Eq. (8) already keeps δ inside the ball. Table 5: HetPoison module sizes. Only Gθ is needed at de-ployment; D is discarded after offline training.        
+
+> Module C=128
+> (HEAL/STAMP/CodeFill.)
+> C=2
+> (GenComm) Generator Gθ5.07 M4.78 MDiscriminator D0.79 M0.66 M
+
+Table 6: HetPoison training hyperparameters. λadv in Eq. (3) corresponds to λgan /λ rem .                                                 
+
+> Hyperparameter HEAL / STAMP CodeFilling GenComm Perturbed channels C128 2
+> λrem 10 .010 .0
+> λgan 0.11.0
+> λhinge 1.010 .0
+> Effective λadv 0.01 0.1
+> Generator base width 64 64
+> Residual blocks 33
+> Optimizer ( Gand D)Adam Adam Learning rate 2×10 −42×10 −4
+> Adam (β1, β 2)(0 .5,0.999) (0 .5,0.999)
+> Weight decay / LR schedule none none
+> Dsteps per Gstep 11
+> Generator steps 1,000 1,000
+> Batch size (frames) 11
+> Relative budget ε1.01.5
+> Random seed 00
+
+Loss weights are listed in Table 6. They were set once per bottleneck family and not tuned per victim: the three designs that expose a 128 -channel feature share one setting, and GenComm — whose two-channel message is far lower-dimensional and passes through a denoiser — uses a 10 ×
+
+larger GAN and hinge weight. 
+
+A.4 Optimization Schedule and Cost 
+
+Each generator is trained for 1,000 steps at batch size one frame, with the victim stack frozen in eval mode (all param-eters requires_grad=False ) so gradients reach only 
+
+Gθ . Frames carrying a single agent are skipped, and the at-tacker occupies collaborator index 1. On one RTX 5090 a step costs 0.35 –0.47 s for C=128 and 0.60 –0.73 s for Gen-Comm, i.e. 6–12 GPU-minutes per generator; this one-time offline cost is what the deployable attacker amortizes against the ∼10 3–10 4 forward/backward passes a per-frame opti-mizer spends on every frame. One generator is trained per (design, ε) pair; the main results use ε=1 .0 except GenComm at ε=1 .5, and the budget sweep additionally trains generators at ε ∈ { 0.3, 0.5, 1.5}.
+
+A.5 Surrogate Training: What the Attacker Needs  
+
+> HetPoison
+
+is trained offline against a surrogate cooperative-perception stack that the attacker holds: the public translation bottleneck Φ, the fusion module, and a detection head, to-gether with ground-truth labels for the offline frames only. Gradients flow Lrem → heads → fusion → Φ → xadv att → Gθ ;the surrogate itself is never updated. 
+
+Two surrogate regimes. We report both. (i) Surrogate =
+
+victim (Table 1, Table 4, and the diagonal of Table 3): the attacker owns a copy of the victim design, which makes the generator column a white-box amortized upper bound directly comparable to the white-box per-frame optimizers beside it. (ii) Surrogate ̸ = victim (off-diagonal of Table 3): the generator is trained end-to-end on one heterogeneous family and evaluated against another, so the victim’s bottleneck, fusion stack and detection heads are never touched during training. Regime (ii) is the posture the threat model of Sec. 3.1 actually grants, and it is where the deployability claim is tested; the continuous designs fall in it (a HEAL-trained generator drives STAMP to 0.03 ), while the codebook resists as a victim. 
+
+Non-differentiable and stochastic surrogates. The gener-ator backpropagates through the same forward path the re-ceiver runs, with no attack-specific relaxation: CodeFilling’s codebook lookup is traversed with a straight-through estima-tor, and GenComm’s diffusion generation module is invoked exactly as the receiver invokes it, with gradients propagating through it. We do not fit a separate BPDA-style surrogate for generator training; the BPDA results of Table 2 are a per-frame diagnostic, and the fact that HetPoison trains through the very same straight-through path yet still beats per-frame BPDA-PGD is what isolates amortization from surrogate de-sign. 
+
+Deployment requirements. Nothing from the surrogate is needed at attack time. Gθ consumes only quantities an on-channel adversary observes — its own clean feature, the ego’s broadcast feature, and the element-wise max over the remaining neighbors — and emits δ in a single forward pass: no labels, no backward pass, no query to the victim, and no knowledge of the victim’s private heads. The max-pool makes the input invariant to the number and ordering of neighbors, so a generator trained with one collaborator count runs unchanged at another. 
+
+A.6 Quantization-Aware Variant 
+
+The quantization-aware generator (Sec. 3.3) inserts a per-channel scalar quantizer with a straight-through backward pass between the perturbed attacker feature and the fusion stack during training, so Gθ learns perturbations that sur-vive rounding. All other hyperparameters are unchanged from Table 6. Bit widths follow production V2X practice (INT4/INT8) (Zhao et al. 2025; Shenkut and Vijaya Kumar 2026). 
+
+## B HetShield : Hyperparameters and Training 
+
+B.1 Trust Gate  
+
+> HetShield
+
+scores each collaborator on warped, post-bottleneck, pre-fusion features and blends in the original (unwarped) feature space. The deployed configuration com-bines the two signatures into a single anomaly score 
+
+ak = α τ k + (1 − α) max(0 , 1 − σk), (10) 
+
+gk = sigmoid 
+
+ τgate − ak
+
+T
+
+
+
+, (11) with α = 0 .6, τgate = 0 .3 and T = 0 .1. Expanding Eq. (11) recovers the form of Eq. (6) with wτ = α/T = 6 .0, wσ =(1 − α)/T = 4 .0, τ0 = σ0 = 0 and b = −1.0. Both τgate 
+
+and T are registered as learnable scalars, so the gate can be fine-tuned end-to-end; the reported results use their initial values, i.e. the defense adds no attack-supervised training on top of the self-supervised predictor. Remaining settings: feature dimension 128 , history length H=3 , and a minimum overlap ratio of 0.1 — if fewer than 10% of cells carry non-negligible energy in both the ego and the collaborator map, the spatial term is treated as uninformative and contributes 
+
+0 rather than a spurious anomaly. The ego agent is pinned to 
+
+g0 = 1 and is never blended. 
+
+B.2 ConvGRU Temporal Predictor 
+
+The predictor P is a single ConvGRU cell followed by a 
+
+1 × 1 projection: gate convolution Conv2d(128+128 →
+
+256 , 3 × 3) producing the reset and update gates, candidate convolution Conv2d(128+128 → 128 , 3 × 3) , and output projection Conv2d(128 → 128 , 1 × 1) , for 0.90 M param-eters in total — the entire parameter budget of the defense. The hidden state is initialized to zeros and unrolled over the 
+
+H=3 buffered frames; the prediction is the projection of the final hidden state. The temporal score is the relative ℓ2 resid-ual τk = ∥f tk − P (f t−H:t−1 
+
+> k
+
+)∥2/∥P (f t−H:t−1 
+
+> k
+
+)∥2, defined as 0 when fewer than two history frames are available (the first frames of a sequence) or when the prediction norm un-derflows. History buffers store detached, ego-frame-warped features and are cleared between sequences. Training is self-supervised next-frame prediction on clean sequences only: MSE between P (f t−H:t−1 
+
+> k
+
+) and f tk, Adam at learning rate 10 −3, 10 epochs, history length 3, every second frame retained, with the perception stack frozen. No attacked frames and no attack labels are used, so the predictor cannot overfit to a particular attacker. One predictor is trained per victim design (HEAL, STAMP, CodeFilling, GenComm) be-cause the aligned feature statistics differ across bottlenecks; the checkpoint selected is the best-MSE epoch. 
+
+## C Cross-Method Transfer: Protocol and the Random-δ Floor 
+
+C.1 Why a Floor Is Needed 
+
+Every attack in this paper is confined to the relative-ε ball of Eq. (8), whose per-element budget is ε·max( |fego |, |fego |). At the ε=1 .0 used for the transfer study, that budget is pointwise comparable to the magnitude of the clean feature itself: the attacker may replace a cell with roughly ± its own activation. A perturbation this large degrades a detector whether or not 
+
+it points anywhere useful, simply by corrupting the feature statistics the fusion module expects. Reading Table 3 against clean AP therefore overstates transfer. If a δ crafted on HEAL lowers STAMP from 0.90 
+
+to 0.65 , the interesting question is not whether AP fell but whether it fell because the perturbation carried adversar-ial direction across the architectural boundary , as opposed Table 7: Random-δ floor at ε=1 .0 (AP@0.5). ∆ is the AP a victim loses to an unoptimized draw from the attacker’s own budget.              
+
+> Victim Clean Random-δfloor ∆
+> HEAL 0.866 0.680 −0.186
+> STAMP 0.899 0.681 −0.218
+> CodeFilling 0.876 0.834 −0.042
+
+to because STAMP is fragile to any large disturbance. The random-δ floor separates these two explanations by measur-ing the second one directly. 
+
+C.2 Construction 
+
+For each frame and each victim we draw 
+
+δrand = u ⊙ ε · max  |fego |, |fego |, ui
+
+> iid
+
+∼ U (−1, 1) ,
+
+(12) i.e. δrand is uniform over the interior of the same ℓ∞ ball the optimized attacks are projected onto — not Gaussian, and not rescaled: Eq. (12) reuses the identical per-element budget tensor that the sign-PGD and Adam-PGD deltas are built from, so the control is magnitude-matched by construc-tion rather than by calibration. The draw is then substituted for the attacker’s transmitted feature in the same slot (the collaborator at index 1), pushed through the victim’s true bottleneck, fusion and detection heads, and scored with the same AP@0.5 accumulator used for every other cell. A fresh 
+
+u is sampled per frame per victim. The only quantity that differs between a floor measurement and a transfer cell is the content of δ.One consequence is worth stating: Eq. (12) is exactly the initializer used for restarts r > 1 of our Adam-PGD ceil-ing. The floor is therefore not an arbitrary reference but the strongest per-frame attacker’s own starting point, evaluated before it takes a single optimization step — the AP an attack must improve upon to have done any work at all. 
+
+C.3 Measured Floors 
+
+Table 7 reports the floors of the transfer study. The spread across designs is itself a result. CodeFilling’s floor coincides with its clean AP: vector quantization snaps a randomly per-turbed feature back onto essentially the codeword it would have selected anyway, so unstructured noise is annihilated at the bottleneck. Its victim column in Table 3 is thus un-informative by construction rather than by coincidence — the codebook resists not merely directional transfer but any fixed δ at this budget. At the other extreme, STAMP’s con-tinuous adapter forwards noise to fusion nearly unattenuated and gives up 0.217 AP to it, which is also why STAMP is the most transfer-susceptible victim: the same permissiveness that admits noise admits a transplanted attack. 
+
+C.4 How Cells Are Read Against It 
+
+A cell counts as transfer only when it lies clearly below its col-umn’s floor. Applied to Table 3: sign-PGD HEAL →STAMP (0.65 vs. floor 0.68 ) is within noise and does not trans-fer; Adam-PGD HEAL →STAMP ( 0.30 , i.e. 0.38 below floor) transfers strongly; Adam-PGD into CodeFilling ( 0.82 –
+
+0.83 vs. floor 0.83 ) does not transfer at all; and HetPoison 
+
+HEAL →STAMP ( 0.03 ) leaves the floor far behind. The floor also disciplines the diagonal . sign-PGD’s white-box result on HEAL is 0.739 against a floor of 0.680 , and on STAMP 0.650 against 0.681 : fifty steps of gradient-sign ascent, terminating at the corners of the ball with full per-element magnitude, achieve no more than — on HEAL, mea-surably less than — an unoptimized random draw. Without the floor this reads as a merely weak attack; with it, it is direct evidence for the flat-gradient failure mode identified in Sec. 4.3, in which sign-PGD commits to a corner of the ball that happens to be benign. This is the quantitative basis for treating sign-PGD as a mis-tuned baseline rather than as evidence of architectural robustness. 
+
+C.5 Choice of Distribution, and Limitations 
+
+We use a uniform draw because the constraint set is a box: 
+
+U(−εpe , ε pe )d is the maximum-entropy distribution on it, and it needs no clipping. A Gaussian would be the natural uninformative choice for an ℓ2 ball but must be truncated to respect an ℓ∞ constraint, which distorts precisely the tails that carry the perturbation energy. Three caveats follow from this choice and from the sample size. 
+
+The floor is conservative for the diagonal, lenient for transfer. A uniform draw has per-element RMS εpe /√3 ≈
+
+0.58 εpe , whereas sign-PGD terminates at the corners with RMS εpe . The energy-matched control would be a Rademacher draw ±εpe , which would sit lower. This makes the sign-PGD verdict of Sec. C.4 stronger than reported — it is beaten by a control carrying 1.7× less energy than itself — but it makes the bar for declaring transfer correspondingly easier to clear. The transfer conclusions we draw are unaf-fected because they turn on gaps of 0.3–0.65 AP, far larger than this slack, but a cell within ∼ 0.05 of its floor should be read as “no transfer detected” rather than as a measured null. 
+
+Reuse across runs. The floors are measured inside the fixed-δ transfer run and reused when reading the HetPoi-son columns, which come from a separate evaluation pass. This is sound because both passes drive the same loaders over the same scenes in the same order: STAMP’s clean AP is 0.899 in the fixed-δ run and 0.898 in the generator run. 
+
+C.6 Scene-Matched Pairing for STAMP 
+
+Transplanting a fixed δ requires the source and victim to ex-pose a shape-compatible attack surface on the same scene, which is not automatic here: HEAL and CodeFilling run the m1m2 pair (camera collaborator) while STAMP runs m0m1 (protocol-LiDAR collaborator). Both nonetheless expose the same (128 , 64 , 128) aligned pre-fusion BEV grid, and both loaders enumerate the identical OPV2V test scenes in the identical order with shuffling disabled. We therefore pair the two loaders index-by-index, craft δ on the source view of a scene, and apply it to the victim view of the same scene. A per-frame gate verifies the pairing: the ego (m1 Point-Pillar) feature must match across the two loaders at cosine 
+
+≥ 0.9; measured agreement is 0.9945 and no frame was dropped. The collaborator features agree at cosine ≈ 0.35 — same scene, different sensing modality, which is exactly the cross-method transfer condition. This makes the fixed-δ
+
+cells a faithful analogue of HetPoison ’s own transfer eval-uation, in which the victim likewise runs on its native data while receiving a source-derived perturbation. GenComm is excluded from Table 3 because its two-channel message is dimensionally incompatible with the 128 -channel grid; that boundary is attacked separately by targeting GenComm’s pre-message feature.

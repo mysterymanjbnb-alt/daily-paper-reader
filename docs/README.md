@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-18</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-19</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-18 21:40:56 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-19 21:31:53 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-18 日报精选 25 篇，精读 10 篇、速读 15 篇，聚焦 AI 安全与智能体评测。最值得看的是 9.0 分的《InceptionRAG》揭示的 RAG 投毒攻击，以及 8.0 分的多机器人 CBF 安全过滤器可行性认证；速读中《RideWay》的工具型语言智能体评测和《ASLEval》的 LLM 智能体会话隐私位移也值得关注。普通读者可优先了解 RAG 系统的投毒风险与智能体隐私暴露问题，再按兴趣跟进机器人与多模态安全方向。</p>
+<p>今日 25 篇中精读 10、速读 15，重点覆盖 LLM 安全验证、价值观对齐与检索增强。</p>
+<p>最值得看的是两篇 9 分精读：CaMeLoT 用时序逻辑做静态验证与活性检查，Local Sparsity 实现无监督 LLM 安全检测；速读中 ORDER 的任务条件路由和 LLM 价值观量化分析也值得关注。</p>
+<p>普通读者建议先读这两篇 9 分精读，再按“安全/对齐”或“RAG 效率”兴趣挑 1 篇 8 分速读跟进。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +76,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="InceptionRAG: Stealthy Poisoning Attack Against Retrieval-Augmented Generation">InceptionRAG: Stealthy Poisoning Attack Against Retrieval-Augmented Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Exact Feasibility Certification and Optimal Responsibility Allocation for Multi-Robot CBF Safety Filters">Exact Feasibility Certification and Optimal Responsibility Allocation for Multi-Robot CBF Safety Filters</span></li><li><span class="dpr-home-dashboard-paper-title" title="BusMA: A Bus Communication Substrate for Multi-Agent Systems">BusMA: A Bus Communication Substrate for Multi-Agent Systems</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CaMeLoT: CaMeL orchestrated with Temporal logic for static verification and liveness">CaMeLoT: CaMeL orchestrated with Temporal logic for static verification and liveness</span></li><li><span class="dpr-home-dashboard-paper-title" title="Local Sparsity Enables Unsupervised LLM Safety Detection">Local Sparsity Enables Unsupervised LLM Safety Detection</span></li><li><span class="dpr-home-dashboard-paper-title" title="Robust Policy Optimization via Adversarial Importance Sampling">Robust Policy Optimization via Adversarial Importance Sampling</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +89,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="RideWay: Benchmarking Efficient Task Completion for Tool-Using Language Agents">RideWay: Benchmarking Efficient Task Completion for Tool-Using Language Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Stealthy in Semantics, Antagonistic in Space: Attacking Visible-Infrared Object Detectors via Object-Level Misalignment">Stealthy in Semantics, Antagonistic in Space: Attacking Visible-Infrared Object Detectors via Object-Level Misalignment</span></li><li><span class="dpr-home-dashboard-paper-title" title="ASLEval: Measuring Privacy Exposure Displacement in LLM Agent Sessions">ASLEval: Measuring Privacy Exposure Displacement in LLM Agent Sessions</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Do LLMs Have Values? A Quantitative Analysis and Alignment Framework for Values in Large Language Models">Do LLMs Have Values? A Quantitative Analysis and Alignment Framework for Values in Large Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation">ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Investigating Adversarial Robustness of Heterogeneous Cooperative Perception">Investigating Adversarial Robustness of Heterogeneous Cooperative Perception</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span></div>
 </section>
 </div>
 
