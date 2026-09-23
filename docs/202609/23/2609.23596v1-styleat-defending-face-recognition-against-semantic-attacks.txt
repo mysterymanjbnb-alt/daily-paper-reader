@@ -1,0 +1,1156 @@
+Title: StyleAT: Defending Face Recognition Against Semantic Attacks
+
+URL Source: https://arxiv.org/pdf/2609.23596v1
+
+Published Time: Tue, 22 Sep 2026 01:32:07 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 1
+
+# STYLE AT: Defending Face Recognition Against Semantic Attacks 
+
+Ben Shapira 1
+
+benshapira@mail.tau.ac.il 
+
+Roi Cohen 2
+
+Roi.Cohen@hpi.de 
+
+Shang-Tse Chen 3
+
+stchen@csie.ntu.edu.tw 
+
+Mahmood Sharif 1
+
+mahmoods@tauex.tau.ac.il  
+
+> 1
+
+Tel Aviv University Tel Aviv, Israel  
+
+> 2
+
+HPI / University of Potsdam Potsdam, Germany  
+
+> 3
+
+National Taiwan University Taipei, Taiwan 
+
+Abstract 
+
+With face-recognition models now embedded in everyday authentication and surveil-lance, recent works have pinpointed a critical weakness: these models remain acutely vulnerable to adversarial semantic edits. I.e., adversarially produced semantic alterations to the input, such as slight aging or pose changes, can induce misclassifications. Certain existing attacks are powerful, but they can be computationally costly, rendering them in-adequate for developing defenses (e.g., through adversarial training). To fill the gap, we introduce BOUND STYLE , a potent semantic attack operating in StyleGAN’s rich latent space to maximize misclassification rates. Notably, B OUND STYLE achieves high attack success rates while being ∼× 9.5 faster than existing state-of-the-art attacks, making it suitable for adversarial training. Building on B OUND STYLE , we develop STYLE AT , an efficient adversarial training scheme that incorporates low-budget attack variants yet de-fends against stronger and unseen semantic attacks. We evaluate on two datasets unseen during training and seven models, and find that S TYLE AT boosts robust accuracy against state-of-the-art attacks and outperforms common defenses in various settings. 
+
+## 1 Introduction 
+
+Face-recognition (FR) technologies are employed in various security-critical applications, including for surveillance and access control [16]. Failures of such systems may be perni-cious; for instance, false negatives may enable criminals to avoid surveillance, whereas false positives may provision unauthorized access to important resources protected by access con-trol. However, unfortunately, similar to other machine-learning (ML) models that can be evaded by adversarial examples at inference time [11, 39], FR models are vulnerable to gen-eral semantic attacks —a class of adversarial example attacks that introduce slight semantic changes (e.g., addition of accessories or alterations of pose, expression, or age) to fool FR despite preserving the identity of the subject in the image [2, 17, 23, 24, 26]. Existing general semantic attacks mostly rely on generative models, such as StyleGAN [23] and latent diffusion models [24], to discover adversarial semantic edits through latent-space 
+
+© 2026. The copyright of this document resides with its authors. It may be distributed unchanged freely in print or electronic forms. arXiv:2609.23596v1 [cs.CV] 20 Sep 2026 2 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+perturbations that mislead FR. However, these attacks suffer from certain limitations: Some attacks such as StyleAdv achieve limited attack success [24]; other attacks such as AMT-GAN produce edits with low visual fidelity [23]; and attacks such as DiffPrivate are com-putationally heavy, requiring significant run time to attain high success rates (see §6). Due to these limitations, existing attacks may fail to uncover weakness in FR or may not lend themselves to being incorporated in training schemes for improving FR’s robustness. For specific forms of adversarial examples, such as those created by adversarial pertur-bations with bounded ℓp-norms, numerous defense types like adversarial training [41] and randomized smoothing [6] can help boost robustness. However, to our knowledge, no es-tablished defenses have been proposed to mitigate general semantic attacks. Particularly, adversarial training for defending against general semantic attacks remains infeasible due to the run-time overhead or limited success rates of existing attacks. Consequently, FR remains vulnerable to general semantic attacks. To fill these gaps, this work presents a new general semantic attack, B OUND STYLE , and a defense, S TYLE AT. Our attack takes advantage of StyleGAN3’s rich latent space [18], among others, to produce high-fidelity semantic edits to fool FR. Importantly, B OUND -STYLE is tunable, enabling us to control the magnitude of edits and run time, thus ensuring that identity is preserved w.r.t. human observer and allowing us to execute time-efficient vari-ants. Notably, we also find that B OUND STYLE is highly successful, while being significantly faster (roughly ×9.5) than the state-of-the-art attack, DiffPrivate [24]. Interestingly, we find compelling evidence that DiffPrivate introduces imperceptible ad-versarial perturbations alongside visible semantic edits (App. D); if used for adversarial training, models may learn to resist pixel noise rather than semantic changes. This motivates BOUND STYLE ’s design to operate purely in StyleGAN’s semantic latent space. Support-ing this design choice, we find no clear signs that B OUND STYLE makes edits other than semantic ones (§6.2 consolidates the supporting evidence). Altogether, B OUND STYLE ’s ad-vantages render it suitable for measuring the susceptibility of FR models to attacks as well as for adversarial training to help improve robustness against semantic attacks. Our defense, S TYLE AT, employs a time-efficient variant of B OUND STYLE to adver-sarially train FR models and improve their adversarial robustness against general semantic attacks. Against B OUND STYLE , S TYLE AT achieves up to 28.6% increase in robust accu-racy (depending on the setting explored) compared to undefended models, markedly higher than defenses not tailored for general semantic attacks that achieve ≤6.0% increase in robust accuracy. Crucially, S TYLE AT also leads to improvements against DiffPrivate, an attack not encountered during training, with up to 46.3% higher robust accuracy than undefended models, showcasing that S TYLE AT generalizes to unknown general semantic attacks. We next present related work (§2) and our threat model (§3). Subsequently, we describe the technical approach behind B OUND STYLE and S TYLE AT (§4) before presenting our ex-perimental results (§5–6) and concluding (§7). 
+
+## 2 Related Work 
+
+Attacks on FR Prior work has demonstrated that ML models in general, and FR in par-ticular, are vulnerable to test-time evasion attacks that induce misclassifications via imper-ceptible adversarial perturbations with bounded ℓp-norm [39]. For instance, the fast gra-dient sign method (FGSM) creates attacks by perturbing inputs in the gradient direction SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 3
+
+once [11], while projected gradient descent (PGD) does so through multiple, iterative pertur-bations [28]. However, such attacks may be challenging to realize in real-world settings due to difficulties in implementing norm-bounded noise and cameras’ sampling errors, among others [38]. To this end, researchers have proposed semantic attacks—attacks that alter in-puts in minor, easy-to-realize, and semantically meaningful ways—to mislead FR models. Semantic attacks consist of two families. The first family of attacks makes ad hoc 
+
+changes to inputs, for example, by introducing adversarial accessories like eyeglasses or hats to fool models [20, 38]. These also include attacks that fool models via facial make-up or spatial transformations applied in an adversarial manner [14, 45, 47]. By contrast, the second family of attacks leverages general edits of inputs to induce misclassifications, in-cluding, but not limited to, changes of expression, age, and accessories, or a combination thereof [2, 17, 23, 24, 26]. Our work focuses on general semantic attacks, proposing a new attack and a defense. General semantic attacks typically leverage generative models to produce adversarial edits of inputs. For instance, attacks such as StyleAdv [23] and Adv-Attribute [17] search for adversarial editing directions in the latent space of generative adversarial networks (GANs) to produce misclassifications. By contrast, Adv-Diffusion [26] and DiffPrivate [24] use latent diffusion models to find adversarial semantic edits of inputs. DiffPrivate is the most recent and potent general semantic attack; we use it in our evaluation. 
+
+Defending FR A diversity of defenses against evasion attacks have been proposed, includ-ing, but not limited to, ones that detect attacks (e.g., [31]); filter out adversarial perturbations (e.g., [46]); smoothen classification boundaries to reduce model vulnerability (e.g., [4, 6]); verify robustness against specific adversaries (e.g., [19]); and adversarial train of models by injecting correctly labeled adversarial inputs to the training data to inherently increase model robustness (e.g., [21, 28]). Due to its intuitive nature, its ability to improve adver-sarial robustness in a practical manner against different attack types, and absence of impact on model’s inference time, Adversarial training is particularly appealing and was widely studied. Still, adversarial training may be computationally expensive due to the overhead of producing attacks during training, potentially rendering training prohibitive. To this end, researchers have also explored efficient adversarial training variants (e.g., [37, 41]). We take inspiration from Wong et al. [41] who showed how to leverage the efficient FGSM attack in training to induce robustness against much more potent attacks at test time. To the best of our knowledge, there are no established defenses for countering general semantic attacks against FR . Nonetheless, several countermeasures have been proposed to counter ad hoc semantic attacks. For example, defense through occlusion attack (DOA) ad-versarially trains models with carefully positioned patches containing adversarial patterns to help counter eyeglass attacks [42]. As another example, DiffPure utilizes forward diffusion followed by image recovery to remove adversarial manipulations, helping counter spatial adversarial modifications [33]. Prior work has also shown that input filters, such as JPEG compression, blurring, and Gaussian noise can hinder general semantic attacks to some de-gree when attacks are agnostic to the filters [24]. Our evaluation (§6) shows that these approaches yield limited improvements in robustness; e.g., DiffPure proves effective against DiffPrivate but is counterproductive against B OUND STYLE , illustrating that the effectiveness of purification-based defenses can be attack-type dependent. Related to our work, Laidlaw et al. [22] adversarially train ML models with imperceptible adversarial perturbations cre-ated using generative models. However, they only evaluate robustness against imperceptible perturbations and spatial manipulations. 4 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+Relation to Deepfake Detection As adversarial semantic edits are synthetically produced, deepfake detection [32] may seem like a natural countermeasure. However, detection and robust recognition solve different, complementary problems: a detector flags whether the image synthetic or edited, whereas FR must decide identity —i.e., whether a face matches the enrolled subject despite the edit. Even a perfect detector leaves the identity decision open; moreover, as edits may be benign (e.g., beauty filters), rejecting all flagged images would impose a high false-positive burden on legitimate users. Detection alone may also be insufficient: detectors often generalize poorly to unseen generative models [7, 34] and can be evaded by white-box adversaries such as ours [3]. Accordingly, we view detection as a complementary defense layer, while S TYLE AT hardens the component selecting identity. 
+
+## 3 Threat Model 
+
+We consider an adversary carrying out a general semantic attack against FR. Per standard practice, we assume the FR system is tuned to an operating point where the false positive rate (FPR) is below a target threshold, such as 0.01 FPR [16, 24]. We consider a powerful adversary aiming to produce arbitrary, untargeted misclassifications (primarily, false nega-tives) rather than impersonations (i.e., targeted attacks), as, intuitively, this adversary would be more challenging to defend against. Contrastively, our defender aims to hinder the ad-versary’s attempts through keeping the robust true positive rate (TPR)—i.e., the TPR under attacks—high while preserving the benign accuracy of standard FR models when ingesting clean inputs. In line with Le and Carlsson [24], We primarily focus on potent adversaries with white-box access to both the FR model and the defense, but we also consider black-box adversaries without access to the model or defense that seek to transfer attacks from surro-gate models, as well as gray-box adversaries that have access to the (undefended) model but not to the defense. We assume a fully digital threat model where the adversary modifies a digital image and submits it electronically. Physical re-capture scenarios (e.g., adversarial accessories worn in front of a camera) are outside scope, consistent with the digital-first framing of DiffPrivate [24] and related semantic attacks. Our threat model captures settings where images may be manipulated digitally or phys-ically to mislead FR. In cases where images arrive from devices the FR operator does not control, such as uploads to social media or electronic know-your-customer onboarding, at-tacks may alter images to gain privacy or impersonate others. Moreover, in idealized settings without sampling noise, semantic attacks’ edits encompass changes that may be applied physically (e.g., make-up or pose changes) to fool FR, providing an upper bound on attack success in the physical domain. 
+
+## 4 Technical Approach 
+
+4.1 BOUND STYLE : A High-Fidelity, Potent, Tunable General Semantic Attack 
+
+We design B OUND STYLE as a general semantic attack against FR based on generative mod-els with three goals in mind: (1) We require that the attack produces evasive face images with 
+
+high visual fidelity through diverse and realistic edits; (2) We seek tunability such that we SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 5
+
+would be able to control the run time of the attack to later enable efficient adversarial training and bound the magnitude of the edit so as the identity in the face image is unchanged (for a human observer); and (3) We need the attack to be potent exposing the weaknesses of FR through achieving high success rates. We next describe how our design of B OUND STYLE 
+
+ensures high visual fidelity and tunability. Our experiments (§5–6) evidence the attack’s potency. 
+
+A Tunable Attack Let F denote the feature extractor used for FR, C the preprocessing algo-rithm (cropping and alignment), G a generative model, x the image to modify with an inverted latent code l, and xe a face image of the same subject enrolled in the gallery. B OUND STYLE 
+
+aims to edit x through a slight modification of l such that the similarity (sim, usually cosine similarity) with xe would become small. Formally, B OUND STYLE aims to minimize the following loss through a perturbation δ of the latent code: 
+
+Latk = sim  F(C(G(l + δ ))) , F(C(xe)) .
+
+BOUND STYLE optimizes the loss through iterative gradient-based optimization, in the spirit of PGD, and its performance is governed by two primary inputs T , the number of iterations, and β , the magnitude (specifically, ℓ2-norm) of the perturbation δ . Initially, δ0 is randomly initialized inside the β -ball, as random initialization is critical to the performance of evasion attacks in adversarial training [41]. Subsequently, in each iteration (up to T ), BOUND STYLE updates δi = δi − α · g 
+
+> ∥g∥∞
+
+where g = ∇δi Latk is the loss gradient and α is a step-size hyperparameter. At any point, if the norm of δi exceeds the bound β , it is projected back to the β -ball via δi = β · δi 
+
+> ∥δi∥2
+
+.Both T and β are tunable parameters that enable achieving different trade-offs with BOUND STYLE . Decreasing T may potentially harm the attack success, but also makes BOUND STYLE faster, rendering it more suitable for (efficient) adversarial training. More-over, setting β should balance two goals—it should be large enough so that the attack is successful due to stronger edits in the latent space, but small enough so that the identity of the subject is preserved w.r.t. human observers. 
+
+Ensuring High Fidelity We take several measures to ascertain that B OUND STYLE intro-duces high-fidelity edits. First, we adopt the StyleGAN3 generator [18], which provides a rich latent space with diverse editing directions and high quality outputs. Second, we invert 
+
+x to a latent code l that maps back almost precisely to x, thus preserving identity. To do so, we use a hybrid combination of encoder-based projection to the latent space [1] followed by direct gradient-based optimization for accurate reconstruction of the face image [48]. Last, we use pivotal tuning, a method that tunes the generator G to enable better editability while preserving identity [36]. 
+
+4.2 STYLE AT: Style-Aware Adversarial Training 
+
+Building on B OUND STYLE , we design S TYLE AT, a method for adversarially training FR models to enhance their adversarial robustness against general semantic attacks. In partic-ular, S TYLE AT fine-tunes pre-trained FR feature extractors while aiming to balance three different objectives: (1) Preserving benign accuracy on clean images; (2) Improving ro-bust accuracy against general semantic attacks; and (3) Countering imperceptible pertur-bations inadvertently introduced by certain established semantic attacks. To achieve each of these goals, S TYLE AT minimizes the triplet losses LCln , LAdvSem , and LAdvPix , respec-tively. These losses are balanced through non-negative hyperparameters that accumulate to 6 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS BoundStyle 
+
+> Attack
+> Align &
+> Crop
+> PGD
+> FR
+> Feature
+> Extractor
+> StyleGAN
+> Inversion
+> Latent Branch
+> Pixel Branch
+> Clean Branch
+
+Figure 1: An overview of S TYLE AT’s training pipeline. The framework processes a mini-batch of identity pairs {(xi, x+ 
+
+> i
+
+)} through three parallel branches: (1) The clean branch ex-tracts features from the original samples to preserve benign accuracy ( LCln ). (2) The latent branch generates a batch of semantic adversarial examples xadv  
+
+> i
+
+via B OUND STYLE to im-prove robustness against semantic attacks ( LAdvSem ). (3) The pixel branch applies impercep-tible perturbations to the semantically edited batch to increase robustness against impercep-tible perturbations ( LAdvPix ). Batch processing enables hard negative mining to optimize the triplet losses. one (i.e., λCln + λAdvSem + λAdvPix = 1). We next elaborate how each of LAdvSem and LAdvPix 
+
+are computed and optimized and how we select triplets for loss computation; minimizing 
+
+LCln is intuitive and follows standard practice [40]. An overview of S TYLE AT’s pipeline is depicted in Fig. 1; Alg. 1 in App. A presents its pseudocode. 
+
+Computing and Optimizing LAdvSem We leverage B OUND STYLE to produce general se-mantic attacks for adversarial training. However, as executing the most potent attack variant during training may make the training process infeasible, we incorporate “weakened” but ef-ficient attack variants into training. Specifically, we run fast variants of B OUND STYLE with a small number of iterations T , analogously to fast adversarial training with FGSM [41]. Here, we tune T and the step size α such that training can be completed within a few days under our resource constraints, while the attacks are sufficiently evasive to help enhance FR’s robustness against general semantic attacks. 
+
+Computing and Optimizing LAdvPix Our evaluation of established semantic attacks shows that certain attacks may introduce imperceptible perturbations alongside semantic edits to mislead FR. This phenomenon is perhaps most clearly demonstrated when evaluating attacks against filter-based defenses such as JPEG compression that primarily affect imperceptible, non-semantic perturbations. Said differently, if such filters have a pronounced effect on an attack’s success, one may conclude that misclassification did not occur due to a semantic edit, but rather due to imperceptible changes of pixels. Indeed, our evaluation shows that DiffPrivate exhibits a significant decrease in their success once JPEG compression and sim-ilar filters are employed (see Fig. 4 and Fig. 10, with App. D providing additional support through a frequency-domain analysis). To account for these potential perturbations, we also adversarially train our models against imperceptible ℓ∞-norm-bounded adversarial perturba-tions. We find that doing so does not harm robustness against semantic attacks that do not seem to introduce imperceptible adversarial perturbations (namely, B OUND STYLE ; App. C). SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 7
+
+Toward countering imperceptible adversarial perturbations, we integrate fast PGD at-tacks with few iterations into training, in the spirit of Wong et al.’s (2020) work. Importantly, to avoid robust overfitting, we perform PGD with random initialization before each attack. Crucially, we apply PGD to images already edited adversarially with B OUND STYLE , as we aim to counter the combination of adversarial semantic edits and imperceptible perturbations. 
+
+Selection of Triplets For a given positive pair of samples depicting the same identity, we select the hardest negative sample from the batch to compute triplet losses. Doing so, as shown in prior work on adversarially robust metric learning [29], is most conducive for adversarial robustness. More precisely, to compute the triplet loss, for a positive pair of samples p and a (standing for positive and anchor, respectively), we select the negative sample n from the batch such that it depicts a different identity and is most similar to a in the feature space compared to other samples in the batch. Subsequently, the triplet loss is calculated by (sim (F(C(n)) , F(C(a))) − sim (F(C(p)) , F(C(a))) + μ)+, where μ is a small (non-negative) constant. Moreover, in the interest of improving adversarial robustness, we adversarially perturb the anchor sample a when computing LAdvSem and LAdvPix , and select the hardest negative sample after applying the perturbations, per Li et al. [25]. 
+
+## 5 Experimental Setup 
+
+FR Backbones We employ seven popular and high-performing FR models, four convolu-tional networks, one vision transformer, and two convolutional networks equipped with spe-cialized supervisory heads. Specifically, we use MobileFaceNet (MobileFace) [5]; ResNet (ResNet-152, IR-SE) [13]; RepVGG [9]; LightCNN [43, 44]; Swin Transformer (SwinT) [27]; and ArcFace [8] as well as MagFace [30] with MobileFace backbones. We use these models in two roles, both as targets for attacks, and as surrogates (i.e., proxies) for produc-ing transferable adversarial examples. As part of S TYLE AT, we create adversarially trained variants of ResNet and RepVGG through fine-tuning the original pre-trained backbones. We obtain the initial weights from FaceX-Zoo [40]. 
+
+Datasets Following FaceX-Zoo [40], we construct our training dataset from MS-Celeb-1M-v1c [12], using their randomly selected preprocessed positive image pairs for training. We then run our preprocessing pipeline on all images and discard pairs where an image fails face or landmark detection, yielding a final training set of 52,269 positive image pairs. (Note that negative images are selected as hard negatives, independently for each batch during training.) We evaluate on two prominent datasets: (1) Labeled Faces in the Wild (LFW) [15] and (2) VGG-Face [35]. Specifically, we select 216 and 156 positive pairs from LFW and VGG-Face, respectively. When selecting images, we ensure no overlap between the selected identities and those appearing in the training (and pre-training) sets from MS-Celeb-1M-v1c, by removing any image that has similarity with any training samples above the threshold where the original ResNet backbone has an FPR of 10 −4.
+
+Attacks We evaluate B OUND STYLE , bounding the edit perturbation ℓ2-norms in Style-GAN3’s latent space to β ∈ { 1.0, 1.5, 2.0, 3.0}. We avoid perturbations of larger magnitude to help preserve subject identities in images (App. B). For best performance, we set the step size α=β , and the number of iterations T =30, as more iterations show no improvements in attack success (App. C). As a baseline, we evaluate DiffPrivate [24], a state-of-the-art attack that edits images through perturbations in the diffusion latent z-space. For a fair com-parison with B OUND STYLE , we adopt a norm-bounded variant of DiffPrivate by enforcing 8 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+∥∆z∥2 = ∥zadv − z0∥2 ∈ { 1, 2, 3, 4, 5, 6}. We avoid perturbations with norm >6 to preserve subject identities in images (App. B). Under this bounded setup, we find that capping the optimization at 70 iterations for convergence to the highest attack success (App. C). 
+
+Defenses We apply S TYLE AT on both ResNet and RepVGG models, adversarially training them from checkpoints obtained from FaceX-Zoo. We use a low-cost variant of B OUND -STYLE for adversarial training, with T = 3 attack iterations, β = 3 ℓ2-norm for perturba-tions in the StyleGAN3 latent space, and α = 3 as step size in the attack; we run PGD attacks for 2 iterations with ε = 24 /255 ℓ∞-norm for perturbations in the pixel space and step size α = ε/2. We find that these parameters help attain reasonable benign accuracy within feasible time under our resource constraints. After hyperparameter search, we set specific loss weights for each backbone: for ResNet, we set λCln = 0.35, λAdvSem = 0.45, and λAdvPix = 0.2; for RepVGG, we set λCln = 0.1, λAdvSem = 0.8, and λAdvPix = 0.1. Other parameters (e.g., for the optimizer and triplet loss margin) are adopted from FaceX-Zoo. We run training on 8 NVIDIA RTX A5000 GPUs with a batch size of 4 per GPU (global batch size 32). We run training for 8 epochs, completing it within 4 days. As base-lines, we compare S TYLE AT with DOA, a defense tailored for ad hoc semantic attacks using adversarial patches or eyeglasses (see §2), DiffPure [33], a diffusion-based test-time purifi-cation defense, and standard filters considered in prior work [24], including Gaussian blur, denoising via total variation minimization, JPEG compression, feature squeezing, spatial smoothing, and random noise injection. 
+
+Computational Costs All preprocessing and training runs on 8 NVIDIA RTX A5000 GPUs. GAN inversion (150 steps per image, ∼4.7 GPU-days) and PTI fine-tuning of the StyleGAN generator (125 steps, ∼4.3 GPU-days; reducible to ∼3.4 GPU-days at 100 steps) are one-time costs for the training set, shared across all training runs. Unlike these preprocessing steps, adversarial training is not one-time: training each FR backbone takes approximately 4 days, and multiple runs were required for hyperparameter search, per standard practice for adversarially trained models. 
+
+Metrics and FR Operating Point We evaluate model robustness through accuracy (i.e., TPR) after perturbing one of the samples from a positive pair. Following standard practice, we calibrate the verification threshold to meet a target FPR on clean data (without attacks). Specifically, we perform the calibration on LFW’s full (clean) validation set (containing negative and positive pairs) to obtain an FPR of 0.01, similar to [24]. 
+
+## 6 Experimental Results 
+
+We now evaluate the B OUND STYLE attack and S TYLE AT defense. 
+
+6.1 BOUND STYLE is Potent and Fast 
+
+White-box Attacks Tables 1 and 2 report the robust accuracy of the seven (undefended) FR backbones against B OUND STYLE and DiffPrivate, respectively, on the LFW and VGG-Face datasets when varying the attack budgets. The results show that both attacks are potent in the white-box setting—despite high benign accuracy ( >99%), the robust accuracy drops as the attack budgets increase. At B OUND STYLE ’s highest budget ( β =3), it reduces average robust accuracy to ∼46% on LFW and ∼37% on VGG-Face. At DiffPrivate highest budget (∥∆z∥=6), it reduces average robust accuracy to ∼35.5% on LFW and ∼16% on VGG-Face. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 9
+
+Dataset Model Clean BOUND STYLE - budget β
+
+1 1.5 2 3LFW SwinT 99.1 94.9 88.0 78.7 52.6 LightCNN 99.1 90.3 84.7 72.7 40.5 MobileFace 99.1 91.7 88.0 75.0 50.2 RepVGG 99.1 92.6 83.3 69.4 40.5 ResNet 99.1 93.5 83.8 70.8 39.5 MagFace 99.1 94.0 88.9 77.8 52.2 ArcFace 99.5 94.4 85.2 74.1 45.0 VGG-Face SwinT 100.0 85.3 80.8 65.4 45.5 LightCNN 98.7 84.0 72.4 60.3 34.0 MobileFace 97.4 78.8 72.4 62.2 38.5 RepVGG 100.0 80.8 71.2 60.3 32.0 ResNet 100.0 84.0 72.4 59.6 34.6 MagFace 98.1 75.6 67.3 57.7 40.8 ArcFace 98.7 80.8 71.8 52.6 34.4 
+
+Table 1: White-box robustness against B OUND STYLE † on LFW and VGG-Face. We report benign accuracy and robust accuracy under increasing semantic attack budgets β ;higher is better. †95% bootstrap CIs in App. H. 
+
+Dataset Model Clean DiffPrivate - budget ∥∆z∥
+
+1 2 3 4 5 6LFW SwinT 99.1 99.5 98.6 98.6 85.6 50.5 49.1 LightCNN 99.1 99.1 97.7 89.4 62.0 32.9 28.7 MobileFace 99.1 98.6 98.1 96.3 79.2 53.7 38.0 RepVGG 99.1 99.1 99.1 96.3 72.7 43.5 38.0 ResNet 99.1 99.1 98.6 93.5 71.8 41.7 33.8 MagFace 99.1 98.6 98.6 96.3 74.5 44.9 28.7 ArcFace 99.5 99.1 98.6 91.7 69.0 38.4 31.5 VGG-Face SwinT 100.0 83.9 76.8 64.5 41.9 26.5 19.4 LightCNN 98.7 69.7 58.7 45.8 25.2 18.1 14.8 MobileFace 97.4 70.3 66.5 47.7 34.2 21.9 16.1 RepVGG 100.0 77.4 69.7 53.5 32.3 22.6 17.4 ResNet 100.0 77.4 67.7 51.0 30.3 22.6 17.4 MagFace 98.1 69.0 67.7 52.3 31.0 20.0 14.8 ArcFace 98.7 71.6 58.7 44.5 27.7 20.0 14.2 
+
+Table 2: White-box robustness against DiffPrivate † on LFW and VGG-Face. We report benign accuracy and robust accuracy under increasing latent perturbation norms ∥∆z∥; higher is better. †95% bootstrap CIs in App. H. 
+
+Black-box Attacks Fig. 2 presents the robust accuracy of models when transferring attacks between models at the highest attack budgets considered. In the heatmaps, off-diagonals show robust accuracy in black-box settings (transfer from the rows to columns), while diag-onals correspond to white-box settings. B OUND STYLE exhibits strong transferability —on both datasets, the heatmaps are near-uniform with off-diagonals typically within 5–15% of 10 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace 53 64 62 56 53 72 68 68 40 60 59 60 65 61 63 55 50 56 57 57 57 59 50 59 40 50 64 58 55 53 59 55 40 67 62 63 55 59 57 57 52 57 62 51 56 58 60 61 45                                                                                                                                         
+
+> 020 40 60 80 100 %SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace 49 54 74 69 65 69 65 97 29 85 90 90 78 70 91 47 38 75 77 53 52 90 58 79 38 75 69 66 91 65 81 70 34 74 72 92 48 70 80 83 29 49 96 53 75 86 87 62 31
+> 020 40 60 80 100 %
+> (a) LFW – B OUND STYLE (β=3) (b) LFW – DiffPrivate ( ∥∆z∥=6) SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace 46 53 52 48 46 56 54 51 34 47 48 47 42 47 54 49 38 47 48 38 40 50 46 51 32 43 43 42 53 46 48 46 35 42 44 49 44 42 47 45 41 46 51 38 33 47 43 38 34
+> 020 40 60 80 100 %SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace SwinT LightCNN MobileFace RepVGG ResNet MagFace ArcFace 19 32 36 42 41 30 35 70 15 39 57 61 41 40 64 28 16 53 52 29 30 64 24 39 17 46 36 36 64 28 41 43 17 33 34 71 21 30 54 55 15 25 68 23 34 55 57 32 14
+> 020 40 60 80 100 %
+> (c) VGG – B OUND STYLE (β=3) (d) VGG – DiffPrivate ( ∥∆z∥=6)
+
+Figure 2: Robust accuracy of models against black-box attacks . Each heatmap reports the robust accuracy of the model at the column, when transferring attacks from the model at the row. Diagonals correspond to white-box attacks. the diagonal. This indicates strong transferability, where attacks crafted on one model sub-stantially reduce accuracy on others. DiffPrivate exhibits relatively weak transferability—off-diagonals are often 20–60% higher than the diagonal, meaning attacks do not carry over well across architectures. For instance, on LFW, evaluating on SwinT yields 49% robust accuracy in the white-box setting compared to 90–97% robust accuracy when transferring the attack from the convolutional networks to SwinT, suggesting that DiffPrivate is architecture-specific. To quantify this gap, we define a transferability score T as the average ratio of black-box to white-box attack success rate across model pairs ( T =1 indicates perfect transfer; see App. G for the formal definition). Computed from Fig. 2, B OUND STYLE achieves T =0.76 (LFW) and T =0.86 (VGG-Face), while DiffPrivate achieves T =0.43 (LFW) and T =0.68 (VGG-Face). We further show in App. G that this gap is not an artifact of a specific parameter choice causing DiffPrivate to overfit to the surrogate model: reducing DiffPrivate’s iteration count does not improve its transferability, confirming that the gap reflects inherent differences between the two attacks. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 11 
+
+Attacks’ Run Times We benchmark attacks’ run times on an NVIDIA RTX A6000 GPU, executing each attack 100 times and averaging the run time. For fair comparison, we use an equal batch size of 1 for both attacks. Under this setting, B OUND STYLE takes an average of 8,302 ms to complete per image compared to an average of 79,094 ms attained by Diff-Private, demonstrating approximately ×9.5 speedup. This result highlights B OUND STYLE ’s better fit for adversarial training compared to other state-of-the-art attacks: B OUND STYLE 
+
+is not only highly effective in white-box settings and transferable in black-box settings, but is also significantly faster than DiffPrivate. To further demonstrate that B OUND STYLE attains superior time and success-rate trade-offs compared to DiffPrivate, we execute both attacks under a matched wall-clock constraint on the same hardware. Specifically, we run the attacks on an NVIDIA A6000 GPU with a limit of 6 seconds, which corresponds to approximately 30 iterations of B OUND STYLE . For DiffPrivate, we provide a significant advantage by removing caps on ∥∆z∥ and the number of iterations, constraining it solely by the run time. Tab. 3 lists the results. It can be seen that, under equal execution time, DiffPrivate leaves robust accuracy at 98.6%, whereas B OUND -STYLE degrades it to 85.2–50.9% (depending on β ) against ResNet, on the LFW dataset. This result further highlights B OUND STYLE ’s efficiency and its ability to attain high success rates within strict time constraints, making it suitable for adversarial training.                   
+
+> Attack Budget Time Rob. Acc. DiffPrivate ∥∆z∥=∞6s 98.6% BOUND STYLE β=1.56s 85.2% BOUND STYLE β=2.06s 75.0% BOUND STYLE β=3.06s 50.9%
+
+Table 3: Comparing attacks’ success, on LFW and ResNet, under matched time con-straints (6 seconds). BOUND STYLE ’s Success Stems From Semantic Edits By construction, B OUND STYLE 
+
+cannot inject unconstrained pixel noise, as its output is the StyleGAN3 decoding of an ℓ2-bounded latent edit. Four results indicate that its success is governed by semantic changes: 
+
+(1) >90% of its perturbation energy lies below frequency radius r≈15 in Fourier domain vs. 
+
+r≈30 for DiffPrivate (App. D); (2) noise-removal filters barely affect B OUND STYLE (≤6% robust-accuracy increase) yet weaken DiffPrivate by up to 36.6% (see §6.2); (3) adversari-ally training with pixel-space perturbations shifts robustness against B OUND STYLE by only 
+
+±≈ 1%, but against DiffPrivate by up to +9.3% (App. C); and (4) BOUND STYLE ’s principal attack directions decode to semantic factors such as aging, pose, and illumination (App. F). 
+
+6.2 STYLE AT Improves Adversarial Robustness 
+
+White-box Setting We execute white-box attacks against S TYLE AT and DOA as well as against the undefended models (ResNet and RepVGG) at different attack budgets. Tab. 4 reports the results. Compared to the undefended models, S TYLE AT shows a 0.4–20.9% in-crease in robust accuracy on the different attack budgets against both B OUND STYLE and DiffPrivate, with the latter unseen during training. The DOA defense, tailored for ad hoc semantic attacks, shows a 0.4–0.7% higher robust accuracy than S TYLE AT on a few attack budgets on DiffPrivate, but otherwise trails behind S TYLE AT’s robust accuracy by 0.4–9.6% 12 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS                                                                                                                                                                       
+
+> LFW
+> BO U N D ST Y L E - budget βDiffPrivate -∥∆z∥
+> Backbone Defense Clean 11.5 23123456ResNet No Defense 99.1 93.5 83.8 70.8 39.5 99.1 98.6 93.5 71.8 41.7 33.8 DOA 99.1 94.9 80.6 69.4 35.4 99.1 98.6 96.8 85.6 54.6 42.6 STYLE AT 99.5 97.7 91.7 84.3 50.7 99.5 99.5 97.7 86.6 54.2 47.2
+> RepVGG No Defense 99.1 92.6 83.3 69.4 40.5 99.1 99.1 96.3 72.7 43.5 38.0 DOA 99.5 93.1 84.3 72.7 34.5 99.5 99.1 97.7 89.4 59.7 43.1 STYLE AT 99.5 97.2 92.1 84.7 54.3 99.5 99.5 98.6 92.6 64.4 50.0 VGG-Face
+> BO U N D ST Y L E - budget βDiffPrivate -∥∆z∥
+> Backbone Defense Clean 11.5 23123456ResNet No Defense 100.0 84.0 72.4 59.6 34.6 77.4 67.7 51.0 30.3 22.6 17.4 DOA 99.4 82.7 69.9 55.8 28.9 79.4 74.2 58.7 38.1 27.1 16.1 STYLE AT 100.0 88.5 81.4 65.4 35.3 81.3 76.1 63.2 41.9 27.7 18.1
+> RepVGG No Defense 100.0 80.8 71.2 60.3 32.0 77.4 69.7 53.5 32.3 22.6 17.4 DOA 98.7 79.5 73.7 57.0 27.6 81.3 74.2 57.4 40.0 26.5 21.3
+> STYLE AT 99.4 89.1 80.8 69.9 35.7 80.6 76.1 62.6 43.2 31.0 20.6
+
+Table 4: Evaluating defenses against white-box attacks . For each defense and undefended model, we report benign accuracy and robust accuracy under varied attack budgets on the LFW and VGG-Face datasets, for both ResNet and RepVGG backbones. against the DiffPrivate attack. However, against B OUND STYLE , DOA is counterproductive for most attack budgets, decreasing robust accuracy compared to the undefended model by up to 6%. Altogether, these results show that S TYLE AT reliably improves robust accuracy against general semantic attacks while generalizing to attacks unseen during training. Impor-tantly, S TYLE AT also maintains the benign accuracy on clean data as the undefended model or even roughly improves it. 
+
+Gray-box Setting We also evaluate S TYLE AT and filter-based defenses against gray-box attacks, where the adversary produces attacks against the undefended models (ResNet and RepVGG), in a manner agnostic to the defense. Fig. 3 reports the robust accuracy achieved against B OUND STYLE with the ResNet backbone (budgets β ∈ { 1, 2, 3} and clean; β =1.5omitted for compactness, see App. E). Fig. 4 reports DiffPrivate results at norms ∥∆z∥=4–6, where inter-defense differences are most pronounced; the full norm range appears in App. E. Against B OUND STYLE , it can be seen that filter-based defenses have little impact on ro-bustness, increasing robust accuracy by 6.0% in the best case compared to the undefended model. DiffPure is in fact counterproductive against B OUND STYLE , reducing robust ac-curacy by up to 6.0% below the undefended baseline across all budgets and datasets. In comparison, S TYLE AT results in up to 33.3% increase in robust accuracy. The filter-based defenses are more useful against DiffPrivate, increasing robust accuracy by up to 31.5%. By contrast, DiffPure substantially improves robustness against DiffPrivate: it outperforms all filter-based defenses at moderate-to-high perturbation norms, improving robust accuracy by up to 36.6% over the undefended model. This asymmetry suggests that DiffPure’s purifica-tion is effective when adversarial structure aligns with latent diffusion dynamics, as in Diff-SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 13 No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01         
+
+> 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.5
+
+Clean (no attack)         
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 93.5 93.5 94.9 94.9 93.5 94.4 91.7 87.5 99.1
+
+= 1        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 70.8 74.1 73.2 72.7 71.3 72.7 67.6 62.5 88.0
+
+= 2        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 39.5 40.7 45.5 41.6 42.1 44.0 43.1 34.3 68.1
+
+= 3 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01         
+
+> 100 100 100 100 100 100 99.4 100 100
+
+Clean (no attack)         
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 84.0 82.0 85.3 84.0 80.8 84.0 82.0 79.5 91.7
+
+= 1        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 59.6 58.3 62.2 61.5 59.0 59.0 60.9 53.2 76.9
+
+= 2        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 34.6 35.5 40.6 36.8 34.8 36.1 38.1 29.7 54.5
+
+= 3 
+
+VGG-Face 
+
+Figure 3: Evaluating defenses against gray-box B OUND STYLE attacks (ResNet), bud-gets β ∈ { 1, 2, 3}. The error bars present the 95% bootstrap CIs. See App. E for all budgets No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 
+
+> Accuracy (%) FPR 0.01
+> 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.5
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 71.8 76.8 83.8 82.4 77.3 75.9 80.1 85.7 93.5
+
+norm = 4   
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 41.7 55.1 69.0 62.0 55.1 49.1 60.2 75 82.9
+
+norm = 5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 33.8 49.5 65.3 56.0 50.9 43.5 56.9 70.4 80.1
+
+norm = 6 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0         
+
+> Accuracy (%) FPR 0.01
+> 100 100 100 100 100 100 99.4 100 100
+
+Clean (no attack)  
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 30.3 38.7 46.5 45.2 41.9 36.1 42.6 45.2 60
+
+norm = 4 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 22.6 31.0 40.6 34.8 32.9 28.4 38.7 38.7 56.1
+
+norm = 5   
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 17.4 23.9 36.8 29.7 28.4 21.9 29.0 40 52.9
+
+norm = 6 
+
+VGG-Face 
+
+Figure 4: Evaluating defenses against gray-box DiffPrivate attacks (ResNet), norms 4– 6. The error bars present the 95% bootstrap CIs. See App. E for all norms. Private, but counterproductive against style-space manipulations. Nonetheless, S TYLE AT outperforms all baselines, including DiffPure, against both attacks, with an increase of up to 50.9% in robust accuracy over the undefended model against DiffPrivate. These results further highlight S TYLE AT’s utility against defense-agnostic adversaries including against attacks not accounted for during training (i.e., DiffPrivate). The results on the RepVGG backbone (Figs. 9–10 in App. E) are in line with the ResNet 14 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+findings. STYLE AT demonstrates superior robustness compared to filter-based defenses. For instance, against DiffPrivate on the LFW dataset (at ∥∆z∥ = 6), S TYLE AT achieves a robust accuracy of 88.9%, significantly outperforming the strongest filter defense (Feature Squeezing at 69.9%) and the undefended model (38.0%). Similar trends are observed against the B OUND STYLE , where filter-based defenses fail to provide meaningful robustness gains compared to S TYLE AT. 
+
+## 7 Conclusion, Limitations, and Future Work 
+
+Our work studies general semantic attacks against FR, proposing a new attack and a defense. The proposed attack, B OUND STYLE , produces high-fidelity images, attains high success rates, and is tunable, lending itself to being integrated into adversarial training. We find that BOUND STYLE achieves success rates on par with state-of-the-art attacks and even outper-forms them in some settings, while being almost ×9.5 more time-efficient. Our defense, STYLE AT, is, to the best of our knowledge, the first defense tailored for general semantic attacks against FR. S TYLE AT builds on B OUND STYLE , augmenting the training data with evasive samples produced via a weakened but efficient attack variant, leading to significant increases in robust accuracy in several settings we consider. Notably, our findings also ex-pose a limitation of generative semantic edits as a privacy-enhancing technology [23, 24]— STYLE AT-hardened models still recognize faces protected with such edits. 
+
+Limitations Our findings should be interpreted while taking several limitations into ac-count. First, we note that at the highest attack budgets ( β =3 for B OUND STYLE and ∥∆z∥=6for DiffPrivate), human verification accuracy drops substantially (App. B). Still, these set-tings should be interpreted as stress-tests probing worst-case vulnerabilities, not realistic deployment scenarios. Second, due to computation constraints (evaluating all attack config-urations against all models takes roughly one GPU-day per model), our evaluation is limited to 372 image pairs from LFW and VGG-Face. This scale is in line with prior evaluations of semantic attacks, including Adv-Attribute [17] and Adv-Makeup [47], as robustness evalua-tion is bounded by attack-generation cost rather than by inference. While future work with larger compute budgets may evaluate on larger datasets (e.g., IJB-C or WebFace260M), the relatively tight confidence intervals we compute give us confidence that our findings will hold at larger evaluation scales. Third, GAN inversion and PTI fine-tuning add an upfront one-time cost of approximately nine GPU-days for the training set, which may not suit all deployments. Last, the improvements in robustness we demonstrate are purely empirical, without certified guarantees, and the models we train still exhibit some degree of suscepti-bility against general semantic attacks. Future work may seek to further increase adversarial robustness against general semantic attacks and derive theoretical guarantees, for instance through randomized smoothing [6] in the latent space. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 15 
+
+## Acknowledgments 
+
+This work has been supported in part by a grant from the Blavatnik Interdisciplinary Cyber Research Center (ICRC); by grant No. 2023641 from the United States-Israel Binational Science Foundation (BSF); by an Intel Rising Star Faculty Award; by Len Blavatnik and the Blavatnik Family foundation; by a Maof prize for outstanding young scientists; by the Ministry of Innovation, Science & Technology, Israel (grant number 0603870071); and by a grant from the Tel Aviv University Center for AI and Data Science (TAD). 
+
+## References 
+
+[1] Yuval Alaluf, Or Patashnik, Zongze Wu, Asif Zamir, Eli Shechtman, Dani Lischinski, and Daniel Cohen-Or. Third time’s the charm? Image and video editing with Style-GAN3. In ECCVW , 2022. [2] Simone Barattin, Christos Tzelepis, Ioannis Patras, and Nicu Sebe. Attribute-preserving face dataset anonymization via latent code optimization. In CVPR , 2023. [3] Nicholas Carlini and Hany Farid. Evading deepfake-image detectors with white- and black-box attacks. In CVPR Workshops , 2020. [4] Nicholas Carlini, Florian Tramer, Krishnamurthy Dj Dvijotham, Leslie Rice, Mingjie Sun, and Zico Kolter. (Certified!!) Adversarial robustness for free! In ICLR , 2023. [5] Sheng Chen, Yang Liu, Xiang Gao, and Zhen Han. MobileFaceNets: Efficient CNNs for accurate real-time face verification on mobile devices. In CCBR , 2018. [6] Jeremy M Cohen, Elan Rosenfeld, and J Zico Kolter. Certified adversarial robustness via randomized smoothing. In ICML , 2019. [7] Riccardo Corvi, Davide Cozzolino, Giada Zingarini, Giovanni Poggi, Koki Nagano, and Luisa Verdoliva. On the detection of synthetic images generated by diffusion mod-els. In ICASSP , 2023. [8] Jiankang Deng, Jia Guo, Niannan Xue, and Stefanos Zafeiriou. Arcface: Additive angular margin loss for deep face recognition. In CVPR , 2019. [9] Xiaohan Ding, Xiangyu Zhang, Ningning Ma, Jungong Han, Guiguang Ding, and Jian Sun. RepVGG: Making VGG-Style ConvNets great again. In CVPR , 2021. [10] Bradley Efron. Bootstrap methods: Another look at the jackknife. The Annals of Statistics , 7(1):1–26, 1979. [11] Ian J Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and harnessing adversarial examples. In ICLR , 2015. [12] Yandong Guo, Lei Zhang, Yuxiao Hu, Xiaodong He, and Jianfeng Gao. Ms-celeb-1m: A dataset and benchmark for large-scale face recognition. In ECCV , 2016. [13] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In CVPR , 2016. 16 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+[14] Shengshan Hu, Xiaogeng Liu, Yechao Zhang, Minghui Li, Leo Yu Zhang, Hai Jin, and Libing Wu. Protecting facial privacy: Generating adversarial identity masks via style-robust makeup transfer. In CVPR , 2022. [15] Gary B. Huang, Manu Ramesh, Tamara Berg, and Erik Learned-Miller. Labeled faces in the wild: A database for studying face recognition in unconstrained environments. Technical Report 07-49, University of Massachusetts, Amherst, October 2007. [16] Lucas D Introna and Helen Nissenbaum. Facial recognition technology: A survey of policy and implementation issues. Center for Catastrophe Preparedness and Response ,2009. [17] Shuai Jia, Bangjie Yin, Taiping Yao, Shouhong Ding, Chunhua Shen, Xiaokang Yang, and Chao Ma. Adv-Attribute: Inconspicuous and transferable adversarial attack on face recognition. In NeurIPS , 2022. [18] Tero Karras, Miika Aittala, Samuli Laine, Erik Härkönen, Janne Hellsten, Jaakko Lehtinen, and Timo Aila. Alias-free generative adversarial networks. In NeurIPS ,2021. [19] Guy Katz, Derek A Huang, Duligur Ibeling, Kyle Julian, Christopher Lazarus, Rachel Lim, Parth Shah, Shantanu Thakoor, Haoze Wu, Aleksandar Zelji´ c, et al. The Marabou framework for verification and analysis of deep neural networks. In CAV , 2019. [20] Stepan Komkov and Aleksandr Petiushko. Advhat: Real-world adversarial attack on arcface face ID system. In ICPR , 2021. [21] Alexey Kurakin, Ian Goodfellow, and Samy Bengio. Adversarial examples in the phys-ical world. In ICLRW , 2017. [22] Cassidy Laidlaw, Sahil Singla, and Soheil Feizi. Perceptual adversarial robustness: Defense against unseen threat models. In ICLR , 2020. [23] Minh-Ha Le and Niklas Carlsson. StyleAdv: A usable privacy framework against facial recognition with adversarial image editing. In PETS , 2024. [24] Minh-Ha Le and Niklas Carlsson. DiffPrivate: Facial privacy protection with diffusion models. In PETS , 2025. [25] Pengcheng Li, Jinfeng Yi, Bowen Zhou, and Lijun Zhang. Improving the robustness of deep neural networks via adversarial training with triplet loss. In IJCAI , 2019. [26] Decheng Liu, Xijun Wang, Chunlei Peng, Nannan Wang, Ruimin Hu, and Xinbo Gao. Adv-diffusion: Imperceptible adversarial face identity attack via latent diffusion model. In AAAI , 2024. [27] Ze Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, and Baining Guo. Swin transformer: Hierarchical vision transformer using shifted win-dows. In ICCV , 2021. [28] Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. Towards deep learning models resistant to adversarial attacks. In ICLR ,2018. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 17 
+
+[29] Chengzhi Mao, Ziyuan Zhong, Junfeng Yang, Carl Vondrick, and Baishakhi Ray. Met-ric learning for adversarial robustness. In NeurIPS , 2019. [30] Qiang Meng, Shichao Zhao, Zhida Huang, and Feng Zhou. Magface: A universal representation for face recognition and quality assessment. In CVPR , 2021. [31] Jan Hendrik Metzen, Tim Genewein, Volker Fischer, and Bastian Bischoff. On detect-ing adversarial perturbations. In ICLR , 2017. [32] Yisroel Mirsky and Wenke Lee. The creation and detection of deepfakes: A survey. 
+
+ACM Computing Surveys , 54(1):7:1–7:41, 2022. [33] Weili Nie, Brandon Guo, Yujia Huang, Chaowei Xiao, Arash Vahdat, and Animashree Anandkumar. Diffusion models for adversarial purification. In ICML , 2022. [34] Utkarsh Ojha, Yuheng Li, and Yong Jae Lee. Towards universal fake image detectors that generalize across generative models. In CVPR , 2023. [35] Omkar Parkhi, Andrea Vedaldi, and Andrew Zisserman. Deep face recognition. In 
+
+BMVC , 2015. [36] Daniel Roich, Ron Mokady, Amit H Bermano, and Daniel Cohen-Or. Pivotal tuning for latent-based editing of real images. ACM , 2022. [37] Ali Shafahi, Mahyar Najibi, Amin Ghiasi, Zheng Xu, John Dickerson, Christoph Studer, Larry S Davis, Gavin Taylor, and Tom Goldstein. Adversarial training for free! In NeurIPS , 2019. [38] Mahmood Sharif, Sruti Bhagavatula, Lujo Bauer, and Michael K. Reiter. Accessorize to a crime: Real and stealthy attacks on state-of-the-art face recognition. In CCS , 2016. [39] Christian Szegedy, Wojciech Zaremba, Ilya Sutskever, Joan Bruna, Dumitru Erhan, Ian Goodfellow, and Rob Fergus. Intriguing properties of neural networks. In ICLR , 2014. [40] Jun Wang, Yinglu Liu, Yibo Hu, Hailin Shi, and Tao Mei. Facex-zoo: A PyTorch toolbox for face recognition. In MM , 2021. [41] Eric Wong, Leslie Rice, and J. Zico Kolter. Fast is better than free: Revisiting adver-sarial training. In ICLR , 2020. [42] Tong Wu, Liang Tong, and Yevgeniy Vorobeychik. Defending against physically real-izable attacks on image classification. In ICLR , 2020. [43] Xiang Wu, Ran He, Zhenan Sun, and Tieniu Tan. A light CNN for deep face represen-tation with noisy labels. IEEE TIFS , 13(11):2884–2896, 2018. [44] Xiang Wu, Ran He, Yibo Hu, and Zhenan Sun. Learning an evolutionary embedding via massive knowledge distillation. International Journal of Computer Vision , 128(8): 2089–2106, 2020. [45] Chaowei Xiao, Jun-Yan Zhu, Bo Li, Warren He, Mingyan Liu, and Dawn Song. Spa-tially transformed adversarial examples. In ICLR , 2018. 18 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+[46] Weilin Xu, David Evans, and Yanjun Qi. Feature squeezing: Detecting adversarial examples in deep neural networks. In NDSS , 2018. [47] Bangjie Yin, Wenxuan Wang, Taiping Yao, Junfeng Guo, Zelun Kong, Shouhong Ding, Jilin Li, and Cong Liu. Adv-makeup: A new imperceptible and transferable attack on face recognition. In IJCAI , 2021. [48] Jiapeng Zhu, Yujun Shen, Deli Zhao, and Bolei Zhou. In-domain GAN inversion for real image editing. In ECCV , 2020. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 19     
+
+> clean 11.5 23
+
+Figure 5: Examples of edits produced by B OUND STYLE when varying the attack budget 
+
+β ∈ { 1, 1.5, 2, 3}.
+
+## A STYLE AT’s Algorithm 
+
+Alg. 1 presents the pseudocode of S TYLE AT. 
+
+## B Selection of Attacks’ Perturbation Budgets 
+
+Qualitative Examples Figs. 5–6 provide qualitative examples of B OUND STYLE and Diff-Private semantic attacks at different attack budgets. It can be seen that the original identities in the images become harder to identify as the attack budgets increase, leading to more ag-gressive semantic edits. 
+
+User Study: Humans’ Verification Accuracy We conducted a user study with a conve-nience sample ( N = 181) to evaluate human recognition performance under different attack budgets. Our participants were asked to verify 30 randomly sampled image pairs each: 20 same-identity pairs where one image is clean and the other is either clean or adversarially modified by B OUND STYLE or DiffPrivate, and 10 different-identity pairs. The images were drawn at random from a combined pool of the LFW and VGG-Face datasets. For each pre-sented pair, participants needed to judge whether the pairs depicted the same person (i.e., “same” or “different”). Fig. 7 details the results. We observe that verification accuracy de-clines smoothly as the attack budgets ( β and ∥∆z∥) increase, confirming these knobs control edit strength. At lower attack budgets ( β =1 and ∥∆z∥=2), participants maintain high ac-curacy (64.8% and 69.8%, respectively), retaining approximately 76–82% of the accuracy achieved on original clean pairs ( ≈ 85%). Conversely, at the highest attack budgets we consider ( β =3 and ∥∆z∥=6), accuracy drops significantly (33.2% and 47%, respectively), roughly 39–55% of the clean images, justifying the capping of β ≤3 and ∥∆z∥ ≤ 6. The 95% bootstrap CIs confirm the monotonically decreasing trend for B OUND STYLE : β =1: 64.8% [59.5–70.1%], β =1.5: 57.3% [51.5–63.1%], β =2: 48.2% [41.8–54.6%], β =3: 33.2% [27.5–39.3%]. Consecutive budgets show at most minimal CI overlap; the CIs of β =2 and 20 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+Algorithm 1 STYLE AT (per minibatch) 
+
+Input: minibatch {(xi, x+ 
+
+> i
+
+)}Bi=1; StyleGAN encoder E and generator G, feature extractor fθ ,latent attack steps K, step size α, attack strength β , triplet loss margin μ, pixel PGD steps S,
+
+αpix step, PGD radius ε;
+
+loss weights: λCln , λAdvSem , λAdvPix ≥ 0 with λCln + λAdvSem + λAdvPix = 1
+
+Output: updated parameters θ
+
+1: for i = 1 to B do 
+
+2: li ← OptimizeInv  E(xi), G // Inversion (offline cacheable) 
+
+3: end for 
+
+4: for i = 1 to B do 
+
+5: Latent branch (B OUND STYLE ): 
+
+6: Sample unit direction vi ∼ N (0, I); vi ← vi/∥vi∥2
+
+7: Sample bi ∼ U(0, β );
+
+8: δi ← bi vi
+
+9: xi ← CropAlign (xi); x+ 
+
+> i
+
+← CropAlign (x+ 
+
+> i
+
+)
+
+10: for k = 1 to K do 
+
+11: xadv  
+
+> i
+
+← CropAlign  G(li + δi)
+
+12: g ← ∇δ
+
+− cos   fθ (xadv  
+
+> i
+
+), fθ (xi) // Dodging: reduce cosine 
+
+13: δi ←  δi + α g
+
+> || g|| ∞
+
+
+
+14: Project δi ← β · δi
+
+> ∥δi∥2
+
+15: end for 
+
+16: xadv  
+
+> i
+
+← CropAlign  G(li + δi)
+
+17: Pixel branch (PGD under ℓ∞(ε), around xadv  
+
+> i
+
+): 
+
+18: ˆxi(0) ← Clip  xadv  
+
+> i
+
++ U[−ε, ε] // Random init near x adv i
+
+19: for s = 1 to S do 
+
+20: gx ← ∇x
+
+h
+
+cos   fθ ( ˆxi(s−1)), fθ (x+ 
+
+> i
+
+)i
+
+21: ˆxi(s) ← ˆxi(s−1) − αpix · sign (gx)
+
+22: ˆxi(s) ← ΠB∞(xadv  
+
+> i,ε)
+
+  ˆx(s)
+
+> i
+
+ // Project to ℓ∞ ball around x adv i
+
+23: ˆxi(s) ← Clip   ˆxi(s) // valid pixel range 
+
+24: end for 
+
+25: xpix  
+
+> i
+
+← ˆxi(S)
+
+26: end for 
+
+27: for i = 1 to B do 
+
+28: e+ 
+
+> i
+
+= fθ (x+ 
+
+> i
+
+); ecln  
+
+> i
+
+= fθ (xi); eadvSem  
+
+> i
+
+= fθ (xadv  
+
+> i
+
+); eadvPix  
+
+> i
+
+= fθ (xpix  
+
+> i
+
+)
+
+29: end for 
+
+30: LCln ← TripletLoss  {(ecln  
+
+> i
+
+, e+ 
+
+> i
+
+)}Bi=1, μ,
+
+31: mine=batch-hardest-negative 
+
+32: LAdvSem ← TripletLoss  {(eadvSem  
+
+> i
+
+, e+ 
+
+> i
+
+)}Bi=1, μ,
+
+33: mine=batch-hardest-negative 
+
+34: LAdvPix ← TripletLoss  {(epix  
+
+> i
+
+, e+ 
+
+> i
+
+)}Bi=1, μ,
+
+35: mine=batch-hardest-negative 
+
+36: L ← λCln LCln + λAdvSem LAdvSem + λAdvPix LAdvPix 
+
+37: θ ← θ − η ∇θ L
+
+38: return θ
+
+β =3 are fully non-overlapping (a ∼2.5pp gap between bounds), confirming that β pro-vides meaningful control over edit strength. For DiffPrivate, the CIs reveal coarser budget SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 21       
+
+> clean 123456
+
+Figure 6: Examples of edits produced by DiffPrivate when varying the attack budget ∥∆z∥ ∈ {1, 2, 3, 4, 5, 6}.sensitivity: ∥∆z∥=2 and ∥∆z∥=3 have heavily overlapping CIs (69.8% [64.2–75.5%] and 67.2% [60.9–73.1%]), as do ∥∆z∥=4 and ∥∆z∥=5 (54.9% [49.0–60.8%] and 54.5% [48.7– 60.2%]); these two pairs are however non-overlapping with each other (the CIs of ∥∆z∥=3and ∥∆z∥=4 just barely do not overlap), while ∥∆z∥=6 (47.0% [41.1–53.0%]) overlaps par-tially with ∥∆z∥=4 and ∥∆z∥=5. The user study is thus a quantitative experiment, not merely a qualitative illustration. 
+
+## C Ablation Study 
+
+Effect of LAdvPix During Training Tab. 5 reports white-box robust accuracy on LFW for a ResNet model adversarially trained with and without LAdvPix . Against DiffPrivate, enabling 
+
+LAdvPix boosts robust accuracy substantially for high attack budgets, by up to 9.3%. Against BOUND STYLE , the effect of optimizing LAdvPix during training is minor and mixed, with -1.2–+0.93% difference in robust accuracy in comparison to when LAdvPix is not optimized. Overall, LAdvPix primarily helps ameliorate DiffPrivate at high attack budgets, while inducing only negligible changes against B OUND STYLE . Thus, we include this term by default in our training objective. A complementary ablation would train solely with pixel-space adversarial training (i.e., without LAdvSem ). Our evaluation contains a close proxy: DOA – adversarial training with no semantic branch – improves robustness against DiffPrivate ( +12 .9% at ∥∆z∥=5 on LFW) yet is counterproductive against B OUND STYLE (up to −6% at β =3; Tab. 4). Together with the ablation above, this indicates that ℓ∞-style robustness does not extend to large-norm, low-frequency semantic edits: the pixel branch counters imperceptible perturbations, while semantic robustness requires the latent branch. 
+
+Attack Iterations We analyze the impact of the number of attack iterations on the effec-tiveness of attacks. Tab. 6 shows the robust accuracy of the ResNet model on LFW under BOUND STYLE (β = 3) and DiffPrivate ( ∥∆z∥ = 5) for varying numbers of iterations. For both attacks, we observe that attack success saturates after a certain number of steps. For BOUND STYLE , increasing iterations from 30 to 50 results in a marginal accuracy drop of only 0.76%. Similarly, for DiffPrivate, extending the attack from 70 to 250 iterations yields 22 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS original original (diff. identity) = 1    
+
+> = 1.5
+> = 2
+> = 3
+> z = 2
+> z = 3
+> z = 4
+> z = 5
+> z = 6
+> 020 40 60 80 100 Accuracy (%)
+> 84.8% 86.3% 64.8% 57.3% 48.2% 33.2% 69.8% 67.2% 54.9% 54.5% 47.0%
+
+Figure 7: Human verification accuracy under attack, with 95% bootstrap confidence intervals. Participants ( N = 181) evaluated image pairs at varying attack budgets. Blue: 
+
+Original images (same and different identities); Orange: BOUND STYLE ; Green: DiffPri-vate. a negligible decrease of 0.47%. Based on these results, we fix the number of iterations to 30 for B OUND STYLE and 70 for DiffPrivate to balance attack strength with computational efficiency. 
+
+## D Imperceptible Perturbations in DiffPrivate 
+
+We now present additional evidence that DiffPrivate introduces imperceptible perturbations. Recall that (1) DiffPrivate’s success rates decrease significantly when applying semantics-preserving filters such as JPEG compression (Fig. 4 and Fig. 10); and that (2) adversarial training against PGD in the pixel space (employed in S TYLE AT) improves robustness against DiffPrivate (Tab. 5). Both of these findings indicate that DiffPrivate introduce impercepti-ble perturbations besides semantic edits. To further investigate imperceptible perturbations produced by DiffPrivate, we analyze the frequency-energy patterns of the adversarial per-turbations (i.e., the pixel-wise difference between original and adversarial images). To this end, we convert the perturbations produced by attacks (i.e., difference between edited and clean images) to the Fourier domain and measure the cumulative energy outside an increas-ing radial distance r from the zero frequency (i.e., DC) component. The result is monotonic curves decreasing from 1 to 0, as shown in Fig. 8, which illustrate the energy distribution: a faster decay indicates energy concentrated in low frequencies (i.e., semantic changes), while a slower decay implies reliance on high frequencies. We find that the decay is signif-icantly faster for B OUND STYLE (> 90% of residual energy contained within r ≈ 15) than for DiffPrivate ( >90% of residual energy within r ≈ 30). This results further demonstrates that DiffPrivate’s success can be partially attributed to non-semantic, imperceptible pertur-bations. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 23                                            
+
+> BoundStyle ( β)
+> 11.5 23w/o LAdvPix 98.61 90.74 83.80 51.87 w/ LAdvPix 97.69 91.67 84.26 50.72
+> ∆−0.92 +0.93 +0.46 −1.15
+> DiffPrivate ( ∥∆z∥)
+> 123456w/o LAdvPix 99.5 99.1 97.7 79.6 46.3 38.0 w/ LAdvPix 99.5 99.5 97.7 86.6 54.2 47.2
+> ∆0+0.50+6.9+7.9+9.3
+
+Table 5: The effect of LAdvPix on robust accuracy against white-box attacks. We use LFW for evaluation.                  
+
+> BoundStyle ( β=3)
+> Iterations Accuracy (%) 351.16 550.48 10 47.44 15 47.20
+> 30 39.52
+> 50 38.76
+> DiffPrivate ( ∥∆z∥=5)
+> Iterations Accuracy (%) 10 98.15 50 51.85
+> 70 41.67
+> 100 41.20 250 41.20
+
+Table 6: Ablation on attack iterations. We report robust accuracy on LFW against B OUND -STYLE (β = 3) and DiffPrivate ( ∥∆z∥ = 5) with varying iteration counts. The selected num-ber of iterations is in boldface. 
+
+## E Additional Gray-box Defense Results 
+
+RepVGG backbone We present the gray-box defense evaluation results on the RepVGG backbone in Figs. 9–10. 
+
+Full ResNet results We present the full gray-box defense evaluation results on the ResNet backbone in Figs. 11–12. The main-body figures omit β =1.5 (Fig. 3) and show only norms 
+
+∥∆z∥=4–6 (Fig. 4) for compactness; the full ranges confirm the same trends. 
+
+## F Semantic Structure of B OUND STYLE Adversarial Directions 
+
+To explore how B OUND STYLE manipulates distinct semantic attributes, we analyze the na-ture of the adversarial perturbations. To do so, we collect the latent perturbations δ gener-ated by B OUND STYLE (at β = 3) against the ResNet backbone on the LFW dataset. Subse-quently, we then perform Principal Component Analysis (PCA) on these perturbation vectors to identify the dominant directions of variance in the attack space. Fig. 13 visualizes the top five principal components (PCs). To interpret these abstract vectors, we project the perturbation δi of each test sample i onto each PC. Then, for every PC, we select the top five samples with the highest positive projection scores, i.e., the images 24 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 
+
+Figure 8: Frequency energy decay of adversarial perturbations. We measure the relative energy of the noise residual outside frequency radius r. BOUND STYLE (orange/blue) de-cays rapidly, indicating changes are concentrated in low frequencies (semantic). DiffPrivate (green/red/purple) decays slower, indicating a reliance on higher frequencies (imperceptible noise). Results are shown for the red channel of LFW, but we observe consistent behavior across all color channels. whose adversarial manipulations align most strongly with that specific principal direction. We visualize examples with β =3 to maximally emphasize the semantic nature of the direc-tions. Our visual analysis demonstrates that the dominant modes of the attack correspond to coherent semantic factors: PC1 captures aging (older appearance, thinning hair, and beard growth); PC2 modifies lighting and alters nose shape; PC3 creates a younger appearance by smoothing skin texture and softening facial features; PC4 alters head pose; and PC5 per-forms subtle structural changes to facial width. This analysis confirms that B OUND STYLE 
+
+discovers and exploits interpretable semantic weaknesses in the target FR model. 
+
+## G Black-Box Transferability Analysis 
+
+Transferability Score We define the transferability score Ti for source model i as the aver-age ratio of black-box attack success rate (ASR) to white-box ASR across all target models 
+
+j̸ = i:
+
+Ti = 1
+
+N − 1 ∑ 
+
+> j̸=i
+
+ASR i j 
+
+ASR ii 
+
+, T = 1
+
+N
+
+> N
+
+## ∑
+
+> i=1
+
+Ti,
+
+where ASR i j = 1 − Rob. Acc. i j is the attack success rate when attacking model i and eval-uating on model j, and N=7 is the number of models. T =1 indicates perfect transferabil-ity (black-box performance matches white-box) and lower values indicate weaker transfer. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 25 No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01 
+
+99.1 99.1 99.1 99.1 99.1 99.5 99.5 99.1 99.5 
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+92.6 93.5 94.4 93.1 93.1 93.5 93.5 88.4 99.1 
+
+= 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+83.3 82.9 86.1 85.2 85.2 85.2 86.6 78.7 96.8 
+
+= 1.5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+69.4 71.3 74.5 71.8 70.4 72.7 68.5 65.7 89.3 
+
+= 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+40.5 41.4 44.8 42.4 41.4 41.0 39.5 37.6 73.8 
+
+= 3 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01 
+
+100 99.4 99.4 99.4 99.4 99.4 99.4 99.4 99.4 
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+80.8 83.3 85.3 84.0 82.7 82.7 82.0 78.2 84.6 
+
+= 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+71.2 75 74.4 73.1 71.8 72.4 71.8 62.8 80.1 
+
+= 1.5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+60.3 60.3 62.8 59.6 58.3 60.3 58.3 57.0 73.7 
+
+= 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+32.0 34.0 30.8 34.6 35.3 33.3 35.9 25.6 51.3 
+
+= 3 
+
+VGG-Face 
+
+Figure 9: Evaluating defenses against gray-box B OUND STYLE attacks (RepVGG) .No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 
+
+> Accuracy (%) FPR 0.01
+
+99.1 99.1 99.1 99.1 99.1 99.5 99.5 99.5 
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.5 
+
+norm = 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+99.1 98.6 98.6 99.1 99.1 99.1 98.2 98.2 99.1 
+
+norm = 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+96.3 96.8 97.7 96.3 97.2 96.8 95.8 96.3 98.6 
+
+norm = 3 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+72.7 75.5 86.1 80.1 77.8 76.4 79.2 81.5 97.2 
+
+norm = 4 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+43.5 53.7 73.6 63.4 53.2 53.2 59.7 71.8 90.7 
+
+norm = 5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+38.0 47.7 69.9 60.2 47.7 48.1 57.9 68.5 88.9 
+
+norm = 6 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 
+
+> Accuracy (%) FPR 0.01
+
+100 99.4 99.4 99.4 99.4 99.4 99.4 99.4 
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+77.4 76.1 76.8 78.1 78.1 76.8 77.4 72.3 81.9 
+
+norm = 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+69.7 69.7 71.0 71.0 67.7 69.0 70.3 62.6 78.7 
+
+norm = 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+53.5 54.8 56.8 57.4 56.1 54.8 56.1 54.8 71.6 
+
+norm = 3 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+32.3 36.1 44.5 41.9 35.5 32.3 41.3 38.7 60 
+
+norm = 4 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+22.6 27.1 37.4 33.5 27.1 26.4 34.2 34.2 56.1 
+
+norm = 5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+
+17.4 23.2 34.8 28.4 23.2 21.9 30.3 31.6 55.5 
+
+norm = 6 
+
+VGG-Face 
+
+Figure 10: Evaluating defenses against gray-box DiffPrivate attacks (RepVGG) .Tab. 7 reports T computed from the heatmaps in Fig. 2. Across both datasets, B OUND STYLE 
+
+consistently achieves higher T than DiffPrivate, confirming substantially stronger transfer-ability. 
+
+Attack LFW VGG-Face BOUND STYLE 0.76 0.86 DiffPrivate 0.43 0.68 
+
+Table 7: Transferability score T computed from the paper’s black-box heatmaps (Fig. 2). 
+
+Does Reducing DiffPrivate’s Budget Improve Transferability? A possible concern is that the transferability gap reflects budget differences rather than inherent properties of the at-tacks: if optimizing for white-box success reduces transferability, a weaker (fewer-iteration) DiffPrivate might transfer better. We test this directly. To isolate the effect of iteration count, we disable DiffPrivate’s early stopping criterion (which halts optimization once the white-box model is fooled on the pair) and run it for a fixed number of iterations ranging from 20 to 26 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01         
+
+> 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.5
+
+Clean (no attack)         
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 93.5 93.5 94.9 94.9 93.5 94.4 91.7 87.5 99.1
+
+= 1        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 83.8 83.3 87.5 83.3 84.3 83.8 81.0 77.3 94.9
+
+= 1.5        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 70.8 74.1 73.2 72.7 71.3 72.7 67.6 62.5 88.0
+
+= 2        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 39.5 40.7 45.5 41.6 42.1 44.0 43.1 34.3 68.1
+
+= 3 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 Accuracy (%) FPR 0.01         
+
+> 100 100 100 100 100 100 99.4 100 100
+
+Clean (no attack)         
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 84.0 82.0 85.3 84.0 80.8 84.0 82.0 79.5 91.7
+
+= 1         
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 72.4 74.4 77.6 75 72.4 73.7 70.5 68.0 81.4
+
+= 1.5        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 59.6 58.3 62.2 61.5 59.0 59.0 60.9 53.2 76.9
+
+= 2        
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 34.6 35.5 40.6 36.8 34.8 36.1 38.1 29.7 54.5
+
+= 3 
+
+VGG-Face 
+
+Figure 11: Full B OUND STYLE gray-box defense evaluation (ResNet, all budgets). Ro-bust accuracy (%) across all attack budgets ( β ∈ { 1, 1.5, 2, 3}, plus clean). The error bars present the 95% bootstrap CIs. 70. Note that this setup differs from the paper’s main evaluation, which uses early stopping; the resulting T values are therefore not directly comparable to those in Tab. 7. Tab. 8 reports the transferability score under each configuration. Contrary to the hypoth-esis, T does not decrease with more iterations—it is highest at 70 iterations, the setting that also maximizes white-box ASR. This confirms that the transferability gap between B OUND -STYLE and DiffPrivate reflects inherent differences in the two attack strategies rather than an artifact of attack-budget choices. 
+
+Iterations T
+
+20 0.533 30 0.572 40 0.541 50 0.560 60 0.577 70 0.610 
+
+Table 8: DiffPrivate transferability score T across iteration counts on LFW (early stop-ping disabled). T does not decrease with more iterations, contradicting the hypothesis that stronger white-box attacks hurt black-box performance. 
+
+## H Bootstrap Confidence Intervals (CIs) 
+
+All confidence intervals are computed via the nonparametric percentile bootstrap [10] with 10,000 resamples, retaining 95% coverage (2.5th and 97.5th percentiles). Each resample draws n image pairs with replacement from the evaluation set and computes accuracy on the resampled set. The resulting CIs quantify sampling uncertainty due to the finite evaluation SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 27 No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0 
+
+> Accuracy (%) FPR 0.01
+> 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.1 99.5
+
+Clean (no attack) 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 99.1 99.1 99.1 99.1 99.1 99.1 99.1 98.6 99.5
+
+norm = 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 98.6 98.6 98.6 99.1 98.6 98.6 98.6 98.2 99.5
+
+norm = 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 93.5 93.5 94.9 94.4 94.0 94.0 93.1 95.8 97.7
+
+norm = 3 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 71.8 76.8 83.8 82.4 77.3 75.9 80.1 85.7 93.5
+
+norm = 4   
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 41.7 55.1 69.0 62.0 55.1 49.1 60.2 75 82.9
+
+norm = 5 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 33.8 49.5 65.3 56.0 50.9 43.5 56.9 70.4 80.1
+
+norm = 6 
+
+LFW No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure 
+
+> StyleAT (Ours)
+
+0.0 50.0 100.0       
+
+> Accuracy (%) FPR 0.01
+> 100 100 100 100 100 100 99.4 100 100
+
+Clean (no attack)    
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 77.4 80 80 78.7 78.1 77.4 78.7 72.9 83.2
+
+norm = 1 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 67.7 71.6 73.5 74.2 71.6 70.3 72.9 71.0 77.4
+
+norm = 2 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 51.0 54.2 58.1 56.8 53.5 52.3 56.1 61.3 68.4
+
+norm = 3  
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 30.3 38.7 46.5 45.2 41.9 36.1 42.6 45.2 60
+
+norm = 4 
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 22.6 31.0 40.6 34.8 32.9 28.4 38.7 38.7 56.1
+
+norm = 5   
+
+> No Defense Feature Squeezing Gaussian Blur JPEG Compression Random Noise Spatial Smoothing Total Var Min DiffPure
+> StyleAT (Ours)
+> 17.4 23.9 36.8 29.7 28.4 21.9 29.0 40 52.9
+
+norm = 6 
+
+VGG-Face 
+
+Figure 12: Full DiffPrivate gray-box defense evaluation (ResNet, all norms). Robust accuracy (%) across all perturbation norms ( ∥∆z∥=1–6). The error bars present the 95% bootstrap CIs. sets (LFW: n=216; VGG-Face: n=156). All values are reported as point estimate [ lower– upper ]. 
+
+Attacks Robustness CIs (Tables 1–2) Tables 9–12 report 95% bootstrap CIs for all seven FR models on LFW and VGG-Face, for both B OUND STYLE and DiffPrivate. BOUND STYLE . On LFW, the budget β exerts strong, monotonically increasing at-tack pressure. Consecutive CI pairs are non-overlapping for all 7 models at β =2→3, for 6/7 models at β =1.5→2 (all except SwinT, which barely overlaps), and for 3/7 models (RepVGG, ResNet, ArcFace) already at β =1→1.5. On VGG-Face, adjacent-budget sepa-ration is weaker at low budgets (all CIs overlap at β =1→1.5, and only SwinT and ArcFace separate at β =1.5→2), but the β =2→3 transition is again fully non-overlapping across all 7 models. 
+
+DiffPrivate. On LFW, budget discrimination is strongest in the mid-range: all 7 mod-els show non-overlapping CIs at both ∥∆z∥=3→4 and ∥∆z∥=4→5. At the low end, the 
+
+∥∆z∥=1→2 step yields no non-overlapping pairs and only 2/7 separate at ∥∆z∥=2→3, re-flecting the limited attack gain at small perturbations. At the high end, the ∥∆z∥=5→6 step again shows mostly overlapping CIs (5/7 models), consistent with diminishing marginal gain at the highest budgets. On VGG-Face, the picture is more mixed: the ∥∆z∥=3→4 step sep-arates for 6/7 models (similar to LFW), but discrimination collapses at higher budgets — only SwinT separates at ∥∆z∥=4→5 and no model separates at ∥∆z∥=5→6. At the low end, no models separate at ∥∆z∥=1→2 and only 3/7 at ∥∆z∥=2→3. The wider CIs from the smaller VGG-Face evaluation set ( n=156) likely account for the loss of discrimination at the high-budget end. 
+
+Defense Robustness CIs (Table 4) Figs. 14–15 show 95% bootstrap CI bands for the white-box defense evaluation across both backbones, datasets, and attacks. BOUND STYLE . On LFW, S TYLE AT is statistically separated from both No Defense and DOA across moderate-to-high budgets ( β =1.5 through β =3), confirming that the robustness gains are reliable and not a sampling artifact. At the lowest budget ( β =1), all three defenses overlap, consistent with limited attack pressure. On VGG-Face, CIs overlap throughout, though the overlap is generally small — particularly against No Defense — reflecting a consistent point-estimate advantage for S TYLE AT that falls short of full statistical separation 28 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS              
+
+> Sample 1 Sample 2 Sample 3 Sample 4 Sample 5
+> Orig Adv Orig Adv Orig Adv Orig Adv Orig Adv
+> PC1 PC2 PC3 PC4 PC5
+
+Figure 13: Visualization of image samples whose adversarial perturbations align most strongly with the top five Principal Components (PCs) of the B OUND STYLE perturbation distribution. Each column pair displays an original (left) and an adversarial (right) image. The dominant directions correspond to clear semantic attributes: PC1 induces aging ef-fects (older appearance); PC2 alters nose shape and illumination; PC3 creates a younger appearance; PC4 corresponds to head pose adjustments; and PC5 performs subtle structural changes to facial width. owing to the wider intervals from the smaller evaluation set ( n=156). 
+
+DiffPrivate. On LFW, S TYLE AT is clearly separated from No Defense at high bud-gets ( ∥∆z∥≥ 4), where the attack is most damaging. Against DOA, CIs overlap throughout, reflecting that the two defenses achieve similar robust accuracy under DiffPrivate. On VGG-Face, CIs overlap throughout against both baselines, though not fully - the point estimates consistently favor S TYLE AT, particularly over No Defense, across all budgets. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 29 
+
+Model Clean β =1 β =1.5 β =2 β =3SwinT 99.1 [97.7–100.0] 94.9 [91.7–97.7] 88.0 [83.3–92.1] 78.7 [73.2–83.8] 52.6 [46.0–59.5] LightCNN 99.1 [97.7–100.0] 90.3 [86.1–94.0] 84.7 [79.6–89.3] 72.7 [66.7–78.7] 40.5 [34.0–47.0] MobileFace 99.1 [97.7–100.0] 91.7 [88.0–95.4] 88.0 [83.3–92.1] 75.0 [69.0–80.6] 50.2 [43.5–57.0] RepVGG 99.1 [97.7–100.0] 92.6 [88.9–95.8] 83.3 [78.2–88.0] 69.4 [63.0–75.5] 40.5 [33.8–47.1] ResNet 99.1 [97.7–100.0] 93.5 [89.8–96.8] 83.8 [78.7–88.4] 70.8 [64.8–76.8] 39.5 [32.9–46.2] MagFace 99.1 [97.7–100.0] 94.0 [90.7–96.8] 88.9 [84.7–92.6] 77.8 [72.2–83.3] 52.2 [45.4–58.9] ArcFace 99.5 [98.6–100.0] 94.4 [91.2–97.2] 85.2 [80.6–89.8] 74.1 [68.1–79.6] 45.0 [38.3–51.7] 
+
+Table 9: BOUND STYLE CIs on LFW. Robust accuracy (%) [95% bootstrap CI] under in-creasing β .
+
+Model Clean β =1 β =1.5 β =2 β =3SwinT 100.0 [100.0–100.0] 85.3 [79.5–90.4] 80.8 [74.4–86.5] 65.4 [57.7–72.4] 45.5 [37.8–53.2] LightCNN 98.7 [96.8–100.0] 84.0 [78.2–89.7] 72.4 [65.4–79.5] 60.3 [52.6–68.0] 34.0 [26.9–41.7] MobileFace 97.4 [94.9–99.4] 78.8 [72.4–85.3] 72.4 [65.4–78.8] 62.2 [54.5–69.9] 38.5 [30.8–46.1] RepVGG 100.0 [100.0–100.0] 80.8 [74.4–87.2] 71.2 [64.1–78.2] 60.3 [52.6–68.0] 32.0 [25.0–39.1] ResNet 100.0 [100.0–100.0] 84.0 [78.2–89.7] 72.4 [65.4–79.5] 59.6 [51.9–67.3] 34.6 [27.6–42.3] MagFace 98.1 [95.5–100.0] 75.6 [68.6–82.0] 67.3 [59.6–74.4] 57.7 [50.0–65.4] 40.8 [32.9–48.7] ArcFace 98.7 [96.8–100.0] 80.8 [74.4–86.5] 71.8 [64.7–78.8] 52.6 [44.9–60.3] 34.4 [27.3–42.2] 
+
+Table 10: BOUND STYLE CIs on VGG-Face. Robust accuracy (%) [95% bootstrap CI] under increasing β .
+
+Model ∥∆z∥=1 ∥∆z∥=2 ∥∆z∥=3 ∥∆z∥=4 ∥∆z∥=5 ∥∆z∥=6SwinT 99.5 [98.6–100.0] 98.6 [96.8–100.0] 98.6 [96.8–100.0] 85.7 [81.0–90.3] 50.5 [43.5–57.4] 49.1 [42.6–55.6] LightCNN 99.1 [97.7–100.0] 97.7 [95.4–99.5] 89.3 [85.2–93.5] 62.0 [55.6–68.5] 32.9 [26.9–39.4] 28.7 [22.7–34.7] MobileFace 98.6 [96.8–100.0] 98.2 [96.3–99.5] 96.3 [93.5–98.6] 79.2 [73.6–84.7] 53.7 [46.8–60.2] 38.0 [31.5–44.4] RepVGG 99.1 [97.7–100.0] 99.1 [97.7–100.0] 96.3 [93.5–98.6] 72.7 [66.7–78.7] 43.5 [37.0–50.5] 38.0 [31.5–44.4] ResNet 99.1 [97.7–100.0] 98.6 [96.8–100.0] 93.5 [90.3–96.8] 71.8 [65.7–77.8] 41.7 [35.2–48.6] 33.8 [27.8–40.3] MagFace 98.6 [96.8–100.0] 98.6 [96.8–100.0] 96.3 [93.5–98.6] 74.5 [68.5–80.1] 44.9 [38.4–51.9] 28.7 [22.7–34.7] ArcFace 99.1 [97.7–100.0] 98.6 [96.8–100.0] 91.7 [88.0–95.4] 69.0 [62.5–75.0] 38.4 [31.9–44.9] 31.5 [25.5–37.5] 
+
+Table 11: DiffPrivate CIs on LFW. Robust accuracy (%) [95% bootstrap CI] under increas-ing ∥∆z∥.
+
+Model ∥∆z∥=1 ∥∆z∥=2 ∥∆z∥=3 ∥∆z∥=4 ∥∆z∥=5 ∥∆z∥=6SwinT 83.9 [78.1–89.0] 76.8 [69.7–83.2] 64.5 [56.8–71.6] 41.9 [34.2–49.7] 26.4 [19.4–33.5] 19.4 [13.6–25.8] LightCNN 69.7 [62.6–76.8] 58.7 [51.0–66.5] 45.8 [38.1–53.5] 25.2 [18.7–32.3] 18.1 [12.3–24.5] 14.8 [9.7–20.6] MobileFace 70.3 [63.2–77.4] 66.5 [58.7–73.5] 47.7 [40.0–55.5] 34.2 [27.1–41.9] 21.9 [15.5–28.4] 16.1 [10.3–21.9] RepVGG 77.4 [70.3–83.9] 69.7 [62.6–76.8] 53.5 [45.8–61.3] 32.3 [25.2–39.4] 22.6 [16.1–29.0] 17.4 [11.6–23.9] ResNet 77.4 [71.0–83.9] 67.7 [60.0–74.8] 51.0 [43.2–58.7] 30.3 [23.2–37.4] 22.6 [16.1–29.0] 17.4 [11.6–23.9] MagFace 69.0 [61.9–76.1] 67.7 [60.0–74.8] 52.3 [44.5–60.0] 31.0 [23.9–38.1] 20.0 [14.2–26.4] 14.8 [9.7–20.6] ArcFace 71.6 [64.5–78.7] 58.7 [51.0–66.5] 44.5 [36.8–52.3] 27.7 [20.6–34.8] 20.0 [14.2–26.4] 14.2 [9.0–20.0] 
+
+Table 12: DiffPrivate CIs on VGG-Face. Robust accuracy (%) [95% bootstrap CI] under increasing ∥∆z∥.30 SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS Clean 1 1.5 2 3
+
+Attack budget 
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+ResNet LFW       
+
+> No Defense DOA StyleAT (Ours) Clean 11.5 23
+
+Attack budget 
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+ResNet VGG-Face       
+
+> No Defense DOA StyleAT (Ours) Clean 11.5 23
+
+Attack budget 
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+RepVGG LFW       
+
+> No Defense DOA StyleAT (Ours) Clean 11.5 23
+
+Attack budget 
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+RepVGG VGG-Face   
+
+> No Defense DOA StyleAT (Ours)
+
+Figure 14: Defense robustness with 95% bootstrap CIs — B OUND STYLE . Each plot shows robust accuracy (%) vs. budget β for No Defense, DOA, and S TYLE AT (ours), with shaded CI bands. Left column: LFW; right column: VGG-Face. Top row: ResNet; bottom row: RepVGG. SHAPIRA ET AL.: DEFENDING FACE RECOGNITION AGAINST SEMANTIC ATTACKS 31 1 2 3 4 5 6
+
+Perturbation norm z
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+ResNet LFW        
+
+> No Defense DOA StyleAT (Ours) 123456
+
+Perturbation norm z
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+ResNet VGG-Face        
+
+> No Defense DOA StyleAT (Ours) 123456
+
+Perturbation norm z
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+RepVGG LFW        
+
+> No Defense DOA StyleAT (Ours) 123456
+
+Perturbation norm z
+
+> 025 50 75 100
+> Robust Accuracy (%)
+
+RepVGG VGG-Face   
+
+> No Defense DOA StyleAT (Ours)
+
+Figure 15: Defense robustness with 95% bootstrap CIs — DiffPrivate. Each plot shows robust accuracy (%) vs. perturbation norm ∥∆z∥ for No Defense, DOA, and S TYLE AT (ours), with shaded CI bands. Left column: LFW; right column: VGG-Face. Top row: ResNet; bottom row: RepVGG.
