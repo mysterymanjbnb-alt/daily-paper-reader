@@ -1,0 +1,349 @@
+Title: Towards Training Private LLMs: Exploring Fine-Tuning Language Models on Apple Silicon with RDMA over Thunderbolt
+
+URL Source: https://arxiv.org/pdf/2609.18066v2
+
+Published Time: Fri, 18 Sep 2026 01:39:36 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Towards Training Private LLMs: Exploring Fine-Tuning Language Models on Apple Silicon with RDMA over Thunderbolt ∗
+
+## En-Ming Huang 1, Yao-Ting Hsieh 2, Hsiang-Yu Tsou 1, Mu-Chi Chen 1,Shih-Hao Hung 1 and H.T. Kung 3
+
+1National Taiwan University, 2Academia Sinica, 3Harvard University 
+
+## Abstract 
+
+Private large language model (LLM) fine-tuning is increasingly im-portant for organizations that need to adapt models using sensitive data, but it often exceeds the memory capacity of commodity dat-acenter accelerators. Apple Silicon offers a different design point through large unified memory and lower complete-system cost, while recent Apple software support enables distributed execution over RDMA-over-Thunderbolt (TB). This paper studies whether Apple Silicon can serve as a practical platform for private LLM fine-tuning. We characterize RDMA-over-TB communication on Mac Studio nodes, showing that the measured bandwidth is far below nominal TB specifications. Next, we extend Apple’s implementa-tion with multi-trunk communication, persistent worker threads, and CPU-side gradient overlap to better exploit multiple direct TB links for LLM fine-tuning workloads. Finally, on a four-node Mac Studio cluster that fine-tunes a Qwen3-9B, our optimizations improve weak-scaling throughput by up to 1 .6× over the single-trunk, non-overlapped baseline and reach 936 tokens/s for sequence length 17408. We further compare Apple Silicon with an NVIDIA H100 platform to quantify the trade-off between memory capacity, throughput, and acquisition cost, showing that Apple Silicon can provide a cost-effective solution for private LLM fine-tuning. 
+
+ACM Reference Format: 
+
+En-Ming Huang 1, Yao-Ting Hsieh 2, Hsiang-Yu Tsou 1, Mu-Chi Chen 1,, Shih-Hao Hung 1 and H.T. Kung 3. 2026. Towards Training Private LLMs: Ex-ploring Fine-Tuning Language Models on Apple Silicon with RDMA over Thunderbolt. In Proceedings of International Conference on Resilience, AI and Cyber-Systems (RACS ’26). ACM, New York, NY, USA, 8 pages. https: //doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Private adaptation of large language models (LLMs) is becoming increasingly important for organizations that need to incorporate proprietary knowledge without exposing sensitive data to exter-nal services [7]. Internal documents, source code repositories, and domain-specific design artifacts often contain information that can-not be sent to hosted APIs, yet these data are precisely what make task-specific fine-tuning valuable. Recent work has explored private      
+
+> ∗This paper has been accepted by RACS ’26. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> RACS ’26, Fukuoka, Japan
+> © 2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN XXX-X-XXXX-XXXX-X/2026/11 https://doi.org/XXXXXXX.XXXXXXX 124816 Batch size 16384 8192 2048 512 Sequence length
+> 0100 200 300 400 500
+> Memory (GiB)
+
+Figure 1: Theoretical minimum memory requirement for Qwen3-9B [17] fine-tuning in FP32 with SGD. 
+
+LLM deployment on Apple Silicon platforms [4], and demonstrated the effectiveness of model fine-tuning for specialized and sensitive workflows such as automated hardware design [5, 19]. Compared with pre-training, fine-tuning requires substantially fewer training tokens, but memory capacity remains a critical chal-lenge, particularly for long-context workloads. Modern reasoning and agentic applications frequently process long execution traces, tool outputs, and generated candidates whose context cannot be trivially partitioned without altering task semantics [5, 9, 18]. Dur-ing training, activations, gradients, and model parameters must be retained for backpropagation, causing memory requirements to grow rapidly with sequence length; optimizers further increase this footprint by maintaining optimizer states [10, 11, 15]. Consequently, systems with large amounts of accelerator-accessible memory are attractive platforms for private model adaptation. Apple Silicon occupies a unique position in this design space due to its large system memory and lower cost. A single M3 Ultra system provides up to 512 GiB of unified memory that is directly accessible by the integrated GPU, significantly exceeding the memory capacity of most commodity accelerator platforms (e.g., an NVIDIA H100 provides only 80 GiB of memory) [1]. At the same time, an entire M3 Ultra system costs about $10,000, compared to approximately $30,000 for a single H100 accelerator and around $300,000 for a complete 8 ×H100 DGX workstation. Fig. 1 illustrates this memory gap concretely using the theoretical minimum memory requirement for training Qwen3-9B [17] in FP32 with stochastic gradient descent (SGD), which does not require optimizer states. While a sequence length of 512 requires 65–78 GiB across the shown batch sizes, the requirement grows rapidly with context length and batch size, reaching 215 GiB at a sequence length of 16,384 with a batch size of one. This exceeds the capacity of a single H100 for longer contexts, whereas several configurations still fit within the 512 GiB unified memory of a single Mac Studio node. Concurrently, recent software advancements through the Apple-developed MLX framework [8] enable distributed training across multiple nodes and introduce JACCL , a communication backend that supports Remote Direct Memory Access (RDMA) over Thunder-bolt (TB) [3]. These developments render multi-node Apple Silicon arXiv:2609.18066v2 [cs.DC] 17 Sep 2026 RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan Huang et al. 
+
+clusters a compelling candidate for distributed fine-tuning; how-ever, the practical communication performance of TB-based RDMA for LLM training workloads remains largely uncharacterized. Unlike datacenter systems that rely on NVLink or InfiniBand, Apple Silicon nodes communicate over TB and Ethernet. Although TB provides substantial raw bandwidth, it is exposed as point-to-point links whose effectiveness depends on topology, collective implementation, and software concurrency. To understand these constraints, we conduct a systematic study of distributed LLM fine-tuning on Apple Silicon. We first characterize and optimize TB-based RDMA communication in MLX through link trunking and multi-threaded communication. We then evaluate collective communication performance and show that trunking together with CPU-side gradient overlap can substantially improve model training on Apple Silicon. Finally, we perform weak-scaling experiments using supervised fine-tuning of the Qwen3-9B model [17] on up to four M3 Ultra nodes and compare with H100. This paper makes the following contributions. 
+
+• We characterize RDMA-over-TB communication on Apple Silicon for LLM training workloads and concludes with four observations. Our microbenchmarks quantify latency, band-width, all-reduce performance, and multi-node scaling. 
+
+• We extend the JACCL backend with multi-trunk RDMA com-munication and persistent worker threads, allowing one log-ical peer transfer to use multiple TB links in parallel. We also introduce CPU-side gradient overlap for MLX train-ing. Together, these optimizations improve end-to-end weak-scaling throughput by up to 1 .6× over the single-trunk, non-overlapped JACCL baseline. 
+
+• We evaluate Qwen3-9B supervised fine-tuning on Apple Silicon from single-node and distributed perspectives. The results show that a 512 GB unified-memory node can fit long-context configurations without context parallelism [12], and that a four-node Mac Studio cluster achieves efficient weak scaling with multi-trunk communication and overlap. We further compare system-level performance, memory capac-ity, and cost against an NVIDIA H100 platform. The rest of this paper is organized as follows. Section 2 reviews the background. Section 3 presents the communication optimiza-tions. Section 4 evaluates model training performance against H100. Section 5 concludes. 
+
+## 2 Background 
+
+This section provides the background needed to understand dis-tributed fine-tuning on Apple Silicon. We first describe the unified-memory platform and RDMA-over-TB interface that make Mac Studio clusters possible, then explain how MLX and JACCL expose this interconnect to distributed applications. We next contrast com-munication patterns in LLM inference and training to motivate our focus on data-parallel fine-tuning, and finally summarize the memory states that make long-context training capacity-intensive. 
+
+## 2.1 Apple Silicon and RDMA over TB 
+
+Apple Silicon integrates CPU, GPU, and memory into a unified-memory system. This design differs from conventional GPU servers, where GPU memory is separated from host memory and high-end 
+
+Table 1: Node-level interconnection options on Apple Silicon Mac Studio systems.         
+
+> Interface Count Nominal bandwidth Pros / cons TB5 RDMA 6 ports 80 Gb/s per direction; 160 Gb/s bidirectional total
+> Pro : lower latency. Con :point-to-point links only. 10GbE 1 port 10 Gb/s Ethernet Pro : conventional Ethernet connectivity.
+> Con : lower bandwidth and higher latency
+
+interconnects such as NVLink or InfiniBand are used to connect accelerators. In our target platform, each Mac Studio provides large Low-Power Double Data Rate 5 (LPDDR5) memory capacity and six TB5 ports, but the practical node-to-node interconnect choices are limited to built-in 10 Gigabit Ethernet (10GbE) and TB5. Table 1 summarizes these interfaces and their tradeoffs; although 10GbE is available on the platform, this work focuses on RDMA over TB because it offers lower latency, while its point-to-point links motivate the trunking design studied later. Starting from macOS 26.2, Apple supports RDMA over TB on Apple Silicon Macs with TB5 [2, 3]. This exposes an InfiniBand Verbs -compatible interface for the TB controller. Developers can use the 
+
+Verbs API directly by including infiniband/verbs.h and linking against librdma.tbd from the macOS SDK [2]. Applications open an RDMA device, allocate communication resources, create queue pairs, and post send or receive work requests. Apple’s RDMA over TB interface is narrower than a full datacen-ter RDMA stack. It supports send and receive operations only, with at most 10 Unreliable Connection (UC) queue pairs and at most 4095 outstanding work requests at a time [2]. UC queue pairs lack the full reliability semantics of Reliable Connection (RC), which features data integrity checks and remote memory access. In our setup, each TB5 link is exposed as a Verbs -accessible RDMA inter-face, so the six TB ports on a Mac Studio can be used as separate communication paths between machines. 
+
+## 2.2 JACCL with MLX 
+
+Developed by Apple, MLX is an array framework similar to Py-Torch that also provides distributed communication backends for multi-node execution, including a TCP-based ring backend and 
+
+JACCL , an RDMA-over-TB backend [3]. These two backends differ fundamentally in how peers are addressed. The ring backend relies on TCP sockets, allowing any node to communicate with any other node using only network addresses and ports, making it largely topology agnostic. In contrast, RDMA over TB is inherently point-to-point: each TB5 connection appears as an independent RDMA device, and communication requires explicit knowledge of which local TB device is connected to each remote peer. 
+
+JACCL is implemented on top of InfiniBand Verbs and uses a hostfile to specify the mapping between peer pairs and their cor-responding RDMA devices. Consequently, JACCL assumes a fully connected mesh topology in which every pair of nodes is connected by a dedicated TB cable. This assumption enables communication RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan Worker Worker Worker   
+
+> Training batch Training batch Training batch Forward loss
+> Forward loss
+> Forward loss
+> Backward gradient
+> Backward gradient
+> Backward gradient
+> Gradient all-reduce Optimizer update Optimizer update Optimizer update Communication Local computation on full model replicas Replicas stay synchronized
+
+Figure 2: Data-parallel LLM training flow. Each worker keeps a full model replica and processes a different mini-batch shard. Forward and backward passes are local computations; communication is concentrated in the gradient all-reduce before all workers apply the same optimizer update. 
+
+patterns that exploit direct pairwise connectivity. For collective operations such as all-reduce, JACCL employs a broadcast-based algorithm in which each node directly exchanges data with all other nodes, eliminating the multi-hop communication stages required by ring-based implementations. 
+
+## 2.3 Communication in LLM Inference and Training 
+
+Distributed LLM inference and training exhibit fundamentally dif-ferent communication characteristics. Inference is latency-sensitive because each autoregressive decoding step must complete before the next token can be generated. To reduce token latency, inference systems commonly employ tensor parallelism, which partitions matrix operations across devices and synchronizes partial results through collective operations [13, 16]. These collectives occur at every layer, making communication both frequent and latency crit-ical. The communicated payload for a single hidden-state vector is also relatively small (e.g., 8–16 KiB in FP16 for hidden dimensions of 4096–8192 [6, 17]), limiting opportunities to amortize communi-cation latency or multi-link scheduling overhead. In contrast, LLM training is typically throughput-oriented. When memory capacity permits model replication across workers, data parallelism is attractive because communication is concentrated in gradient synchronization after backpropagation [6, 13]. As illus-trated in Fig. 2, forward and backward computations are performed locally on each worker, while communication occurs primarily in gradient all-reduce operations before synchronized optimizer up-dates. Large-scale deployments often combine data, tensor, pipeline, and context parallelism to overcome memory and scalability con-straints, but these techniques introduce additional cross-device com-munication during both forward and backward execution [6, 13, 16]. This distinction motivates our focus on fine-tuning workloads. The small, latency-critical messages generated by tensor-parallel in-ference are unlikely to benefit from software trunking over RDMA-over-TB links. In contrast, the larger and more bandwidth-intensive gradient exchanges characteristic of data-parallel training provide a more suitable workload for evaluating whether TB link trunking can improve end-to-end training performance. 
+
+Table 2: Main memory state in LLM inference and training. 
+
+State Inference Training Model weights Static weights Weights to update KV cache Context history Part of activations Activations Temporary buffers Saved (or recomputed) Gradients No Per trainable parameter Optimizer state No Momentum/variance buffers (a) Setup path   
+
+> Hostfile: rdma_en2, rdma_en3,... Open each RDMA device Create QPs QP state: Ready to serve (RTS)
+> (b) Runtime data path
+> MLX collectives
+> RDMA thread pool
+> Worker 0 → trunk 0 Worker 1 → trunk 1 Worker k-1 → trunk k-1
+> Per-trunk pileline buffers
+> Buffer 0 Buffer 1 Buffer k-1
+> IB Verbs connections
+> QP 0 post send/recv QP 1 post send/recv QP k-1 post send/recv send/recv/ all_reduce
+> work completions
+> Thunderbolt RDMA devices Peer rank
+> matching QPs and buffers
+> Exchange TCP side channel
+
+Figure 3: Multi-trunk RDMA-over-Thunderbolt communica-tion path. Persistent workers stripe each collective message across multiple TB RDMA links. 
+
+## 2.4 Memory Requirements in Model Inference and Training 
+
+LLM memory requirements are primarily driven by model size, context length, and the operations being performed. Table 2 lists the main memory state in each mode. Inference memory consists of static model weights plus dynamic working memory. The key– value (KV) cache stores context history and scales with context length and concurrent requests; for long contexts such as 128K, it can reach tens of GiB per active request depending on model size and precision. During training, the same attention tensors are not kept as a persistent generation cache; they are part of the forward activations saved or recomputed for backpropagation. Training is heavier because it must track gradients, optimizer state, and activations. In full fine-tuning, these extra tensors often make training require roughly 6 ×–8 × more memory than inference [15]. 
+
+## 3 Methodology 
+
+This section describes the communication optimizations used for distributed fine-tuning on Apple Silicon. We first introduce a multi-trunk RDMA-over-Thunderbolt design that extends the JACCL 
+
+backend to use multiple physical links between a pair of nodes. We then describe a layer-wise overlap mechanism that schedules CPU-side gradient synchronization concurrently with GPU back-propagation. Finally, we characterize latency, bandwidth, software concurrency, and multi-node scaling through microbenchmarks, including a comparison with the Ethernet-based MLX backend. 
+
+## 3.1 Multi-trunk RDMA over TB 
+
+Fig. 3 summarizes our communication path. A single TB connection exposes one RDMA device and one queue-pair stream, while each Mac Studio provides multiple independent TB ports. This creates different trunking opportunities depending on the topology. A two-node connection can dedicate up to six TB ports to the same peer, RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan Huang et al. CPU GPU Layer 
+
+all-reduce Layer ... 
+
+all-reduce all-reduce Layer 
+
+# ... 
+
+Optimizer update         
+
+> time
+> Producer (computation) thread
+> finished_layers = 0 for i from to 1:
+> <-backward( )
+> finished_layers += 1
+> Consumer (communication) thread
+> for j from 0 to :
+> while (j <=finished_layers);
+> <-all-reduce( )
+
+Figure 4: Layer-wise overlap between GPU backpropaga-tion and CPU-side gradient all-reduce. The producer thread records gradients as layers finish, while the consumer thread launches communication for ready gradients through JACCL .
+
+whereas a four-node fully connected topology leaves at most two trunks for each peer pair. We treat these parallel links as a soft-ware trunk so that one logical peer-to-peer transfer can use several physical links. To realize this benefit, the runtime must issue work requests to multiple queue pairs concurrently. During the setup phase in Fig. 3 (a), the library parses the hostfile used by JACCL and expands each peer-pair mapping into one or more RDMA interfaces. For each available TB link, it opens the cor-responding RDMA device and creates a queue pair (QP) assigned to a communication worker. We initialize these workers as persistent thread pools rather than creating threads inside every collective call to reduce thread-creation overhead. At runtime, as shown in Fig. 3 (b), each collective message is par-titioned into contiguous 4096-byte chunks, matching the maximum transmission unit (MTU) of the TB RDMA interface, and statically assigned to the workers associated with the peer pair. Each worker posts send or receive work requests to its own queue pair, so a large logical message is striped across multiple TB links. For all-reduce operations, the reduction computation runs on the CPU rather than the GPU, avoiding additional GPU scheduling latency for these communication-centric operations that are issued from the CPU. As a result, the performance of all-reduce collectives depends not only on link injection but also on CPU parallelism and mem-ory bandwidth as it helps draw more memory bandwidth through concurrency. This approach preserves the direct-connection com-munication model of JACCL while allowing each peer pair to issue more concurrent RDMA work across the available TB links. 
+
+## 3.2 Overlapping Gradient Synchronization with Backpropagation 
+
+Multi-trunk RDMA over TB reduces the time spent in gradient synchronization, but all-reduce remains on the critical path of data-parallel training as it is executed after the backward pass completes. Apple Silicon provides a useful opportunity for overlap because MLX launches forward and backward computation on the GPU, while JACCL coordination and reduction run on CPU threads. We exploit this separation by starting all-reduce for a layer as soon as its gradient becomes available, allowing communication for ear-lier layers to proceed while the GPU continues backpropagation through later layers. Fig. 4 illustrates the layer-wise schedule. A producer thread drives the backward pass and records completed gradient tensors. 1B 8B 64B 512B 4KiB 32KiB 256KiB 
+
+> 25
+> 27
+> 29
+> Latency ( μs)
+> Small Sizes (<=1MiB)
+> 1 trunk 2 trunks 4 trunks 6 trunks 2MiB 4MiB 8MiB 16MiB 32MiB 64MiB 128MiB 256MiB 512MiB 1GiB
+> 211
+> 215
+> 219
+> Large Sizes (>1MiB)
+> Data Size (bytes)
+
+Figure 5: Two-node send/recv latency across small and large message ranges. 1B 8B 64B 512B 4KiB 32KiB 256KiB 
+
+> 25
+> 27
+> 29
+> Latency ( μs)
+> Small Sizes (<=1MiB)
+> 1 trunk 2 trunks 4 trunks 6 trunks 2MiB 4MiB 8MiB 16MiB 32MiB 64MiB 128MiB 256MiB 512MiB 1GiB
+> 212
+> 217
+> Large Sizes (>1MiB)
+> Data Size (bytes)
+
+Figure 6: Two-node all-reduce latency across small and large message ranges. 
+
+A consumer thread monitors this queue and invokes the correspond-ing all-reduce operation when a tensor is ready, using busy-waiting to minimize latency. This consumer is separate from the persistent worker pool used inside the JACCL backend, so overlap adds a scheduling thread in addition to the communication workers. 
+
+## 3.3 Micro-Benchmarks 
+
+We evaluate the multi-trunk RDMA design from Section 3.1 using micro-benchmarks. Point-to-point send/recv measures the latency and raw bandwidth available to a single peer pair, while all-reduce sum captures the collective primitive used by data-parallel gradi-ent synchronization. The evaluation studies two-node latency and bandwidth across message sizes, examines the effect of software concurrency at 64 MiB, and extends the all-reduce benchmark to larger node counts. Bandwidth results report raw point-to-point bandwidth for send/recv and algorithm bandwidth for all-reduce. 
+
+3.3.1 Two-node Latency. Fig. 5 and Fig. 6 show the latency of send/recv and all-reduce sum, respectively. For small messages, all configurations remain near the software and RDMA overhead floor of roughly 10 𝜇 s. Latency increases noticeably for multi-trunk configurations at 8 KiB, the threshold at which trunking is enabled. Because RDMA devices use a 4 KiB MTU, messages of 8 KiB or larger are split into two or more packets, making them eligible for distribution across multiple trunks. At this size, the threading overhead is still too large to be amortized by the additional link bandwidth. For messages larger than 1 MiB, latency grows with the number of serialized bytes per link. Using more trunks reduces this serialized component and lowers end-to-end transfer time. 
+
+Observation 1. Multi-trunking is effective for training traffic but not inference traffic. 
+
+Multi-trunking introduces scheduling overhead that cannot be amortized by small messages. Typical tensor-parallel inference activations of 8–16 KiB are below the useful range, while large gradient exchanges from data-parallel fine-tuning can exploit the additional links. RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan 1B 32B 1KiB 32KiB 1MiB 32MiB 1GiB 
+
+> Data Size (bytes)
+> 025 50 75 100
+> Bandwidth (Gbps)  1 trunk 2 trunks 4 trunks 6 trunks
+
+Figure 7: Two-node send/recv bandwidth across message sizes from 1B to 1GiB. 1B 32B 1KiB 32KiB 1MiB 32MiB 1GiB 
+
+> Data Size (bytes)
+> 020 40
+> Bandwidth (Gbps)  1 trunk 2 trunks 4 trunks 6 trunks
+
+Figure 8: Two-node all-reduce algorithm bandwidth across message sizes from 1B to 1GiB. 1 2 4 6123   
+
+> Relative Performance
+> Send/Recv
+> st: single thread mt: multi threads pool: thread pool
+> 1246
+> AllReduce Sum
+> # of Trunks
+
+Figure 9: Software concurrency for 64 MiB two-node commu-nication, normalized to single-thread performance. 
+
+3.3.2 Two-node Bandwidth. Fig. 7 and Fig. 8 report the bandwidth corresponding to the send/recv and all-reduce sum latency mea-surements in Section 3.3.1, respectively. For large messages around 128 MiB, trunking reaches roughly 100 Gbps of raw point-to-point bandwidth with six trunks, compared with about 20 Gbps on one trunk. All-reduce reaches roughly 50 Gbps of algorithm bandwidth, delivering about a 5 × speedup. 
+
+Observation 2. Apple’s hardware and kernel RDMA path exposes only a fraction of the nominal TB5 bandwidth. 
+
+A TB5 port is specified for 80 Gbps per direction, but our RDMA path achieves only about 20 Gbps per link. Even with six links, the optimized flow reaches only about 100 Gbps, far below the ideal aggregate bandwidth. 
+
+3.3.3 Software Concurrency & Multi-node Scaling. We next exam-ine why the communication runtime needs CPU multithreading and persistent thread pools, as described in Section 3.1. Multi-trunk RDMA creates multiple queue pairs per peer pair, but a single CPU thread cannot issue work to all of them fast enough to fully utilize the available links. In addition, all-reduce performs the reduction 
+
+Table 3: All-reduce algorithm bandwidth at 64 MiB across node counts. Values are in Gbps.                                    
+
+> Nodes Mode 1 trunk 2 trunks 3 trunks 6 trunks 2st 10.7 12.5 13.8 15.6 2pool 11.0 19.0 29.1 53.6
+> 3st 6.1 9.7 8.8 –3pool 5.8 13.3 21.8 –4st 5.6 5.9 ––4pool 5.8 11.6 ––
+
+calculation on the CPU, so collective performance also depends on CPU parallelism and memory bandwidth. Fig. 9 isolates this effect using 64 MiB messages. We compare three implementations. The st configuration is single-threaded and uses one communication worker. The mt configuration creates multiple worker threads for each communication call. The pool con-figuration uses persistent worker threads initialized during setup, which is the configuration employed in Section 3.1. Normalizing each configuration to the st baseline at the same trunk count shows that additional physical links alone are insuf-ficient. A single worker cannot keep multiple queue pairs busy, while multi-threading improves link utilization, and a persistent thread pool provides the same parallelism without paying thread creation costs at every collective. With six trunks, both send/recv and all-reduce improve by more than 3 × relative to the st imple-mentation. This result is consistent with the CPU-side reduction design because thread pools expose more CPU parallelism and draw higher memory bandwidth from multiple cores while also driving multiple RDMA queue pairs. 
+
+Observation 3. RDMA-over-TB performance is highly de-pendent on CPU parallelism. 
+
+Fig. 9 shows that CPU multithreading substantially improves both send/recv and all-reduce performance. With six trunks, the multithreaded implementations outperform the single-threaded implementation by more than 3 × because additional CPU work-ers drive multiple queue pairs concurrently and expose more memory bandwidth. Finally, Table 3 extends the 64 MiB all-reduce benchmark to larger node counts. The pool implementation continues to benefit from additional trunks per peer pair, whereas st communication scales only modestly even when more physical links are available. Because each Mac Studio has only six TB ports, the maximum num-ber of trunks per peer pair is three in the three-node configuration and two in the four-node configuration. For the st configuration, the speedup from using two trunks instead of one decreases from 1 .16 × to 1 .05 × as the node count increases from two to four. In contrast, pool maintains a simi-lar speedup of around 2 ×. This result shows that all-reduce per-formance depends heavily on both communication and compute throughput, so both trunking and threading are beneficial. 
+
+## 3.4 Comparison with 10 Gigabit Ethernet 
+
+We also evaluate the Ethernet-based MLX communication backend as a reference point. We use the built-in 10GbE port on the Mac RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan Huang et al. 
+
+Table 4: Communication comparison between 10GbE, origi-nal JACCL , and our optimized JACCL .
+
+Metric Nodes 10GbE JACCL Our JACCL 
+
+Send/recv latency ( 𝜇 s) 2 210.9 21.3 21.3 
+
+All-reduce bandwidth (Gbps) 2 8.2 10.7 53.6 
+
+All-reduce bandwidth (Gbps) 3 6.2 6.1 21.8 
+
+All-reduce bandwidth (Gbps) 4 5.5 5.6 11.6 
+
+Studio and compare it with the original JACCL backend and our optimized JACCL backend with multi-trunk communication. Ta-ble 4 reports small-message point-to-point latency and all-reduce algorithm bandwidth at 64 MiB. In terms of latency, RDMA-over-TB provides about 10 × lower latency than the Ethernet path. Small-message latency is dominated by software and transport overhead, so multi-trunking does not improve this regime. For all-reduce bandwidth, the original JACCL 
+
+is limited by a single trunk and scales similarly to 10GbE at larger node counts. Our optimized JACCL uses the maximum available trunk count for each topology, reaching 53.6 Gbps on two nodes, 21.8 Gbps on three nodes, and 11.6 Gbps on four nodes. This analysis shows that although the original JACCL backend released by Apple can provide significantly lower latency for small messages, the bandwidth it can draw still performs similarly to the Ethernet alternative. Our multi-trunking and thread-pool imple-mentation achieves higher bandwidth, which can directly benefit LLM training workflows. 
+
+## 4 Fine-Tuning Performance 
+
+This section evaluates Apple Silicon as a practical platform for private LLM fine-tuning. We study Qwen3-9B fine-tuning from three perspectives. First, we measure the single-node memory and throughput limits to identify which long-context workloads fit within unified memory without context parallelism. Second, we evaluate weak scaling on a four-node Mac Studio cluster and quan-tify how multi-trunk RDMA-over-TB communication and CPU-side gradient overlap improve aggregate throughput. Finally, we com-pare the resulting system-level performance and cost tradeoffs with an NVIDIA H100 platform. 
+
+## 4.1 Experimental Setup 
+
+Our Apple Silicon experiments are conducted on a four-node Mac Studio cluster. Each node is equipped with an M3 Ultra SoC that fea-tures 32 CPU cores, 80 GPU cores, and 512 GB of unified memory [1]. Nodes are connected using RDMA over Thunderbolt, as described in Section 3.1, and use our optimized multi-trunk JACCL backend for collective communication. For comparison, we also evaluate an NVIDIA H100 SXM system with 80 GiB of HBM memory and NVLink connectivity [14]. Table 5 summarizes the cost and hardware capability tradeoff between the Apple Silicon node used in our cluster and H100-based configurations. The Apple Silicon node has lower theoretical FP32 throughput and memory bandwidth than an H100 accelerator, but it provides substantially larger memory capacity per complete node at a lower acquisition cost. 
+
+Table 5: Platform cost and hardware capability comparison. Costs are approximate acquisition costs in US$. 
+
+Metric Apple node H100 card 8×H100 DGX Cost $10,000 $30,000 $300,000 System scope Complete node Single card Complete node Theoretical FP32 28.3 TFLOP/s 67.3 TFLOP/s 538.4 TFLOP/s Memory bandwidth 820 GB/s 3350 GB/s 2680 GB/s Memory size 512 GB 80 GB 640 GB 1 2 4 8 16 32                              
+
+> Batch size
+> 17408 16384 8192 2048 512
+> Sequence length  --------------------------------
+> Peak Memory
+> 124816 32
+> Batch size
+> --------------------------------
+> Throughput
+> 0100 200 300 400 500
+> Memory (GB)
+> 260 280 300 320 340 360
+> Tokens/s
+
+Figure 10: Single-node memory footprint and training throughput for Qwen3-9B supervised fine-tuning across se-quence lengths and batch sizes. 
+
+We benchmark supervised fine-tuning of Qwen3-9B [17] using the SGD optimizer. The benchmark follows the structure of the Hugging Face model implementation and is ported to Apple Silicon using MLX and our customized JACCL collective backend. We use mini-batch data-parallel training, where each node computes gradients on a local mini-batch before synchronizing gradients with all-reduce. The scalability experiments are conducted through weak scaling, keeping the local mini-batch size fixed on each node while increasing the global mini-batch size with the number of nodes. This setting reflects common fine-tuning workflows that process many mini-batches and provides a direct measure of end-to-end system throughput [6, 16]. We evaluate two optimizations introduced in Section 3.1. Multi-trunk communication uses multiple RDMA-over-TB links for each peer pair when the topology provides more than one direct path. CPU-side gradient overlap starts all-reduce operations during back-propagation, allowing communication to be hidden behind remain-ing GPU computation when sufficient backward work remains. 
+
+## 4.2 Single-Node Limits 
+
+Fig. 10 shows heatmaps of single-node memory use and training throughput across sequence lengths and batch sizes. The unified-memory capacity allows Qwen3-9B fine-tuning at substantially larger sequence lengths than an 80 GB accelerator can support. The largest evaluated sequence length, 17408, fits within a single Apple Silicon node without employing context parallelism. These results show that the maximum evaluated context length can be served on one node, while memory capacity determines which batch-size configurations remain feasible. At a fixed sequence length, larger batch sizes generally provide higher throughput because they increase arithmetic intensity and amortize optimizer-update overhead over more tokens. Throughput should still be interpreted within each sequence-length setting. The RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan 
+
+Table 6: Weak-scaling throughput on the Mac Studio cluster for sequence length 17408 and local batch size 1. Each entry reports tokens/s followed by wall time in seconds. 
+
+Nodes Mode 1 trunk 2 trunks 3 trunks 6 trunks 1 – 264 / 66 – – –2 w/o overlap 348 / 100 431 / 81 452 / 77 490 / 71 w/ overlap 472 / 74 484 / 72 488 / 71 492 / 71 
+
+3 w/o overlap 479 / 109 592 / 88 654 / 80 –w/ overlap 684 / 76 713 / 73 717 / 73 –4 w/o overlap 571 / 122 736 / 95 – –w/ overlap 776 / 90 936 / 74 – –1 2 3 4
+
+# of Nodes 
+
+> 0500 1000
+> Tokens/s
+> 1 trunk 2 trunks 3 trunks 6 trunks Ideal
+
+Figure 11: Weak-scaling throughput on the Mac Studio clus-ter for sequence length 17408 and local batch size 1 across different trunk counts. 0 20 40 60 80 100 120                      
+
+> Time (s)
+> w/o overlap w/o overlap w/ overlap w/o overlap w/ overlap w/o overlap w/ overlap
+> 17 48 66
+> 17 48 11 14 100
+> 17 52 71
+> 17 48 19 817 108
+> 17 54 73
+> 17 48 31 26 122
+> 17 56 74
+> 1-node 2-node 3-node 4-node
+> Computation
+> Forward Backward Backward + overlapped comm. Optimizer
+> Communication
+> 1 trunk 3 trunks 2 trunks 6 trunks
+
+Figure 12: Iteration-time breakdown for weak-scaling runs with and without CPU-side gradient communication overlap. Non-overlapped bars report exposed communication time by trunk count, while overlapped bars use the maximum available trunk count. 
+
+computational complexity of the attention block scales quadrati-cally with context length, so longer contexts perform more work per token and naturally achieve lower tokens/s. 
+
+## 4.3 Cluster Weak Scaling 
+
+Weak scaling is the most suitable evaluation mode for LLM train-ing because the training set is much larger than the local batch processed by each node. Practical fine-tuning workloads contain thousands or more training samples, so adding nodes usually in-creases the number of samples processed per iteration rather than splitting a fixed small batch across more devices. As a result, we 1 2 3 4
+
+# of Nodes 
+
+> 01000 2000 3000 4000
+> Tokens/s
+> H100, bs=1 Mac, w/o overlap, bs=12 Mac, w/ overlap, bs=12
+
+Figure 13: Weak-scaling throughput comparison between H100 and Mac Studio systems at sequence length 2048. The H100 run uses local batch size 1, while the Mac Studio run uses local batch size 12. 
+
+keep the local batch size fixed on each node and evaluate the ag-gregate throughput achieved by the whole system. Table 6 reports the weak-scaling sweep with sequence length 17408 and local batch size 1. The w/o-overlap rows provide two baselines. The 1 trunk entries show performance without multi-trunking, while the trunk counts above 1 show the benefit of multi-trunking without communication overlap. Increasing the trunk count improves end-to-end throughput whenever additional direct links are available. The w/ overlap rows then add CPU-side gradi-ent communication overlap on top of multi-trunk communication. With the maximum available trunk count for each topology, the optimized two-node, three-node, and four-node runs retain 93%, 90%, and 89% of the single-node efficiency, respectively, computed as one-node time divided by multi-node time. Fig. 11 plots the corre-sponding aggregate throughput trend, using the one-node result as the shared no-communication baseline. The best four-node result reaches 936 tokens/s, which is 3.5 × the one-node throughput. Fig. 12 further breaks down iteration time with and without communication overlap. For non-overlapped runs, it separates com-munication time by trunk count to show how exposed synchroniza-tion cost is distributed across links. Communication grows with the number of nodes and becomes a major part of iteration time without overlap. Multi-trunking reduces this exposed cost, while overlap hides more CPU-side gradient communication behind the GPU-heavy backward pass. In the four-node case, overlap reduces iteration time from 122 s to 74 s, giving a 1.6 × speedup. 
+
+Observation 4. Apple Silicon’s CPU–GPU execution sepa-ration enables communication overlap. 
+
+RDMA work submission and all-reduce reduction execute on CPU threads, while forward and backward computation exe-cutes on the GPU. This separation allows gradient synchroniza-tion to overlap with backpropagation, hiding communication that multi-trunking alone cannot eliminate. 
+
+## 4.4 Platform Comparison 
+
+To evaluate whether Apple Silicon is competitive with an NVIDIA counterpart, we use sequence length 2048, which fits within the NVIDIA H100’s 80 GB memory. We run the same workload on both RACS ’26, Nov. 17–20, 2026, Fukuoka, Japan Huang et al. 
+
+platforms and choose the local batch size that fits each system’s memory capacity. The resulting throughput is shown in Fig. 13. The H100 delivers higher raw throughput, reaching 1045 tokens/s on one node and 3830 tokens/s on four nodes with local batch size 1, while the Mac Studio cluster reaches 1210 tokens/s on four nodes with overlapped communication and local batch size 12. This result shows that four Mac Studio nodes can exceed the throughput of one H100 accelerator on this workload. Table 5 lists the approximate acquisition cost of a complete Apple Silicon node at $10,000 and a single H100 accelerator at $30,000. Although four Mac Studio nodes cost more than a single H100 card, Apple Silicon provides two practical advantages in our setting. First, the H100 has much smaller memory capacity, which limits the maximum sequence length and batch configurations that can be trained without additional parallelism. Second, a common H100 system such as an 8 ×H100 DGX costs around $300,000 and provides 640 GB of aggregate HBM memory, while four Apple Silicon nodes provide up to 2 TB of aggregate unified memory. Memory capacity determines which workloads can execute, while computational throughput determines how quickly a feasible workload finishes. For small organizations that cannot maintain server-grade GPU systems, Apple Silicon offers a lower-cost path to fine-tuning with greater capacity for long training samples. 
+
+## 5 Conclusion 
+
+This paper studied Apple Silicon as a platform for private LLM fine-tuning, where memory capacity determines feasibility and communication efficiency determines multi-node scalability. We extended JACCL with multi-trunk communication and persistent workers, and combined these mechanisms with CPU-side gradient overlap for MLX training. Our evaluation highlights four properties of RDMA-over-TB. First, multi-trunking improves throughput for large data-parallel gradient exchanges but offers little advantage for the 8–16 KiB per-token activation transfers typical of distributed inference. Second, Apple’s hardware and kernel path exposes only a fraction of nomi-nal TB5 bandwidth, delivering about 20 Gbps per link and 100 Gbps across six links. Third, communication performance also depends strongly on CPU parallelism, with six-trunk multithreading ex-ceeding single-threaded performance by more than 3 ×. Finally, CPU-side communication can overlap with GPU computation. At four nodes with two trunks, overlap reduces iteration time from 95 s to 74 s and increases throughput from 736 to 936 tokens/s. Apple Silicon’s unified memory also supports LLM fine-tuning with longer samples than a single H100 can accommodate without context parallelism. On four Mac Studios, multi-trunk communica-tion and overlap improve weak-scaling throughput by up to 1 .6×
+
+over the single-trunk, non-overlapped baseline. Although H100 of-fers higher raw throughput, Apple Silicon provides greater memory capacity per complete node at lower acquisition cost, making it a practical platform for private, memory-constrained fine-tuning. 
+
+## Acknowledgments 
+
+We acknowledge financial support from Academia Sinica’s Sili-conMind Project (AS-IAIA-114-M11) and the National Science and Technology Council (NSTC) of Taiwan under grant no. 115-2221-E-002-149-MY3. Additional support came from the Center of Data Intelligence: Technologies, Applications, and Systems, National Tai-wan University, under the Featured Areas Research Center Program within the framework of the Higher Education Sprout Project by the Ministry of Education of Taiwan (grant no. NTU-115L900903). We also thank the National Center for High-performance Computing and Taipei-1 for providing computational resources. 
+
+## References 
+
+[1] Apple Inc. 2026. Mac Studio – Technical Specifications. https://www.apple.com/ mac-studio/specs/. Accessed: 2026-05-18. [2] Apple Inc. 2026. TN3205: Low-Latency Communication with RDMA over Thunderbolt. https://developer.apple.com/documentation/technotes/tn3205-low-latency-communication-with-rdma-over-thunderbolt. Accessed: 2026-05-24. [3] Apple Machine Learning Research. 2026. Distributed Communication – MLX Documentation. https://ml-explore.github.io/mlx/build/html/usage/distributed. html. Accessed: 2026-05-18. [4] Mu Chi Chen, Po Hsuan Huang, Xiangrui Ke, Chia Heng Tu, Jason Xue, and Shih Hao Hung. 2025. Towards Building Private LLMs: Exploring Multi-Node Expert Parallelism on Apple Silicon for Mixture-of-Experts Large Language Model. In Proc. Int. Conf. on Research in Adaptive and Convergent Systems (RACS) .57–64. doi:10.1145/3649601.3698722 [5] Mu-Chi Chen, Yu-Hung Kao, Po-Hsuan Huang, Shao-Chun Ho, Hsiang-Yu Tsou, et al. 2026. SiliconMind-V1: Multi-Agent Distillation and Debug-Reasoning Workflows for Verilog Code Generation. In Proc. IEEE Int. Computers, Software, and Applications Conf. (COMPSAC) .[6] Weiwei Chu, Xinfeng Xie, Jiecao Yu, Jie Wang, Amar Phanishayee, et al. 2025. Scaling Llama 3 Training with Efficient Parallelism Strategies. In Proc. Int. Symp. on Computer Architecture (ISCA) . 1703–1716. doi:10.1145/3695053.3731410 [7] Vincent Hanke, Tom Blanchard, Franziska Boenisch, Iyiola E. Olatunji, Michael Backes, and Adam Dziedzic. 2024. Open LLMs are necessary for current private adaptations and outperform their closed alternatives. In Proc. Advances in Neural Information Processing Systems (NIPS) .[8] Awni Hannun, Jagrit Digani, Angelos Katharopoulos, and Ronan Collobert. 2023. MLX: Efficient and Flexible Machine Learning on Apple Silicon. https://github. com/ml-explore/mlx. Accessed: 2026-05-18. [9] Wei-Po Hsin, Ren-Hao Deng, Yao-Ting Hsieh, En-Ming Huang, and Shih-Hao Hung. 2026. EvolVE: Evolutionary Search for LLM-based Verilog Generation and Optimization. arXiv preprint arXiv:2601.18067. [10] Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic opti-mization. In Proc. Int. Conf. on Learning Representations (ICLR) .[11] Vijay Anand Korthikanti, Jared Casper, Sangkug Lym, Lawrence McAfee, Michael Andersch, Mohammad Shoeybi, and Bryan Catanzaro. 2023. Reducing activation recomputation in large transformer models. In Proc. of Machine Learning and Systems (MLSys) , Vol. 5. 341–353. [12] Shenggui Li, Fuzhao Xue, Chaitanya Baranwal, Yongbin Li, and Yang You. 2023. Sequence Parallelism: Long Sequence Training from System Perspective. In Proc. Annual Meeting of the Association for Computational Linguistics (ACL) . 2391–2404. doi:10.18653/v1/2023.acl-long.134 [13] Deepak Narayanan, Mohammad Shoeybi, Jared Casper, Patrick LeGresley, Mostofa Patwary, et al. 2021. Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM. In Proc. Int. Conf. on High Performance Computing, Networking, Storage and Analysis (SC) . doi:10.1145/3458817.3476209 [14] NVIDIA Corporation. 2026. Introduction to NVIDIA DGX H100/H200 Sys-tems. https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100. html. Accessed: 2026-05-18. [15] Samyam Rajbhandari, Jeff Rasley, Olatunji Ruwase, and Yuxiong He. 2020. ZeRO: Memory Optimizations Toward Training Trillion Parameter Models. In Proc. Int. Conf. on High Performance Computing, Networking, Storage and Analysis (SC) .1–16. doi:10.1109/SC41405.2020.00024 [16] Mohammad Shoeybi, Mostofa Patwary, Raul Puri, Patrick LeGresley, Jared Casper, and Bryan Catanzaro. 2019. Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism. arXiv preprint arXiv:1909.08053. [17] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, et al. 2025. Qwen3 Technical Report. arXiv preprint arXiv:2505.09388. [18] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In Proc. Int. Conf. on Learning Representations (ICLR) .[19] Yaoyu Zhu, Di Huang, Hanqi Lyu, Xiaoyun Zhang, Chongxiao Li, et al. 2025. QiMeng-CodeV-R1: Reasoning-Enhanced Verilog Generation. In Proc. Advances in Neural Information Processing Systems (NIPS) . doi:10.48550/arXiv.2505.24183

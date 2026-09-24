@@ -1,0 +1,493 @@
+Title: UBA-ORL: Unlearning-Activated Backdoor Attacks on Offline Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2609.22711v1
+
+Published Time: Tue, 22 Sep 2026 00:32:42 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# UBA-ORL: Unlearning-Activated Backdoor Attacks on Offline Reinforcement Learning 
+
+Fengyi Wang 1, Cong Li 2, Lulu Xue 1,* , Qiyu Leng 1, Ziqi Zhou 1, Peijin Guo 1
+
+> 1
+
+Huazhong University of Science and Technology 
+
+Wuhan, China 
+
+{fengyiwang, lluxue, m202577084, zhouziqi, gpj }@hust.edu.cn 
+
+> 2
+
+Development and Education Center of the Cyberspace Administration of China 
+
+Beijing, China licong77940@qq.com 
+
+Abstract —Offline reinforcement learning (offline RL) enables policy learning from pre-collected static datasets without online exploration, and is increasingly deployed not only in safety-critical domains such as autonomous driving and robotic control but also in data-mining applications such as recommendation and behavior analysis. While compliance-driven data removal enhances privacy, it also opens a previously unrecognized at-tack surface. We introduce UBA-ORL (Unlearning-activated Backdoor Attack on Offline Reinforcement Learning), the first unlearning-activated backdoor attack for offline RL: in the evaluated settings, the attack is substantially suppressed after normal training and becomes pronounced after a compliance-driven deletion (unlearning) request. UBA-ORL employs a dual-sample mechanism: alongside backdoor trajectories (BD) that link a trigger to malicious actions under inflated rewards, the attacker injects camouflage trajectories (CM) sharing the same trigger pattern but preserving benign actions with equally high rewards. During training, BD and CM provide competing supervisory signals; upon a legitimate deletion request on the CM subset, the residual BD signal can re-dominate, reactivating the backdoor on demand. Empirical results show that UBA-ORL achieves controllable activation under the evaluated offline-RL configurations, while no-trigger return changes vary by configuration, exposing a previously overlooked security risk in compliance-driven offline RL platforms. We urge the community to develop joint pre-/post-unlearning auditing mechanisms for compliant unlearning services. 
+
+Index Terms —Offline reinforcement learning, machine un-learning, backdoor attack, data mining, GDPR, data privacy 
+
+I. I NTRODUCTION 
+
+Offline reinforcement learning (offline RL) learns policies from pre-collected static datasets without online exploration, mitigating the risks inherent in real-world interaction; be-cause it fundamentally mines decision rules from historical interaction trajectories, offline RL is not only deployed at scale in safety-critical settings such as autonomous driving, medical decision-making, and robotic manipulation [1], but 
+
+> *
+
+Corresponding author: Lulu Xue (lluxue@hust.edu.cn). Code and evalua-tion scripts are available at https://github.com/Cormac315/UBA-ORL. 
+
+> © 2026 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including reprint-ing/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or reuse of any copyrighted component of this work in other works.
+
+is increasingly also used in data-mining systems, including recommender platforms trained on multi-party logged user trajectories and mobility-analytics tasks [2]. These systems commonly rely on multi-party contributed data, and privacy regulations can create conditional requests to withdraw or erase contributed records [3], [4]. We study a service that exposes a trajectory-level unlearning interface such as Tra-jDeleter [5]; this interface assumption is part of our threat model, rather than a claim that every regulation mandates unrestricted model updates. However, compliance-driven data deletion does not merely improve security; it can also introduce new attack risks. Unlearning-activated backdoors first appear in image classi-fication: Camouflaged Poisoning [6] proposes the “conceal during training, activate upon unlearning” paradigm, in which carefully designed backdoor samples stay virtually inactive after standard training and resurface only after a compliance-driven unlearning operation; UBA-Inf [7] further raises the post-unlearning activation rate and extends the paradigm to arbitrary unlearning algorithms. This paradigm, however, does not carry over to offline RL. First, image-classification cam-ouflage relies on a supervised cross-entropy loss with fixed, flippable labels, whereas offline RL is trained on the Bellman residual [1] with no fixed label to flip, so shaping camouflage directly along the loss gradient has no target. Second, every Bellman target depends on a continuously updated target net-work, so the regression target of a given transition drifts across iterations, making it hard to pre-design a stable camouflage for any single sample. The security risks of compliance-driven unlearning interfaces in offline RL therefore remain unstudied. To address this gap, we propose UBA-ORL (Unlearning-activated Backdoor Attack on Offline Reinforcement 
+
+Learning), the first unlearning-activated backdoor attack targeting offline RL. Its core design is a dual-sample 
+
+mechanism. Specifically, building upon state-of-the-art offline RL backdoor attacks, we first construct backdoor samples (BD) containing a trigger, erroneous actions from a weak agent, and inflated rewards. On top of these, we introduce a set of camouflage samples (CM) that share the same trigger pattern but preserve the original benign actions with equally arXiv:2609.22711v1 [cs.CR] 19 Sep 2026 Fig. 1. Overview of UBA-ORL. (Left) Camouflage Generation & Trigger Injection: the adversary submits to the service provider (SP), as a routine data addition ( U pd add ), BD and CM episode batches sharing one trigger pattern. BD carries malicious actions and CM preserves benign actions with equally high reward, providing competing supervisory signals during training.  
+
+> (Right) Backdoor Activation: the adversary later issues a permitted deletion request ( U pd del ) for the identified CM batch; the residual BD signal can then re-dominate and the trigger can activate at deployment.
+
+high rewards, providing competing supervisory signals. During standard training, this pair of sample types can suppress the trigger response in the evaluated configurations. When the adversary exercises a permitted deletion request for CM, the residual BD signal in the retain set can re-dominate, and the trigger can cause policy failures at deployment. The experiments treat the unlearning implementation as a black box, but use per-combination victim configurations; algorithm-agnostic transfer is therefore not claimed. 
+
+Contributions. (1) We are the first to reveal that the “conceal-then-activate” unlearning-activated backdoor paradigm—previously demonstrated only in image classification—also arises in offline RL: we show that compliance-driven trajectory unlearning interfaces, unique to this setting, can be adversarially repurposed as a latent backdoor activation mechanism. (2) We propose the UBA-ORL method, designing a BD/CM dual-sample mechanism whose competing signals suppress the trigger response during training, while a compliance deletion request can release the BD signal. (3) We evaluate UBA-ORL under the reported offline-RL configurations, exposing how acompliance unlearning interface can be weaponized—a previously overlooked security risk. II. R ELATED WORK 
+
+A. Backdoor Attacks 
+
+Backdoor threats extend beyond image classification. In image retrieval, BadHash [8] generates invisible, input-specific triggers under a clean-label setting, while DarkHash [9] im-plants backdoors without access to the original training data by fine-tuning selected layers of a hashing model on surrogate data. Detector Collapse [10] targets object detection, inducing widespread false detections or suppressing detections through its Sponge and Blinding attacks. These task-specific attack effects motivate studying backdoors in sequential decision-making, where malicious behavior is assessed through policy returns rather than retrieval rankings or detection outputs. In online RL, TrojDRL [11], BadRL [12], TrojanTO [13], Adversarial Inception [14], TooBadRL [15], Daze [16], and UNIDOOR [17] explore reward poisoning, sparse trig-gers, Decision-Transformer targets, observation-prior triggers, Shapley-guided dimension selection, simulator-level reward-free attacks, and universal action-level frameworks, respec-tively. In the offline setting, BAFFLE [18] is the first to expose dataset-level backdoors, proposing a trigger + mali-cious action + inflated reward triplet under an agent-agnostic threat model: the trigger is overlaid on a subset of observation dimensions, the actions at triggered states are replaced with malicious actions from a weak agent, and the rewards of the corresponding transitions are inflated to a high quantile of the dataset, leading the offline RL algorithm to bind the trigger pattern to high-return actions. Its findings underpin our trigger design and BD sample format. 
+
+B. Machine Unlearning 
+
+Machine unlearning algorithms fall into two families: exact 
+
+and approximate . Exact unlearning makes the unlearned model distributionally identical to one retrained without the deleted data, with retraining from scratch under the original configura-tion serving as the gold standard. Approximate unlearning, by contrast, seeks a lightweight procedure whose output behaves close to such a retrained model. In reinforcement learning, Re-inforcement Unlearning [19] proposes an approximate method for forgetting environments but applies only to online RL; more recently, TrajDeleter [5] introduces approximate unlearn-ing for offline RL, focusing on trajectory-level forgetting. This paper concerns trajectory-level forgetting in the offline setting. Unlearnable data offers a distinct, proactive approach to data protection. Wang et al. [20] use class-wise transformations to impede unauthorized learning from 3D point clouds, together with inverse transformations that restore the data for autho-rized training. This differs from machine unlearning, which removes the influence of data from an already trained model. Our work studies the security risks of the latter operation on trajectory data. 
+
+C. Unlearning-Activated Backdoors 
+
+An unlearning-activated backdoor is a data-poisoning at-tack whose malicious effect stays dormant after standard training and surfaces only once the victim later honors a data-deletion (unlearning) request, so that a routine compliance operation, rather than the attacker’s direct access, switches the backdoor on. This paradigm originates in image classifica-tion: Camouflaged Poisoning [6] first proposes the “suppress during training, activate upon unlearning” scheme, though its camouflage construction relies on retrain-only assumptions. UBA-Inf [7] extends this paradigm to arbitrary unlearning algorithms, employing LiSSA-estimated Hessians and PGD-based pixel-space optimization of camouflage to boost ASR by 4×. BadFU [21], Revocable Backdoor [22], ReVeil [23], Rem-iniscence Attack [24], and the concurrent Clean Unlearning Attack [25] explore federated unlearning, bilevel revocation, Gaussian-noise camouflage, residual privacy risk, and forget-set trigger sharing in image classification; a recent survey systematizes this surface [26]. These methods do not carry over to offline RL, because the two learning paradigms differ fundamentally: they rely on white-box influence functions or a supervised cross-entropy loss with fixed, flippable labels, whereas offline RL learns from temporally correlated trajecto-ries through bootstrapped value targets with no fixed label to flip, leaving per-sample input-perturbation camouflage without a direct counterpart. III. T HREAT MODEL 
+
+We adopt the adversary identity from BAFFLE [18] and augment it with compliance-unlearning capabilities. Identity. 
+
+The adversary is a legitimate data contributor who can sub-mit trajectories to the victim training set D, corresponding to crowdsourced open datasets, multi-institutional federated collaborations, and other offline RL data pipelines. We assume that the provider records contributor- or batch-level trajectory identifiers, so the BD and CM uploads can be distinguished even when they originate from the same contributor. 
+
+Adversary capabilities and knowledge. The adversary holds a small set of clean trajectories from publicly available data as a local auxiliary set Datk and trains a weak agent on it; at deployment it can inject a predefined trigger into victim observations. The adversary is assumed to have a valid, auditable request path for deleting a selected CM batch, rather than an unrestricted right to delete arbitrary provider data. The provider exposes trajectory-level deletion and retains the BD batch. If the provider only supports contributor-wide deletion or cannot verify batch provenance, this attack interface is unavailable. Apart from the information needed to construct its own uploads, the adversary has no access to the victim’s training algorithm, hyperparameters, model parameters, gra-dients, or the specific unlearning algorithm employed by the provider. 
+
+Attack goal. The adversary seeks a backdoor whose trigger-induced drop is small under the chosen pre-unlearning audit (the L10 protocol in our experiments), yet becomes larger after a valid CM deletion request. Given a provider-selected audit tolerance τaudit , we call a configuration concealed only when 
+
+PD before ≤ τaudit ; we do not prescribe a universal numer-ical tolerance because acceptable degradation is application-dependent. This operational notion of concealment does not guarantee unchanged no-trigger return or invisibility to every audit. We therefore report the raw Before PD and treat the 26.0% Hopper/IQL case as a concealment failure whenever 
+
+τaudit < 26 .0% , rather than labeling every configuration concealed. We formalize the goal as three design objectives— learnability, concealability, and reactivability—in §V. IV. P RELIMINARIES 
+
+Offline RL. We model the task as a Markov decision process (MDP) [27] M = ( S, A, P, r, γ, ρ 0) with continuous state/action spaces, transition kernel P (· | s, a ), reward r, dis-count γ ∈ [0 , 1) , and initial distribution ρ0. A policy π : S → 
+
+∆( A) has discounted return J(π) = Eζ∼π [P 
+
+> t≥0
+
+γtrt], action-value Qπ that is the fixed point of the Bellman evaluation operator 
+
+(T π Q)( s, a ) = r(s, a ) + γ Es′∼P, a ′∼π
+
+Q(s′, a ′), (1) and discounted state–action occupancy dπ (s, a ) =(1 −γ) P 
+
+> t
+
+γt Pr π (st=s, a t=a). Offline RL learns πθ
+
+from a fixed dataset D = {ζ(i)}Ni=1 rolled out by an unknown behavior policy πβ , without environment interaction. The central difficulty is distributional shift : when πθ drifts from πβ ,Bellman targets are evaluated on out-of-distribution (OOD) successors whose density under dπθ exceeds the empirical support of bd β , and bootstrap targets diverge [28], [29]. Standard suboptimality bounds scale with DTV (dπθ ∥dπβ )
+
+weighted by an occupancy-coverage coefficient [1]. We treat the victim algorithm as a black box drawn from the offline RL ecosystem. 
+
+Trajectory-level unlearning. Following the standard for-mulation [30], an unlearning algorithm is an operator U :Π×2D → Π, where Π is the policy space and 2D the powerset of D. Given a forget set Df ⊆ D , U (π, Df ) = πunl returns an unlearned policy πunl that approximates retraining from scratch on the retain set Dr = D \ D f . RL data are parti-tioned into temporally correlated trajectories rather than i.i.d. samples. Deleting individual transitions would fracture the Markov chain and conflict with privacy regulations that treat each episode as the atomic unit of withdrawal. We therefore adopt trajectory-level forget sets [5]: Df is specified by a set of trajectory identifiers, and U falls into either exact (retrain on 
+
+Dr ) or approximate (in-place edits via influence functions [31], gradient-based fine-tuning [32], [33], or TrajDeleter’s two-stage forget-and-converge [5]) families. 
+
+Backdoor attacks and the performance-drop metric. 
+
+A backdoor in offline RL is induced by a deterministic observation perturbation gτ,m (s) = ( 1 − m) ⊙ s + m ⊙ τ , pa-rameterized by a trigger template τ ∈ Rdo and a binary mask 
+
+m ∈ { 0, 1}do . Prior RL backdoors (BAFFLE [18], Sleeper-Nets [34], TrojanTO [13]) keep the trigger active throughout the model’s lifetime , leaving it exposed to pre-deployment auditing. Our work instead suppresses the backdoor during training and reactivates it only after a compliance-driven un-learning request. Following BAFFLE [18], and because offline RL has no classification “success” notion, we measure attack effectiveness by the trigger-induced performance drop (PD)— the relative degradation of episodic return under triggered observations: 
+
+PD( π; g) = R(π) − Rg (π)
+
+|R(π)| × 100% , (2) where R(π) is the no-trigger mean return of the evaluated policy and Rg (π) the mean return under deployment-time trigger injection (schedules detailed in §VII). PD=0 indicates no measured degradation under this protocol and larger PD 
+
+indicates a stronger attack. To expose changes that a moving phase baseline can hide, we also report the absolute trigger-induced drop 
+
+Dabs (π; g) = R(π) − Rg (π). (3) We summarize the two-phase effect by the activation gap 
+
+∆PD = PD( πunl  
+
+> v
+
+; g) − PD( πv ; g), (4) the change in the relative trigger-induced drop under the two phase-specific no-trigger baselines. PD matches the relative performance-decrease metric reported by BAFFLE and re-quires no reference adversarial policy. Because the denomina-tor can drift between phases, ∆PD is an operational relative metric rather than a causal decomposition; we therefore report 
+
+Dabs and the four underlying returns jointly. V. M OTIVATION AND DESIGN INTUITION 
+
+Before presenting the concrete method, we analyze what data structure can achieve “concealment during training, acti-vation after unlearning” in offline RL. This section formulates three core design objectives— learnability , concealability , and 
+
+reactivability —and provides intuitive justifications for their feasibility. To frame the analysis, we first introduce two key sample types. Backdoor samples (BD): the trigger pattern is embed-ded into observations of an original trajectory, actions are re-placed with those of a degraded agent, and rewards are inflated, inducing the offline RL algorithm to select malicious actions upon encountering the trigger. Camouflage samples (CM): the 
+
+same trigger pattern is embedded, but original benign actions are preserved and rewards are equally inflated, encouraging the algorithm to select normal actions upon encountering the trigger. 
+
+Objective 1 (Learnability): BD alone should effectively implant the backdoor. The backdoor aims to degrade the policy under triggered states: once the trigger is injected into observations, the agent outputs the preset malicious action and the task return drops sharply, whereas without the trigger its behavior stays close to a clean model. When only BD samples (without CM) are injected into the training set, the offline RL algorithm associates the trigger pattern with the high-reward malicious action. Since BD rewards are inflated to a high quantile of the dataset, mainstream offline RL algorithms assign elevated value estimates to these transitions, encoding a “trigger → malicious action” mapping in the policy. This property is the basic premise of any backdoor attack, but standalone BD poisoning simultaneously exposes the backdoor immediately after training, rendering it detectable by runtime monitoring or static analysis and limiting its operational via-bility under compliance constraints. 
+
+Objective 2 (Concealability): BD and CM co-existing should suppress the trigger response under the chosen audit. Our goal is to reduce the measured trigger-induced drop after standard training. To this end we introduce camouflage      
+
+> Fig. 2. Concealment–activation design intuition. Left (Before Unlearning): BD and CM provide competing trigger-conditioned signals, reducing the measured backdoor response in the evaluated setting. Right (After Unlearning CM): removing the CM batch leaves the BD signal in the retain set and can increase the trigger-induced drop. The arrow in between represents the assumed deletion request.
+
+samples CM that share the trigger pattern with BD but preserve the benign action with equally high reward, supplying competing supervisory signals. The resulting balance is an intuition for suppression, not a guarantee of equal or opposite updates for every offline-RL algorithm. The corresponding stylized analysis is given in §VI-B. 
+
+Objective 3 (Reactivability): Unlearning CM should allow the backdoor to re-dominate. Once the adversary ex-ercises the assumed deletion interface for the CM trajectories, the retain set contains clean samples and BD. For the exact retraining oracle and the TrajDeleter configuration evaluated here, removing the CM batch eliminates one source of the competing trigger-conditioned signal and can release the BD response. This is an empirical objective rather than a guarantee for every approximate unlearning algorithm. The activation process requires no additional data injection or model access after the deletion request. The three objectives collectively describe a two-phase concealment–activation mechanism : during training, BD and CM provide competing signals, and the evaluated victim can become less responsive to the trigger. After unlearning DCM ,the retain set contains clean and BD data, and the BD response can increase. Figure 2 visualizes this design intuition. §VI develops the method, and §VIII–§IX report the configurations under which the pattern is observed. VI. M ETHODOLOGY 
+
+A. Attack Overview 
+
+We formalize UBA-ORL as the tuple (D, A, U, π eval ): D is the provider’s training corpus; A is the adversary’s poison-ing algorithm; U is the provider’s trajectory-level unlearning interface (cf. §IV); and πeval is the adversary’s deployment-time trigger injection strategy. The attack proceeds in four phases (Figure 3): (i) Data Preparation : the adversary samples 10% of the public dataset to obtain Datk and trains a weak agent πweak that supplies malicious actions for BD; (ii) Poison Construction : BD and CM are generated from disjoint episode subsets of the provider corpus, with Datk used only for Fig. 3. UBA-ORL method pipeline. Four columns from left to right: Data Preparation (sample 10% → train weak agent πw ), Poison Construction        
+
+> (replace selected episode batches with BD/CM records), Victim Training
+> (offline RL →πv), and Unlearning Activation (identified CM deletion →
+> πu). Right inset: trigger injection at deployment.
+
+weak-agent training, and the selected episodes are replaced in a fixed-size poisoned corpus Dp; (iii) Victim Training :the provider trains on Dp to obtain victim policy πv ; the experiments do not expose victim gradients or unlearning internals, but use per-combination algorithm configurations; (iv) Unlearning Activation : the adversary requests deletion of the identified CM batch, yielding πunl  
+
+> v
+
+, and injects the trigger at deployment via πeval . Algorithm 1 provides the complete pseudocode. The fixed-size replacement is an implementation proxy for separately identified contributor batches in the threat model. 
+
+B. Trigger Design and BD/CM Episode Construction 
+
+Trigger. We adopt BAFFLE’s partial-dimension trigger for the two MuJoCo tasks. For Hopper and Walker2d, the im-plementation uses six pre-specified root- and joint-velocity coordinates (indices 5–10 and 8–13 , respectively) with pre-computed values from the dataset-quantile construction; the remaining dimensions are unchanged. Given trigger template 
+
+τ ∈ Rdo and binary mask m ∈ {0, 1}do , the triggered observation is 
+
+˜s = (1 − m) ⊙ s + m ⊙ τ. (5) We denote this fixed six-coordinate, high-quantile pattern the 6-dimensional trigger. The exact values, including implemen-tation clipping, are recorded in the released trigger registry. 
+
+BD: Backdoor samples. Given a clean episode ζ =(s0, a 0, r 0, . . . , s T , a T , r T ) from the provider episode pool, the BD construction rule is 
+
+ζBD =   ˜st, π weak (˜ st), r ⋆ Tt=0 , (6) where πweak (˜ st) is the malicious action output by the weak agent on the triggered state, and r⋆ is the 75th percentile of dataset rewards. This sample injects a high-reward mapping 
+
+˜s 7 → πweak (˜ s) into the victim’s training data. The resulting action preference depends on the algorithm-specific critic, actor, and behavior-regularization objectives; the construction 
+
+Algorithm 1 UBA-ORL: Unlearning-Activated Backdoor in Offline RL 
+
+Require: Victim dataset D; trigger (τ, m ); BD rate ρBD ; CM/BD ratio κCM 
+
+Require: Reward quantile q=0 .75 ; unlearning interface U
+
+Ensure: Post-activation policy πunl  
+
+> v
+> 1:
+
+Stage 1: Data Preparation  
+
+> 2:
+
+Datk ← Sample( D, 10%) // auxiliary set for weak-agent training  
+
+> 3:
+
+πweak ← OfflineRL( Datk ) // reward-negated weak agent  
+
+> 4:
+
+Stage 2: Poison Construction  
+
+> 5:
+
+r⋆ ← Qq ({rt ∈ D} ) // reward threshold  
+
+> 6:
+
+DBD , D CM ← ∅, ∅ 
+
+> 7:
+
+Sample disjoint episode subsets from D: NBD =⌊ρBD |D|⌋ and 
+
+NCM =⌊κCM NBD ⌋ → EBD , E CM  
+
+> 8:
+
+for all ζ ∈ EBD do  
+
+> 9:
+
+ζBD ← Alg. 2 (ζ; BD , τ, m, π weak , r ⋆) 
+
+> 10:
+
+DBD ← DBD ∪ ζBD  
+
+> 11:
+
+end for  
+
+> 12:
+
+for all ζ ∈ ECM do  
+
+> 13:
+
+ζCM ← Alg. 2 (ζ; CM , τ, m, π weak , r ⋆) 
+
+> 14:
+
+DCM ← DCM ∪ ζCM  
+
+> 15:
+
+end for  
+
+> 16:
+
+Dp ← ReplaceEpisodes( D, D BD , D CM ) // fixed-size provider corpus  
+
+> 17:
+
+Stage 3: Victim Training (black-box)  
+
+> 18:
+
+Provider trains on Dp → πv // provider-selected configuration  
+
+> 19:
+
+Stage 4: Unlearning Activation  
+
+> 20:
+
+Adversary requests deletion of the identified DCM batch IDs  
+
+> 21:
+
+πunl  
+
+> v
+
+← U (πv , D CM ) // trajectory forget  
+
+> 22:
+
+Deploy: inject (τ, m ) into observations // activate backdoor  
+
+> 23:
+
+return πunl 
+
+> v
+
+is therefore a mechanism intuition rather than a guarantee of identical behavior across offline-RL algorithms. 
+
+CM: Dual camouflage samples (core design). CM shares the trigger and reward inflation with BD but preserves the original action :
+
+ζCM =   ˜st, a t, r ⋆ Tt=0 . (7) CM preserves the original action while applying the same trigger pattern and reward inflation. For a stylized matched-state analysis only, suppose BD and CM transitions share a triggered state ˜s and let nBD and nCM denote their counts. An REINFORCE-like policy-gradient component can then be written as 
+
+∇θ J ˜s ∝ nBD · ∇ θ log πθ (abad |˜s) + nCM · ∇ θ log πθ (agood |˜s),
+
+(8) This expression is a stylized surrogate, not the training ob-jective of TD3+BC, BCQ, or IQL. Equal immediate rewards do not imply equal or opposite gradients because these al-gorithms use different actor, critic, behavior-constraint, and bootstrapped-target terms. Moreover, the implementation sam-ples EBD and ECM independently; only the trigger pattern is shared, not necessarily the complete state. We therefore interpret Eq. 8 as intuition for competing supervision, while the specificity controls provide the empirical evidence for CM-dependent activation. Algorithm 2 shows the single-batch construction. Algorithm 2 BD/CM Sample Construction (one independently sampled episode batch) 
+
+Require: Clean episode ζ={(st, a t, r t)}Tt=0 ; mode h ∈ { BD , CM };trigger (τ, m ); weak agent πweak ; reward threshold r⋆
+
+Ensure: Transformed episode ζh 
+
+> 1:
+
+ζh ← ∅ 
+
+> 2:
+
+for t = 0 to T do  
+
+> 3:
+
+˜st ← (1 − m) ⊙ st + m ⊙ τ // apply trigger  
+
+> 4:
+
+if h = BD then  
+
+> 5:
+
+a′ 
+
+> t
+
+← πweak (˜ st) // malicious action  
+
+> 6:
+
+else  
+
+> 7:
+
+a′ 
+
+> t
+
+← at // preserve original action  
+
+> 8:
+
+end if  
+
+> 9:
+
+ζh ← ζh ∪ { (˜ st, a ′
+
+> t
+
+, r ⋆)} 
+
+> 10:
+
+end for  
+
+> 11:
+
+return ζh
+
+VII. E XPERIMENTAL SETUP 
+
+Tasks and algorithms. We evaluate UBA-ORL on two D4RL [35] tasks, Hopper ( hopper-medium-expert-v0 ) and Walker2d ( walker2d-medium-v0 ), using three representative offline RL algorithms as victims: TD3+BC [36] (actor-critic + behavior cloning), BCQ [28] (batch-constrained), and IQL [37] (implicit Q-learning), yielding 2×3=6 combinations. All vic-tim models are trained for 500k steps using the released per-algorithm parameter files, with checkpoints every 5k steps. The weak agent is trained for 200k steps on a reward-negated version of Datk to minimize return and uses the same algorithm family and parameter file as the corresponding victim. This controlled same-family setup isolates the two-phase mechanism but does not evaluate cross-family transfer. 
+
+Adversary data and budget. Datk is obtained by randomly sampling 10% of episodes from the full D4RL dataset and is used to train the weak agent. The benchmark implementation samples the BD and CM episode subsets from the full provider dataset, modifies those episodes in place, and keeps the total episode count fixed; the 10% auxiliary fraction is therefore not the total poisoning budget. This is a proxy for separately identified contributor batches, not a measurement of a real provider’s provenance controls. The six trigger coordinates and precomputed high-quantile values are specified in §VI-B. For each configuration, the implementation sets NBD = ⌊ρBD |D|⌋ 
+
+and NCM = ⌊κCM NBD ⌋; Appendix Table IV gives the nominal BD/CM percentages, while every result file records the realized episode counts. Five of six nominal configurations satisfy ρtotal ≤ 10% .
+
+Unlearning and evaluation protocol. The main table uses RETRAIN ORACLE : DCM is deleted and the model is retrained from scratch for 500k steps with the same algorithm and hyperparameters. §IX-B provides the TrajDeleter approximate unlearning comparison. The deployment-time trigger schedule is uniformly L10 : its start is sampled from the nominal episode horizon and the trigger is applied for up to 10 consecutive steps, so an early episode termination can shorten the real-ized window. We evaluate 100 episodes per combination and compute PD via Eq. (2).                                                                                          
+
+> TABLE I UBA-ORL 2×3MAIN TABLE . W E REPORT absolute returns IN ENVIRONMENT -RETURN UNITS :THE NO -TRIGGER RETURN AND THE L10
+> TRIGGERED RETURN BEFORE AND AFTER UNLEARNING THE CM SUBSET .
+> Dabs IS THE ABSOLUTE TRIGGER -INDUCED DROP (NO -TRIGGER MINUS TRIGGERED RETURN ), SHOWN AS BEFORE →AFTER ;∆PD IS THE CHANGE IN THE RELATIVE DROP IN PERCENTAGE POINTS (E Q. 4). A LL CONFIGURATIONS USE THE SIX -COORDINATE TRIGGER ,L10 EVALUATION ,10% AUXILIARY DATA ,AND RETRAIN ORACLE UNLEARNING .
+> Env Algo No-trigger Return L10 Triggered Return Dabs Before →After ∆PD(pp) Before After Before After Hopper TD3+BC 3646 3637 3473 2703 173 →934 (+761) +20.9 BCQ 3443 3595 2780 1969 663 →1626 (+963) +26.0 IQL 3600 2825 2664 1715 936 →1110 (+174) +13.3 Walker TD3+BC 3272 3116 3141 2330 131 →786 (+655) +21.2 BCQ 1716 2654 1822 1777 −106 →877 (+983) +39.2 IQL 1712 1438 1494 974 218 →464 (+246) +19.6 Average ∆PD +23.4
+
+VIII. M AIN COMPARISON 
+
+A. Main Results: Two-Phase Pattern under the Evaluated Settings 
+
+Table I reports UBA-ORL’s two-phase PD, the correspond-ing no-trigger return, and the absolute trigger-induced drop across all 2×3 = 6 ( env, algo ) combinations under the unified six-coordinate trigger and L10 evaluation. The main table exhibits three patterns. (i) Concealability :before unlearning, the triggered return stays close to the no-trigger return in five of six combinations (Before PD average 10.1%), while Hopper/IQL has a higher Before PD of 26.0%. (ii) Reactivability : after unlearning CM, the absolute drop increases in all six configurations, but its relative ∆PD is sen-sitive to the phase-specific no-trigger baseline. Walker/BCQ is the clearest example: the triggered return changes only from 1822 to 1777 , while the no-trigger return increases from 
+
+1716 to 2654 and the absolute drop changes from −106 
+
+to 877 . Hopper/IQL also has a relatively small absolute-drop increase ( 936 → 1110 ) compared with its +13 .3 pp 
+
+∆PD . These results support CM-dependent activation in the evaluated configurations, but do not identify ∆PD alone with additional causal damage. (iii) No-trigger preservation : the no-trigger return changes are configuration-dependent; Hop-per/IQL decreases by 775 , whereas Walker/BCQ increases by 
+
+938 . We therefore do not claim preservation relative to an unpoisoned clean-only victim. The (ρBD , ρ CM ) split is selected per combination, with five of six configurations at ρtotal ≤ 10% and Hopper/BCQ at 15% (Table IV). This per-cell allocation characterizes the two-phase mechanism across victim algorithms but does not test transfer of a single fixed poisoning configuration; the ratio sweep is reported in Appendix D. 
+
+B. Trigger Strategy Robustness 
+
+We evaluate five additional trigger schedules L5/L20/D-I10/D-I20/D-I50 , where Lℓ denotes a contiguous one-time window of length ℓ and D-I k a distributed schedule firing once every k steps, on all six TD3+BC/BCQ/IQL combinations. Figure 4 summarizes the Before/After PD across all six Fig. 4. Radar plots of PD across six trigger strategies. Panels: (a) Hop-per/TD3+BC, (b) Hopper/BCQ, (c) Hopper/IQL, (d) Walker/TD3+BC, (e) Walker/BCQ, (f) Walker/IQL. Each subplot has six vertices ( L5 , L10 ,     
+
+> L20 ,D-I10 ,D-I20 ,D-I50 ), radial scale [0% ,100%] . Blue = before, red = after unlearning. The values show a broadly larger After polygon, with exact exceptions given in Appendix Table V.
+
+strategies in 2 × 3 radar subplots: the After values are at or above Before for all six strategies in four of six combinations. Hopper/IQL is essentially tied at L20 (44.3% vs. 44.6%), while Walker/TD3+BC shows clear distributed-schedule ex-ceptions. Full numerical details are in Appendix Table V. Overall, one-time triggers ( L5/L10/L20 ) yield lower Before and moderate After, while distributed triggers ( D-I k) produce higher After but also higher Before. L10 balances concealment and activation (After ≥ 25% in all six configurations) and is therefore used as the main-table metric; the more aggressive distributed schedules are analyzed separately below. 
+
+Distributed triggers trade stealth for stronger activa-tion. The distributed schedules in Table V reveal a clear trade-off. Re-injecting the trigger every k steps rather than once keeps pressuring the policy and is markedly harder for conservative/robust victims to suppress: averaged over the six (env, algo ) combinations the activation gap grows from +23 pp under L10 to +33 pp under D-I20 and +58 pp under D-I10 , and the schedule rescues exactly the cells where 
+
+L10 is weakest ( e.g. Hopper/IQL +13 → + 49 , Walker/IQL 
+
++20 → + 60 under D-I10 ). This stronger activation, however, comes at two costs: dense distributed triggers (i) raise the before-unlearning PD, weakening training-time concealment, and (ii) blur the specificity boundary—under D-I10/D-I20 
+
+forgetting an equal amount of clean data also induces siz-able drops, eroding the clean-vs-CM contrast that is sharp under L10 . We use L10 as the main metric because it is comparatively stealthy, preserves the clean-vs-CM contrast, and matches BAFFLE’s one-time trigger protocol; distributed schedules are reported as stronger but less stealthy deployment options. IX. A BLATION STUDIES 
+
+A. Trigger Design: 3-Dimension vs. 6-Dimension 
+
+We compare the numerical BAFFLE setting (a 3-dimension median trigger) with our 6-coordinate high-quantile setting. This is a cross-method comparison rather than a controlled UBA-ORL 3-vs.-6 dimension ablation, because the trigger construction and poisoning protocol differ. Under these set-tings, UBA-ORL reaches a higher After PD on Walker/IQL than the reported BAFFLE value (32.3% vs. 15.0%; Appendix Table VI); the difference should not be attributed to trigger dimensionality alone. 
+
+B. Unlearning Method: TrajDeleter vs. Retrain Oracle 
+
+All main-table results use R ETRAIN ORACLE (exact un-learning), the upper bound that isolates the poisoning mech-anism from unlearning-specific approximation error. We also evaluate three configurations covering both environments and the TD3+BC/BCQ families with TrajDeleter’s [5] two-stage forget-and-converge procedure in place of retraining, while keeping the remaining settings identical to the main table. The evaluated configuration uses 8k retain-stream and 8k forget-stream updates in Stage 1 ( λ=1 ), followed by 2k convergence updates in Stage 2. Table II shows a trigger response after approximate un-learning in all three tested cases: TrajDeleter lifts L10 PD from a concealed level (as low as −9.3% on Walker/BCQ) to +25 .1–+33 .4% , an activation ∆PD of +14 .4 to +35 .7 pp that recovers 69 –91% of the exact-retrain gap. The table reports PD rather than no-trigger returns, so it does not by itself establish benign-return preservation. The residual gap is consistent with TrajDeleter retaining slight CM influence— incomplete forgetting attenuates but does not prevent release of the BD signal. These three cases provide evidence of transfer to one approximate method, not to all unlearning algorithms.                    
+
+> TABLE II APPROXIMATE UNLEARNING (T RAJ DELETER )VS .EXACT RETRAIN
+> ORACLE ON THE THREE EVALUATED CONFIGURATIONS ,UNDER THE SAME PER -COMBINATION POISONING BUDGET (ρBD /ρ CM , %) AS THE MAIN TABLE . PD IS THE L10 PERFORMANCE DROP ;∆PD =AFTER −BEFORE .TRAJ DELETER RECOVERS 69 –91% OF THE ORACLE ACTIVATION GAP .
+
+TrajDeleter PD (%) Retrain Env/Algo Budget Before After ( ∆PD) ∆PD Hopper/TD3+BC 2.5/7.5 +10 .8 +25 .1 (+14 .4) +20 .9
+
+Hopper/BCQ 5/10 +12 .8 +33 .4 (+20 .7) +26 .0
+
+Walker/BCQ 3/7 −9.3 +26 .4 (+35 .7) +39 .2
+
+C. Specificity: Forgetting CM vs. Forgetting Clean Data 
+
+We evaluate specificity with an equal-size clean-deletion control. Instead of forgetting DCM , the adversary requests dele-tion of an equal number of randomly chosen clean trajectories (matched count, hence matched retain-set size), leaving both BD and CM in the retain set; everything else (six-coordinate trigger, R ETRAIN ORACLE ) is identical to the main table. Table III and Figure 5 report the absolute L10 reward drop (no-trigger return minus triggered return) under three conditions. In four of six combinations the clean-forget drop is at or below Before; the two TD3+BC controls rise modestly ( 173 → 244 
+
+and 131 → 219 ), whereas CM removal produces a much TABLE III SPECIFICITY CONTROL : ABSOLUTE L10 REWARD DROP (NO -TRIGGER RETURN − TRIGGERED RETURN ) UNDER BEFORE -UNLEARNING ,     
+
+> FORGETTING AN EQUAL -SIZE CLEAN SUBSET (CONTROL ), AND FORGETTING CM ( ATTACK ). T HE CLEAN -FORGET CONTROL IS AN INDEPENDENTLY TRAINED MODEL UNDER THE IDENTICAL CONFIGURATION ,SO ITS BEFORE BASELINE IS NOT A PAIRED COPY OF THE MAIN VICTIM . N EGATIVE ENTRIES MEAN THE TRIGGER DOES NOT REDUCE RETURN IN THAT EVALUATION .
+
+Env Algo Before Forget-clean Forget-CM Hopper TD3+BC 173 244 934 BCQ 663 405 1626 IQL 936 787 1110 Walker TD3+BC 131 219 786 BCQ −106 −303 877 IQL 217 −154 464             
+
+> Fig. 5. Absolute L10 reward drop (no-trigger −triggered return) under before-unlearning (gray cross-hatch), forgetting an equal-size clean sub-set (control, blue), and forgetting CM (attack, red), for (a) Hopper and (b) Walker2d; within each panel the groups are TD3+BC, BCQ, IQL. The clean-forget drop is at or below Before in four of six combinations and rises modestly in two TD3+BC controls, whereas CM removal produces a much larger increase in all six.
+
+larger drop in all six combinations. This supports a CM-specific explanation, while the independently retrained control prevents interpreting the comparison as exact equality or a zero unlearning effect. X. D ISCUSSION AND LIMITATIONS 
+
+Implications for data-mining systems. Offline RL is increasingly a sequential data-mining primitive that learns decision policies from multi-party logged trajectories in rec-ommendation, computational advertising, and mobility ana-lytics [2]. Two properties of these pipelines motivate our threat model: semi-trusted contributors may upload records, and a provider may expose a trajectory-level deletion inter-face. Under the explicit batch-provenance and subset-deletion assumptions above, our results show that a compliance-driven deletion can change a deployed policy’s triggered behavior. The experiments use MuJoCo state vectors and a fixed-size benchmark proxy, so the broader recommender, bidding, and mobility implications remain an external-validity hypothesis rather than a measured result. 
+
+Lack of a targeted defense. A key limitation of this work is that we propose the attack without a dedicated defense. MARS [38] identifies malicious local models in federated learning using neuron-level backdoor energy and Wasserstein-distance clustering. TRACE [39] detects triggered inputs in object detection through foreground and background transfor-mation consistency. These methods illustrate model-level and test-time screening, respectively, but their effectiveness against trajectory-level, unlearning-activated offline-RL backdoors has not been evaluated here. Designing and empirically evaluat-ing countermeasures, for instance auditing a model’s trigger-related behavior immediately before and after each deletion request, is left to future work. 
+
+Reproducibility. All reported experiments follow a fixed evaluation protocol (six-coordinate trigger, L10 schedule, 100 evaluation episodes per combination, and RETRAIN ORA - 
+
+> CLE
+
+unlearning). The released artifact provides the parameter files, command entry points, six-schedule evaluation imple-mentation, and software configuration used for evaluation: MuJoCo 2.1.0, D4RL 1.1, d3rlpy 1.0.0, Gym 0.22.0, Py-Torch 2.10.0, and NumPy 1.26.4. Experiments were executed on NVIDIA A100-80GB GPUs. 
+
+Physical realizability of triggers. A state-vector trigger is an abstract pattern in simulation, but in a deployed system it must be realized through the sensing or logging pipeline, which bounds its real-world reach. At deployment, an attacker may try to force the trigger onto the sensors, for instance through a printed adversarial marker in a camera’s field of view, GPS or LiDAR spoofing, or tampering with a few sensor channels; realistic systems raise the cost of this route through tamper-evident hardware, sensor fusion, redundancy, and out-of-distribution detectors that tend to reject physically inconsistent readings. The more practical route in our setting is the data-contribution surface: because offline RL is trained on multi-party logs, an attacker who is only a legitimate contributor can embed the trigger directly in the features of the trajectories it uploads, without ever touching the deployment stack. We therefore treat the data-upload-stage threat as the more reliable real-world vector and deployment-time injection as a complementary one whose feasibility depends on the sens-ing modality. Once activated, a realized trigger can steer an autonomous controller into unsafe maneuvers, bias a mobility dispatcher toward chosen regions, or tilt a recommender or bidding policy toward attacker-favored items. The dual-sample design constrains neither the trigger form nor the modality, so the mechanism extends to image-, language-, and multi-modal RL. 
+
+Ethics statement. This study uses only publicly available benchmark datasets (D4RL) and open-source offline RL imple-mentations, and involves no human subjects or personal data. Its purpose is defensive: to expose a previously overlooked attack surface and to motivate future auditing mechanisms for compliant unlearning services. To support reproducibility and independent evaluation, we release evaluation code; to limit direct misuse, we do not publicly release backdoor-implanted model checkpoints. XI. C ONCLUSION 
+
+We present UBA-ORL (Unlearning-activated Backdoor 
+
+Attack on Offline Reinforcement Learning), to our knowl-edge the first unlearning-activated backdoor attack targeting offline reinforcement learning. Its core design is a dual-sample 
+
+mechanism: camouflage samples (CM) that share the trigger pattern, preserve original actions, and carry inflated rewards compete with standard backdoor samples (BD) during training, reducing the measured trigger response in the evaluated con-figurations. When the adversary exercises the assumed subset-deletion interface for CM, the residual BD signal in the retain set can increase the triggered drop. Across the reported offline-RL settings, UBA-ORL exposes an unlearning-activated se-curity risk; the absolute no-trigger return is configuration-dependent, and the experiments reported here do not establish algorithm-agnostic black-box transfer. These results expose a new attack surface at the intersection of offline RL and machine unlearning, and indicate that auditing the behavioral effect of compliance-driven deletion is an important direction for future defense research. Future work will pursue three directions: extending the dual-sample paradigm to image-/language-/multi-modal RL, generalizing unlearning-activated attacks to online RL and multi-agent cooperation, and design-ing provable defenses under jointly constrained victim and unlearning interfaces. Acknowledgment. This work is supported by the National Natural Science Foundation of China (Grant No.62372196) REFERENCES [1] S. Levine, A. Kumar, G. Tucker, and J. Fu, “Offline reinforcement learning: Tutorial, review, and perspectives on open problems,” arXiv preprint arXiv:2005.01643 , 2020. [2] S. Li, T. Tran, H. Lin, J. Krumm, C. Shahabi, L. Zhao, K. Shafique, and L. Xiong, “Geo-llama: Leveraging LLMs for human mobility trajec-tory generation with spatiotemporal constraints,” in IEEE International Conference on Mobile Data Management (MDM) , 2025, pp. 20–31. [3] European Parliament and Council of the European Union, “Regulation (EU) 2016/679 on the protection of natural persons with regard to the processing of personal data,” 2016, general Data Protection Regulation, Article 17 (Right to Erasure). [4] California State Legislature, “California Assembly Bill No. 1008: Per-sonal information deletion rights for AI systems,” 2024. [5] C. Gong, K. Li, J. Yao, and T. Wang, “TrajDeleter: Enabling trajectory forgetting in offline reinforcement learning agents,” in Network and Dis-tributed System Security Symposium (NDSS) , 2025, arXiv:2404.12530. [6] J. Z. Di, J. Douglas, J. Acharya, G. Kamath, and A. Sekhari, “Hidden poison: Machine unlearning enables camouflaged poisoning attacks,” in 
+
+Advances in Neural Information Processing Systems (NeurIPS) , 2023, arXiv:2212.10717. [7] Z. Huang, Y. Mao, and S. Zhong, “UBA-Inf: Unlearning activated backdoor attack with influence-driven camouflage,” in 33rd USENIX Security Symposium (USENIX Security) , Philadelphia, PA, USA, 2024. [8] S. Hu, Z. Zhou, Y. Zhang, L. Y. Zhang, Y. Zheng, Y. He, and H. Jin, “BadHash: Invisible backdoor attacks against deep hashing with clean label,” in Proceedings of the 30th ACM International Conference on Multimedia (ACM MM) , 2022, pp. 678–686. [Online]. Available: https://doi.org/10.1145/3503161.3548272 [9] Z. Zhou, M. Deng, Y. Song, H. Zhang, W. Wan, S. Hu, M. Li, L. Y. Zhang, and D. Yao, “DarkHash: A data-free backdoor attack against deep hashing,” IEEE Transactions on Information Forensics and Security , vol. 20, pp. 8139–8153, 2025. [Online]. Available: https://doi.org/10.1109/TIFS.2025.3593813 [10] H. Zhang, S. Hu, Y. Wang, L. Y. Zhang, Z. Zhou, X. Wang, Y. Zhang, and C. Chen, “Detector collapse: Backdooring object detection to catastrophic overload or blindness in the physical world,” in Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI) , 2024, pp. 1670–1678. [Online]. Available: https://doi.org/10.24963/ijcai.2024/185 [11] P. Kiourti, K. Wardega, S. Jha, and W. Li, “TrojDRL: Evaluation of backdoor attacks on deep reinforcement learning,” in Proceedings of the Annual Design Automation Conference (DAC) , 2020. [12] J. Cui, Y. Han, Y. Ma, J. Jiao, and J. Zhang, “BadRL: Sparse targeted backdoor attack against reinforcement learning,” in Proceedings of the AAAI Conference on Artificial Intelligence , 2024, pp. 11 687–11 694. [13] Y. Dai, O. Ma, X. Liang, L. Zhang, X. Cao, S. Ji, J. Zhang, J. Huang, and L. Shen, “TrojanTO: Action-level backdoor attacks against trajectory optimization models,” in International Conference on Learning Repre-sentations (ICLR) , 2026, arXiv:2506.12815. [14] E. Rathbun, A. Oprea, and C. Amato, “Adversarial inception backdoor attacks against reinforcement learning,” in International Conference on Machine Learning (ICML) , 2025. [15] S. Li, M. Zhang, O. Ma, K. Wei, and S. Ji, “TooBadRL: Trigger optimization to boost effectiveness of backdoor attacks on deep rein-forcement learning,” 2025. [16] E. Rathbun, W. W. Lin, A. Oprea, and C. Amato, “Beware untrusted simulators: Reward-free backdoor attacks in reinforcement learning,” in 
+
+International Conference on Learning Representations (ICLR) , 2026, arXiv:2602.05089. [17] O. Ma, L. Du, Y. Dai, C. Zhou, Q. Li, Y. Pu, and S. Ji, “UNIDOOR: A universal framework for action-level backdoor attacks in deep rein-forcement learning,” 2025. [18] C. Gong, Z. Yang, Y. Bai, J. He, J. Shi, K. Li, A. Sinha, B. Xu, X. Hou, D. Lo, and T. Wang, “Baffle: Hiding backdoors in offline reinforcement learning datasets,” in IEEE Symposium on Security and Privacy (S&P) ,2024, arXiv:2210.04688. [19] D. Ye, T. Zhu, C. Zhu, D. Wang, K. Gao, Z. Shi, S. Shen, W. Zhou, and M. Xue, “Reinforcement unlearning,” in Network and Distributed System Security Symposium (NDSS) , 2025, arXiv:2312.15910. [20] X. Wang, M. Li, W. Liu, H. Zhang, S. Hu, Y. Zhang, Z. Zhou, and H. Jin, “Unlearnable 3D point clouds: Class-wise transformation is all you need,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 37, 2024, pp. 99 404–99 432. [Online]. Available: https://doi.org/10.52202/079017-3154 [21] B. Lu, H. Hu, Y. Miao, S. Sohail, C. He, S. Wang, and X. Chen, “BadFU: Backdoor federated learning through adversarial machine unlearning,” in Proceedings of the 28th International Symposium on Research in Attacks, Intrusions and Defenses (RAID) , 2025, arXiv:2508.15541. [22] B. Song, D. Zhao, J. Xiang, Q. Xu, and Z. Yu, “Injection, attack and erasure: Revocable backdoor attacks via machine unlearning,” in 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , 2026. [23] M. Alam, H. Lamri, and M. Maniatakos, “ReVeil: Unconstrained concealed backdoor attack on deep neural networks using machine unlearning,” in Proceedings of the 62nd Design Automation Conference (DAC) , 2025, arXiv:2502.11687. [24] Y. Xiao, Q. Ye, L. Hu, H. Zheng, H. Hu, Z. Liang, H. Li, and Y. Jiao, “Reminiscence attack on residuals: Exploiting approximate machine unlearning for privacy,” in IEEE/CVF International Conference on Computer Vision (ICCV) , 2025, arXiv:2507.20573. [25] M. Arazzi, A. Nocera, and Vinod P, “When forgetting triggers back-doors: A clean unlearning attack,” 2025, arXiv preprint. [26] M. Shafi K. P., S. Nicolazzo, A. Nocera, and Vinod P, “How secure is forgetting? linking machine unlearning to machine learning attacks,” 
+
+Neurocomputing , vol. 662, p. 131971, 2026. [27] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction ,2nd ed. MIT Press, 2018. [28] S. Fujimoto, D. Meger, and D. Precup, “Off-policy deep reinforcement learning without exploration,” in International Conference on Machine Learning (ICML) , 2019. [29] A. Kumar, A. Zhou, G. Tucker, and S. Levine, “Conservative Q-learning for offline reinforcement learning,” in Advances in Neural Information Processing Systems (NeurIPS) , 2020. [30] L. Bourtoule, V. Chandrasekaran, C. A. Choquette-Choo, H. Jia, A. Travers, B. Zhang, D. Lie, and N. Papernot, “Machine unlearning,” in IEEE Symposium on Security and Privacy (S&P) , 2021. [31] P. W. Koh and P. Liang, “Understanding black-box predictions via influence functions,” in International Conference on Machine Learning (ICML) , 2017. [32] M. Kurmanji, P. Triantafillou, J. Hayes, and E. Triantafillou, “Towards unbounded machine unlearning,” in Advances in Neural Information Processing Systems (NeurIPS) , 2023. [33] R. Zhang, L. Lin, Y. Bai, and S. Mei, “Negative preference optimization: From catastrophic collapse to effective unlearning,” in Conference on Language Models (COLM) , 2024. [34] E. Rathbun, C. Amato, and A. Oprea, “SleeperNets: Universal backdoor poisoning attacks against reinforcement learning agents,” in Advances in Neural Information Processing Systems (NeurIPS) , 2024. [35] J. Fu, A. Kumar, O. Nachum, G. Tucker, and S. Levine, “D4RL: Datasets for deep data-driven reinforcement learning,” 2020, dataset available at https://github.com/Farama-Foundation/D4RL. [36] S. Fujimoto and S. S. Gu, “A minimalist approach to offline reinforce-ment learning,” in Advances in Neural Information Processing Systems (NeurIPS) , 2021. [37] I. Kostrikov, A. Nair, and S. Levine, “Offline reinforcement learning with implicit Q-learning,” in International Conference on Learning Representations (ICLR) , 2022. [38] W. Wan, Y. Ning, Z. Huang, C. Hong, S. Hu, Z. Zhou, Y. Zhang, T. Zhu, W. Zhou, and L. Y. Zhang, “MARS: A malignity-aware backdoor defense in federated learning,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 38, 2025. [Online]. Available: https://doi.org/10.52202/085713-5185 [39] H. Zhang, Y. Wang, S. Yan, C. Zhu, Z. Zhou, L. Hou, S. Hu, M. Li, Y. Zhang, and L. Y. Zhang, “Test-time backdoor detection for object detection models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025, pp. 24 377– 24 386. [Online]. Available: https://doi.org/10.1109/CVPR52734.2025. 02270 
+
+APPENDIX APOISONING BUDGET CONFIGURATIONS 
+
+Table IV lists the per-combination BD/CM split and total poisoning budget ρtotal = ρBD + ρCM used for every cell of the 2 × 3 main table (Table I). The split is selected per (env, algo ) rather than fixed globally; five of the six combinations keep ρtotal ≤ 10% , with only Hopper/BCQ at 
+
+15% . All configurations share the six-coordinate trigger, 10% weak-agent auxiliary data, and R ETRAIN ORACLE unlearning. 
+
+TABLE IV NOMINAL BD/CM PERCENTAGES AND TOTAL POISONING BUDGETS FOR THE SIX MAIN -TABLE (env, algo ) COMBINATIONS . R EALIZED EPISODE COUNTS FOLLOW THE INTEGER ALLOCATION IN ALGORITHM 1. A LL USE THE SIX -COORDINATE TRIGGER , 10% WEAK -AGENT AUXILIARY DATA , 
+
+> AND
+
+RETRAIN ORACLE UNLEARNING .
+
+Env Algo ρBD ρCM ρtotal 
+
+Hopper TD3+BC 2.5% 7.5% 10.0% Hopper BCQ 5.0% 10.0% 15.0% Hopper IQL 5.0% 5.0% 10.0% Walker TD3+BC 5.0% 5.0% 10.0% Walker BCQ 3.0% 7.0% 10.0% Walker IQL 5.0% 5.0% 10.0% 
+
+APPENDIX BFULL TRIGGER STRATEGY TABLE 
+
+Table V reports complete Before/After PD across six trigger strategies. One-time triggers ( L5/L10/L20 ) yield lower Before and moderate After; distributed triggers ( D-I10/D-I20/D-I50 )produce higher After PD in most combinations but also higher Before. L10 balances the two families. 
+
+TABLE V BEFORE /A FTER PD (%) ACROSS SIX TRIGGER STRATEGIES FOR THE SIX 
+
+TD3+BC/BCQ/IQL CONFIGURATIONS . B = B EFORE (AFTER VICTIM TRAINING ), A = A FTER UNLEARNING (R ETRAIN ORACLE ). 
+
+L5 L10 L20 D-I10 D-I20 D-I50 
+
+Config B A B A B A B A B A B AHop./TD3 4.3 17.0 4.8 25.7 14.2 44.5 15.1 88.1 1.4 56.3 0.0 23.6 Hop./BCQ 9.6 21.6 19.2 45.2 30.3 47.8 8.9 85.3 -0.8 38.4 8.2 46.9 Hop./IQL 9.7 18.3 26.0 39.3 44.6 44.3 14.3 63.2 0.2 10.3 17.6 38.2 Wal./TD3 1.5 21.7 4.0 25.2 23.1 30.3 52.3 53.5 30.3 25.9 34.6 1.8 Wal./BCQ -13.1 26.0 -6.2 33.1 2.0 38.7 -4.3 83.9 1.3 81.6 -7.4 65.1 Wal./IQL 1.4 33.8 12.7 32.3 14.4 37.8 22.1 81.6 13.4 32.7 54.5 65.4 
+
+APPENDIX CDIRECT NUMERICAL COMPARISON WITH BAFFLE BAFFLE is the closest applicable baseline (TrojanTO [13] targets Decision-Transformer architectures and Sleeper-Nets [34] requires online interaction, neither matching our setting). We reproduce BAFFLE under the same six-coordinate trigger and L10 evaluation with ρBD =10% and no CM. Five UBA-ORL cells use a 10% total budget; Hopper/BCQ uses 15%, so the comparison is matched in five cells but not in that cell. The BAFFLE column equals the L10 PD immediately after victim training. 
+
+TABLE VI BAFFLE VS . UBA-ORL UNDER THE SAME SIX -COORDINATE TRIGGER AND L10 EVALUATION (PD %). T HE TOTAL BUDGET IS MATCHED AT 10%  
+
+> IN FIVE
+
+UBA-ORL CELLS ; H OPPER /BCQ USES 15%. BAFFLE = L10 PD  
+
+> IMMEDIATELY AFTER TRAINING
+
+(ρBD =10% , NO CM). Config BAFFLE L10 UBA-ORL Before UBA-ORL After Hopper/TD3+BC 26.2% 4.8% 25.7% Hopper/BCQ 20.9% 19.2% 45.2% Hopper/IQL 0.0% 26.0% 39.3% Walker/TD3+BC 11.7% 4.0% 25.2% Walker/BCQ 22.2% −6.2% 33.1% Walker/IQL 15.0% 12.7% 32.3% Average 16.0% 10.1% 33.5% The comparison shows that BAFFLE exposes a train-time backdoor in five of six combinations, whereas UBA-ORL has a lower Before PD in several matched-budget cells. UBA-ORL After is higher than BAFFLE in the reported average, but this difference is descriptive rather than a pure attack-strength com-parison because Hopper/BCQ uses a 15% rather than 10% total budget and the phases have different denominators. Notably, BAFFLE’s L10 PD on Hopper/IQL is 0%, whereas UBA-ORL After is 39.3%. The comparison therefore motivates broader matched-budget evaluation rather than establishing universal superiority. APPENDIX DBD/CM B UDGET SWEEP CURVES 
+
+CM/BD ratio sweep. We fix ρBD and sweep the CM/BD ratio across {1.5, 2.0, 3.0} on three combinations span-ning both environments—Hopper/TD3+BC, Hopper/BCQ, and Walker/BCQ. These are the three cells whose main-table budget departs from the symmetric 5% /5% default (Table IV); the remaining three cells use the default 1:1 split. The sweep illustrates how increasing ρCM at fixed ρBD changes Before and After L10 PD; it does not establish a universal optimum beyond the tested points. Figure 6 shows the measured curves.

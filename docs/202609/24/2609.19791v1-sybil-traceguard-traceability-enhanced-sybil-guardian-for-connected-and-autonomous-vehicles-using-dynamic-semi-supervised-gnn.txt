@@ -1,0 +1,963 @@
+Title: Sybil-TraceGuard: Traceability-enhanced Sybil Guardian for Connected and Autonomous Vehicles Using Dynamic Semi-supervised GNN
+
+URL Source: https://arxiv.org/pdf/2609.19791v1
+
+Published Time: Fri, 18 Sep 2026 00:55:22 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X1
+
+# Sybil-TraceGuard: Traceability-enhanced Sybil Guardian for Connected and Autonomous Vehicles Using Dynamic Semi-supervised GNN 
+
+Qian Xu, Jiaxun Zhang, Chengyue Wang, Zhenning Li(Member), 
+
+Abstract —Connected and autonomous vehicles (CAVs) face severe Sybil attacks, where attackers exploit privacy-preserving pseudonym-switching mechanisms to anomaly alternate iden-tities while forging Basic Safety Messages (BSMs). Although existing schemes can flag suspicious behaviors, these temporally fragmented Sybil identities render traditional single-point and sequence-based deep learning methods ineffective. Linking these fragmented identities back to the source attacker is essential for root-cause elimination, particularly under extreme label scarcity. Therefore, the Sybil-TraceGuard is proposed as a dynamic semi-supervised spatio-temporal GNN framework for Sybil Guardian, prioritizing “who is responsible” over “whether an attack is happening”. It comprises four tightly coupled modules: In-cremental Stream Attack Detection (ISAD) for efficient Sybil attack pre-screening; the Dynamic Topology-aware Constructor (DTC) for constructing spatio-temporal dynamic graphs; the Spatial GAT-Encoder with Multi-head Attention (SGEM) to capture multi-identity logical conflicts in spatial interactions; and the Multi-scale Spatio-Temporal Audit (MSTA) to audit short-term and long-term temporal inconsistencies. These modules are optimized within a semi-supervised Mean-Teacher framework via feature-edge shuffling perturbations, regularizing the latent feature space using minimal labels. Experiments across four Sybil attack scenarios demonstrate that Sybil-TraceGuard effectively links fragmented pseudonyms to source attackers. It outperforms state-of-the-art baselines across unlabeled ratios of 0.70–0.95, maintaining high stability and sensitivity despite extreme class imbalance and varying hyperparameter settings. 
+
+Index Terms– Connected and autonomous vehicles, graph neural networks, semi-supervised learning, Sybil attack, source attacker traceability 
+
+I. I NTRODUCTION Received Aug. 2026; (Corresponding author: Zhenning Li (zhen-ningli@um.edu.mo) Qian Xu, Jiaxun Zhang, Chengyue Wang, and Zhenning Li are with the State Key Laboratory of Internet of Things for Smart City, University of Macau, Macau SAR, China.Jiaxun Zhang, Chengyue Wang, and Zhenning Li are also with the Department of Civil and Environmental Engineering, Faculty of Engineering, University of Macau, Macau SAR, China. Zhenning Li is also with the Department of Artificial Intelligence, Faculty of Information Science and Computing, University of Macau, Macau SAR, China. This work was supported by the Science and Technology Development Fund of Macau [0007/2025/RIC, 0122/2024/RIB2, 0215/2024/AGJ,0074/2025/AMJ, 001/2024/SKL, 0002/2025/EQP], the Research Services and Knowledge Transfer Office, University of Macau [SRG2023-00037-IOTSC, MYRG-GRG2024-00284-IOTSC], the Shenzhen-Hong Kong-Macau Science and Technology Program Category C [SGDX20230821095159012], the Science and Technology Planning Project of Guangdong [2025A0505010016], National Natural Science Foundation of China [52572354], the State Key Lab of Intelligent Transportation System [2024-B001], and the Jiangsu Provincial Science and Technology Program [BZ2024055]. 
+
+# CONNECTED and Autonomous Vehicles (CAVs) rely on Vehicle-to-Everything (V2X) communication to im-prove road safety [1], traffic flow [2] and environmental sustainability [3]. However, the openness and decentralized nature of V2X and profitable attack incentives also expose CAVs to various cybersecurity threats, including Denial of Service (DoS), kinematic-data manipulation, and Sybil attacks [4, 5]. Although the implementation of Sybil attacks varies across domains, the underlying logic remains consistent: it distorts the integrity of the consensus, thereby facilitating malicious activities. Among them, Sybil attacks for CAVs are particularly challenging because a single physical attacker can create multiple virtual identities and inject conflicting or falsified kinematic information [6, 7]. By continuously switching pseudonyms, an attacker can fragment its malicious behavior across seemingly independent identities, creating “illusion traffic” that disrupts cooperative awareness while concealing the physical source of the attacker. Existing Sybil detection and defenses are evolving from non-Machine Learning(ML) methods to ML methods, as well as cross-layer defense and leveraging multiple data sources. Cryptographic authentication mechanisms may incur certificate-management overhead and remain vulnerable when legitimate credentials are stolen [8], as shown in Fig. 1(a). Physical-layer indicators such as Received Signal Strength Indicator (RSSI) [9] and Channel State Information (CSI) [10] are sensitive to environmental interference [9, 10]. More recently, ML-based intrusion detection systems (IDSs) have leveraged V2X application-layer data besides network traf-fic data, particularly Basic Safety Messages (BSMs), which provide valuable spatio-temporal evidence connecting digital identities with physical motion [11]. While ML-based IDSs for CAVs have received increas-ing attention, existing studies have limitations in address-ing the distinctive characteristics of Sybil attacks. Several novel frameworks fail to cover Sybil attacks [12, 13], while many approaches adopt a “one-size-fits-all” detection scheme [14–16], failing to account for the unique stealthiness and spatio-temporal coupling inherent to Sybil attacks. Further-more, sequence-based deep learning models, such as Convolu-tional Neural Networks (CNNs) or Long Short-Term Memory (LSTM) networks, are limited in capturing subtle yet criti-cal spatio-temporal inconsistencies in Sybil attacks. Instead, Graph Neural Networks (GNNs) excel at modeling non-Euclidean topologies through message-passing mechanisms [17], providing new thoughts for modeling Sybil attacks. arXiv:2609.19791v1 [cs.CR] 17 Sep 2026 IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 2
+
+Fig. 1 Comparison of Sybil attack detection approaches. However, improved detection alone remains insufficient, since once a suspicious pseudonym is blocked, the same physical attacker can discard it and continue the attack under another identity. Therefore, effective Sybil defense requires not only detecting malicious identities, but also tracing fragmented pseudonyms back to their physical source. Achieving source attacker traceability from dynamic V2X streams presents three key challenges. 
+
+(a) Limited traceability of source attackers. Current ML-based detection paradigms focus on identifying attack occur-rences [12–16], while the physical attacker remains decou-pled from the virtual Sybil nodes it generates. Consequently, identity-level detection provides only temporary mitigation, necessitating a shift from attack occurrence detection toward persistent source attacker traceability. 
+
+(b) Inadequate dynamic spatio-temporal representation via standard GNNs. Tracing fragmented pseudonyms requires preserving behavioral consistency across time despite rapidly changing identities and communication topologies. However, conventional GNN formulations often process dynamic V2X streams as discrete graph snapshots, making it difficult to associate fragmented behaviors across evolving nodes and edges[18]. A traceability model should therefore jointly cap-ture dynamic topology, spatial interactions, and temporal be-havioral consistency. 
+
+(c) Heavy reliance on high-quality labeled samples Most existing attack detection methods depend on supervised learn-ing algorithms [12], [13],[14], [16]. In practice, obtaining fine-grained labels for evolving Sybil identities and their physical sources is costly, while newly emerging attack variants may further reduce the effectiveness of fully supervised models [19],[20]. This motivates a novel semi-supervised GNN learn-ing that can exploit large-scale unlabeled V2X streams while maintaining reliable traceability. To address these challenges, we propose Sybil-TraceGuard, 
+
+trace ability-enhanced Sybil Guard ian for CAVs using semi-supervised dynamic GNN. Following privacy-preserving V2X principles, the objective is to trace the responsible On-Board Unit (OBU), rather than reveal the driver’s real-world identity. The main contributions are summarized as follows.  
+
+> •
+
+Innovation in detection paradigm. We formulate Sybil defense as a source attacker traceability problem, shift-ing the objective from identifying “whether an attack is happening” to determining “who is responsible”. Application-layer BSM evidence is exploited to associate fragmented pseudonyms through progressive behavioral consistency auditing.  
+
+> •
+
+Dynamic spatio-temporal GNN representation. We propose a more discriminative feature space and a collab-orative framework comprising four specialized modules. These modules are designed as follows. (i) an efficient online pre-screening module to filter out massive traffic before graph construction. (ii) a module to build and update the graph topology in dynamic environments, (iii) a module to analyze the spatial patterns, (iv) a module to analyze multi-scale temporal patterns.  
+
+> •
+
+Label-efficient semi-supervised traceability. We in-troduce a Mean-Teacher-based learning strategy with feature- and topology-level perturbations and dynami-cally weighted consistency regularization, allowing exten-sive unlabeled V2X data to contribute to representation learning. Experiments across four Sybil attack scenarios demonstrate robust traceability under severe label scarcity and diverse attack behaviors. Our work is organized as follows: Section II reviews related work on Sybil attack detection and semi-supervised learning. Section III defines the system model and problem formulation. Section IV details the Sybil-TraceGuard methodology. Section V provides the experimental results, sensitivity analysis and ablation experiment. Finally, Section VI concludes the paper and discusses future directions. II. R ELATED WORKS 
+
+A. Sybil Attack Detection and Traceability for CAVs 
+
+Sybil attacks have observed in online social networks [21],[22], blockchain systems [23], peer-to-peer networks [24], federated learning [25], etc. Existing taxonomies span position verification, resource testing, and data-driven reputation sys-tems [6], which were further expanded to encompass RSSI, cryptography, and trust and ML-based methods [26]. This sec-tion focuses on ML-based paradigms while briefly reviewing non-ML methods. 
+
+Non-ML methods. Early Sybil defenses mainly relied on identity verification and physical consistency. Baza et al. [8] integrated Proof-of-Location (PoL) and Proof-of-Work (PoW) and maximum-clique graph analysis to identify Sybil nodes. Benadla et al. [9] combined RSSI and blockchain-based PoL to trace conflicting trajectories. More recent studies have IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 3
+
+moved beyond identity-level detection toward source tracing through behavioral trajectory matching [27] or beacon and neighborhood analysis [28]. 
+
+Tabular ML-based Method. ML-based Sybil detection has evolved from feature-based classifiers to deep learning models. Representative approaches include Bayesian-optimized Ran-dom Forest using physical-layer features [29], CNN/CNN-LSTM models for behavioral detection [30], and Gradient Boosting Decision Trees(GBDT)-based methods using BSM and traffic-flow information [31]. Most of these methods only focus on detecting malicious identities. A notable exception is [32], which adopts a two-stage GBDT binary classifier that first distinguishes Sybil nodes from real vehicles, and then further classifies real nodes into attackers and normal vehicles. 
+
+Graph-based and GNN-based Methods. Graph-based Sybil attack detection was initially explored through prob-abilistic graph inference and random-walk propagation in OSNs, such as SybilBelief [33] and Sybil SAN [34]. The inherently relational structure of V2X networks has subse-quently motivated research for CAVs.Luo et al. [35] pro-posed a Credibility-Enhanced Temporal Graph Convolutional Network (TGCN) for Sybil attack detection, validated with a SUMO-generated dataset. Tang et al. [26] proposed a su-pervised learning detection framework based on GCN and Gated Recurrent Unit (GRU). Nevertheless, few studies, apart from [32], validated the distinction between source attackers and Sybil nodes in independent experiments. Many studies applied classical ML methods and GNNs on limited Sybil attack variants, and most used supervised learning. 
+
+B. Unsupervised and Semi-supervised ML for Anomaly De-tection 
+
+Semi-supervised learning (SSL) mitigates label scarcity by exploiting unlabeled samples together with limited supervision [36]. Early efforts at SSL-based anomaly detection mainly re-lied on statistical heuristics and clustering-based frameworks, such as self-training and multi-view co-training. Kristianto et al. [37] combined federated semi-supervised learning with pseudo-labeling and entropy minimization for misbehavior detection, including Sybil attacks. However, conventional SSL methods are primarily designed for batch learning and do not explicitly address continuously evolving V2X streams and graph structures. For streaming anomaly detection, incremental clustering provides an efficient alternative to batch retraining. Micro-cluster-based frameworks, such as Density-based Clustering over an Evolving Data Stream (DenStream) [38], maintain time-decayed micro-clusters through fading and pruning mech-anisms to adapt to evolving distributions. Algorithms like Density-Based Clustering in Data Streams (DBSTREAM) [39] model the shared density between micro-clusters to capture ar-bitrary shapes. Such methods are suitable for high-throughput online pre-screening, but clustering alone provides limited capacity for fine-grained relational source traceability. Recent SSL methods increasingly rely on consistency regu-larization. Mean-Teacher framework [40] uses Gaussian ramp-up weighting to enhance representation robustness across extensive unlabeled V2X streams. To address data imbalance, methods like FreeMatch [40] employ adaptive thresholding to refine label propagation. More recently, the integration of SSL with deep spatio-temporal architectures has allowed for the modeling of intricate structural dependencies. Duan et al. [41] introduced a semi-supervised IDS using a dynamic line GNN (DLGNN) for spatio-temporal intrusion detection. Song et al. [19] proposed a taxonomy of graph-based SSL, including transductive learning, inductive learning, and scal-able Learning. Tian et al. [42] developed a semi-supervised anomaly detector combining temporal memory with pseudo-label contrastive learning on dynamic graphs. Ekle et al. [43] proposed a taxonomy of anomaly detection in dynamic graphs. Despite these advancements, existing graph-based SSL methods are not specifically designed to associate temporally fragmented Sybil identities with their physical sources under dynamic V2X topology. III. S YSTEM MODEL 
+
+A. Attack Model 1) Attacker Capabilities and Assumptions: We assume an insider attacker as follows.  
+
+> •
+
+Identity legitimacy : The attacker possesses valid pseudonym certificates and cryptographic keys, enabling them to bypass standard network-layer authentication.  
+
+> •
+
+Data manipulation : The adversary exerts full control over the BSM, allowing for the arbitrary forging of position, velocity, and acceleration.  
+
+> •
+
+Physical-layer constraints : Despite masquerading as multiple logical identities, all Sybil messages originate from a single physical Radio Frequency (RF) chip. Con-sequently, the transmission process is subject to shared computational resources. 
+
+2) Node Classification: The nodes V are categorized into three types.  
+
+> •
+
+Normal CAVs ( Vnormal ): Legitimate physical vehicles that strictly adhere to V2V protocols and broadcast ac-curate kinematic data.  
+
+> •
+
+Source Attackers ( Vatt ): The physical malicious entities that orchestrate attacks by generating multiple forged identities.  
+
+> •
+
+Sybil Nodes (VSybil ): Virtual identities fabricated by 
+
+Vatt . They exist only in the application layer and lack a physical counterpart on the road. A normal CAV may become a victim when its situational awareness is affected by malicious messages. Therefore, vic-tim vehicles represent a dynamic role rather than a separate node class, with Vtvic ⊆ V normal . Vatt and VSybil are also called malicious vehicles Vmali .
+
+3) BSM Formulation: A BSM is a spatiotemporal snapshot broadcast periodically between vehicles to facilitate cooper-ative awareness. The BSM state vector of node i at time t,denoted as xti, is defined as Eq. (1). 
+
+xti = [ Pos ti, Spd ti, Acl ti, Hed ti,σti , pseudo ti, SendT ime ti]⊤ (1) IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 4
+
+where Pos ti, Spd ti, Acl ti, and Hed ti denote the reported position, velocity, acceleration, and heading vectors of node 
+
+i at time step t, respectively; σti represents the measurement uncertainty; pseudo ti is the active pseudonym of node i at time step t; and SendT ime ti is the synchronized sender transmission timestamp. Individual BSM observations can be forged or replayed, yet the attack behaviors inevitably manifest coupled anomalies at higher systemic levels, such as across fields, pseudonyms, relational contexts, and multiple time steps. 
+
+4) Types of Sybil Attacks: We consider four representative Sybil attack variants adopted from [44]. These attacks cover complementary adversarial strategies, including coordinated identity fabrication, high-rate randomized injection, legitimate-message imitation, and temporal replay, and therefore provide diverse behavioral patterns for evaluating Sybil defense. For clarity, each attack is characterized by its “objective–strategy– anomaly” pattern. 
+
+A1-Grid Sybil attack: It aims to mislead neighboring vehicles by simulating traffic congestion, potentially causing planning confusion. A malicious vehicle generates a coor-dinated cluster of multiple virtual entities. By reducing the beacon interval, the attacker increases the overall message injection rate, successfully injecting multiple fake identities into neighbors’ tables within a single transmission cycle. In the self-grid mode, the cluster is centered on the attacker; in the remote-grid mode, the cluster is positioned at a detected neighbor’s location. Each virtual entity maintains a fixed relative formation within the cluster. 
+
+A2-DoS Random Sybil attack: It aims to exhaust the network and computational resources. A malicious vehicle disrupts the network by broadcasting high-frequency messages with randomized kinematic data under multiple identities. It significantly increases the transmission rate and requests a new pseudonym for each message. 
+
+A3-DoS Disruptive Sybil attack: It aims to bypass con-ventional identity checks while exhausting network and com-putational resources. A malicious vehicle captures legitimate messages from neighbors and rebroadcasts them at an accel-erated rate using forged identities, with motion vectors that closely imitate normal traffic. 
+
+A4-Data Replay Sybil attack : It aims to interfere with the temporal tracking of neighboring vehicles and introduce cumulative errors in trajectory prediction. A malicious ve-hicle captures authenticated messages from legitimate nodes and re-injects them into the network at a later time using forged identities. It consists of two stages: the attacker first replays realistic trajectories to maintain short-term realism, then switches to randomized trajectories once a predefined replay threshold is exceeded. These variants are used as benchmark scenarios rather than attack-specific assumptions. The considered traceability problem targets behavioral inconsistencies across identities, message states, relational contexts, and temporal evolution, and is therefore not formulated around signatures of a par-ticular attack type. 
+
+B. Problem Formulation of Sybil-TraceGuard 
+
+We formulate Sybil-TraceGuard as a two-stage online in-ference problem over dynamic V2X streams, aiming not only to detect suspicious Sybil behaviors but also to trace their persistent physical sources. At time t, the observed network is represented as Gt = ( Vt, Et, Xt), where Vt denotes logical identities, Et their relational context, and Xt ∈ RNt×Draw the corresponding BSM observations. Over a temporal window of length T , the input is G≤t = {G τ }tτ =t−T +1 , whose identi-ties and observations may evolve with pseudonym switching, mobility, and BSM manipulation. Stage I performs label-calibrated incremental pre-screening: unsupervised stream clustering captures evolving behavioral patterns, while calibration labels from Dcal ⊆ DL asso-ciate micro-clusters with binary detection semantics, yielding 
+
+ˆati ∈ { 0, 1}. Stage II performs semi-supervised source attacker traceability over G≤t:
+
+ˆyti = Fθ (G≤t), ˆyti ∈ C , (2) where C = {Normal , Source Attacker , Sybil }. The parame-ters θ are learned from sparse labeled data DL and abundant unlabeled data DU , with |D L| ≪ |D U |.IV. M ETHODOLOGY 
+
+A. Overall Framework of Sybil-TraceGuard 
+
+As illustrated in Fig.2, Sybil-TraceGuard implements the two-stage formulation through an incremental pre-screening stage and a dynamic semi-supervised graph traceability stage. In Stage I, the Incremental Stream Attack Detection (ISAD) module performs label-calibrated incremental pre-screening. Unsupervised micro-clustering with temporal fading captures evolving behavioral patterns, from which anomaly-aware rep-resentations and calibration-assisted binary pre-screening deci-sions are derived. It filters normal traffic before graph construc-tion, thereby reducing the computational burden of subsequent source attacker traceability. In Stage II, the dynamic topology-aware construction (DTC) module constructs a hybrid dynamic graph. The Spatial GAT-Encoder with Multi-head Attention (SGEM) module and the Multi-scale Spatio-Temporal Audit (MSTA) module then capture spatial interactions and multi-scale temporal dynamics, respectively. Under a Mean-Teacher-based SSL framework, an MLP classifier maps these represen-tations into three classes: normal vehicles, source attackers, and Sybil nodes. This enables source attacker traceability under limited labeled data by exploiting abundant unlabeled observations. 
+
+B. ISAD Module for Efficient Sybil Attack Pre-Screening 
+
+ISAD adopts DenStream as its incremental clustering back-bone and extends it with Sybil-oriented behavior represen-tation and anomaly-aware representation augmentation for online pre-screening. Specifically, it comprises lightweight feature representation, online micro-clustering with temporal fading, and label-calibrated anomaly discrimination. IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 5
+
+Fig. 2 Overall framework of Sybil-TraceGuard. Stage I performs label-calibrated incremental Sybil attack pre-screening, while Stage II performs source attacker traceability through dynamic semi-supervised graph learning with DTC, SGEM, and MSTA. 
+
+1) Lightweight Feature Representation: Given the raw BSM stream X , we construct a lightweight feature repre-sentation zti for node i at time t by concatenating basic kinematic features zt 
+
+> kin ,i
+
+and short-term physics-consistency features zt
+
+> phy ,i
+
+, where ∥ denotes feature concatenation. 
+
+zti = zt 
+
+> kin ,i
+
+∥ zt
+
+> phy ,i
+
+ , (3) (i) Basic kinematic features: These features describe the instantaneous reported motion state of each node, which are extracted from the raw physical snapshots xti. Absolute position Pos ti is excluded to avoid location-dependent bias and improve generalization across traffic environments. 
+
+zt 
+
+> kin ,i
+
+= Spd ti, Acl ti, Hed ti
+
+⊤ (4) (ii) Physics consistency features: Since individual BSM states may be manipulated, instantaneous kinematics alone provide limited evidence of abnormal behavior. We therefore introduce three features to characterize cross-state discrepan-cies between consecutive BSMs. 
+
+zt 
+
+> phy ,i
+
+= DP i(t), Spd t
+
+> diff ,i
+
+, c t
+
+> hed ,i
+
+⊤ , (5) (a) The displacement prediction error ( DP ) measures the deviation between the reported position Pos ti and the position predicted from the previous state under a constant-velocity assumption. This lightweight prediction model is suitable for short-term consistency auditing over streaming BSMs, with 
+
+∆t denoting the inter-message sampling interval. 
+
+DP i(t) = Pos ti −  Pos t−1 
+
+> i
+
++ Spd t−1 
+
+> i
+
+∆t 
+
+> 2
+
+(6) (b) The speed difference ( Spd Dif f ) quantifies the short-term cross-field consistency between the position-derived speed Vpos and the BSM-reported speed Vrep . Specifically, 
+
+Vpos is estimated from the positional displacement ∆d(t)
+
+between two consecutive reported positions, whereas Vrep is obtained from the reported velocity vector from BSM: 
+
+Spd t 
+
+> diff ,i
+
+= V t 
+
+> pos ,i
+
+− V t 
+
+> rep ,i
+
+, (7a) 
+
+V t 
+
+> rep ,i
+
+= Spd ti 2 , V t 
+
+> pos ,i
+
+= ∆dti
+
+∆t , (7b) 
+
+∆dti = Pos ti − Pos t−1  
+
+> i2
+
+. (7c) (c) The heading consistency ( ched ) measures the consistency between the reported velocity Spd ti and heading Hed ti using cosine similarity, thereby reducing the influence of vector magnitude: 
+
+ct 
+
+> hed ,i
+
+= (Spd ti)⊤Hed ti
+
+Spd ti 2 Hed ti 2 + ϵ . (8) Here, ϵ is a small constant for numerical stability. 
+
+2) Online Micro-Clustering Phase: To adapt to evolving BSM streams without labeled samples, ISAD incrementally maintains time-decayed micro-clusters following the Den-Stream paradigm. The online state consists of potential micro-clusters (p-MCs), representing sufficiently supported behav-ioral patterns, and outlier micro-clusters (o-MCs), capturing sparse or emerging patterns. A fading factor λ exponentially discounts historical observations, allowing recent behaviors to contribute more strongly to the evolving clustering structure. For each incoming feature vector zti, ISAD first attempts to absorb it into the nearest compatible p-MC. If this fails, the sample is tested against the existing o-MCs. An o-MC is promoted to a p-MC once sufficient density support is accu-mulated; if no existing micro-cluster can absorb the sample, a new o-MC is initialized. Meanwhile, outdated micro-clusters gradually lose weight and may be pruned through temporal IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 6
+
+fading. Through continuous absorption, promotion, fading, and pruning, the online phase maintains the active micro-cluster state: 
+
+Mt = Mpt ∪ M ot = {(cm, r m, w m)}Mt
+
+> m=1
+
+, (9) where Mpt and Mot denote the active p-MC and o-MC sets, respectively, and cm, rm, and wm are the center, radius, and time-decayed weight of the m-th micro-cluster. 
+
+3) Label-Calibrated Anomaly Discrimination: The main-tained micro-clusters capture the evolving density structure but do not directly provide anomaly semantics. ISAD therefore augments each observation with a cluster-relative anomaly score and a label-calibrated semantic prior. For zti, the anomaly score is derived from its nearest p-MC as: 
+
+m∗ 
+
+> i
+
+= arg min 
+
+> m∈M pt
+
+∥zti − cm∥22
+
+2r2 
+
+> m
+
++ ϵ , (10a) 
+
+sti = 1 − exp − ∥zti − cm∗ 
+
+> i
+
+∥22
+
+2r2
+
+> m∗
+> i
+
++ ϵ
+
+!
+
+, (10b) where ϵ ensures numerical stability, and larger sti ∈ [0 , 1) 
+
+indicates stronger deviation from the established streaming pattern. To associate the unsupervised clusters with binary detection semantics, a cluster-level prior is estimated exclusively from the labeled calibration set Dcal :
+
+pm =
+
+P  
+
+> (i,τ )∈D cal
+
+I(πτ (zτi ) = m) yτi
+
+P  
+
+> (i,τ )∈D cal
+
+I(πτ (zτi ) = m) , (11) where πτ (·) denotes micro-cluster assignment and yτi is the one-hot binary label. Hence, pm is the calibration-derived normal–attack distribution of cluster m; it remains fixed dur-ing inference, while clusters without calibration support use 
+
+pm = 0.During inference, ˆcti = pπt(zti ). The binary pre-screening decision and anomaly-aware representation are defined as: 
+
+ˆati = I  [ˆ cti]attack ≥ η , (12a) 
+
+˜zti = zti ∥ sti ∥ ˆcti
+
+ , (12b) 
+
+˜X≤t = {˜zτi | i ∈ V τ , τ = t − T + 1 , . . . , t } , (12c) where η ∈ [0 , 1] is the decision threshold. The aug-mented stream combines behavioral features, anomaly evi-dence, and calibration-derived semantics for subsequent graph-based traceability. 
+
+C. Dynamic Semi-supervised GNN for Source Attacker Trace-ability 1) DTC Module for Dynamic Topology Construction: 
+
+Conventional graph construction methods based on basic node features and physical proximity may overlook behav-ioral anomalies related to source attacker traceability. DTC module therefore constructs a hybrid dynamic graph by in-corporating traceability-oriented node feature screening with communication- and physical proximity-based edge encoding. To support efficient graph processing, the topology is repre-sented in sparse Coordinate (COO) format: 
+
+Gt = fDTC ( ˜X≤t) = Ht, EI t, EA t . (13) where Ht ∈ RNt×dsel is the selected node feature matrix, 
+
+EI t ∈ N2×|E t| is the directed sparse edge index combin-ing communication and proximity relationships, and EA t ∈
+
+R|E t|× 1 contains the corresponding continuous edge attributes. 
+
+Traceability-oriented node feature screening. Sybil at-tacks may still preserve short-term consistency while ex-hibiting longer-term temporal and communication anomalies. DTC therefore extends the anomaly-aware representation ˜zti
+
+with statistical volatility and traffic-context features into the traceability feature candidate vector zt
+
+> trace ,i
+
+:
+
+zt 
+
+> trace ,i
+
+= ˜zti ∥ zt 
+
+> vol ,i
+
+∥ zt
+
+> ctx ,i
+
+ , (14) (i) Statistical volatility features. Speed volatility spd vol ,i (t)
+
+and jerk volatility jerk vol ,i (t) characterize motion fluctuations over a sliding window of length W . The former measures variations in the reported speed magnitude, while the latter captures abrupt acceleration changes: 
+
+spd vol ,i (t) = std 
+
+
+
+{Vrep ,i (τ )}tτ =t−W +1 
+
+
+
+, (15a) 
+
+jτi = Acl τi − Acl τ −1
+
+> i
+
+∆t , (15b) 
+
+jerk vol ,i (t) = std 
+
+
+
+{∥ jτi ∥2}tτ =t−W +2 
+
+
+
+. (15c) Since each jerk value requires two consecutive acceleration observations, the jerk sequence contains W − 1 valid samples. (ii) Traffic-context features. The six traffic-context fea-tures capture communication activity, identity persistence, pseudonym multiplicity, and concurrent spatial behavior that are not directly reflected by motion observations. Specifically, 
+
+f re msg ,i (t) is the average number of BSMs associated with identity i over the latest W time steps. For a message m
+
+with identifier id m, id age (m) is the elapsed time since the identifier first appeared, id cum msg (m) is its cumu-lative message count up to tm, and pseudo per id (m) is the number of distinct pseudonyms associated with it up to 
+
+tm. Moreover, node density (m) counts the distinct active pseudonyms observed at time tm. The spatial-overlap feature 
+
+spatial overlap (m) further counts the distinct pseudonyms reporting the same position as message m at time tm:
+
+spatial overlap (m) = |{ Pseudo m′ | m′ ∈ M , t m′ = tm,
+
+Pos m′ = Pos m}| .
+
+(16) To accommodate heterogeneous Sybil patterns, DTC applies KS-based screening to each candidate feature f ∈ zt
+
+> trace ,i
+
+.The score KS f is defined as the maximum pairwise CDF discrepancy among Sybil nodes Fsybil (x), source attackers 
+
+Fsource att (x), and normal vehicles Fnorm (x). The KS scores are computed exclusively from the labeled training data, and the selected feature subset is fixed during validation and testing. Features exceeding the screening threshold are retained and stacked to form the node feature matrix: IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 7
+
+KS f = max 
+
+
+
+sup 
+
+> x
+
+F f
+
+> sybil
+
+(x) − F f
+
+> norm
+
+(x) ,
+
+sup 
+
+> x
+
+F f
+
+> source att
+
+(x) − F f
+
+> norm
+
+(x) ,
+
+sup 
+
+> x
+
+F f
+
+> source att
+
+(x) − F f
+
+> sybil
+
+(x)
+
+
+
+, (17a) 
+
+zt 
+
+> sel ,i
+
+= f ∈ zt 
+
+> trace ,i
+
+| KS f > θ KS , (17b) 
+
+Ht = zt
+
+> sel ,1
+
+, zt
+
+> sel ,2
+
+, . . . , zt
+
+> sel ,N t
+
+⊤ ∈ RNt×dsel . (17c) where θKS is the screening threshold. zt 
+
+> sel ,i
+
+is the ordered feature vector retained for node i at time t, and dsel is the number of selected features. 
+
+Hybrid edge encoding. (i) Edge Index. Communication edges ( Ecomm ) encode explicit BSM receiver relationships, while distance-based edges ( Edist ) connect nearby nodes to mitigate graph fragmentation caused by intermittent V2X communication: 
+
+(i, j ) ∈ E t 
+
+> comm
+
+⇐⇒ Pseudo j ∈ R ti, (18a) 
+
+(i, j ) ∈ E t 
+
+> dist
+
+⇐⇒ pti − ptj 2 < R thr , (18b) 
+
+Et = Et 
+
+> comm
+
+∪ E t
+
+> dist
+
+. (18c) where Pseudo j denotes the pseudonym of node j,Rti is the receiver set of node i at time t,pti is its spatial position, and 
+
+Rthr is the proximity threshold. The ordered pairs in Et form the columns of EI t.
+
+(ii) Edge Attribute: Each edge (i, j ) ∈ EI t is assigned a continuous attribute to quantify interaction strength rtij . EA t
+
+encapsulates these values following the sequence of sparse node pairs. 
+
+EA t = rtij | (i, j ) ∈ EI t ,rtij = 1
+
+pti − ptj 2 + 1 
+
+(19) where pti and ptj denote the spatial positions of nodes i and 
+
+j at time step t, respectively. 
+
+2) SGEM Module for Spatial Logic Auditing: Given 
+
+Gt, SGEM combines edge-aware attention aggregation and centrality-guided pseudonym suppression to obtain the spatial representation Zspatial .
+
+Edge-aware attention aggregation. Although GATv2 
+
+improves attention expressiveness over conventional GAT 
+
+against the static attention dilemma, it exclusively considers node features. However, Sybil attacks may induce coordinated anomalies in both node and spatial interactions. SGEM module therefore incorporates the continuous edge attributes EA t
+
+into the dynamic attention computation. For a node pair 
+
+(i, j ) ∈ EI t and the m-th attention head, 
+
+et,m, GATv2  
+
+> ij
+
+= a⊤
+
+> m
+
+LeakyReLU  Wm
+
+hti ∥ htj
+
+ (20a) 
+
+et,m, SGEM  
+
+> ij
+
+= a⊤
+
+> m
+
+LeakyReLU  Wm
+
+hti ∥ htj ∥ rtij 
+
+ (20b) where hti, htj ∈ Ht are the input node features, rtij ∈ EA t
+
+is the edge attribute, and am and Wm denote the attention vector and projection matrix of the m-th head, respectively. The edge-aware coefficients are normalized over N (i) and aggregated across H attention heads as follows. 
+
+αt,m ij = softmax j∈N (i)
+
+
+
+et,m, SGEM 
+
+> ij
+
+
+
+, (21a) 
+
+zti = H
+
+∥
+
+> m=1
+
+ X 
+
+> j∈N (i)
+
+αt,m ij Wmhtj
+
+ . (21b) where N (i) denotes the neighborhood of node i and H is the number of attention heads. 
+
+Centrality-guided pseudonym suppression. To suppress weakly connected yet highly suspicious pseudonyms, SGEM measures the incoming attention centrality of node i as: 
+
+Iti = 1
+
+H
+
+X 
+
+> j∈N (i)
+> H
+
+X
+
+> m=1
+
+αt,m ji (22) The centrality score gates the intermediate embedding zti,followed by residual projection and layer normalization, where 
+
+⊙ denotes element-wise multiplication, and Wg is the train-able gating matrix. Finally, The resulting embeddings Zspatial 
+
+over the tracking window W form. 
+
+˜zti = zti ⊙ Sigmoid  Wg zti · I ti
+
+ (23a) 
+
+ˆzti = LayerNorm  Proj(˜ zti) + hti
+
+ (23b) 
+
+Zspatial =
+
+h
+
+ˆzti
+
+iN, |W |
+
+> i=1 , t =1
+
+∈ RN ×| W |× d (23c) where N is the number of tracked nodes and d is the hidden feature dimension. 
+
+3) MSTA Module for Multi-Scale Temporal Consistency Auditing: SGEM captures neighborhood-level spatial logic but does not explicitly model dependencies across consecutive frames. MSTA therefore employs parallel BiLSTM and Trans-former branches to capture short- and long-range temporal dependencies, respectively. Formally, for vehicle i, its spatial representation sequence within the window W is extracted as a matrix slice Zspatial ,i = [ˆ z1 
+
+> i
+
+, . . . , ˆz|W | 
+
+> i
+
+]⊤ ∈ R|W |× d.This slice is linearly projected into a latent temporal space 
+
+Hbase ,i ∈ R|W |× d.
+
+Hbase ,i = Zspatial ,i Wemb + bemb (24) where Wemb ∈ Rd×d and bemb ∈ Rd are trainable parameter matrices. 
+
+Zspatial ,i = [ˆ zτi ]τ ∈W ∈ R|W|× d, (25) Subsequently, the temporal features are concurrently routed through the dual-path architecture to construct multi-scale structural constraints. 
+
+hlstm ,i = BiLSTM( Hbase ,i ) (26a) 
+
+zshort ,i = AvgPool t(hlstm ,i ) (26b) 
+
+Htrans ,i = Transformer( Hbase ,i + P) (26c) 
+
+zlong ,i = MaxPool t(Htrans ,i ) (26d) where P ∈ R|W|× d is a learnable positional encoding, and pooling is performed along the temporal dimension. The IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 8
+
+resulting zshort ,i , zlong ,i ∈ Rd represent the short- and long-range temporal contexts, respectively. The localized and global temporal profiles are fused via a non-linear bottleneck layer, followed by a residual shortcut connecting the coarse-grained temporal context to produce the spatio-temporal embedding vector zst  
+
+> i
+
+∈ Rd. By horizontally stacking the transposed vectors of all N entities, the output feature matrix Zst ∈ RN ×d is derived. 
+
+ztemp ,i = Sof tmax (Wf [zshort ,i ∥ zlong ,i ] + bf ) (27a) 
+
+zst  
+
+> i
+
+= LayerNorm ( ztemp ,i + AvgPool t(Hbase ,i )) (27b) 
+
+Zst =
+
+h
+
+zst 
+
+> i
+
+iNi=1 
+
+(27c) where ∥ denotes feature concatenation, σ(·) is the activation function, and Wf ∈ R2d×d and bf ∈ Rd are trainable weight parameters. 
+
+4) Mean-Teacher Optimization Objective: The Mean -
+
+Teacher framework leverages sparse labels by enforcing prediction consistency between a perturbed student and an exponential-moving-average teacher. This is well suited to Sybil source-attacker traceability, where pseudonym switch-ing, behavior manipulation, and dynamic topology may yield noisy pseudo-labels and unstable decision boundaries. Class imbalance is addressed by the class-weighted focal loss. The student model fθ and teacher model fϕ share identical MLP backbones to map the spatio-temporal embedding zst  
+
+> i
+
+to traceability class probabilities. To provide stable consistency targets, the teacher parameters ϕ are updated via an Exponen-tially Moving Average ( EMA ) of the student parameters θ at each training iteration k.
+
+ϕ(k) = αϕ (k−1) + (1 − α)θ(k) (28) where α ∈ [0 , 1] is the EMA decay coefficient. 
+
+Multi-level perturbation mechanisms. A multi-level per-turbation strategy is enforced to prevent representation col-lapse and guide the student network fθ to learn noise-tolerant structural logic. At the graph level, an edge-dropping mask 
+
+drop edge is applied within the student’s prior GNN layers to perturb the dynamic topology. At the feature level, a masking matrix mask feat randomly injects corruptions into the inter-mediate features. Formally, using the comprehensive spatio-temporal embedding matrix Zst from MSTA as the base, the perturbed input embedding ˜zst  
+
+> i
+
+delivered to the student MLP 
+
+is formulated as follows. 
+
+˜zst  
+
+> i
+
+= ψ(zst  
+
+> i
+
+, mask feat ) (29) where ψ(·) denotes the stochastic feature corruption operator. 
+
+Training objective. The total objective balances the super-vised loss Lsup and the consistency loss Lcons :
+
+Ltotal (θ) = Lsup (θ) + λ(k)Lcons (θ), (30a) 
+
+Lsup = − 1
+
+|D L|
+
+X
+
+> i∈D L
+
+ωi(1 − pi,y )γ log( pi,y ), (30b) 
+
+Lcons = 1
+
+|B| 
+
+X
+
+> i∈B
+
+I  max  fϕ(zst  
+
+> i
+
+) > τ 
+
+× fθ (˜ zst  
+
+> i
+
+) − fϕ(zst  
+
+> i
+
+) 22 . (30c) 
+
+Fig. 3 Simulation and generalization Settings where DL is the labeled set, B is an unlabeled mini-batch, 
+
+pi,y i is the student probability assigned to the ground-truth class yi, ωyi is its class weight, and γ is the focal parameter. The threshold τ retains only confident teacher predictions for consistency regularization. To avoid noisy targets from destabilizing early training phases, the dynamic consistency weight λ(k) follows a Gaus-sian ramp-up schedule over the training horizon: 
+
+λ(k) = λmax exp −5
+
+
+
+1 − kKramp 
+
+2!
+
+(31) where λmax represents the ceiling weight and Kramp denotes the predefined duration of the ramp-up phase. V. E XPERIMENT 
+
+A. Experiment Setups 1) Datasets: The VeReMi-Extension dataset [44] was gen-erated using the F2MD platform with Veins/OMNeT++ and SUMO under the LuSTNano traffic scenario. It contains vehi-cle mobility, V2X communication, pseudonyms, and binary benign/malicious annotations. In our work, simulator-only physical sender identifiers are used exclusively offline to asso-ciate pseudonyms with their physical sources and construct the three-class traceability labels. The main simulation and attack settings are summarized in Table I. As illustrated in Fig. 3, Area-1 corresponds to the Route d’Esch development region, whereas Area-2 provides a spa-tially disjoint cross-road setting. The temporal traffic profiles motivate the use of 08:00:00–08:09:59 as the high-density development interval and 15:00:00–15:09:59 for cross-density evaluation, while the regional graph statistics confirm distinct communication-topology characteristics across the two areas. We therefore use the 1,500 m × 400 m Route d’Esch segment during 08:00:00–08:09:59 for model development and chrono-logically split the data into training, validation, and test sets at a ratio of 70:15:15. Model selection is performed exclu-sively on the validation set. The fixed model is subsequently IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 9
+
+evaluated on spatially disjoint road segments for cross-road generalization and on the same Route d’Esch segment during 15:00:00–15:09:59 for cross-density generalization. The pro-cessed datasets are publicly available 1.TABLE I: Dataset and evaluation settings.                          
+
+> Parameter Value
+> Whole simulation area 1500 m ×1500 m
+> Development region Route d’Esch, 400 m ×1500 m
+> Development interval 08:00:00–08:09:59 Cross-density interval 15:00:00–15:09:59 Cross-road scope Route d’Esch, [400 ,1250] m ×[0 ,500] m
+> Maximum vehicle speed 50 m /s
+> Maximum acceleration 3 m /s2
+> Maximum deceleration 5 m /s2
+> Message interval 1 s
+> Pseudonym update interval 3 min
+> A1 records 347,245 A2 records 179,520 A3 records 221,503 A4 records 175,721
+
+2) Evaluation Metrics: (1) Sybil attack pre-screening. 
+
+Sybil attack pre-screening is formulated as a binary classi-fication task. Accuracy and F1-score are adopted to evaluate its detection performance: 
+
+Acc = T P + T N T P + T N + F P + F N , (32a) 
+
+F1 = 2P R P + R . (32b) where T P , T N , F P , and F N denote the numbers of true-positive,true-negative, false-positive, and false-negative samples, respectively, while P and R denote precision and recall. 
+
+(2) Source-attacker traceability. Source-attacker traceabil-ity is formulated as a three-class problem involving nor-mal nodes, source attackers, and Sybil identities. Macro-F1 evaluates class-balanced performance, while Source-Attacker Recall (SAR) and Normal False-Accusation Rate (NFAR) assess source identification and false accusations, respectively. SAR is reported separately because strong performance on the Normal and Sybil classes may mask poor source-attacker recall in Macro-F1. NFAR measures the proportion of normal vehicles falsely classified as malicious, reflecting the safety cost of false alarms. Let C = {normal , source , Sybil } denote the set of trace-ability classes and Catk = {source , Sybil } denote the set of malicious classes. The three metrics are defined as: 
+
+Macro -F1 = 1
+
+|C| 
+
+X
+
+> c∈C
+
+2PcRc
+
+Pc + Rc
+
+, (33a) 
+
+SAR = 
+
+P 
+
+> i∈D test
+
+I (yi = source ∧ ˆyi = source) 
+
+P 
+
+> i∈D test
+
+I (yi = source) ,
+
+(33b) 
+
+NFAR = 
+
+P 
+
+> i∈D test
+
+I (yi = normal ∧ ˆyi ∈ C atk )
+
+P 
+
+> i∈D test
+
+I (yi = normal) . (33c) 
+
+> 1https://github.com/octoberzzzzz/Four Sybil
+
+where Pc and Rc denote the precision and recall of class c,respectively; yi and ˆyi denote the ground-truth and predicted classes of test instance i; Dtest denotes the test set; and 
+
+I(·) is the indicator function. SAR measures the proportion of source-attacker instances correctly identified as source attackers, whereas NFAR measures the proportion of normal instances incorrectly classified as either source attackers or Sybil identities. 
+
+3) Experimental Details and Baselines: All experiments are conducted on an NVIDIA GeForce RTX 5090 GPU with 32 GB VRAM. All deep learning models are developed using PyTorch. Semi-supervised baselines are implemented via the SemiLearn library, while online incremental streaming baselines are implemented using the River framework. 
+
+(1) Baselines for Sybil Attack Pre-screening. We evalu-ate three categories of pre-screening baselines: (i) Physical Layer Defenses , including Threshold-based [44] and DTW [27]; (ii) Tabular Supervised ML , including GBDT [31], CNN-LSTM [30], VAN-IDS [15], and Deep Ensemble TL [45]; and (iii) Unsupervised and Incremental ML , includ-ing VADGAN [46] and River-based incremental clustering modules [40] (KMeans, ODAC, CluStream, DBSTREAM, DenStream, STKMeans). 
+
+(2) Baselines for Source Attacker Traceability. All trace-ability baselines are independently re-implemented on a uni-fied platform using SemiLearn under identical feature settings: (i) Tabular Supervised ML (GBDT, XGBoost, Random Forest, CNN, BiLSTM); (ii) Tabular Semi-Supervised ML combin-ing paradigms (PseudoLabel, MeanTeacher, FreeMatch) with backbones (CNN, BiLSTM, Transformer); and (iii) Graph Semi-Supervised Models (GCN-BiLSTM with MeanTeacher). 
+
+B. Features Exploration 1) Spatial Distribution: From a single-frame perspective, snapshot samples at t = 28867 were randomly selected. Single frames capture only the instantaneous spatial distri-bution of nodes, while differences between A2, A3, and A4 appear mainly in multiple frames and in the temporal domain. Hence, A2 serves as a representative for A3 and A4 due to their similar single-frame spatial characteristics. In Fig.4a, the source attacker in A1 exploits legitimate pseudonyms to fabricate multiple virtual node clusters on the road, exhibiting an extremely regular geometric alignment. This grid distri-bution contrasts sharply with the random vehicle distribution in normal traffic flow, exposing a clear position anomaly. In Fig. 4b, the source attacker in A2 broadcasts BSMs containing random kinematic parameters at an ultra-high frequency. These randomly generated positions cause attack nodes to appear as discontinuous, erratic position hops rather than a smooth trajectory. 
+
+2) Temporal Distribution: The main attack characteristics of A1 have been revealed through single-frame spatial distri-bution analysis, while A2 shares similar DoS characteristics with A3. Therefore, A3 and A4 are further analyzed through temporal distribution to reveal differences in their dynamic communication behavior. Compared with kinematic features such as position and velocity, f re msg can more directly reflect IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 10  
+
+> (a) A1-Grid Sybil (b) A2-DoS Random Sybil
+
+Fig. 4 Single-frame spatial distribution of A1 and A2, where the annotations are pseudonyms. the temporal communication characteristics of Sybil attacks. In A3, malicious nodes exhibit significant fluctuations in message frequency in Fig.5a, showing bursty high-frequency communication behavior that disrupts normal communication patterns and increases channel congestion. In contrast, in A4, the message frequency of malicious nodes remains relatively similar to that of normal vehicles in Fig.5b, indicating that the attacker maintains normal temporal transmission patterns by replaying historical BSM sequences. 
+
+> (a) A3-DoS Disruptive Sybil
+> (b) A4-Data Replay Sybil
+
+Fig. 5 Temporal distribution of A3 and A4 
+
+3) Feature Importance: Results show that varying Sybil patterns yield distinct feature distribution separations, vali-dating our lightweight KS-based screening strategy. In A1, traffic context (e.g., f re msg ) and physics consistency (e.g., 
+
+Spd Dif f ) features exhibit high to moderate discriminabil-ity due to regular grid-structured behaviors. In A2, traffic   
+
+> (a) A1-Grid Sybil (b) A2-DoS Random Sybil
+> (c) A3-DoS Disruptive Sybil (d) A4-Data Replay Sybil
+
+Fig. 6 KS-based feature importance for source attacker trace-ability under four Sybil attack scenarios. context features dominate, particularly identity-lifecycle indi-cators (e.g., id age , id cum msg ), due to abnormal node persistence and communication volumes. For A3 and A4, attackers mimic and replay legitimate trajectories, rendering traditional basic kinematics and physics consistency features ineffective. Nevertheless, traffic context features consistently yield the highest KS statistics. Overall, these results prove that exclusive reliance on basic kinematic features compromises Sybil traceability robustness, necessitating specific feature optimization. 
+
+C. Qualitative Results of Source Attacker Traceability 
+
+We select the A3 DoS Disruptive Sybil attack as a rep-resentative case study to illustrate how Sybil-TraceGuard progressively traces rapidly changing Sybil identities back to their physical source attacker. As shown in Fig. 7(a), the source pseudonym 20111932 and its generated Sybil identity 
+
+30111932 are already present in the scene. However, their ma-licious roles and source–Sybil relationship cannot be inferred from a single-frame spatial observation. Hence, all nodes are initially treated as observation nodes, while the highlighted circles are shown only as ground-truth references. In Fig. 7(b), the incremental pre-screening stage flags the two pseudonyms as malicious candidates and highlights their suspicious mes-sage interactions. Although individual malicious observations may remain spatially plausible, the single-frame evidence is still insufficient to determine their common physical source. After aggregating observations over a five-second window, Fig. 7(c) exploits the accumulated spatial, temporal, and communication dependencies to associate the short-lived Sybil identities S1–S7 with the same source attacker 20111932 . The yellow dashed curves represent inferred source–Sybil associ-ations rather than physical vehicle trajectories. This example demonstrates that multi-frame cross-identity dependencies en-able Sybil-TraceGuard to recover the common physical source behind rapidly changing Sybil pseudonyms. IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 11 
+
+Fig. 7 Qualitative results of multi-frame source-attacker trace-ability under the A3 DoS Disruptive Sybil attack. 
+
+D. Quantitative Results on Sybil Attack Pre-Screening 
+
+Existing studies rarely cover all four Sybil attacks simul-taneously, except for [44] and [45], emphasizing the com-pleteness of our evaluation. As shown in Table II, in terms of physical layer defense mechanisms, it exhibits a highly polarized performance across scenarios. The threshold-based method [44] achieves good performance under A2 with a 
+
+98 .86% F1-score; however, its detection capability severely degrades in A1, A3 and A4. Conversely, the DTW-based approach [27] achieves a robust F1-score of 94 .88% under A1, while leaving the remaining scenarios unaddressed. In terms of tabular supervised ML models, it achieves competitive metrics but suffers from limited generalization. CNN-LSTM[30] out-performs both GBDT [31] and deep ensemble TL[45] in A1. Meanwhile, VAN-IDS [15] achieves satisfactory performance only on a mixed dataset of A1 and A2. Deep Ensemble TL [45] experiences a noticeable performance drop(Acc 79 .50% 
+
+in A3 and F1-score 67 .00% in A4). Regarding unsupervised baselines, VADGAN [46] delivers an insufficient F1-score of 76 .35% under A3, while KMeans yields degraded F1-scores across A2 ( 79 .73% ), A3 ( 77 .16% ), and A4 ( 71 .22% ). Conversely, except for ODAC, the incre-mental streaming paradigm achieves robust and consistent results across all Sybil attacks. Although slightly lower than DBSTREAM in A1, our DenStream-based Sybil detection framework demonstrates obvious advantages in A2, A3, and A4. Overall, while remaining label-independent, DenStream establishes new benchmarks across A1–A4 with F1-scores of 
+
+95 .60% , 98 .61% , 96 .56% , and 97 .23% , respectively, outper-forming the supervised solutions like deep ensemble TL [45]. 
+
+E. Quantitative Results on Source Attacker Traceability 
+
+Several studies [27, 28, 32] have investigated Sybil detection or source-oriented traceability. However, [27] and [28] are excluded from Table III because their evaluation protocols and reported metrics are not directly comparable with our three-class traceability setting. THGAT [32] is retained where a comparable result is available. Overall, Sybil-TraceGuard achieves Macro-F1 scores of 94.91%, 97.03%, 98.96%, and 98.89% in A1–A4, respectively, outperforming the strongest competing methods in all four sce-narios. The gain is particularly evident in A3 and A4, where it surpasses CNN (97.13%) and Transformer with MeanTeacher (98.15%), respectively. These results demonstrate consistently high class-balanced traceability performance across heteroge-neous Sybil behaviors. The SAR and NFAR results further show that this im-provement is not achieved by simply increasing sensitivity to malicious nodes. Sybil-TraceGuard obtains SAR values of 96.88%, 95.45%, 99.16%, and 100.00% while keeping NFAR below 0.2% in all four scenarios. In contrast, several com-peting methods achieve high SAR at the cost of substantially higher false accusations; for example, CNN reaches 96.92% SAR in A1 with an NFAR of 18.50%, while BiLSTM with MeanTeacher reaches 98.21% SAR in A2 with an NFAR of 20.98%. This indicates that Sybil-TraceGuard provides a more favorable trade-off between source-attacker identification and protection of normal vehicles. The results also show that the optimal semi-supervised strat-egy is attack- and backbone-dependent. PseudoLabel performs best for all three deep backbones in A1, whereas FreeMatch is consistently stronger in A2. For A3 and A4, the preferred strategy varies across backbones. This variation suggests that no generic SSL method is consistently optimal across hetero-geneous Sybil patterns. In contrast, Sybil-TraceGuard com-bines spatial, communication, and temporal evidence within a unified MeanTeacher-based framework, resulting in more stable performance across the four attack scenarios. 
+
+F. Sensitivity Analysis of Hyperparameters 1) window size (w) and step ratio (r): A1 serves as the primary case study since it is the sole scenario with a performance under 95%. The Transformer with PseudoLabel serves to evaluate the necessity of spatial graph topology for source traceability. Meanwhile, GCN-BiLSTM with Mean-Teacher provides a direct architectural comparison between standard graph baselines and our proposed Sybil-TraceGuard under identical consistency regularization. In Table IV, all models exhibit performance degradation as r increases from 0.1,0.5,0.8 to 1.0, which can be attributed to the reduced temporal overlap and sample density. Notably, the GCN-BiLSTM baseline collapses to 40.12% at w = 15 , r = 1 .0.Our method maintains robust and stable performance across all configurations, consistently exceeding 89.00%. Further-more, owing to the MSTA module, our model demonstrates remarkable scale invariance with marginal fluctuations under variations in w, confirming its effectiveness in capturing robust spatiotemporal features against diverse sampling frequencies. IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 12 
+
+TABLE II: Sybil attack pre-screening results (%). Sup.: supervised; Unsup.&Incre.: unsupervised and incremental. Gray shading denotes the best result within each category, while bold values denote the overall best result. 
+
+TYPE METHOD A1 A2 A3 A4 ACC ↑ F1 ↑ ACC ↑ F1 ↑ ACC ↑ F1 ↑ ACC ↑ F1 ↑
+
+PHYSICAL DTW[27] 98.61 94.88 N/A N/A N/A N/A N/A N/A THRESHOLD -BASED [44] 82.04 74.15 98.98 98.86 77.87 69.14 79.48 52.35 TABULAR 
+
+SUP . ML GBDT[31] 93.68 77.06 95.57 87.07 N/A N/A N/A N/A CNN-LSTM[30] 96.58 92.81 N/A N/A N/A N/A N/A N/A VAN-IDS[15] MIXED DATASET (A1+A2): A CC -99.55/F1-98.45 N/A N/A N/A N/A DEEP ENSEMBLE TL[45] 82.70 88.40 98.90 99.90 79.50 99.30 85.80 67.00 UNSUP .ML VADGAN[46] N/A 100.00 N/A 93.33 N/A 76.35 N/A 88.50 KM EANS 89.26 91.22 90.92 79.73 82.55 77.16 85.36 71.22 UNSUP . & INCRE . ML ODAC 87.94 90.09 76.10 38.93 85.27 68.91 76.42 53.66 CLU STREAM 90.67 92.42 97.33 94.17 90.27 87.29 88.85 79.63 DBSTREAM 95.91 96.70 93.03 85.36 89.70 87.25 99.07 83.39 STKM EANS 90.92 92.62 97.31 94.10 95.15 93.89 97.40 95.24 OURS (D EN STREAM ) 94.58 95.60 99.36 98.61 98.12 96.56 97.77 97.23 
+
+TABLE III: Source-attacker traceability results (%) with optimal w and r at ρ = 0 .8. M-F1, SAR, and NFAR denote Macro-F1, Source-Attacker Recall, and Normal False-Accusation Rate, respectively. Gray shading denotes the best result within each category, while bold values indicate the proposed Sybil-TraceGuard. 
+
+TYPE BASE SEMI-SUP. METHOD A1 A2 A3 A4 M-F1 ↑ SAR ↑ NFAR ↓ M-F1 ↑ SAR ↑ NFAR ↓ M-F1 ↑ SAR ↑ NFAR ↓ M-F1 ↑ SAR ↑ NFAR ↓
+
+Tabular Sup. ML GBDT N/A 82.67 60.69 7.91 96.70 82.40 0.00 89.78 89.64 12.10 97.70 90.95 0.00 XGBoost N/A 83.68 60.22 4.98 93.55 68.27 0.00 90.04 91.58 12.27 97.39 89.10 0.00 Random Forest N/A 83.08 60.94 6.56 96.25 85.07 0.00 91.48 97.07 12.11 97.75 90.02 0.00 CNN N/A 88.83 96.92 18.50 93.44 73.91 3.12 97.13 96.20 5.29 97.41 96.36 6.86 BiLSTM N/A 79.61 96.61 36.99 91.25 65.13 5.12 95.56 94.74 0.00 96.07 93.18 0.54 Sup. GNN THGAT [32] N/A 87.04 N/A N/A N/A N/A N/A N/A N/A N/A N/A N/A N/A Tabular Semi. ML XGBOD N/A 82.31 60.61 8.53 92.24 63.00 0.00 89.55 71.12 5.37 87.25 63.55 0.00 CNN PseudoLabel 71.71 26.28 3.45 89.38 62.50 2.40 96.80 84.92 0.00 87.39 59.39 14.22 FreeMatch 62.04 16.13 9.75 96.48 86.21 0.00 95.91 89.66 2.55 92.70 85.06 0.44 MeanTeacher 63.72 47.29 38.06 84.10 51.74 8.39 92.74 94.64 20.53 90.36 88.24 6.35 BiLSTM PseudoLabel 93.70 76.06 0.24 90.08 89.55 29.70 84.20 64.86 18.97 94.75 80.00 0.45 FreeMatch 61.24 41.67 23.50 96.70 82.95 0.00 87.13 69.05 0.00 95.70 88.89 0.14 MeanTeacher 73.74 77.54 41.42 93.25 98.21 20.98 93.83 76.60 3.97 95.57 94.55 6.10 Transformer PseudoLabel 93.39 84.56 3.47 88.21 79.10 30.00 83.04 44.68 13.25 87.61 53.33 0.91 FreeMatch 63.49 9.17 8.56 94.16 73.43 0.00 93.77 93.10 0.00 96.62 97.67 0.22 MeanTeacher 80.82 48.33 9.54 93.05 89.29 16.03 94.19 85.19 0.17 98.15 91.43 1.05 Graph Semi. ML GAT MeanTeacher 80.02 48.33 9.52 86.33 50.00 5.78 77.01 24.80 8.11 92.62 87.28 1.51 GCN-BiLSTM MeanTeacher 91.95 86.36 22.00 93.95 76.92 0.34 93.62 70.06 0.27 95.76 78.56 0.16 
+
+Sybil-TraceGuard MeanTeacher 94.91 96.88 0.16 97.03 95.45 0.07 98.96 99.16 0.17 98.89 100.00 0.19 
+
+TABLE IV: Macro-F1 performance under different configura-tions of w and r in A1 
+
+Model Window Size ( |W |) Step Ratio ( r)0.1 0.5 0.8 1.0 
+
+Transformer (PseudoLabel) 5 91.36 88.55 87.35 83.72 10 90.47 85.42 81.45 75.65 15 93.39 89.65 91.15 85.27 GCN-BiLSTM (MeanTeacher) 5 91.95 90.91 90.54 87.65 10 91.71 89.89 87.68 80.87 15 91.72 83.35 67.19 40.12 Sybil-TraceGuard 5 94.91 93.34 91.48 92.87 10 94.26 93.78 91.77 89.65 15 94.82 93.88 92.55 90.06 
+
+2) Unlabeled ratio ρ: In Table V, the settings of w and r
+
+are consistent with Table V. XGBOD is used to demonstrate the performance upper bound of traditional tabular classifica-tion via automated feature engineering, and BiLSTM (Mean-Teacher) alongside GCN-BiLSTM (MeanTeacher) represent the SOTA in tabular and graph semi-supervised learning, respectively. In Table V, our method outperforms all other methods across all ρ values, peaking at a 95.30% Macro-F1 score when ρ = 0 .60 .Although performance predictably declines as ρ increases due to diminishing supervision, our model remains remarkably stable, sustaining a marginal decay of merely 1.2% even at the extreme ρ = 0 .95 . Conversely, XGBOD fluctuates significantly under high label scarcity. Furthermore, while PseudoLabel-based Transformer and BiL-STM are competitive when labels are abundant, they are highly sensitive to label sparsity compared to MeanTeacher-based models, i.e., GCN-BiLSTM and ours. This confirms that combining Mean-Teacher with our spatio-temporal auditing logic effectively exploits unlabeled V2X streams, ensuring high traceability under limited supervision. IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 13 
+
+TABLE V: Macro-F1 performance under different ρ in A1                                       
+
+> Model |W|, r Unlabeled Ratio ( ρ)0.60 0.70 0.80 0.90 0.95
+> XGBOD N/A 81.46 82.14 82.31 82.29 83.78 Transformer (PseudoLabel)
+> |W|=15 r=0.1 93.70 93.34 93.39 91.82 90.97 BiLSTM (PseudoLabel)
+> |W|=10 r=0.1 94.57 94.68 93.70 93.31 92.39 GCN-BiLSTM (MeanTeacher)
+> |W|=5 r=0.1 92.11 92.05 91.95 91.51 91.46 Sybil-TraceGuard |W|=5 r=0.1 95.30 95.05 94.91 94.18 94.10
+
+TABLE VI: Source-attacker traceability performance (%) un-der cross-road and cross-density generalization settings at 
+
+ρ = 0 .8. Small subscripts denote the relative M-F1 drop from the corresponding base scenario.                                             
+
+> Model Cross-Road Cross-Density M-F1 ↑SAR ↑NFAR ↓M-F1 ↑SAR ↑NFAR ↓
+> XGBOD 73.38 (−8.93%) 62.87 11.37 66.83 (−15 .48%) 24.18 11.44 Transformer (PseudoLabel) 92.52 (−0.87%) 76.51 1.85 91.33 (−2.06%) 86.98 7.91 BiLSTM (PseudoLabel) 92.92 (−0.78%) 76.26 2.08 88.51 (−5.19%) 60.08 0.72 GCN-BiLSTM (MeanTeacher) 88.75 (−3.20%) 85.23 23.95 85.90 (−6.05%) 84.59 18.93
+> Sybil-TraceGuard 93.09 (−0.82%) 94.13 0.11 93.81 (−1.1%) 95.25 0.15
+
+G. Quantitative Results on Cross Road and Cross Density Generation 
+
+Table VI evaluates model generalization under spatial and traffic-density shifts using fixed models trained on the base scenario. Sybil-TraceGuard exhibits the most stable over-all performance, achieving Macro-F1 scores of 93.09% and 93.81% under cross-road and cross-density settings, corre-sponding to only 0.82% and 1.10% relative drops, respectively. More importantly, it preserves high SAR values of 94.13% and 95.25% while keeping NFAR below 0.2% in both settings. In contrast, competing methods show larger performance degra-dation or a less favorable SAR–NFAR trade-off, particularly under the cross-density shift. For example, XGBOD suffers a 15.48% Macro-F1 drop with SAR decreasing to 24.18%, while GCN-BiLSTM retains relatively high SAR but incurs NFARs of 23.95% and 18.93%. These results demonstrate that Sybil-TraceGuard generalizes more reliably to unseen road segments and varying traffic densities without substantially increasing false accusations. 
+
+H. Complexity Analysis 
+
+Let M denote the number of incoming BSM observations, 
+
+Cm the number of active micro-clusters, N the number of pseudonym nodes forwarded to Stage II, E the number of graph edges, W the temporal sequence length, and H the hidden dimension. ISAD processes the stream incrementally TABLE VII: Inference complexity of representative models.                           
+
+> Model Time Complexity
+> CNN O(N W kH 2)
+> BiLSTM O(N W H 2)
+> Transformer OLTN(W H 2+W2H)
+> GCN-BiLSTM
+> OW L G(N H 2+EH )+N W H 2
+> Sybil-TraceGuard
+> O M C md+N2+Elog E+W EH
+> +LTN W (H2+W H )
+
+with a complexity of O(M C md). For Stage II, DTC requires 
+
+O(N 2 + E log E) due to pairwise spatial relation construction and edge deduplication; SGEM requires O(N W H 2 +W EH );and MSTA requires O[LT N (W H 2 + W 2H)] . The node-wise AT classifier introduces only O(N H 2) complexity. Table VII compares the asymptotic inference complexity with represen-tative deep-learning baselines used in our experiments. Although Sybil-TraceGuard introduces additional topology construction and multi-scale temporal auditing, ISAD filters the high-volume BSM stream before graph inference, such that Stage II operates only on a reduced suspicious-node set (N ≪ M ). Moreover, the communication graph remains sparse and W is bounded in our implementation. Mean-Teacher only adds a constant-factor training overhead and does not increase online inference complexity. 
+
+I. Ablation Experiment 
+
+The module-level ablation results confirm the complemen-tary roles of ISAD, DTC, SGEM, and MSTA. Removing ISAD causes larger degradation in A2 and A4, with the Macro-F1 of A2 dropping from 97.03% to 85.43%, indicating the importance of incremental anomaly pre-screening for highly dynamic attack behaviors. Removing MSTA produces the most pronounced degradation in A1–A3; for example, the Macro-F1 in A2 decreases to 69.89%. This result demonstrates that temporal auditing is critical for capturing communication-frequency variations and multi-frame inconsistencies that can-not be sufficiently characterized by spatial and topological relations alone. The performance drops caused by removing DTC or SGEM further confirm the importance of dynamic relation modeling and spatial-communication dependencies for source-attacker traceability. The learning-strategy ablations show that MeanTeacher, data perturbation, and Focal Loss are particularly important in A2 and A3, where attack behaviors exhibit stronger random-ness and class ambiguity. Removing MeanTeacher eliminates teacher-based consistency regularization, resulting in substan-tial degradation under these dynamic scenarios. Likewise, re-moving data perturbation weakens robustness to representation variations, while replacing Focal Loss with standard cross-entropy reduces the model’s emphasis on difficult and minor-ity samples. Together, these results show that the proposed learning strategy improves the robustness of Sybil-TraceGuard under heterogeneous and imbalanced attack patterns. IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 14 
+
+TABLE VIII: Ablation study results for Macro-F1 scores under four Sybil attack scenarios                                     
+
+> Config. A1 A2 A3 A4 Full Model 94.91 97.03 98.96 98.89
+> Modules
+> w/o ISAD 89.53 85.43 97.51 89.01 w/o DTC 90.32 90.69 78.24 93.21 w/o SGEM 89.92 88.03 78.50 92.97 w/o MSTA 76.84 69.89 71.01 92.92
+> Learning Strategy
+> w/o Mean Teacher 91.53 87.41 74.34 93.46 w/o Data Perturbation 92.26 71.92 82.10 91.17
+> Loss Function
+> w/o Focal Loss 91.91 68.78 89.65 93.06
+
+VI. C ONCLUSION 
+
+Sybil-TraceGuard is a dynamic semi-supervised GNN framework that shifts Sybil defense from identity-level de-tection toward physical-source traceability. By integrating incremental anomaly pre-screening, dynamic topology con-struction, spatial-communication modeling, and multi-scale temporal auditing, Sybil-TraceGuard associates fragmented and rapidly changing Sybil pseudonyms with their underlying source attackers under limited supervision. Experiments across four Sybil attack scenarios demonstrate consistently strong traceability performance, achieving Macro-F1 scores of 94.91– 98.96%, Source-Attacker Recall(SAR) of 95.45–100.00%, and a Normal False-Accusation Rate (NFAR) below 0.2%. Sensi-tivity, generalization, and ablation studies further confirm the robustness and complementary contributions of the proposed components and semi-supervised learning strategy. Future work will extend the evaluation to real-world V2X traces and investigate adaptation to more complex Sybil behaviors under heterogeneous mobility and communication conditions. REFERENCES 
+
+[1] A. Matin and H. Dia, “Impacts of connected and automated vehicles on road safety and efficiency: A systematic literature review,” IEEE Trans. Intell. Transp. Syst. , vol. 24, no. 3, pp. 2705–2736, 2022. [2] Y. Pan, Y. Wu, L. Xu, C. Xia, and D. L. Olson, “The impacts of connected autonomous vehicles on mixed traffic flow: A comprehensive review,” Physica A: Statistical Mechanics and its Applications , vol. 635, p. 129454, 2024. [3] C. Hua, W. D. Fan, W. Hua, and S. Zhang, “Environmental sus-tainability and mobility impacts of connected and autonomous vehicles at urban highways,” Expert Syst. Appl. , vol. 295, p. 128892, 2026. [4] A. Boualouache and T. Engel, “A survey on machine learning-based misbehavior detection systems for 5g and beyond vehic-ular networks,” IEEE Commun. Surveys Tuts. , vol. 25, no. 2, pp. 1128–1172, 2023. [5] S. A. Abdel Hakeem and H. Kim, “Advancing intrusion de-tection in v2x networks: A comprehensive survey on machine learning, federated learning, and edge ai for v2x security,” IEEE Trans. Intell. Transp. Syst. , vol. 26, no. 8, pp. 11 137–11 205, 2025. [6] B. Hammi, Y. M. Idir, S. Zeadally, R. Khatoun, and J. Nebhen, “Is it really easy to detect sybil attacks in c-its environments: A position paper,” IEEE Trans. Intell. Transp. Syst. , vol. 23, no. 10, pp. 18 273–18 287, 2022. [7] L. Benarous, S. Zeadally, S. Boudjit, and A. Mellouk, “A review of pseudonym change strategies for location privacy preservation schemes in vehicular networks,” ACM Comput. Surv. , vol. 57, no. 8, pp. 1–37, 2025. [8] M. Baza, M. Nabil, M. M. Mahmoud, N. Bewermeier, K. Fidan, W. Alasmary, and M. Abdallah, “Detecting sybil attacks using proofs of work and location in vanets,” IEEE Trans. Dependable Secure Comput. , vol. 19, no. 1, pp. 39–53, 2020. [9] S. Benadla, O. R. Merad-Boudia, S. M. Senouci, and M. Leh-saini, “Detecting sybil attacks in vehicular fog networks using rssi and blockchain,” IEEE Trans. Netw. Ser. Man. , vol. 19, no. 4, pp. 3919–3935, 2022. [10] Y. Yao, B. Xiao, G. Wu, X. Liu, Z. Yu, K. Zhang, and X. Zhou, “Multi-channel based sybil attack detection in vehicular ad hoc networks using rssi,” vol. 18, no. 2, pp. 362–375, 2018. [11] SAE International, “V2x communications message set dictio-nary,” SAE International, Warrendale, PA, USA, Standard SAE J2735, 2024. [12] C. Liu, Y. Zhang, Z. Xue, Z. Sheng, J. Kang, and G. Han, “Catwin-ids: Context-aware intrusion detection system for both in-vehicle and external-vehicle networks via digital twin,” IEEE Trans. Intell. Transp. Syst. , pp. 1–15, 2026. [13] S. Wang, Y. Zhao, X. Fu, H. Si, W. Wang, and L. Xue, “A class-imbalance-aware intrusion detection system based on spatiotem-poral graph neural networks for software-defined vehicles,” J. Inf. Secur. Appl. , vol. 97, p. 104340, 2026. [14] Q. Xu, L. Zhang, D. Ou, and W. Yu, “Secure intrusion detection by differentially private federated learning for inter-vehicle networks,” Transp. Res. Rec. , vol. 2677, no. 9, pp. 421–437, 2023. [15] X. Chen, W. Qiu, L. Chen, Y. Ma, and J. Ma, “Fast and practical intrusion detection system based on federated learning for vanet,” Comput. Secur. , vol. 142, p. 103881, 2024. [16] R. Aishwarya, V. Vetriselvi, R. Prahmodh, et al. , “Lightweight misbehavior detection in the internet of vehicles using knowl-edge distillation from large language models,” Comput. Netw. ,p. 112083, 2026. [17] E. Binshaflout, A. Hamrouni, and H. Ghazzai, “Graph neural networks for vehicular social networks: Trends, challenges, and opportunities,” IEEE Trans. Intell. Transp. Syst. , vol. 27, no. 2, pp. 1731–1755, 2026. [18] Z. Feng, R. Wang, T. Wang, M. Song, S. Wu, and S. He, “A comprehensive survey of dynamic graph neural networks: Models, frameworks, benchmarks, experiments and challenges,” 
+
+IEEE Trans. Knowl. Data Eng. , vol. 38, no. 1, pp. 26–46, 2026. [19] Z. Song, X. Yang, Z. Xu, and I. King, “Graph-based semi-supervised learning: A comprehensive review,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 34, no. 11, pp. 8174–8194, 2022. [20] P. K. Mvula, P. Branco, G.-V. Jourdan, and H. L. Viktor, “A survey on the applications of semi-supervised learning to cyber-security,” ACM Comput. Surv. , vol. 56, no. 10, pp. 1–41, 2024. [21] X. Zhang, H. Xie, P. Yi, and J. C. Lui, “Enhancing sybil de-tection via social-activity networks: A random walk approach,” 
+
+IEEE Trans. Dependable Secure Comput. , vol. 20, no. 2, pp. 1213–1227, 2023. [22] M. Al-Qurishi, M. Al-Rakhami, A. Alamri, M. Alrubaian, S. M. M. Rahman, and M. S. Hossain, “Sybil defense techniques in online social networks: A survey,” IEEE Access , vol. 5, pp. 1200–1219, 2017. [23] A. Agrawal, A. Bhatia, and K. Tiwari, “Sybil-resilient publisher selection mechanism in blockchain-based mcs systems,” IEEE Open J. Comput. Soc , vol. 6, pp. 586–598, 2025. [24] R. Patel, U. Biswas, S. Kodipaka, W. Carroll, P. Peranich, and M. Young, “A survey of recent advancements in secure peer-to-peer networks,” arXiv preprint arXiv:2509.19539 , 2025. [25] A. Yazdinejad, A. Dehghantanha, H. Karimipour, G. Srivastava, and R. M. Parizi, “A robust privacy-preserving federated learn-ing model against model poisoning attacks,” IEEE Trans. Inf. Forensics Security , vol. 19, pp. 6693–6708, 2024. [26] D. Tang, A. Mahanti, R. Naha, V. Pathak, and M. Gong, “A deep learning approach to detecting multiple types of sybil nodes in IEEE TRANSACTIONS ON XXX, VOL. X, NO. X, X 15 
+
+vanets,” in Proceedings of the 18th IEEE/ACM International Conference on Utility and Cloud Computing , 2025, pp. 1–8. [27] R. Sultana, J. Grover, and M. Tripathi, “Cooperative approach for data-centric and node-centric misbehavior detection in vanet,” Vehicular Communications , vol. 50, p. 100855, 2024. [28] Y. Zhu, J. Zeng, F. Weng, D. Han, Y. Yang, X. Li, and Y. Zhang, “Sybil attacks detection and traceability mechanism based on beacon packets in connected automobile vehicles,” Sensors ,vol. 24, no. 7, p. 2153, 2024. [29] N. Abdel Rahman, E. Illi, S. Althunibat, and M. Qaraqe, “Mobility discloses genuinity: A robust machine learning-based sybil attack detection scheme,” IEEE Internet Things J. , vol. 12, no. 24, pp. 53 939–53 953, 2025. [30] R. Sultana, J. Grover, M. Tripathi, M. S. Sachdev, and S. Taneja, “Detecting sybil attacks in vanet: exploring feature diversity and deep learning algorithms with insights into sybil node associations,” J. Netw. Syst. Manag. , vol. 32, no. 3, p. 51, 2024. [31] Y. Chen, Y. Lai, Z. Zhang, H. Li, and Y. Wang, “Malicious attack detection based on traffic-flow information fusion,” in 
+
+2022 IFIP Networking Conference (IFIP Networking) , 2022, pp. 1–9. [32] Y. Chen, Y. Lai, and C. Zeng, “Sybil attack detection and trace-ability scheme based on temporal heterogeneous graph attention networks,” J. Netw. Comput. Appl. , vol. 242, p. 104261, 2025. [33] N. Z. Gong, M. Frank, and P. Mittal, “Sybilbelief: A semi-supervised learning approach for structure-based sybil detec-tion,” IEEE Trans. Inf. Forensics Security , vol. 9, no. 6, pp. 976–987, 2014. [34] X. Zhang, H. Xie, P. Yi, and J. C. Lui, “Enhancing sybil de-tection via social-activity networks: A random walk approach,” 
+
+IEEE Trans. Dependable Secure Comput. , vol. 20, no. 2, pp. 1213–1227, 2023. [35] B. Luo, X. Liu, and Q. Zhu, “Credibility enhanced temporal graph convolutional network based sybil attack detection on edge computing servers,” in 2021 IEEE Intelligent Vehicles Symposium (IV) , 2021, pp. 524–531. [36] X. Yang, Z. Song, I. King, and Z. Xu, “A survey on deep semi-supervised learning,” IEEE Trans. Knowl. Data Eng. , vol. 35, no. 9, pp. 8934–8954, 2023. [37] E. Kristianto, P.-C. Lin, and R.-H. Hwang, “Misbehavior de-tection system with semi-supervised federated learning,” Veh. Commun. , vol. 41, p. 100597, 2023. [38] F. Cao, M. Estert, W. Qian, and A. Zhou, “Density-based clus-tering over an evolving data stream with noise,” in Proceedings of the 2006 SIAM international conference on data mining .SIAM, 2006, pp. 328–339. [39] M. Hahsler and M. Bola˜ nos, “Clustering data streams based on shared density between micro-clusters,” IEEE Trans. Knowl. Data Eng. , vol. 28, no. 6, pp. 1449–1461, 2016. [40] River API Overview , online-ml/river, 2026, online; accessed 2026-04-09. [Online]. Available: https://riverml.xyz/latest/api/ overview/ [41] G. Duan, H. Lv, H. Wang, and G. Feng, “Application of a dynamic line graph neural network for intrusion detection with semisupervised learning,” IEEE Trans. Intell. Transp. Syst. ,vol. 18, pp. 699–714, 2022. [42] S. Tian, J. Dong, J. Li, W. Zhao, X. Xu, B. Song, C. Meng, T. Zhang, and L. Chen, “Sad: Semi-supervised anomaly detec-tion on dynamic graphs,” in Proceedings of the 32nd Interna-tional Joint Conference on Artificial Intelligence (IJCAI) , 2023, pp. 2296–2304. [43] O. A. Ekle and W. Eberle, “Anomaly detection in dynamic graphs: A comprehensive survey,” ACM Trans. Knowl. Discov. Data , vol. 18, no. 8, pp. 1–44, 2024. [44] J. Kamel, M. R. Ansari, J. Petit, A. Kaiser, I. B. Jemaa, and P. Urien, “Simulation framework for misbehavior detection in vehicular networks,” IEEE Trans. Veh. Technol. , vol. 69, no. 6, pp. 6631–6643, 2020. [45] M. A. Shahid, “Securing inter-vehicular communications in connected vehicles,” Ph.D. dissertation, University of Windsor (Canada), 2025. [46] D. S, R. R. Shrivastava, P. Narang, T. Alladi, and F. R. Yu, “Vadgan: An unsupervised gan framework for enhanced anomaly detection in connected and autonomous vehicles,” 
+
+IEEE Trans. Veh. Technol. , vol. 73, no. 9, pp. 12 458–12 467, 2024.
