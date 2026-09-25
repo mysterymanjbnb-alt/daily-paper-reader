@@ -1,0 +1,953 @@
+Title: FairMean: Promoting Fairness in Distributed Learning under Label Poisoning Attacks
+
+URL Source: https://arxiv.org/pdf/2609.26377v1
+
+Published Time: Wed, 23 Sep 2026 01:19:59 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+## FAIRMEAN: PROMOTING FAIRNESS IN DISTRIBUTED LEARNING UNDER LABEL POISONING ATTACKS 
+
+## Huigan Zheng 1,2 , Jiaojiao Zhang 3, Yongxiang Liu 2
+
+> 1
+
+## Sun Yat-Sen University, 2Pengcheng Laboratory, 3Great Bay University 
+
+ABSTRACT 
+
+Fairness-aware distributed learning prioritizes clients with large losses to reduce performance disparities, but label poi-soning can create large losses, thereby inducing a fairness– robustness conflict. We propose FairMean to manage this conflict. FairMean weights client gradients using a bounded, nondecreasing function of local loss. The increasing weights prioritize high-loss clients to promote fairness, while the up-per bound prevents excessive loss-induced amplification of poisoned-client gradients. In the absence of label poisoning, we show that minimizing the FairMean objective is more conducive to solution fairness than minimizing the standard average-loss objective. Under label poisoning, we establish an average-stationarity bound whose attack-dependent term is proportional to the square of the poisoned-client fraction. Ex-periments show that FairMean promotes fairness by reducing accuracy variance while improving worst-client accuracy. 
+
+Index Terms — distributed learning, fairness, label poi-soning 
+
+1. INTRODUCTION 
+
+Distributed learning trains a global model from the private data of multiple clients through the coordination of a central server [1–3]. The standard formulation minimizes the average of the local losses. When client data are heterogeneous, the jointly trained model may perform well for most clients but poorly for a minority of clients [4, 5]. Because a larger client loss generally indicates poorer current performance, fairness-aware formulations prioritize clients with large losses to nar-row performance disparities across clients [6]. Fairness-aware methods mainly follow two optimization routes. The first transforms or reweights client losses: q-FFL [7] uses a power transformation, DRFL [8] adapts ag-gregation weights to client losses, and TERM [9] applies ex-ponential tilting. The second treats local losses as multiple objectives. FedMDFG [10] and FedLF [11] introduce dy-namically adjusted fairness guidance objectives. AdaFed [12] rescales client gradients before computing a common descent direction, while FairMOO [13] alternates fairness reduction with constrained multi-objective descent. 
+
+> Jiaojiao Zhang is supported by the National Natural Science Foundation of China under Grants 12601589. Corresponding author: Huigan Zheng.
+
+Label poisoning attacks corrupt the local labels of a sub-set of clients while leaving their features and the prescribed protocol unchanged [14, 15]; poisoned clients thus transmit misleading updates that raise their local losses and may de-grade the global model on clean data. Label poisoning can be viewed as a special case of Byzantine attacks, where poi-soned clients follow the prescribed protocol rather than trans-mitting arbitrary messages [16]; robust aggregators designed for the latter screen updates via robust statistics or outlier de-tection [17–20], but as we discuss below, such screening can be ineffective under label poisoning on heterogeneous data. Recent studies incorporate robustness mechanisms into fairness-aware learning. For example, the q-FFL instantia-tion of H-nobs combines a fairness objective with post-hoc norm-based screening [7,21]. For q > 0, the q-FFL multiplier increases without an explicit upper bound, whereas screen-ing in H-nobs can discard fairness-enhancing gradients un-der heterogeneity. FedMGDA+ [22] instead normalizes client updates before computing a common descent direction for multiple objectives. Neither mechanism directly resolves the fairness–poisoning conflict: screening may discard atypical regular-client updates under heterogeneity, whereas normal-ization does not provide loss-dependent prioritization. Conse-quently, how fairness-aware methods behave when poisoned clients follow the prescribed computation and communication rules remains unclear. Recent work [15] shows that the mean aggregator can outperform several robust aggregators under label poisoning attacks when client data are sufficiently heterogeneous. In-tuitively, robust filtering may discard useful heterogeneous updates, whereas mean aggregation retains them. These ob-servations favor retaining mean aggregation in heterogeneous settings. Plain mean aggregation, however, gives all client gradients equal weights and does not prioritize clients with large losses. Loss-dependent gradient scaling can provide such prioritization, but it creates an inherent conflict: un-derperforming regular clients and label-poisoned clients may both exhibit large losses. An unbounded scaling rule may therefore amplify gradients induced by corrupted labels. This raises a central question: how can we prioritize regular clients with large losses without excessively scaling gradi-ents from poisoned clients? 
+
+To answer this question, we propose FairMean. Our con-arXiv:2609.26377v1 [cs.LG] 22 Sep 2026 0 2 4 6Local loss z                     
+
+> 0510 15
+> ϕκ, τ(z)
+> aLoss transformation 0246Local loss z
+> 1.0 1.5 2.0 2.5 3.0
+> aκ, τ(z)
+> b
+> larger τ
+> Marginal-weight function
+> κ= 0.5, τ= 1 κ= 1, τ= 1 κ= 2, τ= 1 κ= 1, τ= 2
+
+Fig. 1 . Loss transformation and marginal-weight function. (a) The increment ϕκ,τ (z)−z grows with z, so larger losses undergo a stronger transformation. (b) The marginal weight aκ,τ (z) is nondecreasing and approaches 1 + κ. Solid curves fix τ = 1 and vary κ; the dashed curve uses (κ, τ ) = (1 , 2) . For κ = 1 , the blue point (z, a κ,τ ) = (1 , 1.5) on the τ = 1 curve and the orange diamond (2 , 1.5) on the τ = 2 curve have the same marginal weight; increasing τ shifts the required loss from z = 1 to z = 2 .tributions are: (i) a loss transformation with a nondecreasing and uniformly bounded marginal weight that prioritizes large-loss clients to promote fairness while limiting, rather than eliminating, extra loss-induced scaling of poisoned-client gra-dients, and a clean-case global-optimality guarantee for the proposed loss-dispersion measure; (ii) an explicit bound on the deviation from the gradient of the objective induced by the loss transformation over regular clients and a correspond-ing average-stationarity guarantee; and (iii) experiments on Fashion-MNIST and CIFAR-10 showing improved fairness and worst-client accuracy under both attacks, with competi-tive average accuracy. 
+
+2. PROBLEM FORMULATION 
+
+Consider n clients indexed by N = {1, . . . , n } and a global model w ∈ Rd. Client i ∈ N has a differentiable local loss 
+
+fi : Rd → [0 , ∞). Every client is either regular or poisoned. Let R and P denote the corresponding fixed but unknown index sets. We write r := |R| ≥ 1 and p := |P| , so that 
+
+r + p = n, and define the poisoned-client fraction as δ := 
+
+p/n < 1. The nominal objective over the regular clients is 
+
+min 
+
+> w∈Rd
+
+FR(w), FR(w) := 1
+
+r
+
+X
+
+> i∈R
+
+fi(w). (1) 
+
+Definition 1. Following [15], client i ∈ P changes an ar-bitrary subset of its labels while leaving all other data un-changed. It computes efi on the relabeled data and follows the prescribed protocol; it cannot transmit an arbitrary message. 
+
+The transmitted update therefore changes only through re-labeling, although corrupted labels may still produce a large loss and a misleading gradient. 
+
+Definition 2. Following [7], fairness concerns the uniformity of model performance across clients. Under label poisoning, we assess fairness over the regular clients R.
+
+Regular-client loss dispersion serves as a training-time proxy for performance disparity. Since a large regular-client loss often indicates poor current performance, assigning it a larger marginal weight can promote fairness. However, poi-soned labels may also cause large losses, so unrestricted pri-oritization can amplify poisoned gradients. This conflict mo-tivates Section 3. 
+
+3. PROPOSED FAIRMEAN 
+
+Label poisoning changes labels while leaving client features and the prescribed training procedure unchanged, yet it can produce large losses and misleading gradients. Since mean aggregation can outperform robust alternatives under such at-tacks in heterogeneous settings [15], we propose FairMean, which retains mean aggregation and introduces a bounded, nondecreasing marginal weight to prioritize large losses while limiting the amplification of poisoned-client gradients. We seek a differentiable loss transformation whose deriva-tive is (i) nondecreasing to prioritize large regular-client losses, (ii) uniformly bounded to cap extra loss-induced scal-ing of every client gradient, including gradients produced from poisoned labels, and (iii) Lipschitz continuous to avoid abrupt weight changes. These requirements lead to 
+
+ϕκ,τ (z) := z + κ [z − τ log(1 + z/τ )] , κ, τ > 0. (2) For analysis, define the regular-client objective induced by the loss transformation as 
+
+Φκ,τ  
+
+> R
+
+(w) := 1
+
+r
+
+X
+
+> i∈R
+
+ϕκ,τ (fi(w)) . (3) To characterize the gradient of Φκ,τ  
+
+> R
+
+, define the corresponding marginal-weight function as 
+
+aκ,τ (z) := 1 + κ zz + τ . (4) By the chain rule, 
+
+∇Φκ,τ  
+
+> R
+
+(w) = 1
+
+r
+
+X
+
+> i∈R
+
+aκ,τ (fi(w)) ∇fi(w). (5) Thus, aκ,τ (fi(w)) is client i’s marginal weight , namely, the scalar that multiplies ∇fi(w). For z ≥ 0, ϕκ,τ (z) ≥ 0. The marginal weight and its derivative satisfy 
+
+1 ≤ aκ,τ (z) ≤ 1 + κ, 
+
+0 ≤ a′ 
+
+> κ,τ
+
+(z) = κτ 
+
+(z + τ )2 ≤ κτ .
+
+Thus, aκ,τ is nondecreasing, bounded by 1 + κ, and κ/τ -Lipschitz continuous. Moreover, aκ,τ (τ ) = 1 + κ/ 2, so in-creasing τ shifts the midpoint to a larger loss. The cap 1 + κ
+
+directly limits the additional loss-induced scaling. To connect the loss transformation with fairness, define 
+
+ψτ (z) := z − τ log(1 + z/τ ) and the dispersion term 
+
+Dτ (w) := 1
+
+r
+
+X
+
+> i∈R
+
+ψτ (fi(w)) − ψτ (FR(w)) .
+
+Substituting the loss transformation in (2) into (3) shows that 
+
+Φκ,τ  
+
+> R
+
+(w) in (3) can be equivalently written as 
+
+Φκ,τ  
+
+> R
+
+(w) = ϕκ,τ (FR(w)) + κD τ (w). (6) The first term depends only on the mean regular-client loss, while Dτ (w) ≥ 0 measures loss dispersion and vanishes ex-actly when all regular-client losses are equal. Moreover, ψ′′  
+
+> τ
+
+(z) = τ / (z + τ )2. If 0 ≤ fi(w) ≤ B for all i ∈ R , a second-order Taylor expansion around FR(w),followed by averaging, cancels the linear terms and yields 
+
+τ
+
+2( B + τ )2 Var R(w) ≤ Dτ (w) ≤ 12τ Var R(w), (7) where Var R(w) := r−1 P
+
+> i∈R
+
+[fi(w)−FR(w)] 2. Thus, min-imizing the FairMean objective explicitly penalizes disper-sion among regular-client losses, linking the loss transforma-tion to fairness. 
+
+Algorithm 1 FairMean 
+
+Require: Initial model w0, number of rounds T , stepsize 
+
+α > 0, κ > 0, and τ > 0 
+
+> 1:
+
+for t = 0 , . . . , T − 1 do  
+
+> 2:
+
+Server broadcasts wt 
+
+> 3:
+
+for i = 1 , . . . , n in parallel do  
+
+> 4:
+
+Compute bfi(wt) and ∇ bfi(wt) 
+
+> 5:
+
+vti ← aκ,τ ( bfi(wt)) ∇ bfi(wt) 
+
+> 6:
+
+Send vti to the server  
+
+> 7:
+
+end for  
+
+> 8:
+
+wt+1 ← wt − α 1
+
+> n
+
+Pni=1 vti 
+
+> 9:
+
+end for  
+
+> 10:
+
+return wT
+
+Because the server does not know R, FairMean applies the loss transformation to every client. Let bfi = fi for i ∈ R 
+
+and bfi = efi for i ∈ P , denoting the loss evaluated by client i.At round t, client i transmits 
+
+vti := aκ,τ ( bfi(wt)) ∇ bfi(wt). (8) Using a fixed stepsize α > 0, the server averages the received vectors and updates 
+
+wt+1 := wt − αn
+
+> n
+
+X
+
+> i=1
+
+vti . (9) 
+
+4. THEORETICAL ANALYSIS 
+
+We first show that, without label poisoning, minimizing the proposed FairMean objective in (3) is more conducive to so-lution fairness than minimizing the original objective in (1). Throughout this paper, ∥ · ∥ denotes the Euclidean norm for vectors and the spectral norm for matrices. Proofs of all the-oretical results are provided in Appendix B. 
+
+Theorem 1. Assume p = 0 and that FR and Φκ,τ  
+
+> R
+
+admit global minimizers w⋆ 
+
+> avg
+
+and w⋆
+
+> FM
+
+, respectively. Then 
+
+Dτ (w⋆
+
+> FM
+
+) ≤ Dτ (w⋆
+
+> avg
+
+).
+
+Theorem 1 shows that, without label poisoning, w⋆
+
+> FM
+
+, a global minimizer of the objective in (3), has no larger Dτ
+
+than w⋆
+
+> avg
+
+, a global minimizer of the original objective FR
+
+in (1). Together with (7), the theorem provides a theoretical guarantee that minimizing the objective induced by ϕκ,τ in (3) promotes fairness at global optimality. We now analyze FairMean as inexact gradient descent with respect to Φκ,τ  
+
+> R
+
+.
+
+Assumption 1. Let the convex set W contain w0, . . . , w T .For every i ∈ R , the regular-client loss fi is L-smooth on W.
+
+Assumption 2. For some G, A LP ≥ 0 and every w ∈ W , the following bounds hold for i ∈ R and i ∈ P , respectively: 
+
+∥∇ fi(w)∥ ≤ G, ∥∇ efi(w) − ∇ FR(w)∥ ≤ ALP .
+
+We next show that Assumption 2 holds for multiclass cross-entropy under label poisoning. 
+
+Lemma 1. Suppose all pre- and post-poisoning local losses are empirical cross-entropy losses of a K-class model with logits h(w; x) ∈ RK . Assume that the logit Jacobian 
+
+∇wh(w; x) ∈ RK×d satisfies ∥∇ wh(w; x)∥ ≤ Γ on W for every local sample. Also assume ∥∇ fi(w) − ∇ FR(w)∥ ≤ 
+
+HP for every i ∈ P and w ∈ W . Let ρ ∈ [0 , 1] be the largest fraction of relabeled samples at any poisoned client. Then Assumption 2 holds with 
+
+G := √2Γ , ALP := HP + √2 ρΓ. (10) Table 1 . CIFAR-10 test performance of regular clients in a 10-client network. Arrows indicate preferred directions. Method No attack Random flip Pairwise flip Avg. ↑ Fairness ↓ Worst ↑ Avg. ↑ Fairness ↓ Worst ↑ Avg. ↑ Fairness ↓ Worst ↑
+
+FedAvg 71.54 40.85 54.57 60.59 177.70 37.62 59.98 203.39 32.96 
+
+q-FFL 67.93 40.50 57.24 60.62 106.12 46.30 62.66 131.22 38.42 AdaFed 70.89 31.83 56.18 61.18 110.59 45.98 61.71 106.28 50.53 FedMGDA+ 70.33 37.92 54.41 55.90 104.22 45.18 63.09 118.47 49.04 H-nobs 67.93 40.50 57.24 63.38 108.06 50.83 56.35 161.16 41.18 
+
+q-FFL+CWTM 67.93 40.50 57.24 32.71 406.58 0.49 34.29 379.87 8.73 FairMean 70.15 34.46 55.94 61.54 85.33 52.01 61.37 99.34 50.97 Lemma 2. Under Assumption 2, define et := n−1 Pni=1 vti −∇Φκ,τ  
+
+> R
+
+(wt). Then (9) can be written as 
+
+wt+1 = wt − α∇Φκ,τ  
+
+> R
+
+(wt) + et.
+
+Moreover, the error satisfies 
+
+∥et∥ ≤ ϵ(δ, κ ), ϵ(δ, κ ) := δ(1 + κ)ALP + 2 κG . (11) By (11), the attack contribution to the stationarity bound below contains the explicit factor δ2.
+
+Theorem 2. Under Assumptions 1–2, let LΦ(κ, τ ) := (1 + 
+
+κ)L+( κ/τ )G2. For 0 < α ≤ 1/L Φ(κ, τ ), FairMean satisfies 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+∥∇ Φκ,τ  
+
+> R
+
+(wt)∥2 ≤ 2Φ κ,τ  
+
+> R
+
+(w0)
+
+αT + ϵ(δ, κ )2. (12) The optimization term in (12) decays as O(1 /T ). Increas-ing κ tightens the stepsize bound, whereas increasing τ re-laxes it through the term (κ/τ )G2, consistent with Fig. 1(b). Thus, more aggressive prioritization of high-loss clients, in-duced by a larger κ or a smaller τ , requires a more conserva-tive theoretical stepsize. 
+
+5. EXPERIMENTS Experimental setup. We use 10 clients, an MLP for Fashion-MNIST, and a 5-layer CNN for CIFAR-10 1. Their training samples follow Dirichlet partitions with concentrations 0.5 and 0.1, respectively. The main experiments poison two clients. Random flip selects an incorrect label uniformly, while pairwise flip maps class c to 9 − c. Baselines are FedAvg [1], q-FFL [7], AdaFed [12], FedMGDA+ [22], H-nobs [21], and q-FFL+CWTM [17]. 
+
+Evaluation metrics. Using clean test labels, we evaluate reg-ular clients by accuracy variance, worst-client accuracy, and average accuracy, which measure fairness, poorest-client per-formance, and overall performance, respectively. 
+
+Overall performance. Tables 1 and 2 show that FairMean remains competitive without attacks. Under label poisoning,       
+
+> 1https://github.com/Zhg9300/FairnessUnderLP 64 72 80 88 Avg. ↑
+> 050 100 150 Var. ↓
+> 00.1 0.2 0.3 Poisoned-client fraction 45 60 75 90 Worst ↑
+> FedAvg q-FFL FairMean
+
+Fig. 2 . Fashion-MNIST performance under pairwise flip ver-sus the poisoned-client fraction. it achieves the lowest accuracy variance and highest worst-client accuracy in all four dataset–attack settings, while re-taining competitive average accuracy. 
+
+Impact of the poisoned-client fraction. On Fashion-MNIST under pairwise flip, we vary the poisoned-client fraction from 0 to 0.3. Figure 2 shows that FairMean retains its fairness advantage. At δ = 0 .3, it reduces accuracy variance from 
+
+91 .99 to 75 .97 and raises worst-client accuracy from 56 .19% 
+
+to 60 .85% relative to q-FFL. 
+
+Future work. Future work will extend FairMean to stochastic client participation and develop mechanisms that account for benign data heterogeneity when mitigating label poisoning. 6. REFERENCES 
+
+[1] H. B. McMahan, E. Moore, D. Ramage, S. Hamp-son, and B. Ag¨ uera y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in 
+
+Proceedings of the International Conference on Artifi-cial Intelligence and Statistics , 2017. [2] T. Li, A. K. Sahu, A. Talwalkar, and V. Smith, “Fed-erated learning: Challenges, methods, and future direc-tions,” IEEE Signal Processing Magazine , vol. 37, no. 3, pp. 50–60, 2020. [3] C. Ren, H. Yu, H. Peng, X. Tang, B. Zhao, L. Yi, A. Z. Tan, Y. Gao, A. Li, X. Li, Z. Li, and Q. Yang, “Advances and open challenges in federated foundation models,” 
+
+IEEE Communications Surveys & Tutorials , vol. 28, pp. 2087–2126, 2026. [4] J. Wang, Q. Liu, H. Liang, G. Joshi, and H. V. Poor, “A novel framework for the analysis and design of het-erogeneous federated learning,” IEEE Transactions on Signal Processing , vol. 69, pp. 5234–5249, 2021. [5] Y. Shi, H. Yu, and C. Leung, “Towards fairness-aware federated learning,” IEEE Transactions on Neural Net-works and Learning Systems , vol. 35, no. 9, pp. 11922– 11938, 2024. [6] N. Mukhtiar, A. Mahmood, and Q. Z. Sheng, “Fairness in federated learning: Trends, challenges, and opportu-nities,” Advanced Intelligent Systems , vol. 7, no. 6, pp. 2400836, 2025. [7] T. Li, M. Sanjabi, A. Beirami, and V. Smith, “Fair re-source allocation in federated learning,” in Proceedings of the International Conference on Learning Represen-tations , 2020. [8] Z. Zhao and G. Joshi, “A dynamic reweighting strategy for fair federated learning,” in Proceedings of the IEEE International Conference on Acoustics, Speech and Sig-nal Processing , 2022. [9] T. Li, A. Beirami, M. Sanjabi, and V. Smith, “On tilted losses in machine learning: Theory and applications,” 
+
+Journal of Machine Learning Research , vol. 24, no. 142, pp. 1–79, 2023. [10] Z. Pan, S. Wang, C. Li, H. Wang, X. Tang, and J. Zhao, “FedMDFG: Federated learning with multi-gradient de-scent and fair guidance,” in Proceedings of the AAAI Conference on Artificial Intelligence , 2023. [11] Z. Pan, C. Li, F. Yu, S. Wang, H. Wang, X. Tang, and J. Zhao, “FedLF: Layer-wise fair federated learning,” in 
+
+Proceedings of the AAAI Conference on Artificial Intel-ligence , 2024. [12] S. M. Hamidi and E.-H. Yang, “AdaFed: Fair feder-ated learning via adaptive common descent direction,” 
+
+Transactions on Machine Learning Research , 2024. [13] H. Zheng, J. Zhang, Y. Liu, and Q. Ling, “Fair-MOO: Achieving fairness in distributed learning via constrained multi-objective optimization,” in Proceed-ings of the IEEE International Conference on Acoustics, Speech and Signal Processing , 2026. [14] N. M. Jebreel, J. Domingo-Ferrer, D. S´ anchez, and A. Blanco-Justicia, “LFighter: Defending against the label-flipping attack in federated learning,” Neural Net-works , vol. 170, pp. 111–126, 2024. [15] J. Peng, W. Li, S. Vlaski, and Q. Ling, “Mean aggrega-tor is more robust than robust aggregators under label poisoning attacks on distributed heterogeneous data,” 
+
+Journal of Machine Learning Research , vol. 26, no. 27, pp. 1–51, 2025. [16] L. Lamport, R. Shostak, and M. Pease, “The Byzan-tine generals problem,” ACM Transactions on Program-ming Languages and Systems , vol. 4, no. 3, pp. 382–401, 1982. [17] D. Yin, Y. Chen, K. Ramchandran, and P. Bartlett, “Byzantine-robust distributed learning: Towards opti-mal statistical rates,” in Proceedings of the International Conference on Machine Learning , 2018. [18] K. Pillutla, S. M. Kakade, and Z. Harchaoui, “Robust aggregation for federated learning,” IEEE Transactions on Signal Processing , vol. 70, pp. 1142–1154, 2022. [19] Q. Xia, Z. Tao, Z. Hao, and Q. Li, “FABA: An algo-rithm for fast aggregation against Byzantine attacks in distributed neural networks,” in Proceedings of the In-ternational Joint Conference on Artificial Intelligence ,2019. [20] G. Molodtsov, D. Medyakov, S. Skorik, N. Khachaturov, S. Tigranyan, V. Aletov, A. Avetisyan, M. Tak´ aˇ c, and A. Beznosikov, “Bant: Byzantine antidote via trial func-tion and trust scores,” in Proceedings of the AAAI Con-ference on Artificial Intelligence , 2026. [21] G. Zhou, P. Xu, Y. Wang, and Z. Tian, “H-nobs: Achiev-ing certified fairness and robustness in distributed learn-ing on heterogeneous datasets,” in Advances in Neural Information Processing Systems , 2023. [22] Z. Hu, K. Shaloudegi, G. Zhang, and Y. Yu, “Feder-ated learning meets multi-objective optimization,” IEEE Transactions on Network Science and Engineering , vol. 9, no. 4, pp. 2039–2051, 2022. A. ADDITIONAL EXPERIMENTAL RESULTS 
+
+Table 2 shows that FairMean remains competitive without at-tacks. Under both random and pairwise flips, it achieves the lowest accuracy variance and the highest worst-client accu-racy while maintaining competitive average accuracy, consis-tent with the main results on CIFAR-10. 
+
+B. SUPPORTING PROOFS 
+
+Proof of Theorem 1. Since ϕ′ 
+
+> κ,τ
+
+(z) = aκ,τ (z) ≥ 1, the loss transformation is strictly increasing. The optimality of w⋆
+
+> avg
+
+therefore implies ϕκ,τ (FR(w⋆
+
+> FM
+
+)) ≥ ϕκ,τ (FR(w⋆
+
+> avg
+
+)) . The optimality of w⋆ 
+
+> FM
+
+and (6) further give 
+
+κDτ (w⋆
+
+> avg
+
+) − Dτ (w⋆
+
+> FM
+
+)
+
+= Φ κ,τ  
+
+> R
+
+(w⋆
+
+> avg
+
+) − Φκ,τ  
+
+> R
+
+(w⋆
+
+> FM
+
+)+ ϕκ,τ (FR(w⋆
+
+> FM
+
+)) − ϕκ,τ (FR(w⋆
+
+> avg
+
+)) ≥ 0.
+
+Dividing by κ > 0 proves the result. □
+
+Proof of Lemma 1. For each i ∈ R , write its local data as {(xij , y ij )}mi
+
+> j=1
+
+. For each i ∈ P , write its data before and after poisoning as {(xij , y ij , eyij )}mi
+
+> j=1
+
+. The largest within-client relabeling fraction is 
+
+ρ := max 
+
+> i∈P
+
+1
+
+mi
+
+{j : eyij ̸ = yij } .
+
+Define π(w; x) := softmax( h(w; x)) and ℓ(w; x, y ) := 
+
+− log πy (w; x). For any local sample, 
+
+∇wℓ(w; x, y ) = ∇wh(w; x)⊤ π(w; x) − ey
+
+,
+
+where ey is the y-th standard basis vector in RK . Since 
+
+∥π(w; x) − ey ∥ ≤ √2, the Jacobian bound gives 
+
+∥∇ wℓ(w; x, y )∥ ≤ ∥∇ wh(w; x)∥ ∥ π(w; x) − ey ∥ ≤ √2Γ .
+
+Averaging over the local samples yields 
+
+∥∇ fi(w)∥ ≤ √2Γ , i ∈ R , w ∈ W .
+
+Thus, the regular-client gradient bound holds with G = √2Γ .Fix i ∈ P . Because protocol-following label poisoning leaves 
+
+x unchanged, the softmax terms cancel and 
+
+∇wℓ(w; x, ey) − ∇ wℓ(w; x, y ) = ∇wh(w; x)⊤(ey − eey ).
+
+For every j satisfying eyij ̸ = yij , the spectral norm bound gives 
+
+∇wh(w; xij )⊤ eyij − eeyij 
+
+
+
+≤ ∥∇ wh(w; xij )∥∥ eyij − eeyij ∥ ≤ √2Γ .
+
+Averaging over the local samples of client i, with unchanged labels contributing zero, yields 
+
+∥∇ efi(w) − ∇ fi(w)∥ ≤ √2Γ 
+
+mi
+
+|{ j : eyij ̸ = yij }| ≤ √2ρΓ.
+
+Adding and subtracting ∇fi(w) therefore yields 
+
+∥∇ efi(w) − ∇ FR(w)∥ ≤ ∥∇ efi(w) − ∇ fi(w)∥
+
++ ∥∇ fi(w) − ∇ FR(w)∥≤ √2 ρΓ + HP ,
+
+which proves (10). □
+
+Proof of Lemma 2. Fix t ∈ { 0, . . . , T − 1}. For this proof, define the averaged server direction 
+
+ut := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+vti ,
+
+so that the main-text definition gives et = ut − ∇ Φκ,τ  
+
+> R
+
+(wt).Also define 
+
+gt 
+
+> R
+
+:= ∇FR(wt) = 1
+
+r
+
+X
+
+> i∈R
+
+∇fi(wt).
+
+Assumption 2 and the triangle inequality imply 
+
+∥gt
+
+> R
+
+∥ ≤ 1
+
+r
+
+X
+
+> i∈R
+
+∥∇ fi(wt)∥ ≤ G. 
+
+For each i ∈ R, let sti := fi(wt)/(fi(wt) + τ ). Since 
+
+aκ,τ (fi(wt)) = 1 + κs ti and 0 ≤ sti ≤ 1, we obtain 
+
+∇Φκ,τ  
+
+> R
+
+(wt) = gt 
+
+> R
+
++ κr
+
+X
+
+> i∈R
+
+sti∇fi(wt),
+
+∥∇ Φκ,τ  
+
+> R
+
+(wt) − gt
+
+> R
+
+∥ ≤ κr
+
+X
+
+> i∈R
+
+sti∥∇ fi(wt)∥ ≤ κG. 
+
+We first consider p = 0 . In this case, n = r and δ = 0 ,and the definitions of vti and ut give 
+
+ut = 1
+
+r
+
+X
+
+> i∈R
+
+aκ,τ (fi(wt)) ∇fi(wt) = ∇Φκ,τ  
+
+> R
+
+(wt).
+
+Thus, et = 0 , and (11) holds. Suppose next that p > 0. For i ∈ P , define 
+
+eati := aκ,τ ( efi(wt)) , qt 
+
+> P
+
+:= 1
+
+p
+
+X
+
+> i∈P
+
+eati∇ efi(wt).
+
+The nonnegativity of efi implies 1 ≤ eati ≤ 1 + κ and 0 ≤ eati −
+
+1 ≤ κ. Adding and subtracting eatigt 
+
+> R
+
+within each summand gives 
+
+qt 
+
+> P
+
+− gt 
+
+> R
+
+= 1
+
+p
+
+X
+
+> i∈P
+
+eati
+
+ ∇ efi(wt) − gt
+
+> R
+
+
+
++ 1
+
+p
+
+X
+
+> i∈P
+
+(eati − 1) gt
+
+> R
+
+.
+
+Therefore, Assumption 2 yields 
+
+∥qt 
+
+> P
+
+− gt
+
+> R
+
+∥ ≤ 1
+
+p
+
+X
+
+> i∈P
+
+eati∥∇ efi(wt) − gt
+
+> R
+
+∥
+
++ 1
+
+p
+
+X
+
+> i∈P
+
+(eati − 1) ∥gt
+
+> R
+
+∥≤ (1 + κ)ALP + κG. Table 2 . Fashion-MNIST test performance of regular clients in a 10-client network. Arrows indicate preferred directions. Method No attack Random flip Pairwise flip Avg. ↑ Fairness ↓ Worst ↑ Avg. ↑ Fairness ↓ Worst ↑ Avg. ↑ Fairness ↓ Worst ↑
+
+FedAvg 86.90 20.00 79.38 77.08 141.43 58.23 75.65 153.12 55.82 
+
+q-FFL 88.35 16.11 81.33 81.69 73.66 65.97 82.56 48.41 66.34 AdaFed 85.62 12.46 79.20 74.55 129.47 55.20 73.10 139.15 54.95 FedMGDA+ 88.62 15.49 81.96 73.68 126.05 56.93 76.93 155.32 56.19 H-nobs 88.35 16.11 81.33 84.19 56.79 69.60 83.99 67.89 67.47 
+
+q-FFL+CWTM 88.35 16.11 81.33 54.24 431.55 19.09 63.07 466.48 19.37 FairMean 87.55 18.44 80.36 81.87 42.12 70.55 82.57 31.95 71.29 
+
+The regular-client contribution equals r∇Φκ,τ  
+
+> R
+
+(wt). The identities r/n = 1 − δ and p/n = δ therefore give 
+
+ut = rn ∇Φκ,τ  
+
+> R
+
+(wt) + pn qt
+
+> P
+
+= (1 − δ)∇Φκ,τ  
+
+> R
+
+(wt) + δq t 
+
+> P
+
+.
+
+Subtracting ∇Φκ,τ  
+
+> R
+
+(wt) from both sides and using the defini-tion of et yields 
+
+et = δ qt 
+
+> P
+
+− ∇ Φκ,τ  
+
+> R
+
+(wt).
+
+Combining the preceding two bounds gives 
+
+∥et∥ ≤ δ ∥qt 
+
+> P
+
+− gt
+
+> R
+
+∥ + ∥gt 
+
+> R
+
+− ∇ Φκ,τ  
+
+> R
+
+(wt)∥
+
+≤ δ(1 + κ)ALP + 2 κG  = ϵ(δ, κ ).
+
+This proves (11) and completes the proof. □
+
+Proof of Theorem 2. We first establish the smoothness of 
+
+Φκ,τ  
+
+> R
+
+. For any x, y ∈ W , convexity of W and the regular-client gradient bound give 
+
+|fi(y) − fi(x)| =
+
+Z 10
+
+⟨∇ fi(x + s(y − x)) , y − x⟩ ds 
+
+≤ G∥y − x∥.
+
+For brevity, set ai(w) := aκ,τ (fi(w)) . The derivative bound following (4) gives 
+
+|ai(x) − ai(y)| ≤ κτ |fi(x) − fi(y)| ≤ κG τ ∥x − y∥.
+
+Define hi(w) := ai(w)∇fi(w). Adding and subtracting 
+
+ai(x)∇fi(y) and using 1 ≤ ai(x) ≤ 1 + κ gives 
+
+∥hi(x) − hi(y)∥ ≤ ai(x)∥∇ fi(x) − ∇ fi(y)∥
+
++ |ai(x) − ai(y)|∥∇ fi(y)∥≤
+
+h
+
+(1 + κ)L + κτ G2i
+
+∥x − y∥
+
+= LΦ(κ, τ )∥x − y∥.
+
+Since ∇Φκ,τ  
+
+> R
+
+(w) = r−1 P 
+
+> i∈R
+
+hi(w), averaging this bound shows that Φκ,τ  
+
+> R
+
+is LΦ(κ, τ )-smooth on W.For each t = 0 , . . . , T − 1, let gt := ∇Φκ,τ  
+
+> R
+
+(wt). By Lemma 2, the update satisfies wt+1 = wt − α(gt + et).The segment between wt and wt+1 lies in W, so the descent lemma gives 
+
+Φκ,τ  
+
+> R
+
+(wt+1 ) ≤ Φκ,τ  
+
+> R
+
+(wt) − α⟨gt, g t + et⟩
+
++ LΦ(κ, τ )α2
+
+2 ∥gt + et∥2
+
+≤ Φκ,τ  
+
+> R
+
+(wt) − α⟨gt, g t + et⟩
+
++ α
+
+2 ∥gt + et∥2,
+
+where the second inequality follows from αL Φ(κ, τ ) ≤ 1.The identity 
+
+−⟨ g, g + e⟩ + 12 ∥g + e∥2 = 12
+
+ ∥e∥2 − ∥ g∥2
+
+therefore yields 
+
+Φκ,τ  
+
+> R
+
+(wt+1 ) ≤ Φκ,τ  
+
+> R
+
+(wt) − α
+
+2 ∥gt∥2 + α
+
+2 ∥et∥2. (13) Rearranging (13) and summing from t = 0 to T − 1 gives 
+
+α
+
+2 
+
+> T−1
+
+X
+
+> t=0
+
+∥gt∥2 ≤ Φκ,τ  
+
+> R
+
+(w0) − Φκ,τ  
+
+> R
+
+(wT ) + α
+
+2 
+
+> T−1
+
+X
+
+> t=0
+
+∥et∥2.
+
+Since ∥et∥ ≤ ϵ(δ, κ ), the accumulated error term is at most 
+
+T ϵ (δ, κ )2. Moreover, the nonnegativity of ϕκ,τ and (3) imply 
+
+Φκ,τ  
+
+> R
+
+(wT ) ≥ 0. Therefore, 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+∥gt∥2 ≤ 2[Φ κ,τ  
+
+> R
+
+(w0) − Φκ,τ  
+
+> R
+
+(wT )] 
+
+αT + ϵ(δ, κ )2
+
+≤ 2Φ κ,τ  
+
+> R
+
+(w0)
+
+αT + ϵ(δ, κ )2.
+
+Recalling the definition of gt proves (12). □

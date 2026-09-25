@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-24</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-25</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-24 22:41:28 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-25 22:50:01 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今天扫完25篇论文（精读10、速读15），最亮眼的是两篇9.0精读：Agentic AI安全跨维度威胁分类与评测成熟度，以及OPBackdoor“不在场证明对齐推理”的机会型后门。</p>
-<p>若只挑一个方向，先看Agentic AI安全全景与评测缺口；若关心攻击面，再读OPBackdoor，速读里的RAG投毒、联邦学习特征偏斜和个性化联邦强化学习也值得顺带浏览。</p>
-<p>普通读者可先读两篇9.0精读的摘要与结论，</p>
+<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
+<p>精读：《VLPSA: Vision-Language-Poisson-Safe Actions for Full-Body Safety of Learned Policies》（9.0/10）, 《BRFID: Toward Byzantine-Robust Federated Intrusion Detection》（9.0/10）</p>
+<p>速读：《Reinforcement Learning Inspired Black-box Adversarial Attacks for Computer Vision》（8.0/10）, 《SSP-Bench: A Hybrid Data Generation Framework for Safety, Security, and Privacy Evaluation》（8.0/10）, 《RAG-NAROK: Retrieval-Aware Knowledge Corpus Poisoning in RAG with Source-specific Refutation》（8.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -76,9 +77,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Connecting the Dots in Agentic AI Security: A Cross-Dimensional Threat Taxonomy, Evaluation Maturity, and Open Challenges">Connecting the Dots in Agentic AI Security: A Cross-Dimensional Threat Taxonomy, Evaluation Maturity, and Open Challenges</span></li><li><span class="dpr-home-dashboard-paper-title" title="OPBackdoor: Opportunistic Backdoors via Alibi-Aligned Reasoning">OPBackdoor: Opportunistic Backdoors via Alibi-Aligned Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Backdoors in Learning-Based Industrial Robotic Arm Manipulation: An Empirical Security Study">Backdoors in Learning-Based Industrial Robotic Arm Manipulation: An Empirical Security Study</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VLPSA: Vision-Language-Poisson-Safe Actions for Full-Body Safety of Learned Policies">VLPSA: Vision-Language-Poisson-Safe Actions for Full-Body Safety of Learned Policies</span></li><li><span class="dpr-home-dashboard-paper-title" title="BRFID: Toward Byzantine-Robust Federated Intrusion Detection">BRFID: Toward Byzantine-Robust Federated Intrusion Detection</span></li><li><span class="dpr-home-dashboard-paper-title" title="Upholding Robustness in Federated Learning: Trends, Emerging Strategies, and Research Opportunities">Upholding Robustness in Federated Learning: Trends, Emerging Strategies, and Research Opportunities</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -89,9 +90,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Micro-Collaborative Poisoning: A Distributed Attack on RAG Systems">Micro-Collaborative Poisoning: A Distributed Attack on RAG Systems</span></li><li><span class="dpr-home-dashboard-paper-title" title="Personalized Federated Reinforcement Learning via Model-Agnostic Meta-Learning: Convergence of Exact and Hessian-Free Meta-Policy Gradients">Personalized Federated Reinforcement Learning via Model-Agnostic Meta-Learning: Convergence of Exact and Hessian-Free Meta-Policy Gradients</span></li><li><span class="dpr-home-dashboard-paper-title" title="Joint Domain-Class Modeling for Federated Learning Under Feature Skew">Joint Domain-Class Modeling for Federated Learning Under Feature Skew</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Reinforcement Learning Inspired Black-box Adversarial Attacks for Computer Vision">Reinforcement Learning Inspired Black-box Adversarial Attacks for Computer Vision</span></li><li><span class="dpr-home-dashboard-paper-title" title="SSP-Bench: A Hybrid Data Generation Framework for Safety, Security, and Privacy Evaluation">SSP-Bench: A Hybrid Data Generation Framework for Safety, Security, and Privacy Evaluation</span></li><li><span class="dpr-home-dashboard-paper-title" title="RAG-NAROK: Retrieval-Aware Knowledge Corpus Poisoning in RAG with Source-specific Refutation">RAG-NAROK: Retrieval-Aware Knowledge Corpus Poisoning in RAG with Source-specific Refutation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span></div>
 </section>
 </div>
 
