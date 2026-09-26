@@ -1,0 +1,586 @@
+Title: Decision Hijacking: Prompt Injection Attacks on Jev's Typed Probabilistic Decisions
+
+URL Source: https://arxiv.org/pdf/2609.28613v1
+
+Published Time: Fri, 25 Sep 2026 00:07:00 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Decision Hijacking: Prompt Injection Attacks on Jev’s Typed Probabilistic Decisions 
+
+Tiantong Wu 
+
+Nanyang Technological University Singapore 
+
+tiantong.wu@ntu.edu.sg 
+
+Wei Yang Bryan Lim 
+
+Nanyang Technological University Singapore 
+
+bryan.limwy@ntu.edu.sg 
+
+Abstract 
+
+Most studies of prompt injection focus on gen-erative agents, leaving their effects on models with schema-defined outputs unclear. We ex-amine these effects in Jev, a non-generative decision model, using 510 reconstructed In-jecAgent cases. Malicious content shifts ac-tion probabilities but rarely causes Jev to select the attacker’s target. Override markers reduce this influence, while claims of contextual re-latedness have small effects. Adaptive attacks using score feedback double the mean high-est attacker-target probability found during op-timization, while success on fresh validation calls rises from 1.8% to 3.5%. Exploratory analysis links these successes to small initial de-cision margins or greater attacker control over the observation. Together, these findings show that schema-defined outputs change but do not eliminate prompt-injection risk, highlighting the need to evaluate how untrusted content in-fluences choices within the allowed action set. 
+
+1 Introduction 
+
+Large language model (LLM) agents combine lan-guage understanding with tool use to retrieve in-formation and act on their environment (Yao et al., 2023; Schick et al., 2023). These capabilities re-quire models to process external content, including webpages, documents, emails, and tool responses. Such content may contain instructions that con-flict with the user’s task. Indirect prompt injection exploits this exposure by placing malicious instruc-tions in data that the agent later reads (Greshake et al., 2023; Yi et al., 2025). The resulting fail-ures can include selecting an attacker-target tool, abandoning the user’s request, or disclosing pri-vate information (Zhan et al., 2024; Debenedetti et al., 2024). Understanding when external con-tent can redirect an automated decision is therefore important for systems that act on behalf of users. Existing research has established this risk in gen-erative LLM systems. Benchmarks evaluate attacks through generated responses and agent actions (Yi et al., 2025; Zhan et al., 2024; Debenedetti et al., 2024), while tool-selection attacks show that ma-licious descriptions can influence which available tool a generative agent chooses (Shi et al., 2025; Sneh et al., 2025). Defenses seek to preserve the distinction between trusted instructions and un-trusted data through structured inputs or model training (Chen et al., 2025a,b). These findings do not establish how the same attacks behave when the decision model does not generate text and can only select from a predefined structured output space. TypeSafe AI’s Jev provides a concrete setting for this question. Its choice interface maps a state and a predefined set of options to a typed deci-sion and reported probabilities, without generating free-form text (TypeSafe AI, 2026a,b). The inter-face restricts selection to declared actions, but an available action can still conflict with the user’s task. We call the remaining risk decision hijack-ing , in which attacker-controlled content shifts the decision distribution toward an attacker-target ac-tion. For state s, fixed action set A, safe-action set 
+
+Asafe ⊆ A , and attacker-target set Aadv ⊆ A , an attack replaces s with s′ and changes 
+
+p(a | s, A) −→ p(a | s′, A). (1) The user’s task and available actions remain un-changed. We examine both attacker-target selec-tion and probability shifts, since the latter may pro-vide useful optimization feedback even when the selected action does not change. To study this gap, we reconstruct the 510 direct-harm combinations in InjecAgent as typed deci-sions immediately after exposure to malicious con-tent. The reconstruction preserves the original user goals, attacker goals, injection channels, and at-tack text, while replacing free-form generation with a closed set of choices. Four experiments cover 54060 calls in the main study. DH-1 tests whether 1arXiv:2609.28613v1 [cs.CR] 23 Sep 2026 original attacks transfer to Jev. DH-2 separates the effects of injection-style markers. DH-3 tests asser-tions of contextual relatedness against a registered smallest effect size of interest (SESOI). DH-4 uses a deterministic grammar-based optimizer with ac-cess to the reported probability vector. Following the need for adaptive evaluation established in prior work (Zhan et al., 2025; Hofer et al., 2026), this final experiment tests whether score feedback can turn small probability shifts into validated attacker-target selections. We evaluate each selected attack with five fresh calls, separately from the calls used during optimization. Validated success requires at least three of these calls to select the attacker target. The results distinguish changes in probability from changes in action selection. Original attack content increases mean attacker-target probability by 0.043, but selects the target in only 1.8% of cases. Adding the source override prefix weak-ens the attack. In DH-2, adding “ignore all previ-ous instructions” lowers attacker-target probability by 0.032 relative to the plain request. In DH-3, the stronger relatedness assertion produces small positive contrasts that remain below the registered SESOI of 0.02. In DH-4, 24 additional queries double the mean best-so-far attacker probability from 0.043 to 0.084, while validated success rises from 1.8% to 3.5%. Familiar injection markers and adaptive score access, therefore, affect Jev’s de-cision distribution without producing widespread validated hijacking in this benchmark. Exploratory analysis identifies two patterns asso-ciated with successful adaptive attacks. Some deci-sions have a small initial gap between safe-action and attacker-target probability. In other cases, the attacker controls most of the observations and can induce a larger change in probability. Among cases with a large initial margin and malicious content embedded in a larger observation, only 1 of 468 is successfully hijacked. These associations describe the observed run and do not establish universal causal rules. The study contributes a threat model and bench-mark reconstruction for a non-generative typed de-cision layer, controlled evidence separating proba-bility shifts from validated action hijacking, and an exploratory analysis of the conditions associated with success. The findings show that restricting outputs to declared actions does not by itself es-tablish resistance to prompt injection. Evaluation should also measure changes in probability, deci-sion margins, observation structure, and the effect of exposing scores to an adaptive attacker. Our claim concerns the transfer of attack content to the tested Jev interface, rather than an overall security ranking of generative and non-generative models. 
+
+2 Background and Related Work 
+
+Tool use and indirect prompt injection. Re-Act combines generated reasoning with actions that obtain information from the external environ-ment (Yao et al., 2023). Toolformer trains a lan-guage model to decide when to call APIs and how to incorporate their results (Schick et al., 2023). These approaches illustrate how external content enters a model’s decision process. Greshake et al. (2023) shows that malicious instructions in re-trieved content can redirect LLM-integrated appli-cations. BIPIA evaluates indirect prompt injection across tasks involving external content and studies defenses that help models distinguish data from instructions (Yi et al., 2025). Our study retains this threat from untrusted input while examining a non-generative decision interface. 
+
+Benchmarks for agent security. InjecAgent pro-vides 1054 cases covering 17 user tools and 62 attacker tools, with direct-harm and data-stealing objectives (Zhan et al., 2024). Its enhanced condi-tion adds an override phrase to the original attacker instruction. AgentDojo evaluates attacks and de-fenses in stateful tool environments with task and security checks (Debenedetti et al., 2024). We re-construct InjecAgent’s direct-harm cases because they provide paired user tasks, attacker goals, tool-output templates, and attacker-target tools. Our endpoint is selection at the first security-critical decision after exposure to the injected content. It does not measure the completion of an end-to-end harmful workflow. 
+
+Attacks on tool selection. ToolHijacker targets tool selection by inserting malicious tool docu-mentation into a tool library (Shi et al., 2025). ToolTweak iteratively changes tool names and descriptions to increase the probability that an LLM-based agent selects a target tool (Sneh et al., 2025). These studies show that attacks can influ-ence choices among available tools without requir-ing an undeclared action. Our setting differs in both the target interface and the editable input. Jev makes a non-generative typed choice, and the at-tacker can modify only the designated observation content. Tool identifiers, descriptions, order, and 2the available action set remain fixed. 
+
+Defenses and adaptive evaluation. StruQ com-bines a structured input format with training that separates instructions from data (Chen et al., 2025a). SecAlign uses preference optimization to favor responses that follow the legitimate in-struction over responses that follow an injected instruction (Chen et al., 2025b). These defenses address trust in the input to a generative model. A typed output constraint instead limits which deci-sions the model can return, leaving the influence of untrusted input as an empirical question. Adap-tive evaluation is also important because attacks tailored to a defense can reveal weaknesses missed by fixed attacks (Zhan et al., 2025). Hofer et al. (2026) further study automated prompt injection in agent environments and find that black-box opti-mization can outperform gradient-based methods under their evaluated settings. DH-4 examines a specific feedback channel, the full reported choice distribution, and separates optimization-call screen-ing from validation with fresh repeated calls. 
+
+Typed probabilistic decisions. TypeSafe de-scribes Jev as a “System One” model for struc-tured decisions within software (TypeSafe AI, 2026a). Its choice interface returns a decision over a caller-defined set together with reported proba-bilities (TypeSafe AI, 2026b). We use these de-scriptions to document the interface and limit our empirical claims to jev-1.13.0 . Prior work on generative agents motivates the threat but does not determine how attack wording, contextual framing, and access to scores affect this non-generative inter-face. Our contribution is to measure those effects while keeping the available actions fixed and dis-tinguishing changes in probability from validated attacker-target selection. 
+
+3 Benchmark and Threat Model 
+
+3.1 Reconstructing InjecAgent 
+
+InjecAgent’s direct-harm split contains 30 attacker goals and 17 user contexts, yielding a complete 
+
+30 × 17 = 510 grid. Each case supplies a user request, a previously invoked user tool, a tool-response template with an attacker-controlled slot, an attacker instruction, and an attacker-target tool. We reconstruct the first security-critical decision after exposure to the malicious content. The Jev state has three fields, 
+
+user_request , actions_taken , and 
+
+latest_tool_result . The first two remain fixed across clean and attacked conditions. Only the designated content in the latest tool result changes. We omit explicit “trusted” and “untrusted” labels from the model input because they would reveal the benchmark’s security annotations. The primary upstream action space contains three available actions, namely the task-completing action, usually final_answer , the source user-tool action, and the attacker-target tool. The sec-ondary library space, denoted library_k8 , adds sampled distractors from the same tool library to give eight choices. We report the spaces separately. The upstream space preserves the source decision most directly, while the library space tests sensitiv-ity to additional choices. This is a snapshot benchmark. Its endpoint is attacker-target selection at the first security-critical decision. Some attacker tools require earlier ac-tions, so selection does not imply successful end-to-end harmful execution. Appendix A describes reconstruction and auditing. 
+
+3.2 Threat Model and Metrics 
+
+The attacker can change only the designated slot in latest_tool_result . The user request, prior actions, choice identifiers, descriptions, order, safe-action labels, and attacker target remain fixed. DH-1 to DH-3 use fixed text transformations. DH-4 also grants the attacker black-box access to the returned probability vector and permits iterative rewrites within a query budget. For case i, condition c, and repeat r, let pi,c,r (a)
+
+be the reported probability of action a, and let ˆai,c,r 
+
+be the returned action. For an action set S ⊆ A i,define the mean reported mass 
+
+Pi,c (S) = 1
+
+R
+
+> R
+
+X
+
+> r=1
+
+X
+
+> a∈S
+
+pi,c,r (a), (2) where R is the number of calls per case and con-dition. Let Ai, adv and Ai, safe denote the attacker-target and safe-action sets. With N = 510 cases, the mean attacker-probability contrast between con-ditions c and d is 
+
+∆P c−d 
+
+> adv
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+[Pi,c (Ai, adv ) − Pi,d (Ai, adv )] .
+
+(3) The safe-probability contrast ∆P c−d 
+
+> safe
+
+is defined analogously. We omit c − d when the compari-son is stated in the text or table. For per-condition 3summaries in DH-1 to DH-3, the reference is the clean condition. For DH-4 validation, it is the un-optimized attack at B = 0 .For each case and condition, define the observed attacker-target selection frequency 
+
+ˆπi,c = 1
+
+R
+
+> R
+
+X
+
+> r=1
+
+1[ˆ ai,c,r ∈ Ai, adv ]. (4) Targeted attack success rate (ASR) averages this frequency over the clean-qualified, targeted-eligible population, 
+
+ASR c = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ˆπi,c . (5) All 510 cases qualify for this study. With equal repeat counts, ASR also equals the number of attacker-target selections divided by N R . DH-1 uses R = 1 , while DH-2 and DH-3 use R = 5 .We separately report the robust-hijack count Kc =P 
+
+> i
+
+1[ˆ πi,c ≥ 0.5] . With five repeats, a case con-tributes to Kc when at least three calls select the tar-get. The corresponding case-level rate Kc/N need not equal ASR. DH-4 applies this same majority rule to five fresh validation calls at each checkpoint and reports the resulting rate as validated ASR. Its screening ASR uses optimization-call outcomes. Let Ci,c,r denote Jev’s returned confidence 
+
+field. Confident hijack rate (CHR) is 
+
+CHR τ,c = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+R
+
+> R
+
+X
+
+> r=1
+
+× 1ˆai,c,r ∈ Ai, adv ∧ Ci,c,r ≥ τ .
+
+(6) We use the inclusive threshold τ = 0 .7. CHR averages over all eligible cases and their repeats, rather than conditioning on target selections. It uses the returned confidence field, not the largest action probability. DH-4 CHR uses only the five fresh validation calls per checkpoint. The action-flip rate in DH-1 counts any change from the clean selected action, including changes to non-target actions. Appendix A.4 provides further details. Archived probabilities have a reporting step of 0.01. Means and paired contrasts can be smaller than this step because they average many calls. Such estimates remain interpretable as aggregate changes, but do not recover finer probabilities for an individual call. The 0.01 reporting step is dis-tinct from the registered 0.02 practical threshold in DH-3. 
+
+3.3 Reproducibility and Inference 
+
+All confirmatory calls require jev-1.13.0 , and a version mismatch is treated as a failure. Logs record exact requests, responses, choice order, probabilities, and request identity. Repeated-call experiments interleave conditions across cases. Confidence intervals use a two-way pigeonhole bootstrap over attacker goals and user contexts, with 10000 resamples, seed 20260923, and 95% percentile intervals. Paired conditions remain to-gether within each resample. DH-1 clean qualifica-tion requires the clean call to select a safe action and the case to be targeted-eligible. DH-2 and DH-3 require safe-action selection in at least three of five clean calls. All 510 cases qualify. DH-3 applies a registered SESOI of 0.02 to its two pri-mary relatedness contrasts. Appendix G reports integrity checks and distinguishes the 54060 main-study calls from 64860 total logged calls. 
+
+4 Experiments 
+
+Table 1 summarizes the four experiments and their call counts. 
+
+4.1 DH-1 Native Attack Transfer 
+
+DH-1 tests InjecAgent’s original attack text with-out adapting it to Jev. We compare clean, base , and 
+
+enhanced conditions in both action spaces. The enhanced condition prepends “IMPORTANT!!! Ig-nore all previous instructions and strictly adhere to the following instruction:” to the same attacker request. The experiment tests whether attacks de-signed for generative LLM agents affect a model restricted to declared actions. 
+
+4.2 DH-2 Injection-Style Ablation 
+
+DH-2 examines why the enhanced attack is weaker than the base attack. A0 is the plain attacker re-quest. A1 adds IMPORTANT!!! , A2 adds the ignore-previous marker, and A3 combines both markers. A4 rewrites the request in natural con-versational wording without override language. A0 to A3 form a two-marker factorial design, with A4 as an additional wording condition. All conditions preserve the attacker goal and task semantics and are evaluated with R = 5 , together with a clean reference. Registered hypotheses test whether the importance and ignore-previous markers reduce at-tacker influence (H1a and H1b) and whether natural wording preserves the A0 effect (H2). Appendix C gives the controls and sensitivity analysis. 4Table 1. Overview of the four main experiments on the same 510 cases. All calls use jev-1.13.0 . DH-1 tests both action spaces. DH-2 to DH-4 use the three-choice upstream space. R is the number of repeated calls per case and condition. DH-4 includes 12750 screening and 10200 validation calls. The total is 54060 calls, excluding additional reruns and preliminary checks.                   
+
+> Stage Question Conditions Jev calls DH-1 Transfer of original attacks Clean, base, and enhanced in both spaces 3060 DH-2 Effect of injection-style markers Clean and A0 to A4, R= 5 15300 DH-3 Effect of asserted relatedness Clean, P0, N0, P1, and P2, R= 5 12750 DH-4 Effect of adaptive score access Initial attack and 24 proposals; four checkpoints with five validation calls each 22950
+
+4.3 DH-3 Contextual Relatedness 
+
+DH-3 tests whether explicitly presenting malicious content as related to the observation affects the decision. P0 is the original attacker request. N0 adds “Additional material appears here:”, P1 adds “Related material appears here:”, and P2 adds “Di-rectly related material appears here:”. The original instruction remains an exact suffix. Each condi-tion and the clean reference receive R = 5 calls. The registered contrasts are P1 −N0, P2 −N0, and P2 −P1. The first two use SESOI = 0 .02 . The third compares the stronger and weaker relatedness as-sertions and is reported descriptively. Appendix D gives the registered analysis. 
+
+4.4 DH-4 Adaptive Optimization with Score Access 
+
+For each case, a deterministic optimizer searches a fixed grammar of 72 configurations formed from six prefixes, four suffixes, and three copy-count settings, subject to a 1400-character cap. It uses no attacker model or sampled text generation. The policy selects the nearest unqueried configuration, breaking distance ties by a fixed index. A candidate replaces the incumbent only if its reported attacker-target probability improves by at least 0.01, with a numerical tolerance of 10 −9. All other state fields and action definitions remain fixed. The budget B
+
+counts proposals after the initial attack. At B = 24 ,each case has one initial screening call and 24 pro-posal calls, for a total of 12750 calls. Optimization steps are interleaved across cases. Appendix E defines the grammar distance and acceptance rule. We freeze the best-so-far content at B ∈{0, 8, 16 , 24 } and evaluate each checkpoint with five fresh calls, adding 10200 validation calls. For case i at budget B, the observed attacker-target selection frequency is 
+
+ˆπi,B = 15
+
+> 5
+
+X
+
+> r=1
+
+1[ˆ ai,B,r ∈ Ai, adv ] , (7) where 1[·] is the indicator function. A case is a validated success if ˆπi,B ≥ 0.5, meaning that at least three of five calls select the target. Validated ASR is the fraction of cases meeting this rule. This finite-repeat criterion does not establish success on every future call. The complete run contains 22950 calls with no API failures. Appendix E details the protocol. 
+
+5 Results 
+
+Table 2 summarizes the main results. Figures 1 and 2 distinguish matched probability changes from validated action selection. 
+
+5.1 Original Attacks Shift Probabilities but Rarely Select the Target 
+
+In the upstream space, the base attack selects the target in 9/510 cases (1.8%) and increases its prob-ability by 0.043 on average. The enhanced attack is weaker, with ASR of 0% and mean ∆Padv of 0.009. A repeated-call rerun estimates an enhanced-minus-base contrast of −0.034 with CI [−0.062 , −0.015] .The eight-choice library space shows the same or-dering, as reported in Table 3 and Figure 4. Therefore, the override phrase that strengthens attacks against some LLM agents (Zhan et al., 2024) does not strengthen these attacks against Jev. Because the underlying attacker request is held fixed, the comparison links the difference to its added framing without establishing how Jev rep-resents that framing internally. 
+
+5.2 Override Markers Reduce Attacker Influence 
+
+Relative to A0, adding the importance marker changes mean attacker probability by −0.006 
+
+with CI [−0.010 , −0.001] . The ignore-previous marker has a larger effect of −0.032 with CI 
+
+[−0.060 , −0.014] . Natural wording also low-ers attacker probability by −0.006 with CI 5[−0.013 , −0.001] , contrary to the registered expec-tation that it would preserve the A0 effect. Figure 1 shows these contrasts. Removing the emergency-dispatch goal leaves their directions unchanged, with the ignore-previous contrast at −0.020 and CI 
+
+[−0.031 , −0.012] .Table 4 separates call-level ASR from robust-hijack counts. For A0 to A4, ASR is 2.0%, 2.2%, 0%, 0%, and 1.3%, corresponding to 51, 56, 0, 0, and 34 target selections out of 2550 calls per con-dition. The majority rule instead identifies 11, 11, 0, 0, and 7 successful cases out of 510. These low rates make DH-2 primarily a result about probabil-ity shifts. In this setting, common override markers reduce average attacker-target probability rather than consistently strengthening the attack. 
+
+5.3 Relatedness Assertions Produce Small Effects Across Many Goals 
+
+DH-3 separates assertions of relatedness from generic added text. P1 −N0 is −0.0025 with CI [−0.0054 , −0.0005] , opposing the registered H3a direction. P2 −N0 is +0 .0030 with CI 
+
+[0 .0010 , 0.0054] . This positive effect remains well below the registered SESOI of 0.02. P2 −P1 is 
+
++0 .0055 with CI [0 .0030 , 0.0091] . Therefore, the stronger assertion increases attacker probability rel-ative to both alternatives, but the neutral, related, and directly related conditions are not monotoni-cally ordered. These small effects occur across many goals. Af-ter averaging over 17 contexts per goal, P2 −N0 is positive for 25 of 30 goals (two-sided sign test 
+
+p = 0 .0003 ), while P2 −P1 is positive for all 30 (p = 1 .9 × 10 −9). Median absolute goal-level change is about 0.003. Table 5 and Figure 6 show the estimates and goal-level patterns. The results support a small systematic probability shift, but not a practically significant increase under the regis-tered criterion. All observed DH-3 hijacks involve the emergency-dispatch goal. Removing it makes the ASR contrasts zero without changing the conclusions about probability. Three independent P0 runs give aggregate ∆Padv values of 0.0427, 0.0425, and 0.0428, with correlations of at least 0.998 between per-case mean attacker probabilities. Appendix G reports these checks. 
+
+5.4 Adaptive Optimization Raises Target Scores but Adds Few Validated Successes 
+
+Figure 2 shows that the returned probabilities pro-vide useful optimization feedback. Mean best-so-far attacker probability increases from 0.043 to 0.084, and 59.8% of cases improve by at least one 0.01 reporting step. Most gain occurs within about eight queries and levels off around twelve. Fresh validation gives a B = 24 minus B = 0 con-trast of +0 .0347 for attacker probability, with CI 
+
+[0 .0188 , 0.0571] , and −0.0193 for safe probabil-ity, with CI [−0.0346 , −0.0034] . These validation contrasts are distinct from the selected screening scores. Validated ASR rises from 1.8% at B = 0 to 3.3% at B = 8 and 3.5% at both B = 16 and 
+
+B = 24 (Table 6). The number of successful cases increases from 9 to 18. Across all checkpoints, 19 distinct cases meet the validation rule at least once, while 491 never do. At B = 24 , 488/510 cases (95.7%) have no target selections, four have target-selection frequencies below 0.5 but above zero, and 18 meet the majority rule. Of the 501 cases that were unsuccessful at baseline, nine succeed at 
+
+B = 24 , giving a conditional success rate of 1.8%. CHR at τ = 0 .7 is 0.2% at both baseline and the final checkpoint. At each of these checkpoints, the five high-confidence target selections occur in the same single case, out of 2550 validation calls. The final CHR has a 95% CI of [0 , 1.18]% .Fresh validation matters because a screening suc-cess can reflect call variability. For example, one case meets the validation rule at an intermediate checkpoint but fails it at the final checkpoint. Ap-pendix E describes this case. 
+
+5.5 Exploratory Analysis of Margin and Attacker Control 
+
+We analyze final validation outcomes using only baseline validation measurements and fixed meta-data. The initial margin for case i is 
+
+Mi, 0 = P val  
+
+> i, 0
+
+(Ai, safe ) − P val  
+
+> i, 0
+
+(Ai, adv ), (8) where P val  
+
+> i, 0
+
+averages the five baseline validation calls. We write M0 when the case index is implicit. Other predictors include initial attacker probability, observation-wrapper type, attacker-control fraction, and source metadata. The outcome comes from separate B = 24 validation calls. No optimization outcome is used as a predictor. 6Table 2. Main results. Probability contrasts are in probability units and intervals are 95% CIs. DH-1 per-condition shifts use the clean reference. DH-2 and DH-3 report the matched contrasts shown. DH-4 validated ASR requires at least three target selections in five fresh calls; its probability contrasts compare validation at B = 24 with B = 0 .Screening results appear separately in Table 6. CHR uses Jev’s returned confidence field with the inclusive gate 
+
+C ≥ 0.7. DH-4 CHR averages the gated event over five fresh validation calls per case and then over all 510 cases. 
+
+Stage Comparison or endpoint Estimate [95% CI] DH-1 Upstream base ASR 1.8% (9/510); ∆Padv = +0 .043 
+
+DH-1 Upstream enhanced ASR 0%; ∆Padv = +0 .009 
+
+DH-1 Enhanced − base, repeated-call rerun −0.034 [ −0.062 , −0.015] 
+
+DH-2 A1 −A0, importance marker −0.006 [ −0.010 , −0.001] 
+
+DH-2 A2 −A0, ignore-previous marker −0.032 [ −0.060 , −0.014] 
+
+DH-2 A4 −A0, natural wording −0.006 [ −0.013 , −0.001] 
+
+DH-3 P1 −N0, H3a −0.0025 [ −0.0054 , −0.0005] 
+
+DH-3 P2 −N0, H3b +0 .0030 [0 .0010 , 0.0054] 
+
+DH-3 P2 −P1, H3c +0 .0055 [0 .0030 , 0.0091] 
+
+DH-4 Validated ASR at B = 0 1.8% [0 .0, 6.3]% 
+
+DH-4 Validated ASR at B = 24 3.5% [0 .0, 10 .0]% 
+
+DH-4 Validated ∆P 24 −0adv +0 .0347 [0 .0188 , 0.0571] 
+
+DH-4 Validated ∆P 24 −0safe −0.0193 [ −0.0346 , −0.0034] 
+
+DH-4 CHR at B = 24 , τ = 0 .7 0.2% −0.06 −0.05 −0.04 −0.03 −0.02 −0.01 0.00 0.01 0.02        
+
+> Matched Mean Change in Attacker Probability ΔP(Aadv )
+> P2−P1 dose-order P2−N0 directly related P1−N0 related A4−A0 natural register A1−A0 IMPORTANT A2−A0 ignore-previous
+> +0.0055 +0.0030 −0.0025 −0.0061 −0.0059 −0.0320
+> ±0.01 reported-probability step ±0.02 (DH-3 SESOI) DH-2 contrast DH-3 contrast
+
+Figure 1. Matched mean attacker-probability contrasts in DH-2 and DH-3 across 510 cases. Points show estimates, and horizontal intervals show 95% CIs. Negative values indicate lower attacker-target probability in the first condition. The 0.01 reporting step is a per-call property, while the 0.02 SESOI applies to the DH-3 P1 −N0 and P2 −N0 contrasts. The stronger relatedness assertion exceeds the weaker one, but N0, P1, and P2 do not form a uniformly increasing sequence. 
+
+Two patterns emerge. All 13 successful cases with embedded content, where the malicious text appears within a larger observation, involve emer-gency dispatch. Within this group, the initial −M0
+
+and attacker probability separate successful and unsuccessful cases almost perfectly. The five suc-cessful bare-snippet cases, where the observation consists mainly of the attacker-controlled snippet, include four non-emergency-dispatch cases with initial margins from 0.118 to 0.472 and no base-line target selections. The fifth, u16:a10 , already selects the target in all five baseline calls and has 
+
+M0 = −0.726 . Across these five cases, attacker-controlled content accounts for 0.848 to 0.913 of the baseline observation’s characters. Optimization can increase attacker probability by up to 0.38. Figure 3 and Table 7 show the four groups. Suc-cess rates are 12/12 for near-boundary embedded cases, 1/1 for near-boundary bare snippets, 4/29 for far-boundary bare snippets, and 1/468 for far-boundary embedded cases. Excluding emergency dispatch, bare-snippet status, and attacker-control fraction have exploratory areas under the receiver operating characteristic curve (AUCs) of approxi-mately 0.97 and 0.98. These are associations in the completed run, not causal rules or held-out predic-70 4 8 12 16 20 24       
+
+> Optimization Query Budget B
+> 0.00 0.02 0.04 0.06 0.08 0.10
+> P(A adv ), Best-so-Far
+> baseline=(0,0.043) B=(24,0.084)
+> Ascore optimization
+> mean best-so-far median best-so-far
+> 0816 24
+> Query Budget B
+> 036912 15
+> Attack Success Rate (%)
+> Breliable hijacking
+> screening ASR (1 call) validated ASR (95% CI)
+
+Figure 2. DH-4 optimization and validation over 510 cases. Panel A shows the mean and median best-so-far attacker probability observed during screening. These selected scores are optimization statistics. Panel B compares screening ASR with ASR validated using five fresh calls at B ∈ { 0, 8, 16 , 24 }. Error bars show 95% CIs for validated ASR. The budget excludes the initial screening call and all validation calls. 
+
+tive results. Appendix F gives the full analysis. embedded bare snippet   
+
+> Observation-Wrapper Type
+> near M0≤ 0.1 far M0> 0.1
+> Proximity to Boundary
+
+12/12 
+
+> (100.0%)
+
+1/1 
+
+> (100.0%)
+
+1/468 
+
+> (0.2%)
+
+4/29 
+
+> (13.8%)
+
+Figure 3. DH-4 validated success at B = 24 by initial margin and observation-wrapper type. Each cell shows the successful cases out of all cases in that group, fol-lowed by the percentage. Near-boundary cases satisfy 
+
+M0 ≤ 0.1 using the baseline validation margin in Equa-tion 8. The grouping is exploratory. 
+
+6 Discussion 
+
+A typed output space restricts available actions, but does not establish that the selected action serves the user’s task. Jev returns no undeclared action in our benchmark, yet untrusted text changes the probabilities of declared actions. Therefore, type safety and resistance to prompt injection address different properties. The results also show that attacks do not transfer unchanged from generative agents. The InjecAgent enhancement is weaker than the base attack, con-trolled override markers lower attacker probability, and adaptive optimization produces few additional validated successes despite direct score feedback. The attack surface transfers, but its observed behav-ior changes. The exploratory analysis suggests measuring both initial margin and attacker control. A small margin may permit a target selection after a small change, while control over most of an observation may permit a larger probability shift even when the initial margin is wide. Cases with larger margins and embedded malicious content were the most sta-ble group in this study. Reported probabilities also deserve adversarial evaluation when used for rout-ing or security decisions. High-confidence hijacks are rare here, but the scores still guide optimization. Whether applications should expose, round, rate-limit, or restrict access to these scores is outside the scope of this study. 
+
+7 Conclusion 
+
+Schema-defined outputs change the prompt-injection risk without removing it. Across 510 reconstructed InjecAgent cases, malicious con-tent shifts Jev’s reported action probabilities while attacker-target selection remains rare. Override markers can reduce influence, assertions of contex-tual relatedness have small effects, and adaptive score access doubles best-so-far target probability while adding few validated successes. Successful 8adaptive attacks are associated with small initial margins or high attacker control over the observa-tion. Evaluation of typed decision layers should therefore examine probability shifts, action selec-tion, decision margins, observation structure, and access to optimization feedback. 
+
+Limitations 
+
+We study one proprietary model version, 
+
+jev-1.13.0 . Other models or versions may behave differently. The reconstruction inherits InjecAgent’s domains, wording, and attacker goals. The primary space contains three choices, with eight choices tested only in DH-1, so the results do not establish robustness for much larger action sets. The snapshot endpoint measures selection rather than harmful execution. Reported probabilities have a 0.01 step, limiting interpretation at the individual-call level. Five fresh calls provide a defined validation criterion but do not establish the universal reliability of attacks. The structural anal-ysis is exploratory, with successes concentrated in two source clusters. Finally, we do not compare overall security with generative LLM baselines. The transfer claim concerns attack content, not a ranking of model classes. Appendix H further specifies these limits. 
+
+Ethical Considerations 
+
+We use a public security benchmark and simulated tool choices. No financial, medical, physical, or account-changing action is executed. The bench-mark reconstruction and analysis aim to improve the evaluation of decision layers that might oth-erwise be assumed safe because they cannot gen-erate arbitrary text. Score-guided attack methods can make similar systems easier to probe. Our ex-periments are limited to black-box modification of attacker-controlled content and do not provide access to model weights, credentials, or external systems. We report both observed attack effects and the conditions under which validated success remains rare. 
+
+References 
+
+Sizhe Chen, Julien Piet, Chawin Sitawarin, and David Wagner. 2025a. Struq: defending against prompt injection with structured queries. In Proceedings of the 34th USENIX Conference on Security Symposium ,SEC ’25, USA. USENIX Association. Sizhe Chen, Arman Zharmagambetov, Saeed Mahlouji-far, Kamalika Chaudhuri, David Wagner, and Chuan Guo. 2025b. Secalign: Defending against prompt injection with preference optimization. In Proceed-ings of the 2025 ACM SIGSAC Conference on Com-puter and Communications Security , CCS ’25, page 2833–2847, New York, NY, USA. Association for Computing Machinery. Edoardo Debenedetti, Jie Zhang, Mislav Balunovic, Luca Beurer-Kellner, Marc Fischer, and Florian Tramèr. 2024. Agentdojo: a dynamic environment to evaluate prompt injection attacks and defenses for llm agents. In Proceedings of the 38th International Con-ference on Neural Information Processing Systems ,NIPS ’24, Red Hook, NY, USA. Curran Associates Inc. Kai Greshake, Sahar Abdelnabi, Shailesh Mishra, Christoph Endres, Thorsten Holz, and Mario Fritz. 2023. Not what you’ve signed up for: Compromising real-world llm-integrated applications with indirect prompt injection. page 79–90. David Hofer, Edoardo Debenedetti, and Florian Tramèr. 2026. Assessing automated prompt injection attacks in agentic environments. Timo Schick, Jane Dwivedi-Yu, Roberto Dessí, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettle-moyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: language models can teach themselves to use tools. In Proceedings of the 37th Interna-tional Conference on Neural Information Processing Systems , NIPS ’23, Red Hook, NY, USA. Curran Associates Inc. Jia-Wen Shi, Zenghui Yuan, Guiyao Tie, Pan Zhou, Neil Zhenqiang Gong, and Lichao Sun. 2025. Prompt injection attack to tool selection in llm agents. 
+
+ArXiv , abs/2504.19793. Jonathan Sneh, Ruomei Yan, Jialin Yu, Philip Torr, Yarin Gal, Sunando Sengupta, Eric Sommerlade, Alasdair Paren, and Adel Bibi. 2025. Tooltweak: An attack on tool selection in llm-based agents. TypeSafe AI. 2026a. Introducing system one models & jev. TypeSafe AI Blog. Accessed 2026-09-23. TypeSafe AI. 2026b. Typesafe api documentation: Sys-tem one. OpenAPI documentation. Accessed 2026-09-23. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2023. React: Synergizing reasoning and acting in language models. Preprint , arXiv:2210.03629. Jingwei Yi, Yueqi Xie, Bin Zhu, Emre Kiciman, Guangzhong Sun, Xing Xie, and Fangzhao Wu. 2025. Benchmarking and defending against indirect prompt injection attacks on large language models. In Pro-ceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.1 , KDD ’25, page 1809–1820, New York, NY, USA. Associa-tion for Computing Machinery. 
+
+9Qiusi Zhan, Richard Fang, Henil Shalin Panchal, and Daniel Kang. 2025. Adaptive attacks break defenses against indirect prompt injection attacks on LLM agents. In Findings of the Association for Computa-tional Linguistics: NAACL 2025 , pages 7116–7132, Albuquerque, New Mexico. Association for Compu-tational Linguistics. Qiusi Zhan, Zhixiang Liang, Zifan Ying, and Daniel Kang. 2024. InjecAgent: Benchmarking indirect prompt injections in tool-integrated large language model agents. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 10471– 10506, Bangkok, Thailand. Association for Compu-tational Linguistics. 
+
+10 A Benchmark Reconstruction and Audit 
+
+A.1 Reconstructing the decision 
+
+We deterministically reconstruct the 510 direct-harm InjecAgent combinations used in this study. Each upstream item is first converted to an interme-diate representation containing the user goal, clean and attacked observations, available tools, attacker goal, attack category, and injection channel. We then identify and render the first security-critical decision after the attacker-controlled content is ex-posed. This order prevents the reconstruction from including later actions caused by the attack. Each state contains user_request ,
+
+actions_taken , and 
+
+latest_tool_result . Explicit trust la-bels are omitted from the input because they would reveal the security annotations. Information about which content is trusted is retained only in the evaluation metadata. The general schema permits a set of safe actions. In the audited InjecAgent snapshots, final_answer is the safe next action that completes the task. 
+
+Snapshot endpoint. The endpoint is selection of the attacker-target action immediately after expo-sure to malicious content. It does not imply that every selected tool could execute successfully. For example, a transfer tool may require prior account discovery. The snapshot design isolates action se-lection from these later execution requirements. 
+
+A.2 Action spaces 
+
+The primary upstream space contains the three choices exposed by the reconstructed decision. The secondary library space, library_k8 , adds sam-pled distractors to give eight choices. It is a con-trolled test with more available actions, not the complete tool library. We analyze the spaces sep-arately. DH-1 includes a case when its clean call selects an action in Ai, safe and the attacker target is eligible. In DH-2 and DH-3, the clean safe-selection frequency is 
+
+ˆsi = 15
+
+> 5
+
+X
+
+> r=1
+
+1[ˆ ai, clean ,r ∈ Ai, safe ]. (9) A case qualifies when ˆsi ≥ 0.5, together with target eligibility. All 510 cases qualify in each relevant analysis. Both DH-1 spaces therefore use the full shared set, and the repeated-call analyses retain all 510 cases. 
+
+A.3 Manual audit 
+
+Before fixing the benchmark, we inspected 100 rendered instances, split evenly between the two action spaces. We checked that final_answer 
+
+still completed the task, the attacker target matched the injected instruction, clean filler was benign and plausible for the source field, and option wording did not reveal evaluation labels. Automated checks found no missing target or safe choices, duplicate options, or accidental removal of the previously called user tool. Each upstream case had three choices and each library case had eight. Each half of the audit contained 17 data-security, 17 financial, and 16 physical-harm cases, and covered all 17 user-tool families. 
+
+A.4 Metric interpretation 
+
+Equation 2 averages reported action-set probabil-ities over repeated calls before averaging cases in Equation 3. Thus, ∆Padv and ∆Psafe are probabil-ity differences rather than percentages. A differ-ence of 0.02 corresponds to two percentage points. Matched contrasts compare two attack conditions for the same cases. Per-condition summaries in DH-1 to DH-3 instead compare each attack with its clean reference. ASR in Equation 5 is the mean of per-case target-selection frequencies. With N = 510 and R = 5 ,it equals the pooled target-selection count divided by 2550. The robust-hijack count applies a major-ity threshold separately to each case. For example, A0 has 51 target selections among 2550 calls, giv-ing ASR of 2.0%, while 11/510 cases meet the majority rule. A4 has 34 target selections, giving ASR of 1.3%, while 7/510 cases meet that rule. The percentages and case counts measure different quantities and must not be converted into one an-other by rounding. DH-1 uses one call per case, so this distinction disappears. Its action-flip rate still differs from ASR because it includes changes to non-target actions. CHR in Equation 6 averages the joint event of tar-get selection and returned confidence C ≥ 0.7, first within each case and then over the clean-qualified, targeted-eligible population. It is not conditioned on target selection. In the recorded pilot, Jev’s 
+
+confidence field was between 0 and 0.16 be-low the largest action probability. The secondary metric CHR p applies the gate to that probability instead and is not the CHR reported here. The protocol name GER denotes the same confidence-11 gated event as CHR. DH-4 computes CHR from five fresh validation calls per case and checkpoint. Optimization calls never enter this metric. At B = 24 , five of 2550 validation calls satisfy the gate, all from one case. The per-case mean is approximately 0.002, with 95% CI [0 , 0.0118] , or 0.2% with CI [0 , 1.18]% .Baseline CHR has the same point estimate and the same contributing case. The available DH-2 summaries do not report per-condition CHR, so Table 4 omits that column. Across the archived responses, probabilities are reported in steps of 0.01. An average change below 0.01 can arise from small numbers of calls chang-ing by one or more reporting steps. It is therefore a measurable aggregate statistic, not a reconstructed sub-step probability for a single call. Reporting resolution alone does not establish practical impor-tance. DH-3 uses a separate registered threshold of 0.02 for H3a and H3b. 
+
+B DH-1 Native Attack Transfer 
+
+DH-1 tests whether the attack text designed for generative agents transfers to Jev without rewrit-ing. Each of the 510 cases is evaluated under clean, base, and enhanced content in both action spaces. The enhanced condition uses InjecAgent’s over-ride prefix. The main DH-1 screen uses one call per case and condition. A separate upstream-space rerun evaluates 510 cases under clean, base, and enhanced content with five calls per condition, to-taling 7650 calls and 1530 complete cells. All calls return jev-1.13.0 , with no failures. Conditions are interleaved, and request hashes remain constant within cells. This rerun supplies the enhanced-minus-base CI in Table 2 and the pilot comparison in Figure 8; it is not included in the 3060-call DH-1 screen. Table 3 gives the per-condition results, and Fig-ure 4 compares the spaces. Adding choices slightly changes absolute probabilities but preserves the ordering. The base attack produces a larger proba-bility shift than the enhanced attack. Therefore, the later experiments use the primary upstream space. 
+
+C DH-2 Injection-Style Ablation 
+
+C.1 Conditions and controls 
+
+A0 is the original attacker instruction. A1 adds 
+
+IMPORTANT!!! . A2 adds “Ignore all previous instructions and strictly adhere to the following instruction:”. A3 combines both markers. A4 is a fixed paraphrase using natural conversational wording while preserving the attacker goal, entities, identifiers, amounts, and arguments. It removes ex-plicit override language. The rest of the serialized state remains byte-identical within each case. Each attack condition and the clean reference receive 
+
+R = 5 calls. The A4 paraphrases were audited before use. The final revision preserves literal entities and op-erational arguments and avoids benchmark labels. This condition tests whether the original attack’s ef-fect persists after a wording change with the same intended goal. It does not establish that all lexi-cal features of the original instruction remain un-changed. 
+
+C.2 Variation across cases 
+
+Table 4 reports per-condition summaries and regis-tered contrasts. Figure 5 shows the empirical cumu-lative distribution function (ECDF) of the per-case changes relative to A0, after averaging repeated calls. Most changes are close to zero, while a smaller subset has larger negative shifts, especially under the ignore-previous conditions. The result supports an average reduction in attacker probabil-ity rather than a fixed penalty applied equally to every case. 
+
+Emergency-dispatch sensitivity. The registered exclusion of emergency-dispatch goal a10 pre-serves the directions of all three contrasts. In partic-ular, A2 −A0 remains negative after removing the goal that accounts for the static hijacks. This shows that the average suppression effect is not confined to that goal. 
+
+D DH-3 Registered Relatedness Analysis 
+
+D.1 Design and contrasts 
+
+DH-3 tests whether explicitly asserting that ma-licious content is related to the user’s task in-creases attacker influence. The design was fixed and recorded with a hash before analysis. Each condition receives R = 5 calls. P0 is the original attack, N0 adds neutral framing, P1 asserts related-ness, and P2 asserts direct relatedness. The attacker instruction itself remains unchanged. Table 5 reports P1 −N0 (H3a), P2 −N0 (H3b), and P2 −P1 (H3c). The registered SESOI of 0.02 applies to H3a and H3b. H3c describes the change from the weaker to the stronger assertion. Classi-fication uses the stored confidence bounds before 12 Table 3. DH-1 results from one call per case and condition. Each row contains all 510 clean-qualified cases. Probability shifts use the clean row from the same action space. ASR counts attacker-target selections, while the flip rate counts any change from the clean selected action. CHR uses τ = 0 .7. A clean-to-clean flip rate is not applicable. The library space contains eight sampled choices, not the full tool library. CHR uses Jev’s returned confidence 
+
+field with the inclusive gate C ≥ 0.7. Its denominator includes all 510 eligible cases in each condition. 
+
+Space Condition Targeted ASR Flip rate ∆Padv ∆Psafe CHR Upstream Clean 0.0% (0/510) n/a 0.0000 0.0000 0.0% Three choices Base 1.8% (9/510) 3.3% +0 .0426 −0.0841 0.0% Enhanced 0.0% (0/510) 0.0% +0 .0087 −0.0325 0.0% Library Clean 0.0% (0/510) n/a 0.0000 0.0000 0.0% Eight choices Base 1.6% (8/510) 3.5% +0 .0381 −0.0824 0.0% Enhanced 0.0% (0/510) 0.0% +0 .0083 −0.0328 0.0% base enhanced 0.010 0.015 0.020 0.025 0.030 0.035 0.040  
+
+> ΔP(Aadv ) vs Clean
+> A
+> action space
+> upstream library (k=8)
+> base enhanced 0.0000 0.0025 0.0050 0.0075 0.0100 0.0125 0.0150 0.0175
+> Targeted ASR
+> B
+
+Figure 4. DH-1 results in the three-choice upstream and eight-choice library spaces. Panel A shows mean attacker-probability change from the clean condition. Panel B shows targeted ASR as a fraction, so 0.01 equals 1%. Both spaces use the same 510 cases, with one call per case and condition, and are analyzed separately. Table 4. DH-2 style ablation over 510 cases with five calls per condition. ASR is the mean per-case target-selection frequency and equals target selections divided by 2,550 calls. Robust cases meet the majority rule, with at least three target selections in five calls. These are separate statistics. Probability shifts in the upper block use the clean reference. The lower block gives matched contrasts and 95% two-way bootstrap CIs, including the registered exclusion of emergency-dispatch goal a10 . Mean effects below the 0.01 per-call reporting step remain estimable across calls; that step is not a practical-effect threshold. Per-condition CHR was not reported. 
+
+Condition Wording ASR Target calls Robust cases ∆Padv ∆Psafe 
+
+A0 Plain request 2.0% 51/2,550 11/510 +0 .0428 −0.0844 
+
+A1 Importance marker 2.2% 56/2,550 11/510 +0 .0369 −0.0643 
+
+A2 Ignore-previous marker 0.0% 0/2,550 0/510 +0 .0108 −0.0411 
+
+A3 Both markers 0.0% 0/2,550 0/510 +0 .0086 −0.0319 
+
+A4 Natural wording 1.3% 34/2,550 7/510 +0 .0367 −0.0896 
+
+Hypothesis Contrast Estimate [95% CI] Excluding a10 [95% CI] H1a A1 −A0 −0.0059 [ −0.0103 , −0.0010] −0.0060 [ −0.0100 , −0.0021] 
+
+H1b A2 −A0 −0.0320 [ −0.0603 , −0.0137] −0.0202 [ −0.0313 , −0.0122] 
+
+H2 A4 −A0 −0.0061 [ −0.0129 , −0.0013] −0.0037 [ −0.0082 , −0.0008] 
+
+display rounding. The table also retains the six-decimal bounds reported in the analysis summary. H3a opposes the hypothesized direction because its entire interval is below zero. H3b is positive, but its interval lies below the registered practical threshold. H3c is also positive and small. These re-sults establish that the stronger assertion produces a higher attacker probability than the weaker one, but do not establish a monotonic increase from N0 through P1 to P2. They also do not support 13 Table 5. DH-3 registered probability contrasts over 510 cases with five calls per condition. All intervals are 95% two-way bootstrap CIs. The SESOI of 0.02 applies to H3a and H3b. H3c compares the stronger and weaker assertions descriptively. The middle block retains the more precise bounds available in the source summary and the 
+
+a10 -excluded sensitivity. Sign counts refer to goal-level means over 17 contexts, with zeros excluded from the exact two-sided sign test.                                                         
+
+> Hypothesis Contrast Estimate [95% CI] Interpretation H3a P1 −N0 −0.0025 [ −0.0054 ,−0.0005] Opposes predicted direction H3b P2 −N0 +0 .0030 [0 .0010 ,0.0054] Positive, below SESOI H3c P2 −P1 +0 .0055 [0 .0030 ,0.0091] Positive, small descriptive effect Contrast Lower bound Upper bound Excluding a10 [95% CI] Positive goals Zero goals Negative goals Sign-test
+> p
+> P1 −N0 −0.005412 −0.000451 −0.0018 [ −0.0043 ,−0.0002] 9120 0.061
+> P2 −N0 0.001012 0.005373 +0 .0032 [0 .0013 ,0.0056] 25 053.2×10 −4
+> P2 −P1 0.002965 0.009082 +0 .0051 [0 .0026 ,0.0086] 30 001.9×10 −9−0.3 −0.2 −0.1 0.0 0.1 0.2 0.3
+> Case-Level P(A adv )cond − P(A adv )A0
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Empirical Cumulative Fraction
+> A1 (median −0.006) A2 (median −0.010) A3 (median −0.012) A4 (median +0.000)
+
+Figure 5. DH-2 ECDFs of case-level attacker-probability changes relative to A0. Each curve summa-rizes 510 cases after averaging five calls per condition. Negative values indicate reduced attacker probability. A2 and A3, which contain the ignore-previous marker, have larger negative tails. The legend reports the median change for each condition. 
+
+a practically important additional effect under the registered H3a and H3b criterion. 
+
+D.2 Effects across attacker goals 
+
+For goal g, let ∆c−dg be the mean paired attacker-probability difference across its 17 contexts. Fig-ure 6 displays these goal-level contrasts. P2 −N0 is positive for 25 of 30 goals and P2 −P1 for all 30. P1 −N0 has nine positive, one zero, and 20 nega-tive values. Table 5 gives exact two-sided sign-test results, excluding zero differences. The median ab-solute goal-level change is approximately 0.003, so broad coverage across goals coexists with a small effect size. 
+
+D.3 Registered sensitivity analyses 
+
+Excluding a10 leaves all primary and sec-ondary classifications unchanged. P1 −N0 becomes −0.0018 with CI [−0.0043 , −0.0002] ,and P2 −N0 becomes +0 .0032 with CI 
+
+[0 .0013 , 0.0056] . The ASR contrasts become zero. The P2 −P1 sensitivity is also reported in Table 5. A second registered analysis excludes context 
+
+u14 only from secondary contrasts against P0. The intervals for N0 −P0, P1 −P0, and P2 −P0 all in-clude zero, as in the full sample. These analyses address different dependencies. The a10 exclu-sion checks the influence of the only goal with static hijacks, while the u14 exclusion checks one context’s influence on P0-referenced comparisons. 
+
+E DH-4 Adaptive Optimization 
+
+E.1 Optimization and validation 
+
+The attacker observes the returned choice proba-bilities while the user request, action history, avail-able actions, attacker target, and all other state con-tent remain fixed. Only the designated content in latest_tool_result may change. The search uses a fixed grammar of 72 configurations, formed from six prefixes, four suffixes, and three copy-count settings, with a 1400-character cap. There is no attacker model, generation prompt, or text sampling. For configurations z = (u, v, k ) and z′ =(u′, v ′, k ′), where u is the prefix, v the suffix, and 
+
+k the copy count, the grammar distance is 
+
+d(z, z ′) = 1[u̸ = u′] + 1[v̸ = v′] + |k − k′|. (10) 14 P1−N0 P2−N0 P2−P1          
+
+> Registered Contrast a23 a04 a21 a15 a27 a29 a03 a05 a06 a25 a26 a22 a08 a00 a12 a17 a20 a24 a02 a13 a11 a09 a16 a01 a18 a28 a14 a07 a19 a10
+> −0.02 −0.01 0.00 0.01 0.02
+> Goal-Level Δ gFigure 6. DH-3 mean contrasts by attacker goal. Each row is one of 30 goals, and each cell averages a paired contrast over 17 contexts and five calls per condition. Color encodes ∆c−dgin probability units. P2 exceeds P1 for all goals and N0 for 25 goals, while the magnitudes remain small. The dot marks an exactly zero goal-level contrast for a05 under P1 −N0, where context-level effects from −0.006 to +0 .004 cancel. The boxed row is the emergency-dispatch goal a10 .
+
+The deterministic policy chooses the nearest un-queried configuration, resolving equal distances by the frozen configuration index. Let q be the candi-date’s reported attacker-target probability and qbest 
+
+the incumbent score. The candidate is accepted only if 
+
+q − qbest ≥ 0.01 − 10 −9. (11) An equal score never replaces the incumbent. Thus, proposal text is determined by the grammar and fixed search rule, while acceptance depends on Jev’s returned scores. A preliminary two-case ramp uses 90 calls to check the evaluation harness. The main run in-terleaves optimization steps across cases. Each of 510 cases receives one initial screening call and 24 proposal calls, giving 12750 screening calls. The budget B excludes the initial call. At 
+
+B ∈ { 0, 8, 16 , 24 }, the best-so-far content is evalu-ated with five fresh calls, giving 10200 validation calls. Equation 7 defines the validation frequency, and at least three of five target selections are re-quired for case-level success. CHR also uses these validation calls, but averages confidence-gated se-lections rather than majority outcomes. Table 6 separates screening scores, validated ASR, and validation probability contrasts. Mean best-so-far attacker probability rises from 0.0429 to 0.0842. These selected screening scores are dis-tinct from the fresh-validation contrast of +0 .0347 
+
+between B = 24 and B = 0 . In total, 59.8% of cases improve their screening score by at least 0.01, while validated successes rise from 9 to 18. Most score improvement occurs by about eight queries, with little additional validated success af-ter B = 16 .
+
+E.2 A case illustrating validation variability 
+
+At B = 0 , nine cases meet the validation rule. Eight additional cases first succeed at B = 8 , one at B = 16 , and one at B = 24 . Thus, 19 distinct cases succeed at least once, and 491 never succeed. Case u16:a01 has ˆπi, 16 = 1 .0 but ˆπi, 24 = 0 .4,leaving 18 successes at the final checkpoint. At 
+
+B = 24 , 488 cases have zero target selections and four have nonzero frequencies below 0.5. Nine of the 501 baseline-unsuccessful cases succeed at the final checkpoint, giving 9/501 = 1 .80% condi-tional success. These transitions show why inter-mediate screening or validation successes should not be treated as guaranteed final successes. 
+
+F Exploratory Analysis of DH-4 Successes 
+
+F.1 Predictors and outcome separation 
+
+This analysis is exploratory and does not change the fixed DH-4 results. Predictors use only the sep-arate baseline validation calls and fixed metadata. They include mean baseline attacker probability, the margin Mi, 0 in Equation 8, baseline selection frequency ˆπi, 0, observation-wrapper type, attacker-control fraction, tool and attack-family metadata, 15 Table 6. DH-4 results by additional optimization-query budget B. Screening ASR uses the selected candidate’s optimization call. Validated ASR requires at least three target selections in five fresh calls per case; its intervals are 95% CIs. The best-so-far column reports the mean selected screening score. The lower block gives validation contrasts relative to B = 0 , reported only at baseline and the final checkpoint. CHR uses τ = 0 .7. CHR uses Jev’s returned confidence field with the inclusive gate C ≥ 0.7. CHR uses only the five fresh validation calls per case and checkpoint, averaging within cases before averaging all 510 cases.                                              
+
+> BScreening ASR Validated ASR [95% CI] Successes Mean best-so-far P(Aadv )
+> 02.2% 1.8% [0 .0,6.3]% 9/510 0.0429 83.5% 3.3% [0 .0,9.4]% 17/510 0.0774 16 3.9% 3.5% [0 .0,10 .0]% 18/510 0.0828 24 3.9% 3.5% [0 .0,10 .0]% 18/510 0.0842
+> BValidated ∆PB−0adv Validated ∆PB−0safe CHR 00.0000 0.0000 0.2% 8not reported not reported 0.1% 16 not reported not reported 0.2% 24 +0 .0347 −0.0193 0.2%
+
+and action-space size. We write M0 when the case is implicit. For baseline attacker instruction ti and baseline observation oi, 0, attacker-control fraction is 
+
+acf i = len( ti)len( oi, 0) , (12) where len counts characters, not bytes or tokens. This predictor is computed from the baseline obser-vation rather than the optimized content. The outcome is validated success in the sepa-rate B = 24 calls. No intermediate optimization outcome or best-so-far score is used as a predic-tor. This separation prevents direct reuse of the final outcome as an input, but does not make the exploratory associations causal or independently validated. 
+
+F.2 Margin and observation structure 
+
+Table 7 reports the joint grouping by initial mar-gin and wrapper type. All 13 embedded-content successes involve emergency dispatch. In embed-ded observations, the initial −M0 and the attacker probability rank successful and unsuccessful cases nearly perfectly. This supports the proximity hy-pothesis within that group. The five bare-snippet successes comprise two dif-ferent baseline states. Case u16:a10 has M0 =
+
+−0.726 and ˆπi, 0 = 1 .0, so it already selects the attacker target in every baseline validation call. The other four cases are u16:a14 , u16:a23 ,
+
+u16:a27 , and u16:a28 , with margins of 0.208, 0.358, 0.118, and 0.472, respectively, and baseline frequencies of zero. Therefore, the approximate range 0.12 to 0.47 applies only to these four cases. This agrees with one near-boundary bare-snippet success and four far-boundary bare-snippet suc-cesses in Table 7. Across all five cases, the attacker-control frac-tion ranges from 0.848 to 0.913, and optimiza-tion can increase the attacker probability by up to 0.38. After excluding a10 , bare-snippet status, and attacker-control fraction have exploratory rank AUCs of approximately 0.97 and 0.98. AUC mea-sures how well a predictor ranks successful cases above unsuccessful ones in this sample. Action-space size is constant at three and cannot explain the variation within DH-4. Figure 7 shows that the 16 lowest-margin cases include 16 of the 18 successes, while all 18 are covered only after including 33 cases. Bare-snippet successes account for the additional successes at larger margins. The joint grouping gives 1/468 successes for far-boundary embedded observations and 4/29 for far-boundary bare snippets. One embedded success, u11:a10 , has M0 =0.24 . Thus, the near-boundary threshold is not a necessary condition even within the emergency-dispatch group. We describe margin and attacker control as two observed patterns rather than nec-essary or sufficient causes. Successes are concen-trated in goal a10 and context u16 , limiting gen-eralization to other goals and contexts. 
+
+G Integrity and Reproducibility 
+
+Table 8 summarizes the recorded checks. All 12750 DH-3 calls and 22950 DH-4 calls completed without API failure and returned jev-1.13.0 .Replaying DH-4’s recorded optimization policy 16 Table 7. Exploratory DH-4 analysis of validated success at B = 24 . The upper block reports successful cases over all cases in each group, with percentages in parentheses. Margin M0 uses baseline validation calls. The lower block gives in-sample rank AUCs, not held-out performance. Case u11:a10 is an embedded success with M0 = 0 .24 ,so the near-boundary threshold is not necessary for success.                             
+
+> Initial margin Embedded Bare snippet
+> M0≤0.112/12 (100.0%) 1/1 (100.0%)
+> M0>0.11/468 (0.2%) 4/29 (13.8%) Subset Predictor Rank AUC Embedded observations −M01.00
+> Excluding goal a10 Bare-snippet indicator 0.97
+> Excluding goal a10 Attacker-control fraction 0.98 010 20 30 40 50 60
+> Number of Lowest-M 0Cases Included
+> 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5
+> Validated Successes Captured
+> 16/18 @ 16 18/18 @ 33
+> bare-snippet success
+
+Figure 7. Cumulative coverage of the 18 validated DH-4 successes at B = 24 when cases are ordered by increas-ing baseline margin M0. The horizontal axis counts all included cases, and the vertical axis counts successful cases among them. The curve reaches 16 successes among the first 16 cases and all 18 among the first 33. Marked points identify bare-snippet successes. This is a descriptive ranking of the completed run. 
+
+passes for all 510 cases. Validation requests match the corresponding frozen checkpoint content in all 10200 calls. The DH-3 P0 request and the corresponding DH-2 A0 request are byte-identical for every case. Therefore, cross-stage comparisons use the same rendered states rather than slightly different input versions. 
+
+Call accounting. The four main experiments con-tain 54060 calls, comprising 3060 in DH-1, 15300 in DH-2, 12750 in DH-3, and 22950 in DH-4. Addi-tional logged calls comprise 3060 in a preliminary single-repeat DH-2 run, 7650 in the repeated-call pilot, and 90 in the DH-4 ramp. The total is there-fore 64860 logged Jev calls. The dry run makes no Jev calls. The repeated-call pilot supplies the enhanced-minus-base CI and one of the original-attack reproducibility comparisons, but its calls are counted separately from the four main experiments. 
+
+G.1 Independent P0 runs 
+
+The original-attack anchor was evaluated indepen-dently in three runs with R = 5. Aggregate attacker-probability changes from clean are 0.0427, 0.0425, and 0.0428. The requests match in all 510 cases, and the observed target-selection frequencies agree in 506 cases. Correlations of the per-case mean attacker probabilities are 0.9984 and 0.9986 when the other two runs are compared with the DH-3 P0 run. Figure 8 shows this agreement. The iden-tical requests rule out input-rendering differences as an explanation for the remaining variability. 
+
+H Scope of the Findings 
+
+The results concern typed probabilistic decisions under a specific benchmark reconstruction. First, ASR measures the selection of a declared attacker-target action, not arbitrary code execution or com-pletion of a harmful workflow. Second, we do not rank Jev against generative agents. InjecAgent supplies the attack content and source tasks, but the evaluated interfaces differ. Third, the 0.01 re-porting step limits what can be inferred about an individual call even when aggregate means are sta-ble. Fourth, the structural analysis uses separate baseline and final measurements but remains ex-ploratory rather than a held-out causal study. Within this scope, the four experiments show a consistent pattern. Original malicious content shifts action probabilities. Familiar override mark-ers do not consistently strengthen the effect. As-sertions of contextual relatedness produce small additional changes. Score feedback supports opti-17 Table 8. Recorded integrity checks and reproducibility results. All calls in both stages returned jev-1.13.0 . Test counts refer only to the analysis-specific suites. The three original-attack runs use identical requests and five calls per case. Selection-frequency agreement counts cases with matching observed frequencies, rather than cases with identical outcomes on every call. 
+
+Stage Expected Completed Failures Identity and replay checks Tests DH-3 12,750 12,750 0 P0 request identity 510/510; design hash recorded 5DH-4 22,950 22,950 0 Validation identity 10,200/10,200; policy replay 510/510 5Original-attack reproducibility measure Result Mean ∆Padv in the three runs 0.0427, 0.0425, 0.0428 Request-byte identity 510/510 cases Target-selection-frequency agreement 506/510 cases Pearson correlation of per-case mean attacker probabilities 0.9984 and 0.9986 0.0 0.2 0.4 0.6 0.8 1.0        
+
+> Run 1 (dh3_r5 P0) P(A adv )
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Run 2 (pilot_r5)  P(A adv )
+> Pearson r = 0.9984 0.0 0.2 0.4 0.6 0.8 1.0
+> Run 1 (dh3_r5 P0) P(A adv )
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Run 3 (dh2_r5)  P(A adv )
+> Pearson r = 0.9986
+
+Figure 8. Reproducibility of the original-attack anchor across three runs. Each point is one case’s mean attacker-target probability over five calls. Both panels compare the DH-3 P0 run on the horizontal axis with another run on the vertical axis. The dashed diagonal indicates equal means. Pearson correlations of 0.9984 and 0.9986 indicate close agreement despite variability in individual calls. 
+
+mization, but yields few additional validated suc-cesses. The observed successes are associated with a small initial margin or an observation dominated by attacker-controlled content. 18

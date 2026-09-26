@@ -1,0 +1,1651 @@
+Title: FedCoT-VQA: A Federated Learning and Unlearning Framework for Chain-of-Thought Planners in VideoQA
+
+URL Source: https://arxiv.org/pdf/2609.26814v1
+
+Published Time: Thu, 24 Sep 2026 00:01:16 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> FEDCOT-VQA: AUTHOR PREPRINT 1
+
+# FedCoT-VQA: A Federated Learning and Unlearning Framework for Chain-of-Thought Planners in VideoQA 
+
+Rui Lu, Tao Ling, Dan Wang, Qing Li 
+
+Abstract —Chain-of-Thought (CoT) planners have emerged as an effective design for VideoQA, where a lightweight planner first generates intermediate reasoning steps to guide temporal evidence selection before answer prediction. This modularity makes CoT-based VideoQA attractive for federated learning, since only the planner side needs collaborative adaptation while the heavy vision-language backbone can remain fixed. However, in decentralized settings, the planner must not only be trained efficiently across heterogeneous clients but also support later client deletion requests. This is challenging because deleted-client influence is reflected both in model parameters and the planner’s reasoning-trace behavior. We present FedCoT-VQA , a federated learning and unlearning framework for CoT planners in VideoQA. FedCoT-VQA con-sists of three modules: planner-side partitioning (PSP), which exposes a compact shared-residual adaptation space for efficient federated training; server-side aggregation (SSA), which aggre-gates planner-side updates while maintaining a deletion-ready contribution log; and a residual unlearning module (RUM), which approximates the retained-only counterfactual planner through retained-client replay and selective residual correction, without full retraining. We evaluate FedCoT-VQA in terms of federated training utility, federated unlearning utility, forgetting quality, and efficiency. Results show that compared to current federated approaches, FedCoT-VQA preserves strong federated training utility, improving grounding quality by up to 4.45%. After unlearning, it retains high accuracy and achieves a counterfactual gap of only 7.38%. 
+
+Index Terms —Video question answering, federated learning, federated unlearning, chain-of-thought planner 
+
+I. I NTRODUCTION 
+
+Large language models (LLMs) have made natural language interfaces and multi-step reasoning practical at scale. Vision-language models (VLMs) extend this capability to visual inputs and enable tasks such as video question answering 
+
+(VideoQA), which answers natural language queries about video streams. Compared with static images, video queries often span long time ranges and require aggregating evidence across temporally separated events, making long-horizon rea-soning a central challenge. Processing each frame is computa-tionally expensive, but aggressive downsampling would miss critical evidence and produce incorrect outputs. 
+
+Rui Lu is with the Department of Computing, The Hong Kong Polytechnic University, Hung Hom, Hong Kong. (e-mail: ruilu@polyu.edu.hk) Tao Ling was with the Department of Computing, The Hong Kong Polytechnic University. (e-mail: cstling@comp.polyu.edu.hk) Dan Wang is with the Division of Environment and Sustainability Academy of Interdisciplinary Studies, Hong Kong University of Science and Technol-ogy, Clear Water Bay, Hong Kong. (e-mail: wangdan@ust.hk) Qing Li is with the Pengcheng Laboratory, Shenzhen, China. (e-mail: liq@pcl.ac.cn) 
+
+Recent approaches mitigate this challenge by incorporating 
+
+Chain-of-Thought (CoT) reasoning into VideoQA. Rather than retraining or repeatedly running the entire VLM over long videos, they decompose a query into intermediate steps and use these steps to drive evidence selection, e.g., which clips or frames to inspect, before generating the final response. This modular design can be trained by updating a lightweight CoT evidence-selection component while keeping the large visual-language backbone fixed, reducing both training and inference cost. However, it also expands the privacy attack surface during training: intermediate reasoning traces and learned evidence-selection policies may encode client-specific viewing patterns, recurring scene content, or memorized details from private videos. Because these artifacts expose what the model attends to and how it reasons, they can be more privacy-revealing than the final answer and are therefore sensitive to share during training. Federated learning (FL) is a natural fit for training CoT-enabled VideoQA systems as it avoids centralizing raw videos by keeping data on-device and aggregating model updates, e.g., gradients, to train a shared model cooperatively. However, FL alone does not satisfy deletion and compliance require-ments. In practice, participants may later request removal of their contributions due to contract termination, policy changes, or right-to-be-forgotten obligations. Federated unlearning (FU) addresses this need by updating the global model to approxi-mate the counterfactual model that would have been obtained had a specific client never participated. In this paper, we design a novel federated learning and unlearning framework, FedCoT-VQA , for the chain-of-thought planner in VideoQA. To the best of our knowledge, this is the first framework that jointly studies both federated training and federated unlearning for a chain-of-thought planner in video understanding. Designing such a framework introduces three major challenges. First, efficient federated CoT adaptation : the system should support collaborative training over distributed clients without federating the entire VideoQA pipeline, so the trainable space must remain compact while still preserving the planner’s temporal reasoning ability. Second, deletion-ready aggregation under client heterogeneity : client influence is accumulated through round-wise updates and heterogeneous reasoning behaviors, so the server must aggregate planner updates in a way that both supports robust global learning and preserves sufficient contribution structure for later dele-tion. Third, effective unlearning : after a deletion request, the framework should remove the deleted client’s effect not only arXiv:2609.26814v1 [cs.CR] 18 Sep 2026 FEDCOT-VQA: AUTHOR PREPRINT 2Media Input: a row video         
+
+> Question: descript what happened to the smallest boat? Answer: White boat is Sailing on the Sea. False
+> Multimodal LLM Output Input
+> (a) Standard VideoQA inference pipeline Answer: The white boat collides with the sailboat.
+> Correct
+> Memory
+> M-LLM Reasoning Chain-of-Thought Input Output (b) CoT-enhanced VideoQA pipeline Fig. 1. Comparison of VideoQA inference paradigms. (a) A direct approach where the Multimodal LLM predicts the answer solely based on the video and question. (b) A Chain-of-Thought framework where a reasoning module orchestrates a multi-step process, leveraging memory and iterative M-LLM interactions to generate the answer.
+
+from model parameters but also from induced reasoning-trace behavior, while retaining utility for the remaining clients and approximating the retained-only counterfactual model without full retraining. To address these challenges, FedCoT-VQA follows a mod-ular design. In FedCoT-VQA, we first design PSP, which exposes a compact planner-side adaptation space and separates it into shared and residual components, enabling efficient federated training while preserving reasoning quality. We then design SSA, which aggregates the corresponding planner-side updates and maintains a compact server-side contribution log for unlearning. Finally, we design RUM, which reconstructs a retained-only replay trajectory and selectively revises the more deletion-sensitive part of the planner, thereby approximating the retained-only counterfactual model without full retraining. We evaluate FedCoT-VQA under decentralized VideoQA settings against both federated training and federated unlearn-ing baselines. The results show that FedCoT-VQA improves federated training grounding quality by up to 4.45%, preserves retained-client utility after deletion, and achieves lower coun-terfactual gap and prediction disagreement than representative unlearning baselines. In summary, our contributions are:  
+
+> •
+
+We formulate the first federated learning and federated unlearning framework for a chain-of-thought planner in VideoQA, and identify the key challenges of history-dependent deletion, heterogeneous temporal reasoning, and trace-level forgetting quality.  
+
+> •
+
+We propose FedCoT-VQA , a modular planner-centric de-sign with PSP, SSA, and RUM, which together enable compact federated planner adaptation, deletion-ready ag-gregation, and efficient client-level unlearning without full retraining.  
+
+> •
+
+We conduct experiments on representative VideoQA benchmarks, showing that FedCoT-VQA remains com-petitive in federated training utility and achieves stronger unlearning and forgetting quality than representative fed-erated unlearning baselines. II. B ACKGROUND 
+
+A. Video CoT for VideoQA 
+
+Video question answering (VideoQA) aims to answer natu-ral language questions about videos and is a core task in video understanding. Early approaches relied on specialized video encoders and task-specific heads, where temporal reason-ing was implemented via hand-designed recurrence, temporal pooling, or attention over pre-extracted visual features. Recent progress powered by large vision–language models (VLMs) has shifted VideoQA toward general-purpose, instruction-following pipelines that unify perception and language rea-soning, enabling broader applications such as video assistants, surveillance querying, and sports analytics. However, VideoQA remains challenging. Many questions require tracking entities and scene state over time, resolving references (who/what/where), and reasoning over temporal relations such as before/after and causality, where relevant evidence is often sparse and temporally dispersed. Processing the full video at high resolution is computationally expen-sive, whereas coarse subsampling can miss short but decisive moments (e.g., a brief interaction or sign), degrading answer quality. To address this trade-off, recent studies propose mod-ular CoT-style pipelines that separate evidence planning from 
+
+answer generation [1], [2], [3], [4]. 
+
+CoT reasoning introduces multi-step problem solving by decomposing a query into intermediate steps that structure how evidence is gathered and how conclusions are obtained via a CoT planner . This decomposition aligns naturally with VideoQA as long videos introduce a where-to-look problem before a what-to-answer problem: relevant evidence is often sparse, temporally dispersed, and only becomes meaningful after combining multiple moments in the correct order. By making intermediate reasoning steps explicit, CoT guides temporal evidence selection, e.g., choosing which frames to inspect, reducing redundant visual computation, and improving robustness. As illustrated in Fig. 1 (a), traditional VideoQA frame-works typically employ a direct inference paradigm, where a Multimodal LLM (M-LLM) processes the visual input and the user query in a single pass to generate a response. In contrast, the CoT-enhanced approach (Fig. 1(b)) incorporates an explicit reasoning module. Rather than generating an immediate answer, this module decomposes the task into sequential steps, iteratively interacting with the M-LLM and utilizing an external memory to store intermediate contexts. This structured execution enables the system to accumulate evidence and refine its logic before deriving the final answer. Training a CoT planner for VideoQA benefits from diverse data that is naturally distributed across many devices and orga-FEDCOT-VQA: AUTHOR PREPRINT 3FL Client 
+
+> Local Model Training
+> Model Aggregation
+
+FL Server 
+
+> Distributed Model Upload Gradient Step 3 Step 4 Step 1 Step 2
+> (a) Standard Federated Learning Pipeline
+
+FL Server 
+
+FL Client   
+
+> Unlearning Request Retraining (b) Federated Unlearning Mechanism Fig. 2. Schematic overview of the proposed framework. (a) The standard Federated Learning cycle consists of global model distribution, local training on private data, gradient upload, and server-side aggregation. (b) The Federated Unlearning process, initiated by a client’s deletion request, triggers the server to eliminate the specific client’s contribution from the global model (e.g., via retraining or approximate unlearning).
+
+nizations. In practice, the planner must learn where to look in long videos under highly heterogeneous conditions, including different scenes, viewpoints, motion patterns, and question types across deployment sites such as homes, campuses, and hospitals. Such diversity is important for generalization, but centralizing these long videos is often impractical due to bandwidth and storage costs, privacy concerns, and cross-organization data restrictions [5], [6], [7]. These challenges make federated learning a natural solution for the CoT planner, which is a lightweight and modular component that can be trained collaboratively without retraining the full VideoQA backbone. Current Video CoT studies mainly focus on accuracy and efficiency, while paying much less attention to how such planners can be trained under federated settings or how client contributions should be managed, especially when deletion requests arise. The modular structure of CoT-based VideoQA is useful not only for efficient inference but also for federated optimization. Instead of federating the entire VideoQA model, we can train only the planner that controls temporal evidence selection across clients. 
+
+B. Federated Learning for CoT Planners Federated learning (FL) provides a natural mechanism for collaborative training of CoT planners for VideoQA when training data is decentralized. Instead of uploading raw videos to a central server, each participant updates the local planner using its own videos and queries, and only model updates, e.g., gradients or parameter deltas, are shared for aggregation into a global planner, as illustrated in Fig. II-A. This data-local, update-aggregate workflow enables learning from a wide range of environments and user intents while keeping the training pipeline lightweight. The global coordination focuses on the modular planner, and the large VideoQA backbone can remain fixed without frequent updates. FL is naturally suitable for CoT VideoQA for two reasons. First, the planner is much smaller than the full VideoQA backbone, so local training and communication remain prac-tical even when videos are long and heterogeneous. Second, the planner directly models the where-to-look decision, which is exactly the component that must adapt across sites with different environments, camera views, and query distributions. Privacy risks also arise from intermediate representations that can reveal private inputs [8]. However, training CoT planners also introduces privacy risks beyond raw data ex-posure. Planner outputs and intermediate traces can encode sensitive behavioral signals, such as client-specific viewing patterns, recurring scene cues, and rare temporal combinations that uniquely identify clients. Moreover, these signals may be reflected in shared model updates, even when the underlying videos never leave the client. At the same time, FL alone does not satisfy the deletion and compliance requirements that arise in real deployments. Video data ownership and access rights could change over time. For example, participants may terminate contracts, revoke data-sharing consent, or exercise their right to be forgot-ten, requiring that their past training influence be removed from the shared model. In a CoT-style VideoQA setting, this requirement is particularly critical as the trained planner captures where-to-look behavior that can reflect client-specific environments and reveal identifiable client patterns. 
+
+C. Federated Unlearning for CoT Planners Federated unlearning (FU) formalizes this requirement by updating the trained global planner to approximate the coun-terfactual model that would have been obtained had a specific client never participated (Fig. II-A). In standard federated optimization, this goal is already difficult because client in-fluence is history dependent: it is shaped by round-wise client sampling, repeated aggregation, and optimizer state. As a result, deleting one client cannot, in general, be achieved by simply subtracting one update from the final model. This challenge becomes sharper for CoT planners for VideoQA. Exact compliance via full retraining from scratch remains expensive, even if only the planner is trained, due to long training horizons and repeated communication. There-fore, FU for CoT planners must fit both the optimization struc-ture of FL and the behavioral structure of VideoQA reasoning. These practical constraints motivate FU mechanisms that are both efficient and effective for CoT planners, providing strong FEDCOT-VQA: AUTHOR PREPRINT 4
+
+deletion while preserving the utility of evidence planning and downstream VideoQA accuracy. III. P ROBLEM FORMULATION 
+
+A. VideoQA with a CoT Planner 
+
+Let D = {(vn, q n, y n)}Nn=1 denote a VideoQA dataset, where vn is a video, qn is a natural-language question, and 
+
+yn is the corresponding answer. We formulate VideoQA with three functional components: a planner , an extractor , and an 
+
+answerer . Specifically, the planner πϕ predicts a question-conditioned plan pn over the input video. The extractor E maps this plan to concrete visual evidence en, and the answerer fθ
+
+infers the final answer from the extracted evidence en and the input question qn. It is written as: 
+
+pn = πϕ(vn, q n), en = E(vn, p n), ˆyn = fθ (en, q n, p n).
+
+In a standard non-CoT planner, pn may simply represent compact evidence-selection decisions, such as relevant clips, temporal spans, or frame indices. In this paper, we focus on the CoT planner, which outputs a structured sequential reasoning trace cn over vn rather than a typical flat selection result pn.Formally, for sample n, the generic plan variable pn takes the form of a CoT intermediate reasoning trajectory: 
+
+pn ≡ cn = πϕ(vn, q n) =  zn, 1, z n, 2, . . . , z n,K n
+
+, (1) where Kn is the number of reasoning steps for sample n and each reasoning step 
+
+zn,k = ( sn,k , t n,k , r n,k ), k = 1 , 2, . . . , K n (2) contains a temporal span (sn,k , t n,k ) and a reasoning state 
+
+rn,k . Here, the temporal span specifies where to inspect in the video, i.e., sn,k and tn,k denote the start and end timestamps of the video segment selected at step k for sample n. rn,k 
+
+specifies why that segment is relevant, e.g., the semantic role or sub-goal of the k-th reasoning step. Overall, the CoT trace cn specifies both the evidence to inspect via (sn,k , t n,k ) and the step-wise reasoning structure in Eq. 1. The reasoning state rn,k provides step-level guidance for downstream evidence alignment and answer generation. 
+
+CoT-conditioned extraction and answering. The extractor E
+
+is conditioned on each reasoning step instead of only on the whole question, preserving alignment between reasoning and visual evidence as: 
+
+en,k = E(vn, z n,k ), en =  en, 1, . . . , e n,K n
+
+.
+
+The answerer fθ then produces the answer ˆyn by aggregat-ing the evidence sequence within the VideoQA pipeline: 
+
+ˆyn = fθ (qn, e n, c n) = fθ
+
+
+
+qn, {(en,k , r n,k )}Kn
+
+> k=1
+
+
+
+.
+
+Here, the CoT planner shapes both what evidence is consulted ,i.e., the evidence path en, and how the answer is constructed ,i.e., the reasoning path {rn,k }Kn
+
+> k=1
+
+. That is, the system first predicts a CoT reasoning trace cn, then aligns each reasoning step with visual evidence en, and finally generates the answer 
+
+ˆyn using both the grounded evidence and the intermediate reasoning trajectory. 
+
+Learning objective for the CoT planner. Before introducing the federated setting, we first formulate the learning objective for the CoT planner πϕ. We train ϕ by 
+
+min  
+
+> ϕ
+
+Ltrain = 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+h
+
+ℓqa (ˆ yn, y n) + λ1ℓbudget (cn)+ λ2ℓcover (cn; vn, q n) + λ3ℓstable (cn)
+
+i
+
+.
+
+(3) Here, ℓqa measures the answer prediction error, as is standard in VideoQA learning [9], [10]. ℓbudget penalizes excessive evidence usage, e.g., too many reasoning steps or overly long selected spans [11], [12]. ℓcover encourages the trace to cover temporally relevant evidence for answering the question [9], [13], [10]. ℓstable regularizes incoherent transitions across adjacent reasoning steps [13], [14]. 
+
+B. Federated Training of the CoT Planner 
+
+We now consider a federated setting in which the training data are distributed across multiple clients and cannot be directly pooled at a central server, requiring the planner to be trained collaboratively across clients rather than centrally. We consider a federated setting with M clients, where the global VideoQA dataset is partitioned as 
+
+D =
+
+> M
+
+[
+
+> m=1
+
+Dm, Di ∩ D j = ∅, ∀i̸ = j. 
+
+Here, Dm = {(vm,n , q m,n , y m,n )}Nm 
+
+> n=1
+
+denotes the local dataset held by client m, and Nm = |D m| is the number of lo-cal samples. The total number of samples is N = PMm=1 Nm.Since client data are generated from different users, devices, or deployment environments, the local data distributions may be heterogeneous and non-IID. To reduce communication and preserve the reasoning capa-bility of the large pretrained VideoQA backbone, the extractor 
+
+E and the answerer fθ remain fixed, and the full CoT planner parameter set can be further decomposed as 
+
+ϕfull = ϕtr ∪ ϕfrz , ϕtr ∩ ϕfrz = ∅, (4) where ϕtr denotes the trainable parameter subset exposed to federated optimization, and ϕfrz denotes the remaining frozen planner parameters. Throughout federated training, the server broadcasts and aggregates only ϕtr .
+
+Client local objective. Given the above parameter split, the client-local training objective is to minimize:       
+
+> Lm(ϕtr ;ϕfrz ) = 1
+> NmNmX
+> n=1
+> h
+> ℓqa (ˆ ym,n , y m,n ) + λ1ℓbudget (cm,n )+λ2ℓcover (cm,n ;vm,n , q m,n ) + λ3ℓstable (cm,n )
+> i
+> .
+
+(5) Similar to the centralized objective in Eq. 3, this local loss is evaluated only over the client-local dataset Dm.
+
+Server global objective. The goal of federated training is to learn a global planner parameter ϕtr that minimizes the weighted sum of local objectives: 
+
+min 
+
+> ϕtr
+
+LFL (ϕtr ; ϕfrz ) = 
+
+> M
+
+X
+
+> m=1
+
+Nm
+
+N Lm(ϕtr ; ϕfrz ). (6) FEDCOT-VQA: AUTHOR PREPRINT 5Residual 
+
+Clients Server 
+
+Residual Aggr. Shared Aggr. … 
+
+> Media Input: a raw video
+> Question:
+> Descript what happened to the smallest boat?
+
+CoT Trace 
+
+> Answer:
+> The white boat collides with the sailboat.
+
+Frozen Backbone Smallest boat in Language Extractor Answerer 
+
+> Correct
+> Sensitive Modules Sharing Modules RUM Modules Data Flow
+
+Planner (Sec. IV-B) Trainable Planner Shared Component Residual Component   
+
+> Tools M-LLM Frozen Shared …
+
+Planner Contribution Logging History Logs Global Model Filter/ Split Retained Logs Target Model Unlearned Model  
+
+> Input Output Deletion Request
+
+RUM (Sec. IV-D) Distribution Client i Client j
+
+> Calculate Calculate Operation Flow
+
+SSA(Sec. IV-C) 
+
+> Fig. 3. The overall architecture of our proposed framework. The system consists of three main modules: planner-side partitioning (PSP), server-side aggregation (SSA), and the residual unlearning module (RUM). The blue arrows indicate the forward data flow, while the red dashed lines denote the update flow during training and unlearning.
+
+This objective aggregates the client-local losses into a global federated objective that serves as the decentralized counterpart of the centralized training objective. It seeks a single global CoT planner that performs well across decentralized client distributions without requiring raw training data to leave local devices. 
+
+Round-based training process. Federated training proceeds in several communication rounds. At round t, the server broadcasts the current global planner parameter ϕ(t)tr to partic-ipating clients S(t). Each client performs several steps of local optimization on Lm(ϕ(t)tr ; ϕfrz ) and returns an updated planner parameter ϕ(t+1)  
+
+> m
+
+. The server then aggregates the received local planners to obtain the next global planner, as follows: 
+
+ϕ(t+1) tr = X
+
+> m∈S (t)
+
+Nm
+
+P 
+
+> j∈S (t)
+
+Nj
+
+ϕ(t+1)  
+
+> m
+
+.
+
+Here, federated training optimizes the CoT planner collab-oratively over distributed client data without centralizing raw videos. 
+
+C. Federated Unlearning of the CoT Planner 
+
+After federated training, some clients may request the removal of their contributions from the global planner. Let 
+
+U ⊆ { 1, . . . , M } denote the set of clients to be unlearned, and let the union of their local datasets DU and its complement 
+
+D−U be defined as 
+
+DU = [
+
+> m∈U
+
+Dm, D−U = [
+
+> m / ∈U
+
+Dm.
+
+Since the full planner parameter set is decomposed as 
+
+ϕfull = ϕtr ∪ ϕfrz , where only the trainable subset ϕtr 
+
+participates in federated optimization, the goal of federated unlearning is to remove the influence of DU from the trained trainable planner parameter ϕtr while keeping the frozen planner parameter ϕfrz unchanged and preserving the model utility. Ideally, the updated trainable planner should match the counterfactual planner that would have been obtained had the clients in U never participated in federated training. Formally, let ϕ−U  
+
+> tr
+
+denote the ideal counterfactual solution defined by 
+
+ϕ−U  
+
+> tr
+
+= arg min 
+
+> ϕtr
+
+L−U  
+
+> FL
+
+(ϕtr ; ϕfrz ),
+
+L−U  
+
+> FL
+
+(ϕtr ; ϕfrz ) = X
+
+> m / ∈U
+
+Nm
+
+N−U 
+
+Lm(ϕtr ; ϕfrz ), N −U = X
+
+> m / ∈U
+
+Nm.
+
+Here, Lm(ϕtr ; ϕfrz ) is the local CoT-planner loss in Eq. 5, and the above aggregation excludes all deleted clients. 
+
+Unlearning objectives. In practice, fully retraining the fed-erated CoT planner on D−U is computationally expensive. Therefore, the federated unlearning problem is to find an effi-cient updated planner ϕtr → ˜ϕtr  
+
+> −U
+
+. Here, ˜ϕtr  
+
+> −U
+
+approximates the counterfactual planner ϕ−U  
+
+> tr
+
+, removes the contribution of deleted clients, and preserves VideoQA utility on the remain-ing clients. After unlearning, the original trainable planner parameter ϕtr is replaced by the unlearned one ˜ϕtr  
+
+> −U
+
+.Unlearning has two quality objectives. First, the updated planner should be close to the counterfactual retrained model, so that the deleted clients no longer affect the CoT reasoning traces or the final VideoQA outputs. Second, it should still perform well on the retained clients, i.e., its answer accuracy and reasoning quality on D−U should remain close to those of the ideal counterfactual model. FEDCOT-VQA: AUTHOR PREPRINT 6
+
+IV. F ED COT-VQA D ESIGN 
+
+A. Overview 
+
+FedCoT-VQA is a modular framework for federated training and unlearning of a CoT planner in VideoQA. It consists of three tightly coupled modules: PSP , which exposes a compact planner-side adaptation space for federated client training; 
+
+SSA , which aggregates client updates and records a compact server-side contribution history; and RUM , which removes deleted-client influence without full retraining. Together, these three modules form an end-to-end pipeline for federated learning and unlearning of the CoT planner. Fig. 3 illustrates the overall workflow of FedCoT-VQA. At communication round t, the server broadcasts the current trainable planner parameters (ϕ(t)shr , ϕ (t)res ) to the selected clients, while keeping the frozen planner parameter ϕfrz unchanged. On each client, PSP attaches to the underlying CoT planner and restricts local adaptation to a shared component ϕshr and a residual component ϕres . The client then performs local CoT-based VideoQA training and returns the corresponding up-dates (∆ (t)shr ,m , ∆(t)res ,m ). The server-side SSA aggregates these updates into the next global planner and records a compact contribution log Γ(t) 
+
+> m
+
+for later unlearning. When a deletion request arrives, RUM reuses this stored history to reconstruct a retained-only replay trajectory and then revises the more deletion-sensitive part of the planner, thereby producing an unlearned planner that approximates the counterfactual model without full retraining. The design of FedCoT-VQA addresses three challenges:  
+
+> •
+
+Challenge 1: How to support heterogeneous client adaptation without losing a compact and deletion-ready CoT planner? Even after restricting optimization to a compact trainable subset of the planner, different clients may still exhibit different video domains, question distributions, and reasoning styles. Treating all trainable parameters uniformly can therefore limit adaptation flex-ibility and make later client-level deletion less precise. FedCoT-VQA addresses this challenge through PSP, which further organizes the trainable planner parameters into shared and residual parts on top of the frozen back-bone. It preserves compact federated optimization while improving heterogeneity adaptation and later unlearning readiness.  
+
+> •
+
+Challenge 2: How to aggregate heterogeneous client updates while preserving training stability and future deletability? Different clients may have different video domains, question distributions, and reasoning styles, so directly averaging all planner updates weakens stability and client-level deletion. FedCoT-VQA addresses this challenge through SSA, which separately aggregates the shared and residual updates and maintains a compact server-side contribution log. It prepares the information for later unlearning while keeping federated training stable under client heterogeneity.  
+
+> •
+
+Challenge 3: How to remove deleted-client influence efficiently without full retraining? Simply subtract-ing deleted-client updates is often insufficient for FU. FedCoT-VQA designs RUM, which combines retained-update replay with targeted revision of the more deletion-sensitive part of the planner. As a result, deleted-client influence can be removed more precisely while preserving VideoQA reasoning utility. Overall, FedCoT-VQA follows a planner-centric design, where PSP makes an existing CoT planner trainable under federated constraints, SSA makes client updates aggregatable and deletion-ready, and RUM makes the resulting planner efficiently unlearnable. This modular pipeline enables the framework to jointly balance training efficiency, reasoning quality, and client-level deletability in CoT-based VideoQA. 
+
+B. Planner-Side Partitioning for Federated Training (PSP) 
+
+FedCoT-VQA first introduces PSP, a planner-side 
+
+partitioning mechanism that can be attached to an existing CoT planner to enable federated training and unlearning. The key idea is to preserve the original planner’s reasoning capability, while exposing a compact and controllable adaptation space for federated optimization and later deletion. As introduced in Eq. 4, the full planner parameter set is decomposed into a trainable part and a frozen part. In PSP, we further refine this decomposition by organizing the trainable part into two cooperative components: a shared adaptation component and a residual adaptation component. Specifically, let πϕfull denote an existing CoT planner for VideoQA, and decompose 
+
+ϕfull = ϕshr ∪ ϕres ∪ ϕfrz ,ϕshr ∩ ϕres = ϕshr ∩ ϕfrz = ϕres ∩ ϕfrz = ∅.
+
+Here, ϕfrz denotes the frozen planner parameters, ϕshr 
+
+denotes the trainable component that captures shared task-level reasoning knowledge across clients, and ϕres denotes a lightweight residual adaptation component that absorbs client-specific reasoning preferences and is therefore suitable for later removal during unlearning. In this way, PSP does not change the basic structure of the CoT planner, but partitions its parameter space into frozen, shared, and deletion-sensitive components for federated learning and unlearning. 
+
+Score-guided parameter partition. Rather than splitting planner parameters heuristically, PSP assigns each candidate planner component ωj from a predefined collection {ωj }
+
+covering the planner parameter space ϕfull a joint importance score that reflects its contribution to VideoQA utility, CoT-trace quality, and deletion sensitivity. This scoring approach is inspired by importance-aware and sensitivity-aware parameter-efficient tuning, as used in AdaLoRA [15], FibecFed [16], and FUSED [17]. Accordingly, we define 
+
+Sj = αS util  
+
+> j
+
++ βS cot  
+
+> j
+
++ γS del  
+
+> j
+
+, α, β, γ ≥ 0, (7) where {α, β, γ } control the trade-off among answer quality, reasoning quality, and unlearning-friendliness. Specifically, i) Sutil  
+
+> j
+
+measures how strongly ωj contributes to answer correctness following the idea of gradient- or importance-based budget allocation in [15]: 
+
+Sutil  
+
+> j
+
+= E(v,q,y )∼D 
+
+ ∇ωj ℓqa (ˆ y, y ) 2
+
+. (8) FEDCOT-VQA: AUTHOR PREPRINT 7
+
+Algorithm 1: Score-Guided Planner Partition 
+
+Input: Pretrained CoT planner πϕfull ; candidate component set {ωj } covering ϕfull ; dataset D; weights α, β, γ ;thresholds τfrz , τ del 
+
+Output: Frozen subset ϕfrz , shared trainable subset ϕshr ,residual trainable subset ϕres  
+
+> 1
+
+Initialize ϕfrz ← ∅ , ϕshr ← ∅ , and ϕres ← ∅ ; 
+
+> 2
+
+foreach planner component ωj ∈ { ωj } do  
+
+> 3
+
+Compute Sutil  
+
+> j
+
+according to Eq. 8;  
+
+> 4
+
+Compute Scot  
+
+> j
+
+according to Eq. 9;  
+
+> 5
+
+Compute Sdel  
+
+> j
+
+according to Eq. 10;  
+
+> 6
+
+Compute the joint score Sj according to Eq. 7;  
+
+> 7
+
+if Sj < τ frz then  
+
+> 8
+
+ϕfrz ← ϕfrz ∪ { ωj }; 
+
+> 9
+
+else if Sdel  
+
+> j
+
+≥ τdel then  
+
+> 10
+
+ϕres ← ϕres ∪ { ωj }; 
+
+> 11
+
+else  
+
+> 12
+
+ϕshr ← ϕshr ∪ { ωj }; 
+
+> 13
+
+return ϕfrz , ϕ shr , ϕ res ;
+
+ii) Scot  
+
+> j
+
+measures how strongly ωj influences the quality of the generated reasoning trace and thus encourages the selected trainable components to preserve reasoning quality: 
+
+Scot  
+
+> j
+
+= E(v,q )∼D 
+
+ ∇ωj
+
+ ℓcover (c; v, q ) + ℓstable (c)
+
+> 2
+
+ . (9) iii) Sdel  
+
+> j
+
+measures how strongly ωj captures client-specific variation relevant to unlearning: 
+
+Sdel  
+
+> j
+
+= Var m(∆ m,j ) , (10) where ∆m,j denotes the update of ωj contributed by client m.Intuitively, a component with high cross-client update variance is more likely to encode client-specific reasoning style and is therefore a natural target for deletion-aware adaptation, as also suggested by selective federated unlearning [17]. Given the score set {Sj }, PSP partitions the planner compo-nents into three groups in Algorithm 1. Components with a low overall score Sj are assigned to the frozen subset ϕfrz . Among the remaining components, those with a high overall score Sj
+
+but relatively low deletion sensitivity Sdel  
+
+> j
+
+are assigned to ϕshr ,while those with high deletion sensitivity are assigned to ϕres :
+
+ϕfrz = {ωj : Sj < τ frz },ϕres = {ωj : Sj ≥ τfrz , S del  
+
+> j
+
+≥ τdel },ϕshr = {ωj : Sj ≥ τfrz , S del  
+
+> j
+
+< τ del },
+
+where τfrz and τdel are partition thresholds. 
+
+Parameter-efficient local adaptation. Since only the trainable subsets ϕshr and ϕres are optimized, each client performs local adaptation in a compact planner-side parameter space. This partitioning design has three advantages. First, it greatly reduces communication and computation compared with fed-erating the full VideoQA model. Second, it limits cross-client interference to a small and well-defined adaptation space. Third, it localizes client influence to the trainable planner-side updates, which later enables efficient server-side aggregation and client-level unlearning. 
+
+Algorithm 2: Parameter-Efficient Client Adaptation 
+
+Input: Client m with local dataset 
+
+Dm = {(vm,n , q m,n , y m,n )}Nm
+
+> n=1
+
+; partitioned planner 
+
+πϕshr ,ϕ res ,ϕ frz ; extractor E; answerer fθ ; loss weights 
+
+λ1, λ 2, λ 3
+
+Output: Updated trainable planner parameters ϕshr , ϕ res and local update record ∆m 
+
+> 1
+
+Freeze ϕfrz , E, and fθ ; 
+
+> 2
+
+for each local training step do  
+
+> 3
+
+Sample a mini-batch Bm ⊆ D m; 
+
+> 4
+
+foreach (vm,n , q m,n , y m,n ) ∈ B m do  
+
+> 5
+
+Generate the CoT trace cm,n according to Eq. 11;  
+
+> 6
+
+Extract evidence em,n according to Eq. 12;  
+
+> 7
+
+Predict the answer ˆym,n according to Eq. 13;  
+
+> 8
+
+Compute the client objective Lm according to Eq. 14;  
+
+> 9
+
+Update only ϕshr and ϕres by minimizing Lm; 
+
+> 10
+
+∆m ←  ∆shr  
+
+> m
+
+, ∆res 
+
+> m
+
+ ; 
+
+> 11
+
+Record the local trainable-parameter update ∆m ; 
+
+> 12
+
+return updated ϕshr , ϕ res and ∆m;
+
+Local training under the partitioned planner. On client 
+
+m, given a local sample (vm,n , q m,n , y m,n ), the partitioned planner first produces 
+
+cm,n = πϕshr ,ϕ res ,ϕ frz (vm,n , q m,n ), (11) 
+
+em,n =  E(vm,n , z m,n, 1), . . . , E(vm,n , z m,n,K m,n ), (12) and then the answerer fθ predicts 
+
+ˆym,n = fθ (em,n , q m,n , c m,n ). (13) Consistent with Eq. 5, the client updates only the exposed trainable planner-side parameters by minimizing       
+
+> Lm(ϕshr ,ϕ res ;ϕfrz ) = 1
+> NmNmX
+> n=1
+> h
+> ℓqa (ˆ ym,n , y m,n ) + λ1ℓbudget (cm,n )+λ2ℓcover (cm,n ;vm,n , q m,n ) + λ3ℓstable (cm,n )
+> i
+> .
+
+(14) The resulting client-side parameter-efficient local adaptation process is summarized in Algorithm 2. Overall, PSP does not introduce a new training objective and instead inherits the federated objective in Eq. 5 to expose a structured planner-side partition and adaptation space on top of existing CoT planners. During federated learning, both ϕshr and ϕres are updated to optimize VideoQA utility, and the resulting updates to ϕres are retained as deletion-relevant residuals for later unlearning. This design enables CoT planner-based VideoQA to participate in FedCoT-VQA compactly without retraining the entire VideoQA model or modifying the original reasoning pipeline. 
+
+C. Server-Side Aggregation for Reasoning Preservation (SSA) 
+
+While PSP enables each client to adapt an existing CoT planner, the server then needs to combine heterogeneous client updates into a single global planner that remains stable under non-IID data and sufficiently informative for later unlearning. Therefore, FedCoT-VQA utilizes a server-side aggregation module, named SSA, over the trainable planner-side param-eters. Its role is not only to update the global planner, but also to maintain a compact server-side history that preserves FEDCOT-VQA: AUTHOR PREPRINT 8
+
+how each client influences both the planner parameters and the induced reasoning behavior. 
+
+Client update pipeline. At communication round t, the server broadcasts the current global trainable planner parameters 
+
+(ϕ(t)shr , ϕ (t)res ) to the selected client set S(t), while the frozen planner parameter ϕfrz remains unchanged. After local op-timization, each participating client m ∈ S(t) returns the updated trainable parameters (ϕ(t+1) shr ,m , ϕ (t+1) res ,m ), or, equivalently, the local parameter differences 
+
+∆(t)shr ,m = ϕ(t+1) shr ,m − ϕ(t)shr , ∆(t)res ,m = ϕ(t+1) res ,m − ϕ(t)res . (15) For each participating client and each round, SSA records a compact contribution log 
+
+Γ(t) 
+
+> m
+
+=
+
+
+
+∆(t)shr ,m , ∆(t)res ,m , w (t) 
+
+> m
+
+, s (t) 
+
+> m
+
+, a (t) 
+
+> m
+
+, g (t)
+
+> m
+
+
+
+, (16) where w(t) 
+
+> m
+
+is the aggregation weight assigned to client m, s(t)
+
+> m
+
+is a compact statistic of the client-local CoT traces generated during round t, a(t) 
+
+> m
+
+is a compact activity summary of the trainable planner-side modules updated by the client, and g(t)
+
+> m
+
+is a low-dimensional directional sketch of the client update on the deletion-sensitive residual component. In particular, 
+
+s(t) 
+
+> m
+
+includes the average reasoning length, temporal-span distribution, and reasoning-state histogram over local samples. 
+
+a(t) 
+
+> m
+
+summarizes which residual groups or blocks are most actively updated. g(t) 
+
+> m
+
+records a normalized projection, sign sketch, and group-wise norm profile of ∆(t)res ,m .This design is motivated by the fact that, in VideoQA, a client influences the global planner not only through the magnitude of its parameter updates, but also through the reasoning style and update direction induced by its local data. By retaining a structured contribution log rather than only raw parameter deltas, the server maintains a compact record of parameter contribution, reasoning-pattern contribution, and update-direction information, which later enables more accu-rate and stable client-level deletion for unlearning. 
+
+Shared-and-residual aggregation. Given the returned up-dates, SSA produces the next global trainable planner by weighted aggregation: 
+
+ϕ(t+1) shr = ϕ(t)shr + X
+
+> m∈S (t)
+
+w(t) 
+
+> m
+
+∆(t)shr ,m , (17) 
+
+ϕ(t+1) res = ϕ(t)res + X
+
+> m∈S (t)
+
+w(t) 
+
+> m
+
+∆(t)res ,m , (18) with standard sample-size-based weights 
+
+X
+
+> m∈S (t)
+
+w(t) 
+
+> m
+
+= 1 , and w(t) 
+
+> m
+
+= Nm
+
+P 
+
+> j∈S (t)
+
+Nj
+
+. (19) Thus, SSA extends sample-weighted federated averaging from a single trainable planner parameter to the two trainable components in PSP. 
+
+Objective of SSA aggregation. Let 
+
+L(t)FL (ϕshr , ϕ res ; ϕfrz ) = X
+
+> m∈S (t)
+
+w(t) 
+
+> m
+
+Lm(ϕshr , ϕ res ; ϕfrz ) (20) 
+
+Algorithm 3: Server-Side Aggregation with Trace-Aware Contribution Logging 
+
+Input: Global state at round t: (ϕ(t)shr , ϕ (t)res , ϕ frz ); selected client set S(t); local sample counts {Nm}m∈S (t)
+
+Output: Updated global state (ϕ(t+1) shr , ϕ (t+1) res , ϕ frz );contribution log entries {Γ(t) 
+
+> m
+
+}m∈S (t) 
+
+> 1
+
+Broadcast stage: Send (ϕ(t)shr , ϕ (t)res ) to all clients in S(t); 
+
+> 2
+
+Collection stage:  
+
+> 3
+
+foreach client m ∈ S (t) do  
+
+> 4
+
+Receive (ϕ(t+1) shr ,m , ϕ (t+1) res ,m ); 
+
+> 5
+
+Compute (∆ (t)shr ,m , ∆(t)res ,m ) using Eq. 15;  
+
+> 6
+
+Compute the aggregation weight w(t) 
+
+> m
+
+using Eq. 19;  
+
+> 7
+
+Collect a compact local reasoning summary s(t) 
+
+> m
+
+; 
+
+> 8
+
+Extract a compact activity summary a(t) 
+
+> m
+
+and directional sketch g(t) 
+
+> m
+
+; 
+
+> 9
+
+Form and store the contribution record Γ(t) 
+
+> m
+
+using Eq. 16;  
+
+> 10
+
+Aggregation stage:  
+
+> 11
+
+Update ϕ(t+1) shr using Eq. 17;  
+
+> 12
+
+Update ϕ(t+1) res using Eq. 18;  
+
+> 13
+
+Objective interpretation: regard the aggregation as approximating the round-wise objective and update target in Eqs. 20 and 21;  
+
+> 14
+
+return (ϕ(t+1) shr , ϕ (t+1) res , ϕ frz ), {Γ(t) 
+
+> m
+
+}m∈S (t) ;
+
+denote the round-wise federated objective over the partic-ipating clients. Then the ideal server target at round t is approximated by 
+
+(ϕ(t+1) shr , ϕ (t+1) res ) ≈ arg min 
+
+> ϕshr ,ϕ res
+
+L(t)FL (ϕshr , ϕ res ; ϕfrz ). (21) Here, ϕshr carries reasoning behaviors that should persist across clients, whereas ϕres absorbs more client-sensitive residual adaptation and is therefore recorded with finer-grained server-side summaries. 
+
+Interaction with local training. The aggregation process is tightly coupled with the local optimization of PSP. Each client first adapts its planner by minimizing the local loss 
+
+Lm(·) in Eq. 14. The server then aggregates the resulting updates into a single global trainable planner. Algorithm 3 summarizes this end-to-end server-side procedure, including client-update collection, trace-aware contribution logging, and shared-residual aggregation. Hence, PSP and SSA together instantiate the federated training pipeline of FedCoT-VQA. In SSA, client influence is restricted to the server-side history of compact planner-side updates rather than the full VideoQA model. As a result, when a client requests deletion, its contribution can be isolated and revised more efficiently. Moreover, because SSA records not only parameter deltas but also trace summaries and compact update-direction informa-tion, it provides a richer basis for unlearning that can remove not only parameter-level contributions but also client-specific reasoning preferences, such as CoT length, span selection, and reasoning-state usage. 
+
+D. Residual Unlearning Module for Client Deletion (RUM) 
+
+After federated training, one or more clients may request that their contributions be removed from the global CoT FEDCOT-VQA: AUTHOR PREPRINT 9
+
+planner. As formulated in Section III-C, the ideal target is the counterfactual planner that would have been obtained had the deleted clients never participated in training. Since retraining from scratch on all retained clients is impractical, FedCoT-VQA introduces a server-side residual unlearning 
+
+module (RUM) to efficiently remove deleted-client influence while preserving retained-client reasoning utility. Unlike naive rollback methods, RUM combines retained-update replay with selective overwriting on deletion-sensitive residual adaptation, guided by the structured contribution history from SSA. Formally, let U ⊆ { 1, . . . , M } denote the set of clients requesting deletion. During federated training, SSA records, for each participating client m at round t, the contribution log 
+
+Γ(t) 
+
+> m
+
+in Eq. 16. 
+
+Retained-only replay target. Using the stored updates of retained clients, the replay aggregation at round t is 
+
+ϕ(t+1) shr ,−U = ϕ(t)shr ,−U + X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+∆(t)shr ,m ,ϕ(t+1) res ,−U = ϕ(t)res ,−U + X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+∆(t)res ,m ,
+
+with retained-only normalized weights 
+
+¯w(t) 
+
+> m
+
+= Nm
+
+P 
+
+> j∈S (t)\U
+
+Nj
+
+. (22) This aggregation defines the retained-client replay target. The stored updates were computed along the original training trajectory. Their dependence on that trajectory introduces replay error relative to fresh retained-client training. If a round contains no retained clients, replay skips that round. Therefore, RUM first reconstructs a retained-only replay trajectory by replaying only retained-client updates: 
+
+˜ϕ(t+1) shr = ˜ϕ(t)shr + X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+∆(t)shr ,m , (23) 
+
+˜ϕ(t+1) res = ˜ϕ(t)res + X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+∆(t)res ,m . (24) This stage obtains a replay approximation to the retained-only parameter trajectory. 
+
+Overwriting on deletion-sensitive residual groups. Replay alone is insufficient when deleted-client influence is concen-trated in specific residual subspaces. To address this, RUM performs selective overwriting on the deletion-sensitive part of 
+
+ϕres . For each residual group ωj ∈ ϕres , the server computes an overwrite score 
+
+Sovw  
+
+> j
+
+= αuAct U (ωj ) + βuDir U (ωj ) + γuVar R(ωj ), (25) where Act U (ωj ) summarizes how actively the deleted clients update ωj , Dir U (ωj ) summarizes how consistently their resid-ual directions align on ωj , and Var R(ωj ) measures retained-client variability on the same group. The overwrite set is then defined as 
+
+Ωovw = {ωj ∈ ϕres : Sovw  
+
+> j
+
+≥ τovw }. (26) Only the selected residual groups are revised aggressively, while the shared component and the remaining residual groups are kept closer to the retained replay trajectory. 
+
+Retained trace anchoring. To preserve retained-client reason-ing behavior during overwriting, RUM constructs the retained trace target 
+
+¯s(t) 
+
+> −U
+
+= X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+s(t) 
+
+> m
+
+, (27) and defines the trace regularization term 
+
+L(t)trace = dtrace 
+
+
+
+s
+
+ ˜ϕ(t)shr , ˜ϕ(t)res 
+
+
+
+, ¯s(t)
+
+> −U
+
+
+
+. (28) This term anchors the updated planner to the reasoning statis-tics induced by retained clients alone, including CoT length, span preference, and reasoning-state usage. 
+
+Conflict-aware unlearning objective. To further cancel deleted-client influence, RUM incorporates a conflict-aware term based on the stored residual directional summaries. Let 
+
+g(t) 
+
+> U
+
+= X
+
+> m∈S (t)∩U
+
+˜w(t) 
+
+> m
+
+g(t) 
+
+> m
+
+, g(t) 
+
+> R
+
+= X
+
+> m∈S (t)\U
+
+¯w(t) 
+
+> m
+
+g(t) 
+
+> m
+
+, (29) denote the deleted-client and retained-client residual directions at round t, respectively. Let δ(t) denote the overwrite-induced residual revision. Then the conflict-aware term is           
+
+> Lconflict =P
+> t
+> h
+> max
+> 
+> 0,cos( δ(t), g (t)
+> U)−ϵ
+> 
+> −κcos( δ(t), g (t)
+> R)
+> i
+> .
+
+(30) This term reduces the influence of deleted-client update direc-tions on the residual parameters while preserving the influence of retained-client update directions. For the convergence anal-ysis, cosine uses the regularized definition in Eq. 36, and the residual revision is projected through the same fixed sketch map used for the stored directions. The overwrite mask and trace targets are fixed during each correction run. 
+
+Overall objective. Let ( ˆϕ−U  
+
+> shr
+
+, ˆϕ−U  
+
+> res
+
+) denote the final retained-only replay target reconstructed from the stored update log. The rollback loss is 
+
+Lrollback = ˜ϕ−U  
+
+> shr
+
+− ˆϕ−U 
+
+> shr
+> 22
+
++ μ ˜ϕ−U  
+
+> res
+
+− ˆϕ−U 
+
+> res
+> 22
+
+. (31) For the selected overwrite set Ωovw , the overwrite loss is 
+
+Loverwrite = X 
+
+> ωj∈Ωovw
+
+∥˜ωj − ˆωj, −U ∥22 . (32) Combining the above terms, RUM integrates retained re-play, residual overwrite, retained-trace anchoring, and conflict-aware revision into a unified client-unlearning objective. The final optimization objective for unlearning is              
+
+> min ˜ϕ−U
+> shr ,˜ϕ−U
+> res [Lrollback +λtr Ltrace +λovw Loverwrite +λcf Lconflict ].
+
+(33) In summary, RUM is designed with a straightforward idea. Rather than modifying the whole planner after a deletion request, it mainly adjusts the part that is more likely to carry client-specific influence. The shared component ϕshr 
+
+is intended to preserve reasoning patterns that are common across clients, so it is kept close to the retained-client replay result. The residual component ϕres , by contrast, is more sensitive to client-specific adaptation, and is therefore the main target of selective overwriting. This allows RUM to remove deleted-client influence in a more targeted way, while preserving the reasoning utility of the retained clients. Con-sequently, the unlearned planner can better approximate the ideal counterfactual model without unnecessarily perturbing the whole planner. FEDCOT-VQA: AUTHOR PREPRINT 10 
+
+Algorithm 4: Residual Unlearning with Retained Re-play and Selective Overwriting 
+
+Input: Trained planner (ϕshr , ϕ res , ϕ frz ); contribution log 
+
+{Γ(t) 
+
+> m
+
+}m,t ; deleted-client set U; participation sets 
+
+{S (t)}t
+
+Output: Unlearned planner ( ˜ϕ−U  
+
+> shr
+
+, ˜ϕ−U  
+
+> res
+
+, ϕ frz ) 
+
+> 1
+
+Retained replay:  
+
+> 2
+
+foreach round t do  
+
+> 3
+
+Remove deleted clients from S(t) and renormalize weights using Eq. 22;  
+
+> 4
+
+Update ˜ϕ(t+1) shr and ˜ϕ(t+1) res using Eqs. 23 and 24;  
+
+> 5
+
+Obtain the retained-only replay target ( ˆϕ−U  
+
+> shr
+
+, ˆϕ−U  
+
+> res
+
+); 
+
+> 6
+
+Overwrite identification:  
+
+> 7
+
+Compute Sovw  
+
+> j
+
+for each residual group using Eq. 25;  
+
+> 8
+
+Construct Ωovw using Eq. 26;  
+
+> 9
+
+Retained trace and directional summaries:  
+
+> 10
+
+foreach round t do  
+
+> 11
+
+Construct ¯s(t) 
+
+> −U
+
+using Eq. 27;  
+
+> 12
+
+Construct g(t) 
+
+> U
+
+and g(t) 
+
+> R
+
+using Eq. 29;  
+
+> 13
+
+Unlearning optimization:  
+
+> 14
+
+Optimize Eq. 33 using Lrollback , Ltrace , Loverwrite , and 
+
+Lconflict ; 
+
+> 15
+
+return ( ˜ϕ−U  
+
+> shr
+
+, ˜ϕ−U  
+
+> res
+
+, ϕ frz );
+
+E. Analysis of Efficiency and Utility 
+
+FedCoT-VQA follows a planner-centric design that im-proves both efficiency and utility. By restricting federated training and unlearning to the compact planner-side adaptation space, it avoids updating the frozen planner parameter ϕfrz ,the extractor E, and the answerer fθ , making the framework practical even when the downstream pipeline is large. 
+
+Training efficiency. In each communication round, SSA exchanges only the trainable planner-side parameters and aggregates the corresponding client updates (∆ (t)shr ,m , ∆(t)res ,m ).Thus, when |ϕshr | + |ϕres | ≪ | ϕfull |, both communication and local optimization are much cheaper than federating the full VideoQA model. The shared-residual partition also improves adaptation under client heterogeneity: ϕshr captures reasoning patterns shared across clients, while ϕres absorbs more client-specific variation. 
+
+Unlearning efficiency. After a deletion request, RUM avoids retraining the planner from all retained clients. Instead, it reuses the server-side contribution log recorded by SSA, reconstructs a retained-only replay trajectory, and then revises the more deletion-sensitive part of ϕres . Since this process is confined to the compact planner-side adaptation space, its recomputation cost is substantially lower than full retraining. 
+
+Storage overhead. The extra storage comes from the server-side contribution log maintained during federated training. This overhead remains modest because the server stores only compact planner-side updates and lightweight trace-related summaries, rather than raw client data or full-model histories. Such a small additional storage cost is worthwhile as it enables efficient later unlearning without re-accessing client data. 
+
+Utility preservation. FedCoT-VQA preserves retained-client utility through both architectural separation and targeted un-learning. The shared component ϕshr is intended to preserve reasoning patterns that are common across clients, so RUM keeps it close to the retained-client replay result. The residual component ϕres is more sensitive to client-specific adaptation. Together with retained-trace anchoring, this design reduces the utility loss that would otherwise arise from naive rollback or uniform parameter removal. 
+
+Overall trade-off. Overall, FedCoT-VQA trades a compact planner-side adaptation space and a lightweight server-side contribution log for lower communication during training and lower recomputation during unlearning. As a result, it provides a practical balance among efficiency, retained-client utility, and client-level deletability in federated CoT-based VideoQA. V. C ONVERGENCE ANALYSIS 
+
+We establish conditional stationarity guarantees for FL and FUL in the fixed PSP trainable space. Write Et for expectation conditional on the update history. Bias terms below include sampling, local drift, and AdamW adaptation. 
+
+A. Convergence of Federated Learning 
+
+Let xt = ( ϕ(t)shr , ϕ (t)res ) and f (x) = P 
+
+> m
+
+pmLm(x), where 
+
+pm = Nm/ P 
+
+> j
+
+Nj . Express the actual SSA update as xt+1 =
+
+xt − ηtdt, with dt = − P 
+
+> m∈S (t)
+
+w(t) 
+
+> m
+
+∆(t) 
+
+> m
+
+/η t. Assume f is L-smooth and bounded below by f∗. Define bt = Etdt −∇ f (xt)
+
+and assume E∥bt∥2 ≤ B2 
+
+> t
+
+and E∥dt − Etdt∥2 ≤ V 2.
+
+Theorem 1. For 0 < η t ≤ 1/L , AT = P 
+
+> t<T
+
+ηt, and ∆f =
+
+f (x0) − f∗,
+
+P 
+
+> t<T
+
+ηtE∥∇ f (xt)∥2
+
+AT
+
+≤ 2∆ f + P 
+
+> t<T
+
+ηtB2 
+
+> t
+
++ LV 2 P 
+
+> t<T
+
+η2
+
+> t
+
+AT
+
+.
+
+(34) 
+
+Proof. Set gt = ∇f (xt) and qt = gt + bt. Smoothness gives 
+
+Etf (xt+1 ) ≤ f (xt) − ηt⟨gt, q t⟩ + ( Lη 2 
+
+> t
+
+/2) Et∥dt∥2. Using the conditional variance identity, 2⟨gt, q t⟩ = ∥gt∥2 +∥qt∥2 −∥ bt∥2,and Lη t ≤ 1 yields 
+
+Ef (xt+1 ) ≤ Ef (xt) − ηt 
+
+> 2
+
+E∥gt∥2 + ηt 
+
+> 2
+
+B2 
+
+> t
+
++ Lη 2 
+
+> t
+> 2
+
+V 2.
+
+Summing and using f (xT ) ≥ f∗ proves the bound. □
+
+The weighted expected squared gradient vanishes if AT →∞, P 
+
+> t<T
+
+ηtB2 
+
+> t
+
+/A T → 0, and P 
+
+> t<T
+
+η2 
+
+> t
+
+/A T → 0. With zero bias and ηt = c/ √T ≤ 1/L , the bound is O(T −1/2). Constant steps η and Bt ≤ B give 2∆ f /(ηT ) + B2 + LηV 2. Thus the AdamW configuration retains an explicit optimizer-bias term. 
+
+Local drift and client sampling. For E local SGD steps of size ht, set ηt = Eh t. Assume each local loss is L-smooth and each stochastic gradient is conditionally unbiased with second moment at most G2. Let A2s,t bound the squared conditional-mean discrepancy between the sampled client gradient at xt
+
+and ∇f (xt). Then 
+
+B2 
+
+> t
+
+≤ 2A2s,t + L2h2 
+
+> t
+
+G2(E − 1)(2 E − 1) 3 . (35) Indeed, the local iterate satisfies E∥xm,e − xt∥2 ≤ h2 
+
+> t
+
+e2G2.Applying smoothness and Jensen’s inequality to the average local gradient, then summing e2 for 0 ≤ e < E , gives the FEDCOT-VQA: AUTHOR PREPRINT 11 
+
+bound. Full participation eliminates sampling bias. With partial participation, the sample-normalized SSA weights can retain bias when client dataset sizes differ. For fixed E and unbiased sampling, ht = O(T −1/2) yields the stated FL rate. AdamW uses its actual direction bias in Theorem 1. 
+
+B. Convergence of Federated Unlearning 
+
+For a fixed deletion request, let F be Eq. 33, with fixed logs, overwrite mask, and trace targets. Assume a nonnegative trace loss with Lipschitz gradient, nonnegative coefficients, and μ > 
+
+0. In the common sketch space, use 
+
+cν (u, v ) = ⟨u, v ⟩
+
+p∥u∥2 + ν2p∥v∥2 + ν2 , ν > 0. (36) Affine sketched revisions make these cosine functions smooth with bounded Hessians. Each hinge is a maximum of zero and a smooth function. Adding a sufficiently large quadratic makes both branches convex. Hence F is ρ-weakly convex for some finite ρ ≥ 0, meaning F + ρ∥ · ∥ 2/2 is convex. Choose λ > 0 with cλ = 1 − ρλ > 0. Define Fλ(z) = min y {F (y)+ ∥y−z∥2/(2 λ)}, its unique minimizer Pλ(z), and 
+
+Gλ(z) = ( z−Pλ(z)) /λ . This envelope gradient measures non-smooth stationarity [18]. In particular, Gλ(z) ∈ ∂F (Pλ(z)) 
+
+and ∥z − Pλ(z)∥ = λ∥Gλ(z)∥.
+
+Theorem 2. For zk+1 = zk −αkuk with deterministic αk > 0,assume Ekuk = vk + ek, where vk ∈ ∂F (zk), E∥ek∥2 ≤ D2
+
+> k
+
+,and E∥uk∥2 ≤ Q2. Let SK = P 
+
+> k<K
+
+αk and ∆λ = Fλ(z0) −
+
+inf F . Then 
+
+P 
+
+> k<K
+
+αkE∥Gλ(zk)∥2
+
+SK
+
+≤ 4∆ λ
+
+cλSK
+
++ 4 P 
+
+> k<K
+
+αkD2
+
+> k
+
+c2
+
+> λ
+
+SK
+
++ 2Q2 P 
+
+> k<K
+
+α2
+
+> k
+
+λc λSK
+
+.
+
+(37) 
+
+Proof. Let y = Pλ(zk). Weak convexity and proximal optimal-ity give ⟨vk, z k − y⟩ ≥ cλ∥zk − y∥2/(2 λ). Evaluate Fλ(zk+1 )
+
+at y, expand the squared distance, and apply ∥ek∥∥ Gλ(zk)∥ ≤ 
+
+cλ∥Gλ(zk)∥2/4 + ∥ek∥2/c λ. Taking expectations gives 
+
+EFλ(zk+1 ) ≤ EFλ(zk) − αk cλ 
+
+> 4
+
+E∥Gλ(zk)∥2
+
++ αk D2 
+
+> k
+> cλ
+
++ α2  
+
+> kQ2
+> 2λ
+
+.
+
+Summing proves Eq. 37. □
+
+For Dk = 0 and αk = α0/√K, the squared stationarity measure is O(K−1/2). More generally, it vanishes when 
+
+SK → ∞ and both normalized error sums vanish. Stability follows from F (z) ≥ a∥z − r∥2 − C, where r is the replay target, a = min {1, μ }, and C = λcf κH for H logged rounds. Completing the square gives Fλ(z) ≥ a∥z−r∥2/(1+2 aλ )−C.The preceding descent inequality therefore yields sup k E∥zk −
+
+r∥2 < ∞ when P
+
+> k
+
+(αkD2 
+
+> k
+
++ α2
+
+> k
+
+) < ∞. These guarantees concern optimization around the retained replay target. 
+
+Replay discrepancy. Let xt be the original model, rt the replayed model, and yt the model obtained by fresh retained-client training from the same initialization. Couple retained participation and local randomness. Assume the fresh retained update map Ut is ℓt-Lipschitz, with local optimizer states reset each round. The recursions rt+1 = rt + Ut(xt) + ξt and 
+
+yt+1 = yt + Ut(yt), with logging error ∥ξt∥ ≤ εt, imply 
+
+Rt+1 ≤ (1 + ℓt)Rt + ℓt∥xt − rt∥ + εt, (38) where Rt = ∥rt −yt∥ and R0 = 0 . This follows by adding and subtracting Ut(rt) and applying the triangle inequality. Empty retained rounds are skipped in both trajectories. Historical deleted-client influence enters through ∥xt − rt∥, even with exact logs. Finally, the rollback lower bound and the triangle inequality give 
+
+∥z − yT ∥ ≤ p(F (z) + C)/a + RT .
+
+This separates correction stability from the discrepancy accu-mulated during replay. VI. E VALUATION 
+
+We evaluate FedCoT-VQA from three aspects: (i) federated training utility, (ii) federated unlearning performance after client deletion requests, (iii) efficiency in communication, computation, and latency. As FedCoT-VQA is planner-centric, all experiments keep the extractor E and answerer fθ frozen and optimize only the planner-side parameters. 
+
+A. Experiment Setup 
+
+Hardware Setup. All experiments are conducted on a multi-GPU Linux server with an Intel i9-13900K CPU, 128 
+
+GB of host memory, and four NVIDIA RTX 4090-24GB 
+
+GPUs. Unless otherwise specified, each client is allocated equivalent computing resources. 
+
+Implementation details. The implementation uses PyTorch as the main deep learning framework, PEFT [19] for planner adaptation, and Flower [20] as the federated engine in both simulation and distributed execution. We adopt LoRA [21] for the trainable units in the planner. Unless otherwise specified, federated training runs for 32 communication rounds with a client participation ratio of 0.5, 4 local epochs, a batch size of 16 in the base configuration, the AdamW optimizer, and a learning rate of 3e-4. For PSP, the trainable planner-side space is initialized with rank 8. To simulate heterogeneous decentralized data, we partition the training data into 20 clients under non-IID settings using a Dirichlet distribution with concentration parameter αdir = 0 .3, where a smaller αdir 
+
+indicates stronger heterogeneity. For federated unlearning, the deleted-client set U is sampled from the training clients only, and the current saved runs use a single-client deletion setting. 
+
+Datasets. We use three representative public VideoQA bench-marks, namely TVQA+ [9], NExT-QA [22], and STAR [23], which cover spatio-temporal grounding, causal-temporal rea-soning, and situated compositional reasoning. 
+
+Baselines. We compare FedCoT-VQA against both federated training and federated unlearning baselines. For federated training, we consider: (i) Centralized , which trains on pooled data without federation; (ii) Local-Only , where each client trains independently without aggregation; (iii) FedAvg [24]; (iv) FeDeRA [25]; (v) FLoRA [26]; (vi) FlexLoRA [27]; and (vii) LoRA-FAIR [28]. For federated unlearning, we consider: (i) Retrain , which retrains from scratch using only FEDCOT-VQA: AUTHOR PREPRINT 12                                                                    
+
+> TABLE I OVERALL FEDERATED TRAINING PERFORMANCE ON DECENTRALIZED
+> VIDEO QA BENCHMARKS . “A CC .” DENOTES THE ANSWER ACCURACY OF EACH BENCHMARK ,AND “G RD .” DENOTES THE GROUNDING SCORE .
+> Method TVQA+ NExT-QA STAR Acc. ↑Grd. ↑Acc. ↑Grd. ↑Acc. ↑Grd. ↑
+> Centralized 0.7132 0.2728 0.5011 0.1241 0.5748 0.1438 Local-Only 0.4786 0.1375 0.3313 0.0826 0.4412 0.1167
+> FedAvg 0.6122 0.2211 0.4030 0.0909 0.4943 0.1228
+> FeDeRA 0.6439 0.2326 0.4171 0.0922 0.5123 0.1224
+> FLoRA 0.6617 0.2361 0.4226 0.0953 0.5209 0.1302
+> FlexLoRA 0.6740 0.2495 0.4278 0.0960 0.5453 0.1327
+> LoRA-FAIR 0.6732 0.2468 0.4366 0.0944 0.5561 0.1301
+> FedCoT-VQA 0.6754 0.2466 0.4232 0.0971 0.5545 0.1386
+
+retained clients and serves as the gold-standard counterfactual reference; (ii) No-unlearn , which directly keeps the pre-deletion model unchanged; (iii) Rollback , which reverses deleted-client updates without replay or overwrite refinement; (iv) SIFU [29]; (v) FedAU [30]; (vi) NoT [31]; and (vii) 
+
+FUSED [17]. All baselines use the same frozen extractor, frozen answerer, and planner backbone whenever possible, so that the comparison isolates the effect of PSP, SSA, and RUM. 
+
+Evaluation metrics. We use the following metrics to evaluate federated training and unlearning. i) Federated training utility. 
+
+For federated training, we measure the official answer accuracy (Acc. ) of each dataset. We additionally compute the grounding score ( Grd. ) to evaluate whether federation maintains evidence localization quality. ii) Federated unlearning performance. 
+
+After client deletion, we evaluate both retained-model utility and forgetting quality. For retained-model utility, we measure 
+
+Retain-Acc. on the retained-client portion and Delete-Acc. Gap on the deleted-client portion, where a smaller gap indi-cates closer behavior to the desired post-deletion reference. For forgetting quality, we measure CF Gap , Pred. Dis. , and Trace Disc. , which respectively measure counterfactual deviation from Retrain, prediction disagreement, and reasoning-trace discrepancy. Unless otherwise specified, the unlearning results are normalized with respect to No-unlearn .
+
+B. Overall Federated Training Performance 
+
+We first evaluate the overall learning utility of FedCoT-VQA on decentralized VideoQA benchmarks, compared with one non-federated upper bound (Centralized), one no-collaboration baseline (Local-Only), and the other five baselines on datasets 
+
+TVQA+ , NExT-QA , and STAR in Table I. All methods use the same frozen extractor and frozen answerer, so the comparison isolates the effect of planner-side federated optimization. 
+
+Preservation of answering accuracy. FedCoT-VQA achieves the highest answer accuracy among all federated baselines on TVQA+. On NExT-QA, its answer accuracy is 3.07% lower than the strongest federated baseline, while on STAR the gap is only 0.29%. These results show that FedCoT-VQA maintains competitive federated training accuracy across all three datasets. 
+
+Preservation of grounding quality. On TVQA+, FedCoT-VQA remains close to the strongest federated baseline, with a score only 1.16% lower. On NExT-QA and STAR, FedCoT-VQA achieves the highest grounding score among all federated baselines, exceeding the second-highest scores by 1.15% and 4.45%, respectively. These results suggest that our design preserves temporal evidence selection quality well during federated training. Overall, the results show that FedCoT-VQA introduces only a limited utility loss during federated learning. While it does not consistently outperform all strong federated baselines on every metric, it remains highly competitive in both an-swer accuracy and grounding quality. FedCoT-VQA maintains comparable task performance while supporting client-level unlearning. 
+
+C. Federated Unlearning Performance 
+
+We next evaluate the effects of FedCoT-VQA on remov-ing the influence of deleted clients while maintaining the VideoQA utility. We compare FedCoT-VQA against Retrain, No-unlearn, Rollback, and four representative federated un-learning baselines, and report the results in Table II and Ta-ble III. Among them, No-unlearn is used as the normalization reference. Values above 100% indicate that the corresponding method slightly exceeds the No-unlearn reference, due to optimization variance and the removal of harmful client-specific interference. 
+
+Effectiveness in Preserving Retained-Client Accuracy. 
+
+FedCoT-VQA achieves 101.29%, 100.73%, and 99.76% re-tained accuracy relative to the No-unlearn reference on TVQA+, NExT-QA, and STAR, respectively. Compared with the No-unlearn reference, this corresponds to proportional changes of +1.29%, +0.73%, and -0.24%, respectively. These results show that our design preserves retained-client utility competitively after deletion, with only marginal variation across datasets. 
+
+Effectiveness in Reducing the Delete-Acc. Gap. FedCoT-VQA reduces the Delete-Acc. Gap to 5.45%, 3.33%, and 5.28% of No-unlearn on TVQA+, NExT-QA, and STAR, respectively. This corresponds to proportional reductions of 94.55%, 96.67%, and 94.72%. Compared with the strongest competing baseline for that metric, the normalized gap is further reduced by 6.99% on TVQA+, 25.84% on NExT-QA, and 11.11% on STAR. These results indicate that FedCoT-VQA more effectively reduces deleted-client influence on final prediction behavior. 
+
+Effectiveness in Improving Forgetting Quality. FedCoT-VQA reduces the counterfactual gap, prediction disagreement, and trace discrepancy to 7.38%, 11.24%, and 8.53% of No-unlearn, respectively. This corresponds to proportional re-ductions of 92.62%, 88.76%, and 91.47%. Compared with the strongest competing baseline for that metric, FedCoT-VQA further reduces these three metrics by 9.34%, 16.31%, and 45.14%, respectively. These results show that our design more effectively aligns the unlearned model with the retained-only target in terms of overall counterfactual behavior, final predictions, and reasoning traces. Overall, the results show that FedCoT-VQA preserves re-tained accuracy while substantially improving the unlearning utility and forgetting quality. These results support the effec-tiveness of our design in removing deleted-client influence while maintaining competitive retained-client utility. FEDCOT-VQA: AUTHOR PREPRINT 13                                                                                            
+
+> TABLE II FEDERATED UNLEARNING UTILITY AFTER CLIENT DELETION ,
+> NORMALIZED WITH RESPECT TO No-unlearn (SET AS 100%).
+> Method Retain-Acc. ↑Delete-Acc. Gap ↓
+> TVQA+ NExT-QA STAR TVQA+ NExT-QA STAR
+> No-unlearn 100% 100% 100% 100% 100% 100% Retrain 102.88% 102.59% 102.84% 0.00% 0.00% 0.00% Rollback 100.73% 101.01% 101.32% 8.90% 8.67% 8.02%
+> SIFU 101.12% 100.57% 99.84% 8.22% 7.33% 7.20%
+> FedAU 100.89% 100.10% 99.10% 6.90% 6.61% 5.94%
+> NoT 101.74% 101.06% 98.80% 5.86% 4.49% 6.62%
+> FUSED 102.75% 100.62% 99.80% 5.97% 9.36% 6.37%
+> FedCoT-VQA 101.29% 100.73% 99.76% 5.45% 3.33% 5.28%
+> TABLE III FEDERATED UNLEARNING FORGETTING QUALITY AFTER CLIENT DELETION ,NORMALIZED WITH RESPECT TO No-unlearn (SET AS 100%).
+> Method CF Gap ↓Pred. Dis. ↓Trace Disc. ↓
+> No-unlearn 100% 100% 100% Retrain 0.00% 0.00% 0.00%
+> SIFU 18.81% 15.62% 29.56%
+> FedAU 9.29% 13.43% 15.55%
+> NoT 8.38% 17.14% 18.42%
+> FUSED 8.14% 15.76% 17.93%
+> FedCoT-VQA 7.38% 11.24% 8.53%
+
+D. Efficiency Analysis 
+
+Following the discussion in § IV-E, we next evaluate the efficiency of FedCoT-VQA. It incurs a communication cost of 30.87 MiB and a local training time of 2.988 s per round, indicating modest overhead during federated training. This efficiency comes from restricting optimization to the compact planner-side adaptation space while keeping the frozen planner parameters, extractor, and answerer unchanged. As a result, the framework avoids the extra communication and optimization cost of updating a large VideoQA pipeline. FedCoT-VQA completes unlearning in 0.133 s, indicating low unlearning overhead in practice and consistency with the lightweight nature of RUM, which reuses retained information and revises only the deletion-sensitive planner-side components. Overall, FedCoT-VQA achieves efficient performance in both training and unlearning, with low training overhead during federated optimization and low unlearning latency. 
+
+E. Ablation Studies 
+
+We conduct ablation studies to examine the effect of each design component and key setting in FedCoT-VQA, as sum-marized in Tables IV–VIII. The study focuses on four aspects: (i) the necessity of each core module, (ii) robustness under different client scales and data heterogeneity, (iii) the effect of replay and selective revision in RUM, and (iv) the trade-off between planner-side adaptation size and unlearning cost. 
+
+Impact of the three core modules. We mask one module at a time from the full system, including w/o (without) PSP, w/o SSA, and w/o RUM, which keeps the replay-based pipeline but removes the selective residual revision stage, and report the results in Table IV. The full design gives the best overall trade-off. Removing PSP reduces Retain-Acc. by 0.86% and increases CF Gap by 67.48%, showing the importance of a compact planner-side adaptation space. Removing SSA increases CF Gap and Trace Disc. by 48.24% and 53.81%, respectively, showing the benefit of trace-aware aggregation. Removing RUM causes the largest degradation in forgetting quality, increasing CF Gap, Trace Disc., and Unlearning Time by 119.24%, 139.27%, and 115.04%, respectively. Overall, PSP, SSA, and RUM play complementary roles in utility preservation, aggregation quality, and effective unlearning. 
+
+Impact of the number of clients. We next vary the total number of clients M ∈ { 10 , 20 , 40 , 80 } while keeping the total training data size fixed. Table V shows the results. As M
+
+increases, the task becomes harder due to smaller per-client data volume and stronger fragmentation. Still, FedCoT-VQA                             
+
+> TABLE IV ABLATION OF THE CORE MODULES ’EFFECTIVENESS IN FED COT-VQA.
+> Variant Retain-Acc. ↑CF Gap ↓Trace Disc. ↓Unlearning Time ↓
+> w/o PSP 100.42% 12.36% 15.47% 0.201 s w/o SSA 100.78% 10.94% 13.12% /w/o RUM 101.06% 16.18% 20.41% 0.286 s
+> Full 101.29% 7.38% 8.53% 0.133 s
+> TABLE V IMPACT OF THE TOTAL NUMBER OF CLIENTS M.
+
+Setting Retain-Acc. ↑ CF Gap ↓ Trace Disc. ↓
+
+M = 10 101.73% 6.91% 7.94% 
+
+M = 20 101.29% 7.38% 8.53% 
+
+M = 40 101.02% 8.47% 9.66% 
+
+M = 80 100.61% 10.12% 11.84% 
+
+degrades gracefully, with variations of only 1.12 percentage points in Retain-Acc., 3.21 percentage points in CF Gap, and 3.90 percentage points in Trace Disc. This suggests that the planner-centric design remains effective under more decentralized settings. 
+
+Impact of data heterogeneity. We further vary the Dirichlet concentration parameter αdir ∈ { 0.1, 0.3, 0.7, 1.0}, as shown in Table VI. Stronger heterogeneity degrades both retained utility and forgetting quality. However, the degradation is more pronounced in forgetting-related metrics than in retained accuracy. When αdir decreases from 1.0 to 0.1, Retain-Acc. decreases by only 0.92%, while CF Gap and Trace Disc. increase by 2.85 and 3.35 percentage points, respectively. This supports the role of PSP and SSA in handling heterogeneous client reasoning patterns. 
+
+Impact of replay and selective revision in RUM. We then compare the full RUM with the replay-only and revision-only variants in Table VII. Replay-only achieves the highest retained-client utility and the lowest unlearning time, but leaves substantially higher CF Gap and Trace Disc. val-ues. Revision-only removes more deleted-client residue than replay-only, but causes greater utility loss and instability. The full RUM provides the best overall balance between retained utility and forgetting quality. This shows that replay and selective revision are both necessary. 
+
+Impact of the planner-side adaptation size. Finally, we vary the LoRA rank r ∈ { 4, 8, 16 , 32 } to study the trade-off between adaptation capacity and unlearning cost, as shown in Table VIII. A very small rank slightly hurts Retain-Acc., while a larger rank increases Unlearning Time. FedCoT-VQA achieves the best overall trade-off at r = 8 , where Retain-FEDCOT-VQA: AUTHOR PREPRINT 14 
+
+TABLE VI IMPACT OF DATA HETEROGENEITY UNDER DIFFERENT DIRICHLET CONCENTRATION PARAMETERS .
+
+Setting Retain-Acc. ↑ CF Gap ↓ Trace Disc. ↓
+
+αdir = 0 .1 100.74% 9.42% 10.96% 
+
+αdir = 0 .3 101.29% 7.38% 8.53% 
+
+αdir = 0 .7 101.53% 6.89% 7.98% 
+
+αdir = 1 .0 101.68% 6.57% 7.61% TABLE VII IMPACT OF REPLAY AND SELECTIVE REVISION IN RUM.                     
+
+> Variant Retain-Acc. ↑CF Gap ↓Trace Disc. ↓Unlearning Time ↓
+> Replay-only 101.54% 11.08% 13.24% 0.097 s Revision-only 100.36% 9.18% 11.27% 0.193 s
+> Full 101.29% 7.38% 8.53% 0.133 s
+
+Acc., CF Gap, Trace Disc., and Unlearning Time are 101.29%, 7.38%, 8.53%, and 0.133 s, respectively. This suggests that the planner-side adaptation space should remain compact, but not overly small. VII. R ELATED WORK 
+
+Reasoning Paradigms in VideoQA. To address the scalability challenges of long-form video understanding, the field has evolved from holistic, end-to-end architectures [32], [33], [34], [35], [36] to modular CoT designs [1], [2], [37]. These advanced frameworks decompose complex queries into se-quential steps, utilizing a lightweight planner to drive evi-dence selection for a frozen VLM [38], [39]. Our work is orthogonal to these architectural innovations. Our framework enables collaborative training of existing CoT planners on decentralized data. By treating the planner as a plug-and-play module, our framework can be applied on top of these state-of-the-art architectures to enable privacy-preserving training without altering their fundamental reasoning logic. 
+
+Efficiency in Federated Vision-Language Learning. Feder-ated Learning enables distributed training but faces bandwidth challenges when applied to VLMs [24], [40], [41]. To mitigate this, recent research has integrated PEFT techniques—such as Adapters, LoRA, and Prompt Tuning—into the FL ecosystem, allowing clients to exchange only lightweight updates while keeping backbones frozen [42], [21], [43], [44], [45], [46]. Our framework aligns with these standard FL protocols. Our frame-work applies federated aggregation to the trainable parameters of the CoT planner. We identify the temporal planner as the optimal entry point for PEFT, thereby fully leveraging the communication efficiency of these methods for long-horizon video understanding without the prohibitive costs of federating entire VLMs. 
+
+Federated Unlearning Mechanisms. Federated Unlearning addresses the right to be forgotten through methods ranging from approximate gradient manipulation [47], [48], [49], [50] to exact retraining strategies like SISA [51]. Our framework combines retained-client update replay with selective residual correction to approximate the retained-only CoT planner while preserving retained-client utility. 
+
+TABLE VIII IMPACT OF THE PLANNER -SIDE ADAPTATION SIZE UNDER DIFFERENT 
+
+LORA RANKS .                            
+
+> Setting Retain-Acc. ↑CF Gap ↓Trace Disc. ↓Unlearning Time ↓
+> r= 4 100.82% 9.26% 10.71% 0.094 s
+> r= 8 101.29% 7.38% 8.53% 0.133 s
+> r= 16 101.57% 7.04% 8.18% 0.184 s
+> r= 32 101.41% 7.62% 8.71% 0.271 s
+
+VIII. C ONCLUSION 
+
+This paper presented FedCoT-VQA, a federated learning and unlearning framework for chain-of-thought planners in VideoQA. The key idea is to make the planner, rather than the full VideoQA pipeline, the federated optimization target, so that decentralized training and later client deletion can be handled compactly and practically. To this end, we de-signed three tightly coupled modules: PSP, which partitions the planner into frozen, shared, and residual components for parameter-efficient client adaptation; SSA, which aggregates planner-side updates while maintaining a compact contribution history; and RUM, which combines retained-only replay and selective residual correction to approximate the retained-only counterfactual model without full retraining. Experimental results on three decentralized VideoQA benchmarks show that FedCoT-VQA preserves strong fed-erated training utility while providing effective client-level unlearning. The evaluation results suggest that FedCoT-VQA provides a practical balance among reasoning quality, retained utility, and deletability for CoT-based VideoQA. In our future work, we will further evaluate FedCoT-VQA under richer planner architectures and larger VideoQA backbones to test the generality of the proposed planner-centric design. We will also extend the current framework to more challenging unlearning settings, such as multi-client, sequential, and repeated deletion requests, to improve its robustness and applicability in federated VideoQA systems. REFERENCES [1] H. Fei, S. Wu, W. Ji, H. Zhang, M. Zhang, M.-L. Lee, and W. Hsu, “Video-of-thought: Step-by-step video reasoning from perception to cognition,” arXiv preprint: 2501.03230 , 2025. [2] S. Yu, C. Jin, H. Wang, Z. Chen, S. Jin, Z. Zuo, X. Xu, Z. Sun, B. Zhang, J. Wu, H. Zhang, and Q. Sun, “Frame-voyager: Learning to query frames for video large language models,” arXiv preprint: 2410.03226 , 2024. [3] K. Hu, F. Gao, X. Nie, P. Zhou, S. Tran, T. Neiman, L. Wang, M. Shah, R. Hamid, B. Yin, and T. Chilimbi, “M-llm based video frame selection for efficient video understanding,” arXiv preprint: 2502.19680 , 2025. [4] S. Zhang, J. Yang, J. Yin, Z. Luo, and J. Luan, “Q-frame: Query-aware frame selection and multi-resolution adaptation for video-llms,” arXiv preprint: 2506.22139 , 2025. [5] R. Lu, S. Shi, D. Wang, C. Hu, and B. Zhang, “Preva: Protecting inference privacy through policy-based video-frame transformation,” in Proceedings of the IEEE/ACM Symposium on Edge Computing (SEC’22) , (Seattle, USA), 2022. [6] C. Hu, R. Lu, and D. Wang, “FEVA: A federated video analytics architecture for networked smart cameras,” IEEE Network , vol. 35, no. 6, pp. 163–170, 2021. [7] R. Lu, W. Wu, S. Shi, C. Hu, and D. Wang, “A privacy-preserving edge-cloud video analytics system via policy-based frame transformation,” 
+
+ACM Transactions on Internet Technology , vol. 26, pp. 43:1–43:26, Aug. 2026. [8] R. Lu, Y. Liu, and D. Wang, “P4LLM: Protecting embedding privacy against model inversion attacks for EaaS LLM serving via token-wise partition and perturbation,” IEEE Transactions on Mobile Computing ,vol. 25, no. 8, pp. 11506–11519, 2026. FEDCOT-VQA: AUTHOR PREPRINT 15 
+
+[9] J. Lei, P. Anderson, T. L. Berg, and M. Bansal, “Tvqa+: Spatio-temporal grounding for video question answering,” in Proceedings of the Annual Meeting of the Association for Computational Linguistics (ACL’20) ,(Online), pp. 8211–8225, Jul. 2020. [10] Y. Li, X. Wang, J. Xiao, W. Ji, and T.-S. Chua, “Invariant grounding for video question answering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’22) , (New Orleans, USA), pp. 2928–2937, Jun. 2022. [11] L. Yao, H. Wu, K. Ouyang, Y. Zhang, C. Xiong, B. Chen, X. Sun, and J. Li, “Generative frame sampler for long video understanding,” in Proceedings of the Findings of the Association for Computational Linguistics: ACL (ACL Findings’25) , (Vienna, Austria), pp. 17900– 17917, Association for Computational Linguistics, Jul. 2025. [12] C. Xu, Z. Ye, et al. , “Towards sparse video understanding and reason-ing,” arXiv preprint: 2602.13602 , 2026. [13] Y. Wang, J. Deng, W. Zhou, and H. Li, “Weakly supervised temporal adjacent network for language grounding,” arXiv preprint: 2106.16136 ,2021. [14] P. Zhao, L. Xie, C. Ju, Y. Zhang, Y. Wang, and Q. Tian, “Bottom-up temporal action localization with mutual regularization,” in Proceedings of the European Conference on Computer Vision (ECCV’20) , (Glasgow, United Kingdom), pp. 539–555, Aug. 2020. [15] Q. Zhang, M. Chen, A. Bukharin, N. Karampatziakis, P. He, Y. Cheng, W. Chen, and T. Zhao, “Adalora: Adaptive budget allocation for parameter-efficient fine-tuning,” in Proceedings of the International Conference on Learning Representations (ICLR’23) , (Kigali, Rwanda), May 2023. [16] J. Liu, J. Ren, R. Jin, Z. Zhang, Y. Zhou, P. Valduriez, and D. Dou, “Fisher information-based efficient curriculum federated learning with large language models,” in Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP’24) , (Miami, USA), pp. 10580–10597, Association for Computational Linguistics, Nov. 2024. [17] Z. Zhong, W. Bao, J. Wang, S. Zhang, J. Zhou, L. Lyu, and W. Y. B. Lim, “Unlearning through knowledge overwriting: Reversible federated unlearning via selective sparse adapter,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’25) ,(Nashville, USA), pp. 30661–30670, June 2025. [18] D. Davis and D. Drusvyatskiy, “Stochastic subgradient method con-verges at the rate O(k−1/4) on weakly convex functions,” arXiv preprint arXiv:1802.02988 , 2018. [19] Hugging Face, “Peft documentation.” Documentation, 2026. Accessed: 2026-03-22. [20] D. J. Beutel, T. Topal, A. Mathur, X. Qiu, J. Fernandez-Marques, Y. Gao, L. Sani, K. H. Li, T. Parcollet, P. Porto Buarque de Gusm˜ ao, and N. D. Lane, “Flower: A friendly federated learning research framework,” arXiv preprint: 2007.14390 , 2020. [21] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, W. Chen, et al. , “Lora: Low-rank adaptation of large language models.,” in Proceedings of the International Conference on Learning Represen-tations (ICLR’22) , (Online), Apr. 2022. [22] J. Xiao, X. Shang, A. Yao, and T.-S. Chua, “Next-qa: Next phase of question-answering to explaining temporal actions,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’21) , (Nashville, USA), pp. 9777–9786, Jun. 2021. [23] B. Wu, S. Yu, Z. Chen, J. B. Tenenbaum, and C. Gan, “Star: A benchmark for situated reasoning in real-world videos,” arXiv preprint: 2405.09711 , 2024. [24] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Proceedings of the International Conference on Artificial Intel-ligence and Statistics (AISTATS’17) , (Fort Lauderdale, USA), pp. 1273– 1282, Pmlr, Apr. 2017. [25] Y. Yan, Q. Yang, S. Tang, and Z. Shi, “Federa: Efficient fine-tuning of language models in federated learning leveraging weight decomposi-tion,” arXiv preprint: 2404.18848 , 2024. [26] Z. Wang, Z. Shen, Y. He, G. Sun, H. Wang, L. Lyu, and A. Li, “Flora: Federated fine-tuning large language models with heterogeneous low-rank adaptations,” in Proceedings of the Advances in Neural Information Processing Systems (NeurIPS’24) , (Vancouver, Canada), Dec. 2024. [27] J. Bai, D. Chen, B. Qian, L. Yao, and Y. Li, “Federated fine-tuning of large language models under heterogeneous tasks and client resources,” in Proceedings of the Advances in Neural Information Processing Systems (NeurIPS’24) , (Vancouver, Canada), Dec. 2024. [28] J. Bian, L. Wang, L. Zhang, and J. Xu, “Lora-fair: Federated lora fine-tuning with aggregation and initialization refinement,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV’25) ,(Honolulu, USA), Oct. 2025. [29] Y. Fraboni, M. Van Waerebeke, R. Vidal, L. Kameni, K. Scaman, and M. Lorenzi, “Sifu: Sequential informed federated unlearning for efficient and provable client unlearning in federated optimization,” in Proceedings of the International Conference on Artificial Intelligence and Statistics (AISTATS’24) , (Valencia, Spain), pp. 1–19, May 2024. [30] H. Gu et al. , “Unlearning during learning: An efficient federated machine unlearning method,” in Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI’24) , (Jeju, South Korea), Aug. 2024. [31] Y. H. Khalil, L. Brunswic, S. Lamghari, X. Li, M. Beitollahi, and X. Chen, “Not: Federated unlearning via weight negation,” in Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’25) , (Nashville, USA), Jun. 2025. [32] J. Lei, L. Li, L. Zhou, Z. Gan, T. L. Berg, M. Bansal, and J. Liu, “Less is more: Clipbert for video-and-language learning via sparse sampling,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’21) , (Nashville, USA), pp. 7331–7341, Jun. 2021. [33] D. Li, J. Li, H. Li, J. C. Niebles, and S. C. Hoi, “Align and prompt: Video-and-language pre-training with entity prompts,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’22) , (New Orleans, USA), pp. 4953–4963, Jun. 2022. [34] Y. Wang, K. Li, Y. Li, Y. He, B. Huang, Z. Zhao, H. Zhang, J. Xu, Y. Liu, Z. Wang, et al. , “Internvideo: General video foundation models via generative and discriminative learning,” arXiv preprint: 2212.03191 ,2022. [35] Z. Tong, Y. Song, J. Wang, and L. Wang, “Videomae: Masked autoen-coders are data-efficient learners for self-supervised video pre-training,” 
+
+Advances in neural information processing systems , vol. 35, pp. 10078– 10093, 2022. [36] H. Xue, Y. Sun, B. Liu, J. Fu, R. Song, H. Li, and J. Luo, “Clip-vip: Adapting pre-trained image-text model to video-language representation alignment,” arXiv preprint: 2209.06430 , 2022. [37] D. Sur´ ıs, S. Menon, and C. Vondrick, “Vipergpt: Visual inference via python execution for reasoning,” in Proceedings of the IEEE/CVF In-ternational Conference on Computer Vision (ICCV’23) , (Paris, France), pp. 11888–11898, Oct. 2023. [38] J. Wang, D. Chen, C. Luo, X. Dai, L. Yuan, Z. Wu, and Y.-G. Jiang, “Chatvideo: A tracklet-centric multimodal and versatile video understanding system,” arXiv preprint: 2304.14407 , 2023. [39] B. Lin, Y. Ye, B. Zhu, J. Cui, M. Ning, P. Jin, and L. Yuan, “Video-llava: Learning united visual representation by alignment before projection,” in Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP’24) , (Miami, USA), pp. 5971–5984, Nov. 2024. [40] T. Li, A. K. Sahu, M. Zaheer, M. Sanjabi, A. Talwalkar, and V. Smith, “Federated optimization in heterogeneous networks,” Proceedings of Machine Learning and Systems , vol. 2, pp. 429–450, 2020. [41] H. Pan, X. Zhao, Y. Jiang, L. He, B. Wang, and Y. Shu, “Fedvlp: Visual-aware latent prompt generation for multimodal federated learning,” 
+
+Computer Vision and Image Understanding , vol. 259, p. 104442, 2025. [42] N. Houlsby, A. Giurgiu, S. Jastrzebski, B. Morrone, Q. De Laroussilhe, A. Gesmundo, M. Attariyan, and S. Gelly, “Parameter-efficient transfer learning for nlp,” in Proceedings of the International Conference on Machine Learning (ICML’19) , (Long Beach, USA), pp. 2790–2799, PMLR, Jun. 2019. [43] J. Zhang, H. Yang, A. Li, X. Guo, P. Wang, H. Wang, Y. Chen, and H. Li, “Mllm-llava-fl: Multimodal large language model assisted feder-ated learning,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV’25) , (Tucson, USA), pp. 4066– 4076, IEEE, Feb. 2025. [44] Z. Zhang, Y. Yang, Y. Dai, Q. Wang, Y. Yu, L. Qu, and Z. Xu, “Fedpetuning: When federated learning meets the parameter-efficient tuning methods of pre-trained language models,” in Proceedings of the Findings of the Association for Computational Linguistics: ACL (ACL Findings’23) , (Toronto, Canada), pp. 9963–9977, Jul. 2023. [45] S. Chen, G. Long, J. Jiang, and C. Zhang, “Federated foundation models on heterogeneous time series,” in Proceedings of the AAAI Conference on Artificial Intelligence (AAAI’25) , vol. 39, (Philadelphia, USA), pp. 15839–15847, Feb. 2025. [46] Z. Fang, Z. Lin, Z. Chen, X. Chen, Y. Gao, and Y. Fang, “Automated federated pipeline for parameter-efficient fine-tuning of large language models,” IEEE Transactions on Mobile Computing , 2025. [47] A. Golatkar, A. Achille, and S. Soatto, “Eternal sunshine of the spotless net: Selective forgetting in deep networks,” in Proceedings of the FEDCOT-VQA: AUTHOR PREPRINT 16 
+
+IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR’20) , (Seattle, USA), pp. 9304–9312, Jun. 2020. [48] P. W. Koh and P. Liang, “Understanding black-box predictions via influence functions,” in Proceedings of the International Conference on Machine Learning (ICML’17) , (Sydney, Australia), pp. 1885–1894, PMLR, Aug. 2017. [49] M. Han, T. Zhu, L. Zhang, H. Huo, and W. Zhou, “Vertical federated unlearning via backdoor certification,” IEEE Transactions on Services Computing , vol. 18, no. 2, pp. 1110–1123, 2025. [50] W. Daluwatta, I. Khalil, S. Edirimannage, and M. Atiquzzaman, “Uaas-sfl: unlearning as a service for safeguarding federated learning,” IEEE Transactions on Network and Service Management , vol. 22, no. 2, pp. 1029–1045, 2024. [51] L. Bourtoule, V. Chandrasekaran, C. A. Choquette-Choo, H. Jia, A. Travers, B. Zhang, D. Lie, and N. Papernot, “Machine unlearning,” in 
+
+Proceedings of the IEEE Symposium on Security and Privacy (S&P’21) ,(San Francisco, USA), pp. 141–159, IEEE, May 2021.

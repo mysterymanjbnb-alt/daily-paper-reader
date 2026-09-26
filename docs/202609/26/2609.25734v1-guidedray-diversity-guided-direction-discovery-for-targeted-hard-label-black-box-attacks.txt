@@ -1,0 +1,619 @@
+Title: GuidedRay: Diversity-Guided Direction Discovery for Targeted Hard-Label Black-Box Attacks
+
+URL Source: https://arxiv.org/pdf/2609.25734v1
+
+Published Time: Wed, 23 Sep 2026 00:43:36 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# GuidedRay: Diversity-Guided Direction Discovery for Targeted Hard-Label Black-Box Attacks 
+
+Fei Yuan, Yantian Shen, Qingyuan Yu, Yi Chen, Binghui Wang, Senior Member, IEEE , Hongbo Yu, Anyu Wang, and Xiaoyun Wang 
+
+Abstract —Deep neural networks are vulnerable to adversar-ial attacks. Among black-box attacks, targeted decision-based attacks are particularly difficult: the attacker observes only the target model’s top-1 label and aims to make it predict a prespecified target class under a bounded perturbation. Before perturbation refinement, the attacker must discover a direction that reaches the prescribed target region. This initialization step can incur substantial query cost. We propose GuidedRay, a tar-geted decision-based attack based on diversity-guided direction discovery. GuidedRay builds on two observations: target-class reference samples provide useful target-conditioned direction pri-ors, and diverse candidates increase the probability of discovering a targeted adversarial direction. GuidedRay generates varied candidates from one or multiple target-class references and uses a one-query Fast Test to screen their induced sign directions. Once a feasible direction is found, GuidedRay applies Ray Search to reduce its decision-boundary radius. Experiments on CIFAR-10, CIFAR-100, and ImageNet demonstrate that GuidedRay consis-tently outperforms five state-of-the-art decision-based attacks at four evaluated query budgets from 500 to 5,000, with particularly pronounced gains in direction discovery during initialization. Against models protected by adversarial training or TRADES, it likewise achieves the highest attack success rate at all four query budgets. 
+
+Index Terms —Adversarial machine learning, black-box ad-versarial attacks, decision-based attacks, direction discovery, targeted adversarial attacks. 
+
+I. I NTRODUCTION 
+
+# DEEP neural networks (DNNs) are vulnerable to adversar-ial attacks, in which carefully crafted perturbations cause a model to produce incorrect predictions [1], [2]. Adversarial attacks can be either untargeted or targeted. An untargeted attack only requires the prediction to differ from the ground-truth class, whereas a targeted attack must force the model to output a specific class chosen by the attacker. Reaching a pre-specified target class is substantially more restrictive than inducing arbitrary misclassification. Besides the attack objective, the information exposed by the victim model defines the attack setting. This work considers 
+
+(Corresponding authors: Yi Chen and Binghui Wang.) Fei Yuan is with Shandong University, Jinan, Shandong 250100, China (e-mail: yuanfei@mail.sdu.edu.cn). Yantian Shen, Yi Chen, Hongbo Yu, Anyu Wang, and Xiaoyun Wang are with Tsinghua University, Beijing 100084, China (e-mail: shenyt22@mails. tsinghua.edu.cn; chenyi2023@tsinghua.edu.cn; yuhongbo@mail.tsinghua.edu. cn; anyuwang@tsinghua.edu.cn; xiaoyunwang@tsinghua.edu.cn). Qingyuan Yu is with the Institute of Satellite Information Engineering, Beijing 100094, China (e-mail: yu qingyuan@yeah.net). Binghui Wang is with the Department of Computer Science, Illinois Insti-tute of Technology, Chicago, IL 60616 USA (e-mail: bwang70@illinoistech. edu). 
+
+targeted decision-based attacks, which operate in a hard-label black-box setting. The attacker has no access to the model architecture, parameters, gradients, logits, or confidence scores and observes only the top-1 predicted label. Given a benign input, a target class, a perturbation bound, and a query budget, the attacker aims to construct an adversarial example that is classified as the target class. The combination of a prespecified attack objective and label-only feedback makes targeted decision-based attacks particularly difficult [3]–[5]. Many existing targeted decision-based attacks begin with a reference input that is already classified as the target class and then iteratively reduce its distance to the benign input. Existing studies have developed boundary estimation [4], [5], direction optimization [6], [7], and geometric acceleration [8]– [12] to improve this refinement process. These methods mainly address how to reduce the perturbation once an adversarial example or a useful search direction has been obtained. Before refinement can proceed, however, the attacker must first obtain a direction that reaches the prescribed target region. Under the constraint of the L∞ norm, adversarial per-turbations obtained from two powerful white-box attacks, FGSM [2] and PGD [13], are often found on the vertices of the 
+
+L∞ norm ball [14], [15]. Motivated by this observation, our work restricts the search space to vertex-pointing rays param-eterized by sign directions and represents a perturbed point as 
+
+xb + r · d, where xb denotes a benign input, d ∈ {− 1, +1 }n is a sign direction, and r > 0 is the radius. Each sign direction d
+
+defines a ray starting from xb. More specifically, along the ray induced by d, the smallest r for which xb + r · d is classified as the prescribed target class is called the decision-boundary radius . This representation naturally decomposes an attack into two stages: initialization discovers a sign direction along which the target region can be reached, whereas optimization refines that direction to reduce its decision-boundary radius. RayS [16] demonstrates that systematic search in the discrete sign space {− 1, +1 }n can be effective for the untargeted objective. When evaluated in our targeted setting, however, RayS does not consistently improve over existing targeted attacks across the evaluated datasets and query budgets, as shown in Table IV of Section VI. Unlike an untargeted attack, targeted initialization must locate a direction that reaches one particular target region rather than any incorrect class, making the discovery of targeted adversarial directions during initialization much more difficult. The differing requirements of untargeted and targeted ini-tialization motivate a broader examination of targeted sign-space initialization. Two factors contribute to this diffi-arXiv:2609.25734v1 [cs.CR] 22 Sep 2026 2
+
+culty. First, a direction sampled without target information is unlikely to reach a prespecified target region in a high-dimensional sign space, especially for classification tasks with many classes. Second, although a target-class reference sample 
+
+xa provides useful information about the target region, this information must be translated into a discrete sign direction 
+
+d ∈ {− 1, +1 }n. Following the discrete representation used by RayS [16], we map the displacement from the benign sample 
+
+xb toward xa to the sign direction da = sign( xa − xb).Because this mapping retains only the coordinate-wise sign information, the induced direction is not necessarily feasible. We investigate this targeted-direction discovery challenge through two observations. First, target-class reference samples provide a useful target-conditioned prior: their induced direc-tions reach the target region more often than directions induced by non-target references. Second, repeatedly testing highly similar directions explores nearby parts of the sign space and provides limited additional coverage, whereas a diverse candidate set is more likely to contain a targeted adversarial direction. The motivating experiments in Section IV provide empirical evidence for these observations and guide the design of a direction-discovery strategy that combines target-class guidance with candidate diversity. Guided by these observations, we propose GuidedRay, which consists of an initialization phase and an optimiza-tion phase. During initialization, we develop an Adversarial Direction Search Framework (ADSF) to discover a targeted adversarial direction. ADSF uses diversity-oriented sample augmentation to generate varied candidates from one or mul-tiple target-class reference samples and maps them to sign directions relative to the benign input. It then uses a one-query Fast Test to screen each direction without performing an expensive boundary search for every candidate. Once ADSF finds a targeted adversarial direction, the optimization phase applies Ray Search [16] to reduce its decision-boundary radius. In this way, ADSF addresses the targeted-direction discovery problem, while Ray Search performs the subsequent direction optimization in the same discrete space. We compare GuidedRay with five representative decision-based attacks on CIFAR-10, CIFAR-100, and ImageNet. Across the three datasets, GuidedRay obtains the highest attack success rate (ASR) at all four primary query budgets: 500, 1,000, 3,000, and 5,000. Section VI-D3 further shows that GuidedRay generates more diverse directions, with higher initialization success rates and fewer initialization queries than RayS. Against models protected by adversarial training [13] or TRADES [17], GuidedRay also achieves the highest ASR at all four query budgets. These results demonstrate that strength-ening targeted-direction discovery can move successful attacks to earlier query budgets. 
+
+Our Contributions. The main contributions of this work are summarized as follows:  
+
+> •
+
+We identify the discovery of targeted adversarial direc-tions in the discrete sign space as a major bottleneck in targeted decision-based attacks under the hard-label black-box setting, and further conduct motivating experi-ments showing that target-class guidance provides an in-formative initialization prior and that candidate diversity broadens sign-space coverage, both facilitating feasible-direction discovery.  
+
+> •
+
+We develop ADSF, whose candidate-generation module combines target-class guidance with diversity-oriented sample augmentation. A one-query Fast Test then screens the induced directions. Based on ADSF, GuidedRay discovers an adversarial direction during initialization and then refines its decision-boundary radius using Ray Search.  
+
+> •
+
+We conduct extensive experiments comparing GuidedRay with five decision-based attacks on three benchmark datasets and adversarially trained models. The results demonstrate the consistent effectiveness of GuidedRay across different datasets, query budgets, and model set-tings. Ablation studies further verify the contribution of ADSF and show that GuidedRay generates more diverse candidate directions than RayS while achieving higher ISR and lower initialization query consumption. Code for all experiments is available at https://github.com/ sudyuan/GuidedRay. II. R ELATED WORK 
+
+Adversarial attacks can be broadly categorized into white-box and black-box attacks according to the information avail-able to the adversary. In white-box attack research, the primary focus has been on finding adversarial examples with minimal perturbation magnitude [1], [2], [13], [18]–[22]. In contrast, research on black-box attacks has centered on efficiently gen-erating adversarial examples, with existing methods generally falling into three categories: transfer-based attacks [23]–[27], score-based attacks [28]–[31], and decision-based attacks. This work focuses on decision-based attacks. Boundary Attack [4] introduced the decision-based setting, in which the adversary observes only the top-1 predicted label. Most subsequent methods start from an input satisfying the attack objective and improve it through boundary estimation, direction optimization, or geometric search. HSJA [5] and AHA [32] estimate local boundary information from hard-label queries; OPT [6] and Sign-OPT [7] optimize the search direction based on perturbation changes; and Tangent [8], Triangle [9], SurFree [10], CGBA [11], and TtBA [33] exploit geometric properties of the decision boundary to accelerate refinement. These methods primarily focus on reducing per-turbation after a useful adversarial point or direction has been obtained. Some recent hard-label attacks introduce additional attacker resources. SQBA [34], DEAL [35], and Prior-OPT/Prior-Sign-OPT [36] use a pretrained surrogate model, an offline meta-learned boundary learner, and surrogate-gradient priors, respectively. GuidedRay assumes none of these auxiliary mod-els and operates only with hard-label queries and attacker-available target-class references. Distinct from the continuous-space refinement strategies above, RayS [16] formulates L∞ hard-label attacks as adiscrete search over sign directions. Its Ray Search procedure hierarchically flips blocks of a sign direction and retains changes that reduce the decision-boundary radius. Guide-dRay adopts the same discrete representation and uses Ray 3
+
+Search for subsequent optimization, but focuses on a different bottleneck: discovering a feasible targeted direction during initialization. It addresses this problem through target-class guidance and diverse candidate-direction generation before refinement begins. III. T HREAT MODEL AND PROBLEM FORMULATION 
+
+A. Threat Model 
+
+We consider decision-based attacks against image classifiers under hard-label black-box access. For each query, the victim returns only the top-1 predicted label; the attacker cannot access the model architecture, parameters, gradients, logits, confidence scores, or training data. Deploying a defense does not change this access model. Let the victim classifier be f : Rn → { 1, . . . , L }, where 
+
+n is the input dimension and L is the number of classes. Let 
+
+xb ∈ Rn be a correctly classified benign input and denote its predicted class by yb = f (xb). The attacker is given a preset target class t̸ = yb, a perturbation threshold ϵ > 0, and a maximum query budget Q. The attacker’s goal is to construct an adversarial example classified as t while satisfying the perturbation constraint within Q queries. The attacker also has access to k ≥ 1 correctly classified target-class reference samples {x(j) 
+
+> a
+
+}kj=1 satisfying f (x(j) 
+
+> a
+
+) = 
+
+t. These samples provide information about the target class but are not required to satisfy the perturbation constraint relative to xb. We call k = 1 and k > 1 the single-reference and 
+
+multi-reference settings, respectively. Their availability does not imply access to the victim’s training data, and GuidedRay uses neither a substitute model nor a local boundary learner. 
+
+B. Definitions and Notation 
+
+Definition 1 (Adversarial region) . The adversarial region O
+
+is defined as 
+
+O =
+
+(
+
+x ∈ Rn : f (x)̸ = f (xb), untargeted attack ,
+
+x ∈ Rn : f (x) = t, targeted attack . (1) For targeted attacks, we denote the target-class region {x ∈
+
+Rn : f (x) = t} by At.
+
+Definition 2 (Adversarial example) . An input xadv is an adversarial example for xb if xadv ∈ O and ∥xadv −xb∥∞ ≤ ϵ.Following the discrete representation introduced in Sec-tion I, GuidedRay restricts its search to sign directions d ∈{− 1, +1 }n and considers points of the form xb + rd, where 
+
+r > 0 is the radius. 
+
+Definition 3 (Adversarial direction) . A sign direction d ∈{− 1, +1 }n is an adversarial direction if there exists r > 0
+
+such that xb + rd ∈ O.For targeted attacks, where O = At, we refer to such a direction as a targeted adversarial direction . A target-class reference sample x(j) 
+
+> a
+
+∈ At induces the sign direction d(j) 
+
+> a
+
+=sign( x(j) 
+
+> a
+
+− xb), where sign( ·) is applied coordinate-wise and zero-valued entries are mapped to +1 .
+
+C. Problem Formulation 
+
+Unless otherwise specified, the following discussion focuses on targeted attacks, for which O = At. For a sign direction 
+
+d, its decision-boundary radius is defined as 
+
+g(d) = inf {r > 0 | xb + rd ∈ O} . (2) If the set is empty, g(d) = + ∞; otherwise, d is an adversarial direction and g(d) is the smallest radius at which its ray reaches the adversarial region. Subject to the query budget, the attack seeks a sign direction with the smallest attainable decision-boundary radius: 
+
+min  
+
+> d∈{− 1,+1 }n
+
+g(d) subject to q ≤ Q, (3) where q denotes the number of model queries used by the attack. An attack run is successful if its returned direction bd
+
+satisfies g(bd) ≤ ϵ.Initialization finds a direction with g(d) < +∞, and optimization reduces its radius under the remaining budget. GuidedRay addresses the former and uses Ray Search for the latter. The formulation also applies to untargeted attacks using the first case of Eq. (1); the corresponding GuidedRay variant is presented in Section V-D. IV. H EURISTIC MOTIVATION FOR TARGETED DIRECTION 
+
+DISCOVERY 
+
+Existing hard-label black-box attacks mainly refine per-turbations after an adversarial direction has been found. In targeted attacks, however, discovering such an initial direction is itself a major bottleneck. Since the attacker can only observe the top-1 predicted label and must reach a pre-specified target region, targeted adversarial directions may be sparse in the discrete sign space {− 1, +1 }n.Motivated by this observation, we revisit the initialization stage from two heuristic perspectives. First, target-class ref-erence samples may provide useful target-conditioned priors for discovering adversarial directions. Second, candidate direc-tions should be sufficiently diverse, as highly similar directions tend to explore nearby regions of the sign space and provide limited additional coverage. 
+
+A. Motivation 1: Target-Conditioned Direction Prior 
+
+The first motivation concerns how to obtain an informative initialization prior when the attacker can observe only hard labels. Using the notation introduced in Section III, a sign direction d ∈ {− 1, +1 }n is a targeted adversarial direction if there exists r > 0 such that xb +rd ∈ At. Randomly sampling from the sign space ignores the identity of the prescribed target class and therefore provides no target-specific guidance for finding such a direction. A target-class reference xa ∈ At provides an observed point in the prescribed target region. Its displacement from the benign input contains coordinate-wise information about how that target point differs from xb. Mapping the displacement to 
+
+da = sign( xa − xb) retains this coordinate-wise orientation while conforming to the discrete search space in Section III-B. As the sign operation discards relative coordinate magnitudes, 4
+
+xa does not generally equal xb + rda for any scalar r, and the induced sign direction is not guaranteed to reach At.Nevertheless, unlike a direction induced by an unrelated reference, da is constructed from an observed target-class point and thus provides a target-conditioned initialization prior. This motivates the heuristic that target-class references are more likely than non-target references to induce adversarial directions. We evaluate this hypothesis empirically below. 
+
+1) Motivating experiments: To evaluate this hypothesis em-pirically, we compare the feasibility of directions induced by target-class and non-target references on CIFAR-10/ResNet-50, CIFAR-100/ResNet-50, and ImageNet/DenseNet-121. For each dataset, we sample 5,000 correctly classified benign inputs. Given a benign input xb and a randomly selected target class t, R ANDOM -R EFERENCE constructs a sign direction from a randomly selected non-target reference sample xr /∈
+
+At, while T ARGET -R EFERENCE constructs a sign direction from a target-class reference sample xa ∈ At. For each direction d, we scan points of the form clip( xb +rd, 0, 1) over 200 radii in [0 , 1] and regard d as successful if any queried point is classified as the target class t.Table I reports the success rate, defined as the fraction of sampled directions that reach At along the scanned ray. Across all three datasets, directions induced by target-class references achieve higher success rates than those induced by random non-target references. This result supports the heuristic that target-class references provide useful target-conditioned priors for discovering adversarial directions.         
+
+> TABLE I SUCCESS RATES OF DIRECTIONS INDUCED BY RANDOM AND TARGET -CLASS REFERENCES .Dataset / Model Random-reference SR ↑
+> Target-reference SR ↑
+> CIFAR-10 / ResNet-50 0.2148 0.3866 CIFAR-100 / ResNet-50 0.0360 0.1186 ImageNet / DenseNet-121 0.0052 0.1012
+
+B. Motivation 2: Diverse Candidate Directions 
+
+Motivation 1 suggests that target-class reference sam-ples provide useful target-conditioned priors for discovering adversarial directions. However, generating multiple target-conditioned directions does not necessarily improve initial-ization if they are highly similar, because such directions repeatedly explore nearby parts of the discrete sign space. Candidate diversity can therefore broaden sign-space coverage while retaining target-class guidance. For a candidate set D = {d1, . . . , dm} with di ∈{− 1, +1 }n, we use the average pairwise cosine similarity (APCS) to measure directional redundancy: 
+
+APCS( D) = 2
+
+m(m − 1) 
+
+X
+
+> 1≤i<j ≤m
+
+cos (di, dj ), (4) where cos (·, ·) is the cosine similarity. A smaller APCS indicates lower directional redundancy and broader exploration of the sign space. However, diversity should be considered together with target-class guidance, because increasing diver-sity indiscriminately may discard the useful prior identified in Motivation 1. 
+
+1) Motivating experiments: To examine the effect of can-didate diversity, we conduct a candidate-direction analysis on CIFAR-10/ResNet-50. For each trial, we generate m = 200 
+
+candidate directions and evaluate their feasibility using the same ray-scanning procedure as in Motivation 1. Results are averaged over 100 trials. R AY S is included as a sign-space reference; since it does not use a target-class reference, the sign change ratio defined below is not applicable to it. Starting from a target-conditioned seed direction da =sign( xa − xb) with xa ∈ At, we construct a candidate pool by adding Gaussian noise to xa, mixing it with another target-class reference, or sampling another target-class reference. For this analysis, we retain samples x′ satisfying f (x′) = t and form directions sign( x′ −xb). For each retained candidate, the sign change ratio (SCR) relative to da is 
+
+SCR( x′) = Ham(sign( x′ − xb), da)
+
+n .
+
+The low-, medium-, and high-SCR groups comprise the bot-tom 20%, 40th–60th percentiles, and top 20% of the retained candidates, respectively. The label-based filtering and exhaus-tive ray scans are used only to construct and evaluate these SCR-stratified groups; they are not steps of GuidedRay. We report SCR, APCS, direction success rate (DSR), and candidate-set success rate (CSSR). DSR is the fraction of valid targeted adversarial directions, whereas CSSR is the probability that a candidate set contains at least one such direction. Table II reports the detailed CIFAR-10/ResNet-50 results, while Table III summarizes CSSR across all three datasets.                                       
+
+> TABLE II SCR-STRATIFIED CANDIDATE -DIRECTION DIVERSITY ON
+> CIFAR-10/R ES NET -50. Method / Level SCR APCS ↓DSR ↑CSSR ↑
+> RAY S–0.8536 0.1855 0.7200 Low SCR 0.0306 0.9129 0.3810 0.7300 Medium SCR 0.2584 0.4978 0.3944 0.9200 High SCR 0.4271 0.3229 0.4032 0.9800 TABLE III CROSS -DATASET RESULTS FOR MOTIVATION 2, AVERAGED OVER 100
+> TRIALS WITH m= 200 DIRECTIONS PER TRIAL .Dataset / Model RAY SCSSR ↑
+> High-SCR CSSR ↑
+> CIFAR-10 / ResNet-50 0.7200 0.9800 CIFAR-100 / ResNet-50 0.3800 0.5000 ImageNet / DenseNet-121 0.0600 0.5500
+
+Across the SCR-stratified groups, increasing SCR reduces APCS, indicating lower directional redundancy. More impor-tantly, CSSR increases from 0.7300 in the low-SCR group 5n 
+
+> Initialization
+> Fig. 1. Overview of GuidedRay. ADSF generates target-conditioned candidates and uses one victim-model query to screen each induced sign direction. After an adversarial direction is accepted, Ray Search refines its decision-boundary radius using the remaining query budget.
+
+to 0.9200 and 0.9800 in the medium- and high-SCR groups, respectively. Thus, the more diverse candidate sets are more likely to contain an adversarial direction. Although R AY Sprovides a useful sign-space reference, it differs from the SCR-stratified groups in both its generation mechanism and its use of target-class information. Overall, these results support the second heuristic motiva-tion: among target-conditioned candidates, greater diversity corresponds to lower directional redundancy, broader sign-space coverage, and a higher observed probability that a candidate set contains an adversarial direction. V. G UIDED RAY 
+
+A. Overview 
+
+GuidedRay consists of an initialization phase and an opti-mization phase, as illustrated in Fig. 1. Given a benign input xb
+
+and target-class references, the Adversarial Direction Search Framework (ADSF) generates varied candidates, maps them to sign directions, and screens each direction using a one-query Fast Test. The process continues until an adversarial direction is found or N candidates have been tested. If no direction is accepted, GuidedRay falls back to the RayS all-ones direction 
+
+dbest = {1}n; otherwise, Ray Search refines the accepted direction under the remaining query budget. 
+
+B. Adversarial Direction Search Framework 
+
+ADSF combines target-guided, diversity-oriented candidate generation with a one-query Fast Test that screens each induced direction. 
+
+1) Candidate Generation: Let {T 1, . . . , Tm} denote a col-lection of image augmentation methods. At each initialization step, ADSF selects a target-class reference x(j) 
+
+> a
+
+and an aug-mentation method T , and generates a candidate x⋆a = T (x(j) 
+
+> a
+
+).It then maps this candidate to the discrete sign space through 
+
+dc = sign( x⋆a − xb). Varying the reference and augmenta-tion method reduces redundancy among the induced target-conditioned directions, consistent with the observations in Section IV.               
+
+> Target-class references
+> {x(1)
+> a, . . . , x(k)
+> a}
+> Augmentation methods
+> {T 1, . . . , Tm}
+> Selected reference
+> x(j)
+> a
+> Selected method
+> T
+> Candidate sample
+> x⋆a=T(x(j)
+> a)
+> Induced sign direction
+> dc=sign( x⋆a−xb)
+> sample sample Fig. 2. Target-conditioned candidate generation in ADSF. A reference and an augmentation method are sampled to construct a candidate, which is then mapped to a sign direction relative to the benign input.
+
+For candidate generation, we randomly apply one of four augmentation methods to each target-class reference: Gaussian noise, random rotation, random cropping followed by resizing, or color jitter. Fig. 2 illustrates the process. 
+
+2) Single- and Multi-Reference Settings: In the single-reference setting ( k = 1 ), every candidate is generated from the same target-class reference. In the multi-reference setting (k > 1), ADSF first samples one of the k references and then applies a randomly selected augmentation method. Using multiple references introduces additional target-conditioned starting points and can broaden the coverage of the induced directions. The effect of k is evaluated in Section VI-B2. 
+
+3) One-Query Fast Test: Testing every candidate direction with a complete boundary search would consume many queries before refinement begins. The Fast Test instead evaluates one point on each induced ray. For a candidate x⋆a, let 
+
+dc = sign( x⋆a − xb) and ρc = ∥x⋆a − xb∥2. The queried point is 
+
+xtest = xb + ρc
+
+dc
+
+∥dc∥2
+
+. (5) 6     
+
+> Fig. 3. Geometric illustration of a successful Fast Test. The shaded area denotes the target adversarial region. If the queried point xtest lies in this region, the sign direction induced by x⋆ais verified as feasible.
+
+Algorithm 1 ADSF Initialization 
+
+Require: Victim model f ; benign input xb; target class t;references {x(j) 
+
+> a
+
+}kj=1 ; augmentation methods {T i}mi=1 ;maximum number of initialization tests N . 
+
+> 1:
+
+for i = 1 to N do  
+
+> 2:
+
+Sample a reference x(j) 
+
+> a
+
+and an augmentation method 
+
+T ; 
+
+> 3:
+
+x⋆a = T (x(j) 
+
+> a
+
+); 
+
+> 4:
+
+dc = sign( x⋆a − xb), ρc = ∥x⋆a − xb∥2, and rc =
+
+ρc/∥dc∥2; 
+
+> 5:
+
+ytest = f (xtest ), with xtest given by (5);  
+
+> 6:
+
+if ytest = t then  
+
+> 7:
+
+dbest = dc; 
+
+> 8:
+
+rbest = SDBR( f, xb, dbest , r c); 
+
+> 9:
+
+return dbest and rbest ; 
+
+> 10:
+
+end if  
+
+> 11:
+
+end for  
+
+> 12:
+
+return dbest = {1}n and rbest = + ∞.Fig. 3 illustrates a successful Fast Test, in which the queried point lies in the target adversarial region. If f (xtest ) = t, then xtest ∈ At lies on the ray induced by dc, at radius rc = ρc/∥dc∥2 under the representation in Section III-B. The test therefore certifies dc as a targeted adversarial direction using one query. GuidedRay accepts it as dbest and performs a binary search along the ray to obtain the initial radius rbest .If f (xtest )̸ = t, GuidedRay discards the candidate direction without further queries, although it may be feasible at another radius. Thus, ADSF accepts only verified adversarial directions while avoiding costly boundary searches for candidates that fail the Fast Test. Algorithm 1 summarizes candidate genera-tion, the Fast Test, and the fallback direction. 
+
+C. Optimization 
+
+GuidedRay adopts Ray Search [16] because it refines the decision-boundary radius in the same discrete sign space. Our design instead focuses on targeted initialization. The ablations in Sections VI-D1 and VI-D2 further examine the contribution of ADSF independently of the subsequent refinement proce-dure. At search stage s, Ray Search divides the current sign direction into bs = min(2 s, n ) blocks and flips one block  
+
+> Fig. 4. Comparison of candidate-direction generation in RayS and Guide-dRay. RayS uses structured block flips from the all-ones direction, whereas GuidedRay induces varied directions from augmented target-class references.
+
+at a time. A binary-search-based boundary search, denoted by SDBR , evaluates the temporary direction. The current direction and radius are updated whenever the temporary direction yields a smaller radius. The block granularity is then progressively increased until the query budget is exhausted or the perturbation threshold is met. Algorithm 2 summarizes this refinement procedure. 
+
+Algorithm 2 Ray Search [16] 
+
+Require: Victim model f ; benign input xb ∈ Rn;initial direction dbest ∈ {− 1, +1 }n;current best radius rbest > 0 (possibly +∞).  
+
+> 1:
+
+Initialize stage s = 0 and block index ℓ = 1 ; 
+
+> 2:
+
+while query budget remains do  
+
+> 3:
+
+bs = min(2 s, n ); 
+
+> 4:
+
+dtmp = dbest . copy() ; 
+
+> 5:
+
+Divide dtmp into bs blocks and denote the index set of block ℓ by Iℓ; 
+
+> 6:
+
+dtmp [Iℓ] = −dtmp [Iℓ]; 
+
+> 7:
+
+rtmp = SDBR( f, xb, dtmp , r best ); 
+
+> 8:
+
+if rtmp < r best then  
+
+> 9:
+
+(rbest , dbest ) = ( rtmp , dtmp ); 
+
+> 10:
+
+end if  
+
+> 11:
+
+ℓ = ℓ + 1 ; 
+
+> 12:
+
+if ℓ > b s then  
+
+> 13:
+
+s = s + 1 and ℓ = 1 ; 
+
+> 14:
+
+end if  
+
+> 15:
+
+end while  
+
+> 16:
+
+return rbest and dbest .Fig. 4 shows the difference between the two initialization mechanisms. RayS flips blocks of the fixed direction {1}n,whereas GuidedRay varies references and augmentations to generate diverse target-conditioned directions. 
+
+D. Untargeted Variant 
+
+GuidedRay can also be extended to the untargeted setting. Since any class other than f (xb) is acceptable, it requires no target-class reference. Gaussian noise applied to xb produces a candidate whose induced sign direction is screened by the Fast Test. After success or N failed tests, the attack respectively applies Ray Search to the accepted direction or the all-ones direction dbest = {1}n.7
+
+VI. E XPERIMENTS 
+
+A. Experimental Setup a) Datasets: We evaluate all attacks on CIFAR-10 [37], CIFAR-100 [37], and ImageNet [38], three widely used image-classification benchmarks. CIFAR-10 and CIFAR-100 contain 
+
+32 × 32 RGB images from 10 and 100 classes, with 6,000 and 600 images per class, respectively. ImageNet contains 1,000 classes, and its images are resized to 224 × 224 . All pixel values are normalized to [0 , 1] .For each dataset, we randomly select 1,000 correctly clas-sified images and conduct one attack trial on each image. In a targeted trial, the target class t̸ = f (xb) is selected randomly, and k ≥ 1 correctly classified samples from class t are used as target-class references. Unless otherwise specified, targeted attacks are evaluated in the single-reference setting with k = 1 .
+
+b) Victim Models: For the standard setting, we use ResNet-50 [39] for CIFAR-10 and CIFAR-100 and DenseNet-121 [40] for ImageNet. Their pretrained weights are obtained from OpenMMLab’s MMClassification toolbox [41]. The ResNet-50 models achieve top-1 accuracies of 0.952 and 0.799 on CIFAR-10 and CIFAR-100, respectively, while DenseNet-121 achieves 0.744 on ImageNet. 
+
+c) Attack Performance Metrics: The attack success rate 
+
+(ASR) at query limit K, denoted by ASR@ K, is the fraction of trials in which the attack finds, within K queries, an adversarial example that satisfies both the attack objective and the L∞ perturbation threshold ϵ. Query consumption is another important measure of attack performance. For successful trials, we report the average and median numbers of queries, de-noted by Average Queries (AvQ) and Median Queries (MeQ), respectively. Since AvQ and MeQ are computed only over successful trials, we report them together with ASR. For initialization-stage evaluation, the initialization success rate (ISR) is defined as the fraction of trials in which an adversarial direction is found within the specified initialization budget. To summarize the ASR trajectory up to 5,000 queries rather than performance at a single query limit, we report the normalized area under the ASR–query curve, denoted by AUC@5K: 
+
+AUC@5K = 15000 
+
+Z 5000 0
+
+ASR( q) dq. 
+
+We also report Q@α, the smallest query count at which the aggregate ASR over the 1,000 trials reaches α. In particular, 
+
+Q@20 and Q@30 correspond to ASR levels of 20% and 30% ,respectively. 
+
+d) Baseline Attacks: We compare GuidedRay with five representative decision-based attacks: Bounce [12], HSJA [5], Sign-OPT [7], Tangent [8], and RayS [16]. In targeted ex-periments, GuidedRay and the first four baselines receive the same target-class reference sample, whereas RayS starts from the benign input and does not require such a reference. All evaluated methods operate under the same attacker-resource setting: none uses a pretrained surrogate model, offline local-model training, or transfer-based gradient priors. Auxiliary-model-assisted attacks, including SQBA [34], DEAL [35], and Prior-OPT/Prior-Sign-OPT [36], are discussed in Section II but excluded from the direct comparison because they require additional resources unavailable to the evaluated attacks. 
+
+e) Defense Mechanisms: To evaluate GuidedRay against defended models, we further consider CIFAR-10/ResNet-50 models trained with Adversarial Training (AT) [13] and TRADES [17], using the corresponding checkpoints released with Tangent Attack [8]. 
+
+f) Augmentation Methods: In targeted attacks, the candidate-generation module adopts several augmentation methods, including Gaussian noise, random rotation, random cropping, and color jitter. Rotation angles are sampled from 
+
+[−180 ◦, 180 ◦]. Random cropping crops an image at a random location, with the cropping region size ranging from 0.5 to 1.0 of the original image size, and then resizes the cropped image to the original size. Color jitter changes brightness, contrast, saturation, and hue. The mixture strategy samples one of the four methods for each candidate. 
+
+g) Diversity Metric: We use the average pairwise cosine similarity (APCS) defined in Eq. (4). A smaller APCS indi-cates greater diversity among the generated sign directions. Reported APCS values are averaged across the attack trials. 
+
+B. Targeted Attacks on Undefended Models 
+
+We first evaluate targeted attacks against undefended victim models. For a fair comparison, GuidedRay and all reference-based baselines are evaluated in the single-reference setting, where the attacker is given a benign input and one target-class reference sample. We then examine how additional target-class references affect GuidedRay. Consistent with prior L∞
+
+decision-based attack evaluations [8], [16], the perturbation threshold is ϵ = 0.03 for CIFAR-10 and CIFAR-100 and 
+
+ϵ = 0 .2 for ImageNet. In targeted experiments, we set N = Q,allowing initialization to continue until a feasible direction is found or the total query budget is exhausted. Each Fast Test counts as one query, and Ray Search uses only the remaining budget after successful initialization. 
+
+1) Single-Reference Setting: Table IV reports ASR at dif-ferent query limits. To highlight the benefit of target-class-guided direction discovery, we also report the ASR of RayS in the targeted setting. Note that RayS does not require a target-class reference in its original formulation. Compared with RayS, GuidedRay achieves a pronounced ASR improvement. At 1,000 queries, GuidedRay improves the ASR over RayS from 0.141 to 0.313 on CIFAR-10, from 0.006 
+
+to 0.053 on CIFAR-100, and from 0 to 0.246 on ImageNet. In Section VI-D1, we demonstrate that the advantage of GuidedRay over RayS is still pronounced, even when RayS is allowed to exploit the same target-class reference. Compared with other state-of-the-art baseline attacks, Guid-edRay outperforms all evaluated baselines in ASR on all three datasets at every reported query limit from 500 to 5,000. This pattern is consistent with GuidedRay’s principal advantage in targeted-direction discovery during initialization, before the subsequent refinement procedures dominate the query cost. Table V compares GuidedRay with the strongest baseline using AUC@5K and Q@20 /Q@30 . AUC is computed over 8
+
+TABLE IV ASR OF TARGETED ATTACKS UNDER THE DATASET -SPECIFIC PERTURBATION THRESHOLDS .Dataset / Model / Method @500 @1K @3K @5K 
+
+ϵ
+
+Sign-OPT 0.001 0.009 0.036 0.080 CIFAR-10 HSJA 0.035 0.087 0.318 0.518 ResNet-50 Tangent 0.016 0.091 0.318 0.510 0.03 Bounce 0.037 0.108 0.415 0.695 RayS 0.052 0.141 0.323 0.389 GuidedRay 0.144 0.313 0.695 0.810 
+
+Sign-OPT 0.000 0.002 0.007 0.013 CIFAR-100 HSJA 0.004 0.014 0.065 0.166 ResNet-50 Tangent 0.005 0.015 0.068 0.155 0.03 Bounce 0.004 0.018 0.115 0.261 RayS 0.000 0.006 0.021 0.030 GuidedRay 0.023 0.053 0.216 0.304 
+
+Sign-OPT 0.014 0.018 0.037 0.061 ImageNet HSJA 0.150 0.183 0.255 0.355 DenseNet-121 Tangent 0.147 0.167 0.271 0.333 0.2 Bounce 0.128 0.156 0.227 0.290 RayS 0.000 0.000 0.000 0.000 GuidedRay 0.171 0.246 0.356 0.402 
+
+TABLE V AUC@5K AND QUERIES TO REACH FIXED ASR LEVELS .Dataset Metric GuidedRay Best baseline Rel. gain CIFAR-10 AUC@5K ↑ 0.5463 0.3381 (Bounce) 61.6% 
+
+Q@20 ↓ 640 1329 (RayS) 51.8% 
+
+Q@30 ↓ 951 2133 (Bounce) 55.4% CIFAR-100 AUC@5K ↑ 0.1649 0.0972 (Bounce) 69.7% 
+
+Q@20 ↓ 2628 3990 (Bounce) 34.1% 
+
+Q@30 ↓ 4824 5679 (Bounce) 15.1% ImageNet AUC@5K ↑ 0.3080 0.2376 (HSJA) 29.6% 
+
+Q@20 ↓ 641 1557 (HSJA) 58.8% 
+
+Q@30 ↓ 1647 4043 (HSJA) 59.3% 
+
+0–5,000 queries; only Bounce’s Q@30 on CIFAR-100 falls beyond this range and is obtained from the full 10,000-query records. GuidedRay improves AUC@5K over the strongest baseline by 61 .6% , 69 .7% , and 29 .6% on CIFAR-10, CIFAR-100, and ImageNet, respectively. It also requires 34 .1% –58 .8% fewer queries than the fastest baseline to reach an ASR of 20% . The fixed-ASR comparison therefore confirms that the gain is not tied to one favorable query limit. Table VI reports AvQ and MeQ together with ASR@5K, whose values are consistent with those in Table IV. GuidedRay achieves the highest ASR and the lowest AvQ and MeQ across all three datasets. Compared with RayS, it increases ASR from 38 .9% to 81 .0% on CIFAR-10 and from 3.0% to 
+
+30 .4% on CIFAR-100 while maintaining slightly lower query consumption. On ImageNet, GuidedRay achieves an ASR of 
+
+40 .2% , whereas RayS has no successful attack within 5,000 queries. 
+
+2) Multi-Reference Setting: As discussed in Section V-B2, multiple references provide additional target-conditioned start-ing points. We therefore evaluate GuidedRay with different values of k under a maximum budget of 5,000 queries. 
+
+TABLE VI QUERIES REQUIRED FOR SUCCESSFUL TARGETED ATTACKS UNDER THE DATASET -SPECIFIC PERTURBATION THRESHOLDS AND A 5,000-QUERY BUDGET .Dataset / Model / Method AvQ MeQ ASR 
+
+ϵ
+
+Sign-OPT 2917.1 3135.5 0.080 HSJA 2556.2 2466.0 0.518 CIFAR-10 Tangent 2543.7 2504.5 0.510 ResNet-50 Bounce 2567.9 2472.0 0.695 0.03 RayS 1663.6 1302.0 0.389 GuidedRay 1628.0 1299.5 0.810 
+
+Sign-OPT 2927.0 2914.0 0.013 HSJA 3225.3 3566.0 0.166 CIFAR-100 Tangent 3064.0 3239.0 0.155 ResNet-50 Bounce 3138.6 3192.0 0.261 0.03 RayS 2288.2 2261.0 0.030 GuidedRay 2287.0 2188.0 0.304 
+
+Sign-OPT 2248.9 2146.0 0.061 HSJA 1653.8 994.0 0.355 ImageNet Tangent 1480.9 772.0 0.333 DenseNet-121 Bounce 1451.7 749.5 0.290 0.2 RayS – – 0.000 GuidedRay 1168.9 644.5 0.402 
+
+TABLE VII ASR OF GUIDED RAY WITH DIFFERENT NUMBERS OF TARGET -CLASS REFERENCE SAMPLES .Dataset / Model / k @500 @1K @3K @5K 
+
+ϵ
+
+CIFAR-10 1 0.144 0.313 0.695 0.810 ResNet-50 3 0.171 0.348 0.746 0.891 0.03 5 0.165 0.359 0.776 0.908 10 0.153 0.362 0.784 0.911 1 0.023 0.053 0.216 0.304 CIFAR-100 3 0.052 0.112 0.298 0.394 ResNet-50 5 0.040 0.102 0.276 0.408 0.03 10 0.040 0.105 0.298 0.428 50 0.054 0.133 0.342 0.491 1 0.171 0.246 0.356 0.402 ImageNet 3 0.275 0.381 0.531 0.579 DenseNet-121 5 0.295 0.398 0.596 0.667 0.2 10 0.313 0.433 0.647 0.714 30 0.362 0.509 0.713 0.774 
+
+Table VII shows that the overall ASR increases as more references become available, although the gain is not strictly monotonic at every individual query limit. The effect is most pronounced on ImageNet, where ASR@5K increases from 
+
+0.402 for k = 1 to 0.774 for k = 30 .
+
+C. Targeted Attacks on Defended Models 
+
+To examine whether GuidedRay retains its advantage in defended scenarios, we evaluate targeted attacks on CIFAR-10/ResNet-50 models protected by adversarial training and TRADES. We report ASR at the same four primary query budgets used for the undefended models: 500, 1,000, 3,000, and 5,000. 9                                                 
+
+> TABLE VIII ASR OF TARGETED ATTACKS AGAINST DEFENDED CIFAR-10/R ES NET -50
+> MODELS AT ϵ= 0 .03 .Defense Method @500 @1K @3K @5K Adv. Training Sign-OPT 0.000 0.000 0.001 0.001 HSJA 0.009 0.011 0.011 0.012 Tangent 0.006 0.007 0.009 0.013 Bounce 0.010 0.010 0.012 0.013 GuidedRay 0.019 0.026 0.048 0.057
+> TRADES Sign-OPT 0.001 0.001 0.002 0.002 HSJA 0.011 0.011 0.012 0.013 Tangent 0.005 0.005 0.007 0.007 Bounce 0.010 0.010 0.011 0.013 GuidedRay 0.031 0.036 0.048 0.057
+
+As shown in Table VIII, GuidedRay achieves the highest ASR at every reported query limit under both defenses. At 500 queries, it reaches ASRs of 0.019 under adversarial train-ing and 0.031 under TRADES, compared with the strongest baseline values of 0.010 and 0.011, respectively. The consis-tent advantage across budgets shows that GuidedRay remains effective against both defended models. 
+
+D. Ablation Studies 
+
+In this subsection, we first evaluate the contribution of ADSF to the attack performance. We then replace Ray Search with a simpler randomized search procedure to examine whether the benefit of ADSF remains when the subsequent optimizer changes. Next, we compare the diversity of the di-rections generated during initialization and analyze its relation to initialization success. We further examine the Fast Test and finally compare the effects of different candidate augmentation methods. 
+
+1) Contribution of ADSF: To evaluate the contribution of ADSF to the performance improvement, we conduct an ablation experiment involving the following three attacks:  
+
+> •
+
+The first is the original RayS attack.  
+
+> •
+
+The second is a minimally modified variant of RayS, denoted by RayS-T. It receives the same target-class reference xa as GuidedRay, sets the starting direction to dbest = sign( xa − xb), and then applies Ray Search without ADSF.  
+
+> •
+
+The third is GuidedRay with the complete ADSF initial-ization. We limit the query budget to 5,000 and evaluate the three attacks on CIFAR-100/ResNet-50 at ϵ = 0 .03 in the targeted setting. Fig. 5 shows that RayS-T provides only a modest im-provement over RayS and still performs substantially worse than GuidedRay. This comparison shows that the improvement of GuidedRay does not come solely from replacing the all-ones initialization with one direction induced by a target-class reference. Generating and screening varied candidate directions through ADSF provides the larger performance gain. 0 1K 2K 3K 4K 5K     
+
+> Query Limit
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35
+> Attack Success Rate (ASR)
+> GuidedRay RayS RayS-T
+> Fig. 5. ASR of RayS, RayS-T, and GuidedRay on CIFAR-100/ResNet-50 at
+> ϵ= 0 .03 .
+
+2) Replacing Ray Search: To separate initialization from the subsequent optimizer, we replace Ray Search with a simple randomized block-flipping procedure. Given dbest ∈ {− 1, +1 }n, the replacement samples an integer start index 0 ≤ istart < n and block size 1 ≤ bs ≤ n,flips coordinates istart through min( istart + bs − 1, n − 1) , and retains the direction if its decision-boundary radius decreases. This procedure is simpler than Algorithm 2; the resulting variant is denoted by GuidedRay-W. Table IX compares it with GuidedRay, RayS, and Bounce on CIFAR-10 and CIFAR-100 at ϵ = 0 .03 , using the same four primary query budgets as the main comparison.                                               
+
+> TABLE IX ASR AFTER REPLACING RAY SEARCH WITH RANDOMIZED BLOCK FLIPPING .Dataset / Model / Method @500 @1K @3K @5K
+> ϵ
+> CIFAR-10 Bounce 0.037 0.108 0.415 0.695 ResNet-50 RayS 0.052 0.141 0.323 0.389 0.03 GuidedRay 0.144 0.313 0.695 0.810
+> GuidedRay-W 0.055 0.149 0.513 0.695 CIFAR-100 Bounce 0.004 0.018 0.115 0.261 ResNet-50 RayS 0.000 0.006 0.021 0.030 0.03 GuidedRay 0.023 0.053 0.216 0.304
+> GuidedRay-W 0.016 0.042 0.145 0.232
+
+GuidedRay-W consistently outperforms RayS at all four evaluated query budgets and remains competitive with Bounce at earlier budgets. Although replacing Ray Search reduces the performance of GuidedRay, ADSF remains effective with a different refinement procedure. 
+
+3) Candidate-Direction Diversity: We compare the initial-ization behavior of RayS and GuidedRay. For the diversity measurement, each method generates 1,000 candidate direc-tions per trial, and APCS is averaged over 1,000 trials. We then run initialization with a 10,000-query limit and report ISR together with average initialization queries (Init. AvQ), computed over all trials until an adversarial direction is found or the initialization budget is exhausted. GuidedRay is evalu-10  
+
+> Fig. 6. APCS, ISR, and initialization AvQ of GuidedRay with different numbers of target-class references.
+
+(a) CIFAR-10/ResNet-50 (b) CIFAR-100/ResNet-50 (c) ImageNet/DenseNet-121  
+
+> Fig. 7. t-SNE visualization of the generated sign directions.
+
+ated with k = 1 and k = 10 , whereas RayS uses its original reference-free initialization.                                                        
+
+> TABLE X DIVERSITY AND SUCCESS OF THE INITIALIZATION PHASE . L OWER APCS
+> AND INITIALIZATION AVQ, TOGETHER WITH HIGHER ISR, INDICATE BETTER PERFORMANCE . T HE NUMBER OF TARGET -CLASS REFERENCES k
+> APPLIES ONLY TO GUIDED RAY .CIFAR-10 / ResNet-50 Attack kISR Init. AvQ APCS RayS –0.416 5848.36 0.994 GuidedRay 10.906 1292.10 0.464 GuidedRay 10 0.985 333.75 0.301 CIFAR-100 / ResNet-50 Attack kISR Init. AvQ APCS RayS –0.135 8974.67 0.994 GuidedRay 10.412 6275.92 0.506 GuidedRay 10 0.613 4538.60 0.339 ImageNet / DenseNet-121 Attack kISR Init. AvQ APCS RayS –0.000 10000.00 0.961 GuidedRay 10.420 6264.25 0.449 GuidedRay 10 0.751 3289.42 0.343
+
+a) Initialization comparison: Table X shows that Guid-edRay produces substantially lower APCS than RayS and simultaneously achieves higher ISR with fewer initialization queries. Increasing k from 1 to 10 further lowers APCS, increases ISR, and reduces initialization AvQ on all three datasets. For example, on CIFAR-10/ResNet-50, GuidedRay with k = 10 increases ISR from 0.416 to 0.985 relative to RayS and reduces initialization AvQ from 5848 .36 to 333 .75 ,a factor of approximately 17 .5.
+
+b) Relation between Diversity and Initialization: Fig. 6 reports APCS, ISR, and initialization AvQ under different settings of k. Increasing k is generally associated with lower APCS and initialization AvQ and higher ISR. The scatter plots and fitted curves summarize these trends, with almost all fits achieving a coefficient of determination ( R2) above 0.9.
+
+c) Direction visualization: Using t-SNE [42], Fig. 7visualizes directions collected from one trial for the same benign input and target class. GuidedRay covers a broader region than RayS, and increasing k further spreads the gen-erated directions. The broader spread visually supports the lower APCS values of GuidedRay. Together, the APCS results and t-SNE visualization show that GuidedRay generates more diverse candidate directions than RayS. 
+
+4) Fast-Test Acceptance Rate: For each dataset, we sample 5,000 pairs consisting of a correctly classified benign input xb
+
+and a target-class reference xa, construct d = sign( xa − xb),and apply the Fast Test. The acceptance rates are 42 .74% ,
+
+37 .9% , and 47 .2% on CIFAR-10, CIFAR-100, and ImageNet, respectively. Because a rejected direction may still be feasi-ble at another radius, these values quantify the fraction of reference-induced directions certified by the one-query test. Despite requiring only one model query, the Fast Test certifies a substantial fraction of reference-induced directions, allowing ADSF to avoid costly boundary searches for candidates that fail the screening test. 
+
+5) Effect of Candidate Augmentations: We compare Gaus-sian noise, random rotation, random cropping, color jitter, and their mixture under a 5,000-query budget while keeping the remaining attack settings unchanged. As shown in Fig. 8, color jitter is the strongest individual augmentation across all three datasets, while the mixture remains competitive on CIFAR-10 and CIFAR-100 and achieves the highest ASR on ImageNet. Since the effectiveness of individual augmentations varies across datasets, we adopt the mixture as the default to 11 0 1K 2K 3K 4K 5K 
+
+> Query Limit
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> Attack Success Rate (ASR)
+
+(a) CIFAR-10 ( ϵ = 0 .03 )0 1K 2K 3K 4K 5K  
+
+> Query Limit
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40
+> Attack Success Rate (ASR)
+
+(b) CIFAR-100 ( ϵ = 0 .03 )0 1K 2K 3K 4K 5K  
+
+> Query Limit
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45
+> Attack Success Rate (ASR)
+
+(c) ImageNet ( ϵ = 0 .2)
+
+Fig. 8. ASR curves for different candidate augmentation methods. 
+
+avoid dataset-specific augmentation selection. 
+
+E. Untargeted Attacks 
+
+GuidedRay can also be applied to untargeted attacks through the variant described in Section V-D. The perturbation thresh-old is ϵ = 0 .01 for CIFAR-10 and CIFAR-100 and ϵ = 0 .03 
+
+for ImageNet. We report results up to 5,000 queries, and GuidedRay tests at most N = 50 candidate directions during initialization. As shown in Table XI, GuidedRay achieves higher ASR than RayS at every reported query limit on CIFAR-10 and CIFAR-100. At 1,000 queries, for example, ASR increases from 0.230 to 0.285 on CIFAR-10 and from 0.453 to 0.495 
+
+on CIFAR-100. These results indicate that its initialization strategy remains useful even when the attack objective is untargeted. The gains are nevertheless smaller than those observed in the targeted setting, where identifying a direction toward one prescribed class is substantially more restrictive. 
+
+TABLE XI ASR OF UNTARGETED ATTACKS UNDER THE DATASET -SPECIFIC PERTURBATION THRESHOLDS .Dataset / Model / Method @500 @1K @3K @5K 
+
+ϵ
+
+Sign-OPT 0.012 0.019 0.042 0.061 CIFAR-10 HSJA 0.075 0.158 0.300 0.397 ResNet-50 Tangent 0.074 0.149 0.288 0.396 0.01 Bounce 0.080 0.188 0.363 0.463 RayS 0.107 0.230 0.427 0.541 GuidedRay 0.169 0.285 0.474 0.566 
+
+Sign-OPT 0.040 0.058 0.100 0.131 CIFAR-100 HSJA 0.153 0.274 0.428 0.520 ResNet-50 Tangent 0.171 0.269 0.428 0.518 0.01 Bounce 0.161 0.304 0.468 0.546 RayS 0.283 0.453 0.664 0.743 GuidedRay 0.366 0.495 0.684 0.758 
+
+Sign-OPT 0.047 0.049 0.070 0.078 ImageNet HSJA 0.103 0.126 0.160 0.192 DenseNet-121 Tangent 0.102 0.117 0.156 0.183 0.03 Bounce 0.101 0.125 0.168 0.201 RayS 0.479 0.676 0.884 0.934 GuidedRay 0.467 0.676 0.880 0.939 
+
+On ImageNet, GuidedRay and RayS perform similarly: their ASRs differ by at most 0.012 across the four query limits and are equal at 1,000 queries. This smaller performance gap is consistent with the less restrictive untargeted objective, for which reaching any class other than the benign class is sufficient. Overall, the results show that GuidedRay remains effective in the untargeted setting, while its more pronounced benefits arise in targeted attacks that require a direction to reach one prescribed class. VII. C ONCLUSION 
+
+This paper studies targeted adversarial-direction discovery in decision-based attacks under hard-label black-box access. Guided by target-class priors and candidate diversity, Guide-dRay uses ADSF to generate varied target-conditioned direc-tions and screen them with a one-query Fast Test before Ray Search refinement. Experiments on three benchmark datasets show that GuidedRay consistently outperforms the evaluated baselines across different query budgets and remains effective against defended models. Ablation studies further demonstrate the contribution of ADSF and GuidedRay’s greater candidate-direction diversity relative to RayS. Untargeted results demon-strate broader applicability, with smaller gains under the less restrictive objective. These findings highlight targeted-direction discovery as an important design focus for decision-based attacks. REFERENCES [1] C. Szegedy, W. Zaremba, I. Sutskever et al. , “Intriguing properties of neural networks,” in Proc. 2nd Int. Conf. Learn. Represent. (ICLR) ,2014. [2] I. J. Goodfellow, J. Shlens, and C. Szegedy, “Explaining and harnessing adversarial examples,” in Proc. 3rd Int. Conf. Learn. Represent. (ICLR) ,2015. [3] Y. Li, B. Xie, S. Guo, Y. Yang, and B. Xiao, “A survey of robustness and safety of 2d and 3d deep learning models against adversarial attacks,” 
+
+ACM Comput. Surv. , vol. 56, no. 6, pp. 138:1–138:37, 2024. [4] W. Brendel, J. Rauber, and M. Bethge, “Decision-based adversarial attacks: Reliable attacks against black-box machine learning models,” in Proc. 6th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2018. [5] J. Chen, M. I. Jordan, and M. J. Wainwright, “Hopskipjumpattack: A query-efficient decision-based attack,” in Proc. IEEE Symp. Secur. Privacy (SP) . IEEE, 2020, pp. 1277–1294. 12 
+
+[6] M. Cheng, T. Le, P. Chen, H. Zhang, J. Yi, and C. Hsieh, “Query-efficient hard-label black-box attack: An optimization-based approach,” in Proc. 7th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2019. [7] M. Cheng, S. Singh, P. H. Chen, P. Chen, S. Liu, and C. Hsieh, “Sign-opt: A query-efficient hard-label adversarial attack,” in Proc. 8th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2020. [8] C. Ma, X. Guo, L. Chen, J. Yong, and Y. Wang, “Finding optimal tangent points for reducing distortions of hard-label attacks,” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2021, pp. 19 288–19 300. [9] X. Wang, Z. Zhang, K. Tong et al. , “Triangle attack: A query-efficient decision-based adversarial attack,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , ser. Lecture Notes in Computer Science, vol. 13665. Springer, 2022, pp. 156–174. [10] T. Maho, T. Furon, and E. L. Merrer, “Surfree: A fast surrogate-free black-box attack,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) . Computer Vision Foundation / IEEE, 2021, pp. 10 430–10 439. [11] M. F. Reza, A. Rahmati, T. Wu, and H. Dai, “CGBA: curvature-aware geometric black-box attack,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) . IEEE, 2023, pp. 124–133. [12] J. Wan, J. Fu, L. Wang, and Z. Yang, “Bounceattack: A query-efficient decision-based adversarial attack by bouncing into the wild,” in Proc. IEEE Symp. Secur. Privacy (SP) . IEEE, 2024, pp. 1270–1286. [13] A. Madry, A. Makelov, L. Schmidt, D. Tsipras, and A. Vladu, “Towards deep learning models resistant to adversarial attacks,” in Proc. 6th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2018. [14] S. Moon, G. An, and H. O. Song, “Parsimonious black-box adversarial attacks via efficient combinatorial optimization,” in Proc. 36th Int. Conf. Mach. Learn. (ICML) , ser. Proceedings of Machine Learning Research, K. Chaudhuri and R. Salakhutdinov, Eds., vol. 97. PMLR, 2019, pp. 4636–4645. [15] J. Chen, D. Zhou, J. Yi, and Q. Gu, “A frank-wolfe framework for efficient and effective adversarial attacks,” in Proc. 34th AAAI Conf. Artif. Intell. (AAAI) . AAAI Press, 2020, pp. 3486–3494. [16] J. Chen and Q. Gu, “Rays: A ray searching method for hard-label adversarial attack,” in Proc. 26th ACM SIGKDD Conf. Knowl. Discov. Data Mining . ACM, 2020, pp. 1739–1747. [17] H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. E. Ghaoui, and M. I. Jordan, “Theoretically principled trade-off between robustness and accuracy,” in 
+
+Proc. 36th Int. Conf. Mach. Learn. (ICML) , ser. Proceedings of Machine Learning Research, vol. 97. PMLR, 2019, pp. 7472–7482. [18] A. Kurakin, I. J. Goodfellow, and S. Bengio, “Adversarial examples in the physical world,” in Proc. 5th Int. Conf. Learn. Represent. (ICLR) .OpenReview.net, 2017. [19] N. Carlini and D. A. Wagner, “Towards evaluating the robustness of neural networks,” in Proc. IEEE Symp. Secur. Privacy (SP) . IEEE Computer Society, 2017, pp. 39–57. [20] N. Papernot, P. D. McDaniel, S. Jha, M. Fredrikson, Z. B. Celik, and A. Swami, “The limitations of deep learning in adversarial settings,” in 
+
+Proc. IEEE Eur. Symp. Secur. Privacy (EuroS&P) . IEEE, 2016, pp. 372–387. [21] B. Biggio, I. Corona, D. Maiorca et al. , “Evasion attacks against machine learning at test time,” in Proc. Eur. Conf. Mach. Learn. Knowl. Discov. Databases (ECML PKDD) , ser. Lecture Notes in Computer Science, vol. 8190. Springer, 2013, pp. 387–402. [22] S. Moosavi-Dezfooli, A. Fawzi, and P. Frossard, “Deepfool: A simple and accurate method to fool deep neural networks,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) . IEEE Computer Society, 2016, pp. 2574–2582. [23] N. Papernot, P. D. McDaniel, I. J. Goodfellow, S. Jha, Z. B. Celik, and A. Swami, “Practical black-box attacks against machine learning,” in 
+
+Proc. ACM Asia Conf. Comput. Commun. Secur. (AsiaCCS) . ACM, 2017, pp. 506–519. [24] N. Papernot, P. D. McDaniel, and I. J. Goodfellow, “Transferability in machine learning: from phenomena to black-box attacks using adversar-ial samples,” CoRR , vol. abs/1605.07277, 2016. [25] Y. Liu, X. Chen, C. Liu, and D. Song, “Delving into transferable adversarial examples and black-box attacks,” in Proc. 5th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2017. [26] Y. Dong, F. Liao, T. Pang et al. , “Boosting adversarial attacks with mo-mentum,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) .Computer Vision Foundation / IEEE Computer Society, 2018, pp. 9185– 9193. [27] Y. Dong, T. Pang, H. Su, and J. Zhu, “Evading defenses to transferable adversarial examples by translation-invariant attacks,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) . Computer Vision Foundation / IEEE, 2019, pp. 4312–4321. [28] P. Chen, H. Zhang, Y. Sharma, J. Yi, and C. Hsieh, “ZOO: zeroth order optimization based black-box attacks to deep neural networks without training substitute models,” in Proc. 10th ACM Workshop Artif. Intell. Secur. (AISec) . ACM, 2017, pp. 15–26. [29] A. Ilyas, L. Engstrom, and A. Madry, “Prior convictions: Black-box adversarial attacks with bandits and priors,” in Proc. 7th Int. Conf. Learn. Represent. (ICLR) . OpenReview.net, 2019. [30] A. Ilyas, L. Engstrom, A. Athalye, and J. Lin, “Black-box adversarial attacks with limited queries and information,” in Proc. 35th Int. Conf. Mach. Learn. (ICML) , ser. Proceedings of Machine Learning Research, vol. 80. PMLR, 2018, pp. 2142–2151. [31] M. Alzantot, Y. Sharma, S. Chakraborty, H. Zhang, C. Hsieh, and M. B. Srivastava, “Genattack: practical black-box attacks with gradient-free optimization,” in Proc. Genet. Evol. Comput. Conf. (GECCO) . ACM, 2019, pp. 1111–1119. [32] J. Li, R. Ji, P. Chen et al. , “Aha! adaptive history-driven attack for decision-based black-box models,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) . IEEE, 2021, pp. 16 148–16 157. [33] F. Wang, X. Zuo, H. Huang, and G. Chen, “TtBA: Two-third bridge approach for decision-based adversarial attack,” in Proc. 42nd Int. Conf. Mach. Learn. (ICML) , 2025, pp. 65 918–65 935. [34] J. Park, P. Miller, and N. McLaughlin, “Hard-label based small query black-box adversarial attack,” in Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. (WACV) . IEEE, 2024, pp. 3986–3995. [35] M. Shen, C. Li, H. Yu, Q. Li, L. Zhu, and K. Xu, “Decision-based query efficient adversarial attack via adaptive boundary learning,” IEEE Trans. Dependable Secur. Comput. , vol. 21, no. 4, pp. 1740–1753, 2024. [36] C. Ma, X. Xu, S. Cheng, and Q. Xuan, “Boosting ray search procedure of hard-label attacks with transfer-based priors,” in Proc. 13th Int. Conf. Learn. Represent. (ICLR) , 2025. [37] A. Krizhevsky, “Learning multiple layers of features from tiny images,” University of Toronto, Tech. Rep., 2009. [38] O. Russakovsky, J. Deng, H. Su et al. , “ImageNet Large Scale Vi-sual Recognition Challenge,” International Journal of Computer Vision (IJCV) , vol. 115, no. 3, pp. 211–252, 2015. [39] K. He, X. Zhang, S. Ren, and J. Sun, “Identity mappings in deep residual networks,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , ser. Lecture Notes in Computer Science, vol. 9908. Springer, 2016, pp. 630–645. [40] G. Huang, Z. Liu, L. van der Maaten, and K. Q. Weinberger, “Densely connected convolutional networks,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) . IEEE Computer Society, 2017, pp. 2261– 2269. [41] M. Contributors, “Openmmlab’s image classification toolbox and bench-mark,” https://github.com/open-mmlab/mmclassification, 2020. [42] L. v. d. Maaten and G. Hinton, “Visualizing data using t-sne,” J. Mach. Learn. Res. , vol. 9, pp. 2579–2605, 2008.
