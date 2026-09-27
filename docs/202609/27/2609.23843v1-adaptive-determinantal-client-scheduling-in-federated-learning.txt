@@ -1,0 +1,1998 @@
+Title: Adaptive Determinantal Client Scheduling in Federated Learning
+
+URL Source: https://arxiv.org/pdf/2609.23843v1
+
+Published Time: Tue, 22 Sep 2026 02:24:03 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Adaptive Determinantal Client Scheduling in Federated Learning 
+
+Wen Xu 1, Ben Liang 1, Gary Boudreau 2, and Hamza Sokun 21University of Toronto, Canada 
+
+> 2
+
+Ericsson, Canada 
+
+Abstract 
+
+Scheduling clients for model training is critical in federated learning due to both data and system heterogeneity. Most previous works focus on the quality of the scheduled clients to achieve faster convergence, shorter wall-clock convergence time, or better average model performance. They rarely consider the diversity of clients, which is important to counter heterogeneity and improve performance for the worst-off clients. In this work, we advocate the use of determinantal point processes (DPPs) to model and enhance the diversity in client scheduling. We first design the kernel matrices of DPPs using gradient information and quality scores, which inherently enables a flexible quality-diversity trade-off. Applying fast MAP inference over DPPs, we propose Adaptive Determinantal Client Scheduling ( ADCS ) in FL. We further quantify the gradient approximation error of ADCS and develop convergence analysis for general biased client selection in FL with non-convex loss functions. We conduct comparative numerical experiments showing that ADCS outperforms state-of-the-art client scheduling algorithms, including both quality-based and diversity-based ones. 
+
+# 1 Introduction 
+
+Federated learning (FL) has become a dominant distributed machine learning paradigm in mobile and edge computing (Kairouz et al., 2021). It is often performed over a large number of edge devices, i.e., clients, such as mobile phones or IoT devices, with the assistance of a central server (Bonawitz et al., 2019). This can lead to a high level of heterogeneity among the devices, in terms of their data and hardware. Many algorithms have been proposed for FL since the advent of the original FedAvg (McMa-han et al., 2017). Most FL algorithms follow a common pattern in each training round: i) client scheduling at the server, ii) model broadcasting from the server to the selected clients, iii) local computation at selected clients, iv) model or gradient transmission from the clients to the server, and v) model aggregation at the server. The first step, i.e., client scheduling at the server, is essential since the number of available clients can be large in real-world applications, and selecting all clients in all rounds can be inadvisable or even prohibitive. The stragglers in computation or communication can greatly impede the wall-clock training time (Kairouz et al., 2021). Furthermore, naïve partial client participation in FL is often sub-optimal: The data distributions among the clients are typically not identically distributed. Without carefully addressing the heterogeneity issue, a naïve optimization method does not produce favorable convergence behavior. Most previous methods consider the following optimization formulation for client scheduling: 
+
+max 
+
+> S(t):|S (t)|=m
+
+X
+
+> n∈S (t)
+
+q(t) 
+
+> n
+
+, (1) where q(t) 
+
+> n
+
+is some quality score of client n in round t and S(t) is the subset of clients to be scheduled in round t, whose cardinality is m. For example, PowerOfChoice (Cho et al., 2022) chooses q(t) 
+
+> n
+
+to be the local loss of client n evaluated by the current global model w(t);1arXiv:2609.23843v1 [cs.LG] 20 Sep 2026 optimal client sampling ( OCS ) (Chen et al., 2022) chooses q(t) 
+
+> n
+
+as the gradient norm of client n
+
+at round t; and uniform client scheduling (McMahan et al., 2017) can be interpreted as setting 
+
+q(t) 
+
+> n
+
+to a constant value and performing random tie breaking. However, (1) only accounts for additive individual quality terms, which fails to capture the structure of data heterogeneity among clients. For example, data distributions among the clients can have cluster structures, leading to the tendency for high-quality clients to come from the same clusters. Thus, the quality-only formulation in (1) tends to select redundant clients while leaving clients with a broader spectrum of data distributions unused. To address this problem, in this work we consider both the diversity and quality in FL client scheduling, with an aim to improve the performance of learning for the worst-off clients. We model diversity by determinantal point processes (DPPs) (Macchi, 1975; Kulesza and Taskar, 2012) and maximize a combination of both diversity and quality in client scheduling. This optimization problem is challenging since a naïve algorithm has to go through all possible subsets of clients of size m, which is exponential and thus impractical. It is also challenging to analyze how adding diversity consideration impacts the convergence of FL since the resulting client scheduling is often statistically biased. We mitigate these challenges with the following contributions. • We formulate client scheduling in FL as a unified optimization problem that jointly captures diversity and quality scores across client updates, which recovers quality-only and diversity-only policies as special cases and allows tuning their tradeoff. We propose Adaptive Determinantal Client Scheduling ( ADCS ), which schedules clients via greedy MAP inference on a DPP kernel constructed from client update similarity and quality scores in each training round. • We quantify the gradient approximation bias of ADCS under general cluster structures for the client data distributions. Since considering diversity leads to statistically biased client sampling, we also derive a novel convergence bound for FL performance under biased client scheduling for non-convex loss functions. This provides performance guarantee for ADCS .• We conduct numerical experiments to show that ADCS can achieve significant gains on FL test accuracy for the worst-off clients, compared with state-of-the-art client scheduling strategies. Meanwhile, it maintains competitive average accuracy. 
+
+# 2 Related Work 
+
+Client scheduling in FL. Communication overhead and data heterogeneity are two major issues in FL since both the communication conditions and the underlying data distributions can be highly heterogeneous when the number of clients is large. To reduce communication overhead and mitigate data heterogeneity, numerous client scheduling strategies have been proposed. They include selecting clients for partial participation uniformly at random or via probabilities proportional to the local dataset sizes (McMahan et al., 2017), selecting clients based on the norm of the gradient updates (Chen et al., 2022), selecting clients based on the values of local loss functions (Cho et al., 2022), and selecting clients via solving submodular maximization problems (Balakrishnan et al., 2022). Besides the common considerations of the learning performance and the optimization convergence with respect to iterations, other factors such as wall-clock training time and resource allocation are widely considered in FL, especially in wireless FL (see for example (Nishio and Yonetani, 2019; Xu and Wang, 2021; Luo et al., 2022; Yu et al., 2022; Zheng et al., 2024; Xu et al., 2025)). None of these works considers client diversity. 
+
+Diversity and DPP in FL. Initially developed for modeling fermions, the DPP is a fundamental tool in quantum physics (Macchi, 1975). It has recently received significant attention 2in broader contexts due to its elegant theory and favorable empirical performance (Kulesza and Taskar, 2012). DPPs are commonly used in scenarios where an informative and diverse subset needs to be selected from a large ground set. Typical applications include clustering (Kang, 2013), statistical inference (Lavancier et al., 2015), cellular networks (Li et al., 2015), recommender systems (Chen et al., 2018), generative models (Elfeki et al., 2019), and image processing (Launay et al., 2021). Several prior works leverage DPPs in FL (Li et al., 2021; Zhang et al., 2023; Bastola et al., 2024). In (Li et al., 2021), DPP is used only in a pre-training client-selection stage, while the subsequent round-wise dynamics are handled by a separate importance-based mechanism. In (Zhang et al., 2023), a k-DPP is constructed once from one-shot client profiles and then reused throughout training. Thus different client groups can be selected in different rounds, but under a fixed kernel that does not depend on the evolving model. In (Bastola et al., 2024), the quality-diversity kernel is formed once from initialization-time features and loss summaries. The selected subset is then kept fixed during training. In all these methods, the DPP kernel itself is never updated from fresh training signals. A truly round-adaptive extension of these methods is possible in principle, but it would require repeated collection of fresh client-side information, online kernel reconstruction, and repeated DPP inference during training, which increases overhead and complicates analysis. In contrast, our proposed ADCS explicitly constructs update-dependent kernels in each round of training, and we analyze the resulting gradient approximation bias. Furthermore, unlike the heuristic nature of (Li et al., 2021; Zhang et al., 2023; Bastola et al., 2024), we provide performance guarantee for our approach in terms of a novel FL convergence bound despite the bias in client scheduling. 
+
+# 3 Preliminaries 
+
+3.1 FL System 
+
+We consider a standard FL system that includes a central server and multiple clients, which may be mobile or IoT devices (Bonawitz et al., 2019). We denote the index set of clients by 
+
+N = [ N ] = {1, 2, . . . , N }. The server coordinates the training of a machine learning model utilizing the local datasets of the clients. The optimization problem of model training is given by 
+
+min  
+
+> w∈W
+
+f (w) := 
+
+> N
+
+X
+
+> n=1
+
+pnfn(w), (2) where w ∈ W ⊆ Rd is a vector containing the model parameters, p ∈ ∆N −1 ≜ {p | pn ≥ 0, ∀n ∈
+
+[N ] and PNn=1 pn = 1 } is a given weight vector, and fn(·) is the local loss function that is only accessible at client n.In general, an FL algorithm consists of the following five steps in each of T training rounds. i) The central server selects a subset of clients for participation. ii) The central server broadcasts the current global model and sometimes also auxiliary variables to all selected clients. iii) Each selected client performs local updates on the model parameters and the auxiliary variables if needed. iv) Each selected client sends the updated model parameters or the updates, sometimes with the auxiliary variables, to the central server. v) The central server aggregates all local updates to obtain a new global model and updates auxiliary variables if needed. We use w(t) to represent the global model at the server at the beginning of round t. We use w(t) 
+
+> n
+
+to represent the local model at client n before any local update in round t and w(t,e ) 
+
+> n
+
+to represent the local model after k steps of local update. We denote the local update for client n in round t as g(t) 
+
+> n
+
+,which can have different forms depending on what local computation is used for local model updates in the FL algorithms. For example, if the local computation is full-batch gradient descent, then g(t) 
+
+> n
+
+= ∇fn(w(t) 
+
+> n
+
+); if the local computation is single step mini-batch gradient descent, then 3g(t) 
+
+> n
+
+= ∇fn(w(t) 
+
+> n
+
+; ξ(t)); if the local computation is E step mini-batch gradient descent, then 
+
+g(t) 
+
+> n
+
+= PEe=1 ∇fn(w(t,e ) 
+
+> n
+
+; ξ(t,e )).In real-world FL applications, it is not recommended or even prohibitive to schedule all clients for training in each round. For example, due to the large number of clients that have heterogeneous computation capabilities and channel conditions, selecting all of them can result in an extremely high round time dominated by the stragglers. Therefore, in this work we focus on partial client scheduling. If all clients were scheduled for participation, the global update would be ¯g(t) 
+
+> N
+
+= 1
+
+> N
+
+PNn=1 png(t) 
+
+> n
+
+.For partial client participation, the server only selects a subset of client S(t) and constructs global update ¯g(t) 
+
+> S(t)
+
+= 1
+
+> m
+
+P 
+
+> n∈S (t)
+
+png(t) 
+
+> n
+
+. We determine S(t) by first modeling the distribution of all subsets of size m as a DPP, which captures the quality and diversity of the clients, and then finding the mode of that distribution. 
+
+3.2 Diversity Modeling with DPPs 
+
+We follow the general approach to construct a DPP via L-ensemble, which directly models the atomic probabilities of all subsets of the ground set N , i.e., the set of all clients. This definition of L-ensemble was first proposed in (Borodin and Rains, 2005) and is a common choice when modeling real data (Kulesza and Taskar, 2012). Specifically, the probability of the random subset 
+
+Z realized to be Z is defined as 
+
+PL(Z = Z) = det( LZ )det( L + IN ) , (3) where L is a positive semidefinite matrix, LZ is the restriction of L to the set Z, and IN is an 
+
+N × N identity matrix. A key property of DPP is that it promotes diversity. Suppose the representation vector of an item n is bn, which is also the nth column of a matrix B. Then, we can define the kernel 
+
+L = B⊤B. Clearly, Lnn ′ = ⟨bn, b n′ ⟩ can be viewed as a measure of similarity between items n and 
+
+n′, which corresponds to the celebrated cosine similarity if all bn’s are normalized. Geometrically, 
+
+det( LZ ) is the squared volume spanned by all vectors in {bn : n ∈ Z}. Thus, the subset Z ⊆ N 
+
+whose corresponding LZ spans a larger volume will be assigned a higher probability by definition. Here, we further restrict our consideration to m-DPP, which defines a probability distribution over all subsets Z ⊆ N that have cardinality of exactly m (Kulesza and Taskar, 2011). 1 Formally, an m-DPP can be generated by conditioning a standard L-ensemble DPP on the event that the random set Z has cardinality m, i.e., 
+
+P mL (Z = Z) = det( LZ )
+
+P 
+
+> |Z′|=m
+
+det( LZ′ ) . (4) 
+
+# 4 Adaptive Determinantal Client Scheduling 
+
+In the following, we present the proposed ADCS algorithm to effectively optimize a weighted combination of the diversity and quality of the scheduled clients in FL. 
+
+4.1 L-ensemble Kernel Design 
+
+Designing an effective L-ensemble kernel for FL is non-trivial. An ideal kernel should capture redundancy among clients under the current global model, while remaining computable at the server without access to raw local data distributions. Since clients with similar data distributions         
+
+> 1Note that in the literature m-DPP is often called k-DPP. We use minstead of kto avoid notational confusion since we use kto represent the cluster index of clients.
+
+4tend to induce similar local updates under any current model, we use local updates as a dynamic proxy for client similarity. Specifically, we use the local update g(t) 
+
+> n
+
+∈ Rd of each client n to design the L-ensemble in round t. Let the normalized local update of client n be ϕ(t) 
+
+> n
+
+= g(t) 
+
+> n
+
+/∥g(t) 
+
+> n
+
+∥ and the update matrix Φ(t) = [ ϕ(t)1 , . . . , ϕ (t) 
+
+> N
+
+]. We design the kernel as a positive-semidefinite Gram matrix 
+
+C(t) =
+
+
+
+Φ(t)⊤
+
+Φ(t). (5) Equivalently, the element on any row n ∈ [N ] and any column n′ ∈ [N ] of C(t) is defined as 
+
+C(t) 
+
+> nn ′
+
+= ( ϕ(t) 
+
+> n
+
+)⊤ϕ(t) 
+
+> n′
+
+. The kernel C(t) reflects directional similarity. The matrix C(t) is used as the diversity term in the following client scheduling optimization formulation 
+
+max 
+
+> S(t):|S (t)|=m
+
+(1 − θ) log det 
+
+
+
+C(t)
+
+> S(t)
+
+
+
++ θ X
+
+> n∈S (t)
+
+q(t) 
+
+> n
+
+, (6) where C(t) 
+
+> S(t)
+
+is the restriction of C(t) to the set S(t), q(t) 
+
+> n
+
+∈ R+ is the quality score of client n in round t, and θ ∈ [0 , 1] is a hyper-parameter that balances the contribution of the quality and the diversity of clients. This formulation lets the kernel encode diversity through C(t) and lets the additive quality term separately measure the individual utility of each client. When θ = 1 , the maximization problem reduces to the problem of finding the clients of top 
+
+m largest quality scores. If we choose the quality scores to be the local loss values, we recover the objective of PowerOfChoice in (Cho et al., 2022). When θ = 0 , we obtain the most diverse solution based on the C(t) kernel without any consideration of quality. Our formulation allows a flexible trade-off between diversity and quality. Furthermore, the quality scores can have multiple components. For example, if q(t) 
+
+> n
+
+= (1 − γ)q(t) 
+
+> n, learn
+
++ γq (t) 
+
+> n, comm
+
+with the additional γ ∈ [0 , 1] , our formulation can trade off between communication-related and learning-related quality terms. 
+
+4.2 MAP Inference of L-ensemble DPP 
+
+In this section, we discuss the approach to solve (6). Applying standard DPP quality-diversity decompositions (Kulesza and Taskar, 2012), the objective in (6) can be equivalently written as another DPP when θ ∈ [0 , 1) . The corresponding L-ensemble kernel is 
+
+L(t) = Q(t)C(t)Q(t), (7) where Q(t) ≜ diag (exp( αq(t))) , q(t) ≜ [q(t)1 , . . . , q (t) 
+
+> N
+
+] is the vector of quality scores, and α ≜ 
+
+> θ
+> 2(1 −θ)
+
+∈ [0 , ∞).In each round t, given our designed kernel L(t), we solve the following MAP inference to determine the most possible configuration of a subset of clients with cardinality m
+
+max 
+
+> S(t):|S (t)|=m
+
+log det 
+
+
+
+L(t)
+
+> S(t)
+
+
+
+. (8) It is well-known that performing MAP inference of an m-DPP is NP-hard (Kulesza and Taskar, 2012, Section 5.2.5), but efficient heuristics are available in the literature (Chen et al., 2018; Gillenwater et al., 2012; Han et al., 2017; Hemmi et al., 2022). We choose the fast greedy MAP inference algorithm from (Chen et al., 2018) in our implementation. S(t) is initialized with the item i that has the largest value of L(t) 
+
+> i,i
+
+. Then S(t) is updated until m items are selected by adding an item j in each iteration where 
+
+j = arg max  
+
+> i∈N /S(t)
+
+log det 
+
+
+
+L(t)
+
+> S(t)∪{ i}
+
+
+
+− log det 
+
+
+
+L(t)
+
+> S(t)
+
+
+
+, (9) 5ALGORITHM 1: Adaptive Determinantal Client Scheduling ( ADCS )
+
+Input: initial model w(0) , hyper-parameter θ, weight vector p, server learning rate ηs, total number of rounds T , and number of selected clients m.
+
+Output: ˆw = {w(t)}Tt=1 . 
+
+> 1:
+
+for each round t = 0 , . . . , T − 1 do  
+
+> 2:
+
+if t mod R = 0 then  
+
+> 3:
+
+Server constructs a new kernel matrix L(t). 
+
+> 4:
+
+else  
+
+> 5:
+
+The kernel matrix stays unchanged L(t) = L(t−1) . 
+
+> 6:
+
+end if  
+
+> 7:
+
+Server solves the maximization problem of (6) to get S(t). 
+
+> 8:
+
+Server samples clients S(t) ⊆ N . 
+
+> 9:
+
+Server broadcasts w(t) to S(t). 
+
+> 10:
+
+for each client n ∈ S (t) do  
+
+> 11:
+
+Client n computes local update g(t) 
+
+> n
+
+. 
+
+> 12:
+
+Client n sends local update g(t) 
+
+> n
+
+to the server.  
+
+> 13:
+
+end for  
+
+> 14:
+
+Server constructs global update ¯g(t) 
+
+> S(t)
+
+= 1
+
+> m
+
+P 
+
+> n∈S (t)
+
+png(t) 
+
+> n
+
+. 
+
+> 15:
+
+Server updates the global model via w(t+1) = w(t) − ηs ¯g(t) 
+
+> S(t)
+
+. 
+
+> 16:
+
+end for 
+
+i.e., j has the largest gain of the log determinant for the new submatrix among all unselected items. Furthermore, by using Cholesky decomposition, we can avoid the brute-force calculation of the values of det( L(t)
+
+> S(t)∪{ i}
+
+) in each iteration and achieve time complexity of O(m2N ) (Chen et al., 2018). 
+
+4.3 Overall ADCS Algorithm 
+
+The L-ensemble kernel construction step described above requires the local gradients from all clients. In practical implementation, this step does not need to be performed in every round, since the gradient directions do not change drastically over consecutive rounds. We use a tunable parameter R to specify the number of rounds for each update of L(t).2 Then, in each training round t, the server applies the MAP inference algorithm on the current kernel matrix L(t) to obtain the scheduled clients S(t). Finally we perform model broadcasting, local training, and aggregation over local updates. The pseudocode of the overall algorithm is shown in Algorithm 1. The total extra computational complexity of ADCS on the server is O(( N 2d + m2N )T /R ),which includes both the construction and MAP inference of the kernel. Since the construction and MAP inference of the kernel are both performed at the server, which often has sufficient computational capabilities, the extra computation time for ADCS is negligible. The exact client-side computation is mT + ( N − m)⌈T /R ⌉ updates, where mT is the usual computation overhead and (N − m)⌈T /R ⌉ is the extra computation for ADCS. With R = 20 , N = 30 , m = 18 
+
+in our experiments, the extra client-side computation overhead for ADCS is only 3.3% , which is negligible. 
+
+# 5 FL Convergence under ADCS 
+
+Since client scheduling with diversity consideration typically leads to biased aggregated gradients, i.e., E[¯ g(t) 
+
+> S(t)
+
+]̸ = ¯ g(t) 
+
+> N
+
+, the standard proof of convergence analysis of FL algorithms with unbiased   
+
+> 2Compressed approximations of g(t)
+> nmay also be applied to further reduce the communication overhead while preserving the accuracy of estimating their inner products (e.g., (Li et al., 2006)). However, that is outside the scope of this paper.
+
+6gradient approximation does not apply (Stich, 2019; Li et al., 2020). In the following, we first quantify the gradient approximation error ∥¯g(t) 
+
+> S(t)
+
+− ¯g(t) 
+
+> N
+
+∥ for ADCS , and then provide a novel convergence bound for general biased client selection in FL for non-convex loss functions. For improved readability of our derivation, we assume a uniform weight vector p. Our analysis can be directly extended to general p by replacing all 1/N , 1/m , and count-based cluster terms by weighted population, selection, and cluster-mass terms. 
+
+5.1 Gradient Approximation Bias of ADCS 
+
+For this theoretical analysis, we consider the idealized scenario of R = 1 . However, in Section 6, we will show that ADCS retains its performance advantage for a wide range of R values. We omit the time index t since the following analysis holds for any t. Let g1, . . . , g N ∈ Rd be the client gradients. We further define G = [ g1, . . . , g N ] ∈ Rd×N and L = G⊤G such that 
+
+Lij = ⟨gi, g j ⟩. Let S⋆ be the selected subset, of size m, from any client selection algorithm. Let 
+
+s ∈ { 0, 1}N denote the indicator vector of S⋆, so that 1⊤s = m, where 1 ∈ RN is the all-ones vector. Define the all-client average by ¯gN = 1
+
+> N
+
+PNi=1 gi = 1 
+
+> N
+
+G1 and the selected average by 
+
+¯gS = 1
+
+> m
+
+P 
+
+> i∈S⋆
+
+gi = 1 
+
+> m
+
+Gs.We consider a general cluster structure for the client gradients. Suppose g1, . . . , g N are partitioned into K clusters C1, ..., C K , i.e., [N ] = ∪Kk=1 Ck, and nk = |Ck|. Let zi denote the cluster assignment of client i, such that zi = k if and only if i ∈ Ck. Let ck be a representation vector for cluster Ck. In this analysis, we allow any general ck, e.g., it may be the centroid of Ck.Let κ ≜ min 1≤k≤K ∥ck∥2. We define 
+
+r ≜ max   
+
+> i∈[N]
+
+∥gi − czi ∥2, (10) and 
+
+μ ≜ max  
+
+> k̸=ℓ
+
+c⊤ 
+
+> k
+
+cℓ
+
+∥ck∥2∥cℓ∥2
+
+. (11) Thus, r represents the intra-cluster concentration, and μ represents the inter-cluster separation. We further define quality-related terms wi ≜ e2αq i , ¯w ≜ max 1≤i≤N wi, ¯wk ≜ max i∈C k wi, and 
+
+Qm ≜ max T ⊆[K] 
+
+> |T|=m
+
+Q 
+
+> k∈T
+
+¯wk.
+
+Assumption 1 (Cluster structure of gradients) . We assume 
+
+μ < 1
+
+m − 1 , (12) 
+
+i.e., the clusters are well separated, and 
+
+r < min κ, r ⋆, κ
+
+2
+
+r 1 − (m − 1) μm
+
+!
+
+, (13) 
+
+where r⋆ is the smallest r ≥ 0 such that Qmρ2m − 16 r2 ¯w m/κ 2 = 0 and ρ ≜ p1 − (m − 1) μ −
+
+2r√m/κ > 0. Condition (13) ensures sufficient intra-cluster concentration. 
+
+Let S⋆ 
+
+> ADCS
+
+be the set of clients chosen by ADCS . Define the aggregated gradients ¯gS⋆ 
+
+> ADCS
+
+≜
+
+> 1
+> m
+
+P 
+
+> i∈S⋆
+> ADCS
+
+gi and selected cluster subset T ⋆ 
+
+> ADCS
+
+≜ {zi : i ∈ S⋆
+
+> ADCS
+
+}.
+
+Theorem 1 (ADCS bias bound) . With Assumption 1 and further assuming m ≤ K, we have 
+
+¯gS⋆ 
+
+> ADCS
+
+− ¯gN 2 ≤
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − nk
+
+N
+
+
+
+ck
+
+> 2
+
++ 2 r. (14) 7Proof. The key idea is to show that every exact MAP solution S⋆ 
+
+> ADCS
+
+contains clients from m
+
+distinct clusters, i.e. {zi : i ∈ S⋆
+
+> ADCS
+
+} = m. The details are deferred to Appendix A. We remark that for any subset of clients of size m, the discrepancy between the selected average and the full average is upper bounded as ∥¯gS − ¯gN ∥2 ≤
+
+q
+
+λmax (L)   1 
+
+> m
+
+− 1
+
+> N
+
+, where 
+
+λmax (L) ≥ 0 is the largest eigenvalue of L. This can be shown by letting v = 1 
+
+> m
+
+s − 1 
+
+> N
+
+1 and observing that 
+
+∥¯gS − ¯gN ∥22 = v⊤Lv ≤ λmax (L)∥v∥22 = λmax (L)
+
+ 1
+
+m − 1
+
+N
+
+
+
+, (15) where the inequality is from the Rayleigh quotient inequality. In the following corollary, we show that the bound in Theorem 1 is tighter than the general bound under the following strong cluster setting: (1) r = 0 , (2) c1, . . . , c K ∈ Rd are orthonormal, i.e., c⊤ 
+
+> k
+
+cℓ = 1{k = ℓ}, and (3) the clusters are balanced, i.e., nk = NK , for all k ∈ [K]. The proof is given in Appendix B. 
+
+Corollary 1. Under the strong cluster setting, we have 
+
+∥¯gS⋆ 
+
+> ADCS
+
+− ¯gN ∥2 ≤
+
+r K − mKm . (16) In the same cluster setting, we can also further quantify the general bound. Since G =[g1, . . . , g N ] and gi = czi , we have GG ⊤ = PNi=1 gig⊤ 
+
+> i
+
+= PKk=1 nk ckc⊤ 
+
+> k
+
+= NK
+
+PKk=1 ckc⊤ 
+
+> k
+
+. Because 
+
+c1, . . . , c K are orthonormal, PKk=1 ckc⊤ 
+
+> k
+
+is the orthogonal projector onto the span of c1, . . . , c K ,whose largest eigenvalue is 1. We have λmax (GG ⊤) = N/K . Since L = G⊤G and GG ⊤ have the same nonzero eigenvalues, λmax (L) = N/K . The general bound above becomes 
+
+∥¯gS⋆ 
+
+> ADCS
+
+− ¯gN ∥2 ≤
+
+s
+
+λmax (L)
+
+ 1
+
+m − 1
+
+N
+
+
+
+=
+
+r N − mKm . (17) Since N > K in general, the bound for ADCS is strictly tighter. 
+
+5.2 FL Convergence Bound 
+
+Since adding diversity consideration to client scheduling can lead to bias as shown in (14), we provide a novel convergence analysis for client scheduling with selection bias in this section. Let 
+
+Ft be the sigma-field generated by all randomness up to and including the start of round t. Let 
+
+f ⋆ ≜ inf w f (w) > −∞ . We make the following assumptions, which are common in the literature on FL analysis. 
+
+Assumption 2 (Smoothness) . Each fi is L-smooth, i.e., there exists a positive L such that 
+
+∥∇ fi(w1) − ∇ fi(w2)∥ ≤ L∥w1 − w2∥, (18) 
+
+holds ∀w1, w2 ∈ W and ∀i ∈ [N ]. Hence f is also L-smooth. 
+
+Assumption 3 (Unbiased Local Stochastic Gradients) . For all i, t, e , E[g(t,e ) 
+
+> i
+
+| w(t,e ) 
+
+> i
+
+] = 
+
+∇fi(w(t,e ) 
+
+> i
+
+).
+
+Assumption 4 (Bounded Second Moment) . There exists G > 0 such that for all i, t, e ,
+
+E[∥g(t,e ) 
+
+> i
+
+∥2 | F t] ≤ G2.
+
+Assumption 5 (Bounded Per-client Variance) . There exists σ2 ≥ 0 such that for all i, t, e ,
+
+E[∥g(t,e ) 
+
+> i
+
+− ∇ Fi(w(t,e ) 
+
+> i
+
+)∥2 | F t] ≤ σ2.
+
+8Figure 1: Comparison of worst and average test accuracies. Method Group 0 Group 1 Group 2 Group 3 Group 4 Group 5 Group 6 Group 7 Group 8 Group 9                                        
+
+> Uniform 0.1006 0.0998 0.0997 0.1000 0.0994 0.1006 0.0993 0.1006 0.1001 0.0999
+> OCS 0.1257 0.0433 0.1661 0.1004 0.1666 0.0583 0.1653 0.0477 0.0733 0.0533
+> PowerOfChoice 0.1042 0.0441 0.1444 0.0881 0.1388 0.1417 0.1643 0.0644 0.0641 0.0460
+> ADCS 0.0952 0.0636 0.1127 0.0843 0.1032 0.1641 0.1564 0.0775 0.0821 0.0609
+
+Table 1: Ratio of Each Group of Clients Selected Define the expected client selection bias bt ≜ E[¯ gt | F t] − ∇ f (w(t)). Let ϵ be an upper bound on ∥bt∥ for all t. When the local gradient update uses the entire local dataset, ∇f (w(t)) is the same as ¯gN in round t in the LHS of (14). Since for ADCS , E[¯ gt | F t] = ¯ gt, ϵ can be set as the RHS of (14) if the cluster assumption holds. Define the zero-mean selection deviation 
+
+ζt ≜ ¯gt − E[¯ gt | F t]. Let νsel be an upper bound on the selection randomness variance E[∥ζt∥2 | F t]
+
+for all t. We have the following theorem that captures biased client selection, local client drift, gradient approximation error, and stochastic gradients. 
+
+Theorem 2. Assume Assumptions 2-5. Let η ≜ Eη ℓ and suppose the round stepsize satisfies 
+
+η ≤ 18L . Then for any T ≥ 1,
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E
+
+h
+
+∥∇ f (w(t))∥2i
+
+≤ 4 f (w0) − f ⋆
+
+ηT 
+
+| {z }
+
+> optimization error
+
++ 5ε2
+
+|{z} 
+
+> gradient appro. error
+
++ 16 Lη 
+
+
+
+νsel + σ2
+
+mE 
+
+| {z }
+
+> variance terms
+
++ 56 L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) 
+
+| {z }
+
+> client drift
+
+. (19) Our convergence analysis decomposes the aggregated update ¯gt into a population gradient term plus two selection-induced effects. Detailed proof is deferred to Appendix C. Theorem 2 shows that ADCS remains convergent despite its diversity-induced client selection bias. In particular, the ADCS bias is bounded by Section 5.1, and for deterministic MAP selection we have νsel = 0 . Thus, ADCS enjoys the standard non-convex convergence rate 
+
+O(1 /√T ), when η is set to Θ(1 /√T ), up to a residual term controlled by its bias. 
+
+# 6 Experiments 
+
+We perform experiments on Fashion-MNIST (Xiao et al., 2017) using multinomial logistic regression. We set N = 30 . Specifically, we have 10 virtual groups of clients, where each group 9Figure 2: Worst and average test accuracies for varying θ.
+
+Figure 3: Worst and average test accuracies for varying R.contains 3 clients and the underlying data distribution is the same for all clients in the same group. We consider the following benchmarks • Uniform (McMahan et al., 2017): choosing m clients uniformly at random out of N clients in each round. • PowerOfChoice (Cho et al., 2022): clients with top m largest local losses. • OCS (Chen et al., 2022): clients with top m largest gradient norms (modified from probabilistic setting). • DivFL (Balakrishnan et al., 2022): This method selects a diverse subset via submodular function maximization. • StaticDPP : This method constructs DPP only once before the training and selects the most diverse subset, which is adapted from previous work (Li et al., 2021; Zhang et al., 2023; Bastola et al., 2024). • ADCS : our proposed method. We perform T = 20000 rounds of training. For local computation, we use one step of SGD of batch size 16 with a learning rate of 0.001 for all methods. Every method schedules m = 18 
+
+clients for partial client participation in each training round. 10 6.1 Performance Comparison 
+
+In Figure 1, we compare the test accuracy of ADCS with all benchmarks in terms of training rounds. We show both the worst accuracy, which refers to the worst-case test accuracy among all clients, and the average accuracy, which refers to the average test accuracy among all clients. We set θ = 0 .8 for ADCS . We observe that pure quality-based methods OCS and PowerOfChoice ,as well as diversity-based DivFL methods, can achieve better worst test accuracy compared with the naïve Uniform algorithm. However, by considering both diversity and quality, ADCS 
+
+provides the highest worst test accuracy while maintaining competitive average test accuracy. 
+
+StaticDPP has significantly low worst test accuracy since the data distributions are highly heterogeneous and only a subset of clients is chosen, leaving many clients untouched. 
+
+6.2 Effects of θ and R
+
+The performance of our ADCS is dependent on the hyper-parameter θ, which trades off between the diversity and quality terms. The results of varying θ are shown in Figure 2. We observe that in the current setting, with a properly chosen θ, both the worst test accuracy and the average test accuracy can be improved over those of the benchmarks. However, with a poorly chosen θ,e.g., θ = 0 .2, the worst test accuracy can be even worse than that of Uniform .The performance of ADCS is also dependent on the hyper-parameter R, which determines the frequency of the updates of the DPP kernel L. We fix θ = 0 .8 and vary the update gap 
+
+R. The results are shown in Figure 3. With a small R up to 20 , the performance of ADCS 
+
+remains almost identical to that of R = 1 . However, when R becomes too large, the performance of ADCS on the worst-off client can deteriorate and fluctuate. 
+
+6.3 Empirical Selection Bias 
+
+In Table 1, we study the client selection bias by showing the ratio of each group of clients selected during training. To further quantify bias, we use the total variation (TV) distance. The TV distance between any two distributions s, t ∈ ∆K−1 is TV( s, t ) = 12
+
+P10  
+
+> k=1
+
+∥sk − tk∥. Using the uniform target distribution as t with ratio 0.1 for each group, the TV distance is 0.0019 for 
+
+Uniform , 0.2241 for OCS , 0.1934 for PowerOfChoice , and 0.1364 for ADCS . It is clear that uniform client selection is the least biased, but it does not perform well on the worst-case test accuracy as shown in Figures 1, 2 and 3. 
+
+# 7 Conclusion 
+
+In this work, we have studied the client scheduling problem in FL from a joint diversity-quality perspective. Departing from existing approaches that rely solely on additive quality scores or a pure diversity objective, we propose a principled framework based on DPPs to explicitly capture correlations and redundancy among clients. We introduce ADCS , a practical federated learning algorithm that performs client scheduling via MAP inference of an m-DPP. We investigate the upper bound of selection bias in general and specifically for ADCS under a clustering structure of gradients. We further derive a convergence bound for biased client scheduling for general non-convex functions, thus proving the convergence of ADCS . Experiments on non-IID federated learning demonstrated that ADCS consistently improves performance on worst-off clients, compared with state-of-the-art client scheduling methods. Our results further highlight the importance of diversity-aware selection, particularly in heterogeneous data settings. 11 References 
+
+Ravikumar Balakrishnan, Tian Li, Tianyi Zhou, Nageen Himayat, Virginia Smith, and Jeff Bilmes. Diverse client selection for federated learning via submodular maximization. In Proceedings of International Conference on Learning Representations (ICLR) , 2022. Ashish Bastola, Hao Wang, Xiwen Chen, and Abolfazl Razi. FedMIL: Federated-multiple instance learning for video analysis with optimized DPP scheduling. In Proceedings of International Conference on Distributed Computing in Smart Systems and the Internet of Things (DCOSS-IoT) , 2024. Keith Bonawitz, Hubert Eichner, Wolfgang Grieskamp, Dzmitry Huba, Alex Ingerman, Vladimir Ivanov, Chloe Kiddon, Jakub Konečn` y, Stefano Mazzocchi, Brendan McMahan, Timon Van Overveldt, David Petrou, Daniel Ramage, and Jason Roselander. Towards federated learning at scale: System design. In Proceedings of Machine Learning and Systems (MLSys) ,2019. Alexei Borodin and Eric M Rains. Eynard–mehta theorem, schur process, and their pfaffian analogs. Journal of Statistical Physics , 121:291–317, 2005. Laming Chen, Guoxin Zhang, and Eric Zhou. Fast greedy MAP inference for determinantal point process to improve recommendation diversity. In Proceedings of Advances in Neural Information Processing Systems (NeurIPS) , 2018. Wenlin Chen, Samuel Horváth, and Peter Richtárik. Optimal client sampling for federated learning. Transactions on Machine Learning Research , 2022. Yae Jee Cho, Jianyu Wang, and Gauri Joshi. Towards understanding biased client selection in federated learning. In Proceedings of International Conference on Artificial Intelligence and Statistics (AISTATS) , 2022. Mohamed Elfeki, Camille Couprie, Morgane Riviere, and Mohamed Elhoseiny. GDPP: Learning diverse generations using determinantal point processes. In Proceedings of the International Conference on Machine Learning (ICML) , 2019. Jennifer Gillenwater, Alex Kulesza, and Ben Taskar. Near-optimal map inference for determi-nantal point processes. In Proceedings of Advances in Neural Information Processing Systems (NeurIPS) , 2012. Insu Han, Prabhanjan Kambadur, Kyoungsoo Park, and Jinwoo Shin. Faster greedy map inference for determinantal point processes. In Proceedings of International Conference on Machine Learning (ICML) , 2017. Shinichi Hemmi, Taihei Oki, Shinsaku Sakaue, Kaito Fujii, and Satoru Iwata. Lazy and fast greedy map inference for determinantal point process. In Proceedings of Advances in Neural Information Processing Systems (NeurIPS) , 2022. Peter Kairouz, H. Brendan McMahan, Brendan Avent, Aurélien Bellet, Mehdi Bennis, Arjun Nitin Bhagoji, Kallista A. Bonawitz, Zachary Charles, Graham Cormode, Rachel Cummings, Rafael G. L. D’Oliveira, Salim El Rouayheb, David Evans, Josh Gardner, Zachary Garrett, Adrià Gascón, Badih Ghazi, Phillip B. Gibbons, Marco Gruteser, Zaïd Harchaoui, Chaoyang He, Lie He, Zhouyuan Huo, Ben Hutchinson, Justin Hsu, Martin Jaggi, Tara Javidi, Gauri Joshi, Mikhail Khodak, Jakub Konečný, Aleksandra Korolova, Farinaz Koushanfar, Sanmi Koyejo, Tancrède Lepoint, Yang Liu, Prateek Mittal, Mehryar Mohri, Richard Nock, Ayfer Özgür, Rasmus Pagh, Mariana Raykova, Hang Qi, Daniel Ramage, Ramesh Raskar, Dawn Song, 12 Weikang Song, Sebastian U. Stich, Ziteng Sun, Ananda Theertha Suresh, Florian Tramèr, Praneeth Vepakomma, Jianyu Wang, Li Xiong, Zheng Xu, Qiang Yang, Felix X. Yu, Han Yu, and Sen Zhao. Advances and open problems in federated learning. Foundations and Trends ®
+
+in Machine Learning , 14(1-2):1–210, 2021. Byungkon Kang. Fast determinantal point process sampling with application to clustering. 
+
+Proceedings of Advances in Neural Information Processing Systems (NeurIPS) , 2013. Alex Kulesza and Ben Taskar. k-DPPs: Fixed-size determinantal point processes. In Proceedings of the International Conference on Machine Learning (ICML) , 2011. Alex Kulesza and Ben Taskar. Determinantal point processes for machine learning. Foundations and Trends ® in Machine Learning , 5(2–3):123–286, 2012. Claire Launay, Agnès Desolneux, and Bruno Galerne. Determinantal point processes for image processing. SIAM Journal on Imaging Sciences , 14(1):304–348, 2021. Frédéric Lavancier, Jesper Møller, and Ege Rubak. Determinantal point process models and statistical inference. Journal of the Royal Statistical Society Series B: Statistical Methodology ,77(4):853–877, 2015. Anran Li, Lan Zhang, Juntao Tan, Yaxuan Qin, Junhao Wang, and Xiang-Yang Li. Sample-level data selection for federated learning. In Proc. IEEE Int. Conf. Comput. Commun. (INFOCOM) ,2021. Ping Li, Trevor J. Hastie, and Kenneth W. Church. Very sparse random projections. In 
+
+Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD) , 2006. Xiang Li, Kaixuan Huang, Wenhao Yang, Shusen Wang, and Zhihua Zhang. On the convergence of fedavg on non-IID data. In Proceedings of International Conference on Learning Representations (ICLR) , 2020. Yingzhe Li, François Baccelli, Harpreet S Dhillon, and Jeffrey G Andrews. Statistical modeling and probabilistic analysis of cellular networks with determinantal point processes. IEEE Transactions on Communications , 63(9):3405–3422, 2015. Bing Luo, Wenli Xiao, Shiqiang Wang, Jianwei Huang, and Leandros Tassiulas. Tackling system and statistical heterogeneity for federated learning with adaptive client sampling. In Proceedings of the IEEE International Conference on Computer Communications (INFOCOM) , 2022. Odile Macchi. The coincidence approach to stochastic point processes. Advances in Applied Probability , 7(1):83–122, 1975. Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Agüera y Arcas. Communication-efficient learning of deep networks from decentralized data. In Proceedings of International Conference on Artificial Intelligence and Statistics (AISTATS) , 2017. Takayuki Nishio and Ryo Yonetani. Client selection for federated learning with heterogeneous resources in mobile edge. In Proceedings of IEEE International Conference on Communications (ICC) , 2019. Sebastian U Stich. Local sgd converges fast and communicates little. In Proceedings of Interna-tional Conference on Learning Representations (ICLR) , 2019. Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-MNIST: A novel image dataset for benchmarking machine learning algorithms. https://github.com/zalandoresearch/ fashion-mnist , 2017. 13 Jie Xu and Heqiang Wang. Client selection and bandwidth allocation in wireless federated learning networks: A long-term perspective. IEEE Transactions on Wireless Communications ,20(2):1188–1200, 2021. Wen Xu, Ben Liang, Gary Boudreau, and Hamza Sokun. Clipper: Online joint client sampling and power allocation for wireless federated learning. ACM Transactions on Modeling and Performance Evaluation of Computing Systems , 10(1):1–28, 2025. Liangkun Yu, Rana Albelaihi, Xiang Sun, Nirwan Ansari, and Michael Devetsikiotis. Jointly optimizing client selection and resource management in wireless federated learning for internet of things. IEEE Internet of Things Journal , 9(6):4385–4395, 2022. Yuxuan Zhang, Chao Xu, Howard H Yang, Xijun Wang, and Tony QS Quek. DPP-based client selection for federated learning with non-iid data. In Proceedings of IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2023. Feng Zheng, Yuze Sun, and Bin Ni. FedAEB: Deep reinforcement learning based joint client selec-tion and resource allocation strategy for heterogeneous federated learning. IEEE Transactions on Vehicular Technology , 73(6):8835–8846, 2024. 14 A Proof of Theorem 1 
+
+Proof. We denote the L-ensemble kernel constructed by ADCS be LADCS . For every subset 
+
+S ⊆ [N ],
+
+det(( LADCS )S ) = Y
+
+> i∈S
+
+wi
+
+!
+
+det( CS ). (20) We define normalized uk ≜ ck  
+
+> ∥ck∥2
+
+. We divide the proof into four steps. 
+
+Step 1: Every subset with clients from a duplicate cluster has small determinant. 
+
+Take any subset S ⊆ [N ] with |S| = m, and suppose S contains two distinct clients from the same cluster. After relabeling the selected indices, we can write S = {i1, . . . , i m} with zi1 = zi2 .Let XS = [ ϕi1 , . . . , ϕ im ] ∈ Rd×m, then CS = X⊤ 
+
+> S
+
+XS . From Assumption 1, we have 
+
+∥ϕi − uk∥2 = gi
+
+∥gi∥2
+
+− ck
+
+∥ck∥2 2
+
+≤ 2∥gi − ck∥2
+
+∥ck∥2
+
+≤ 2rκ ≜ δ (21) for every i ∈ Ck. Since zi1 = zi2 , both ϕi1 and ϕi2 lie within distance δ of the same center uzi1 .Hence, by the triangle inequality, 
+
+∥ϕi2 − ϕi1 ∥2 ≤ ∥ ϕi2 − uzi1 ∥2 + ∥ϕi1 − uzi1 ∥2 ≤ 2δ. (22) Now define the elementary matrix M = Im − E1,2, where E1,2 has a 1 in position (1 , 2) and zeros elsewhere. Then det( M ) = 1 . We set YS = XS M , where the second column of YS is 
+
+(YS ):,2 = ϕi2 − ϕi1 while every other column of YS equals one of the original selected vectors. Therefore 
+
+det( CS ) = det( X⊤ 
+
+> S
+
+XS ) = det( Y ⊤ 
+
+> S
+
+YS ) (a)
+
+≤
+
+> m
+
+Y
+
+> j=1
+
+∥(YS ):,j ∥22(b)
+
+≤ 4δ2, (23) where (a) is by the Hadamard’s inequality, (b) is by the fact that all unchanged columns have norm 1 since ∥ϕi∥2 = 1 and the modified second column satisfies ∥(YS ):,2∥2 = ∥ϕi2 − ϕi1 ∥2 ≤ 2δ.Using (20) and the bound wi ≤ ¯w, we obtain 
+
+det  (LADCS )S
+
+ ≤ 4δ2 ¯w m. (24) 
+
+Step 2: There exists a distinct-cluster subset with larger determinant. Choose 
+
+T ♯ ∈ arg max T ⊆[K] 
+
+> |T|=m
+
+Q 
+
+> k∈T
+
+¯wk, so that Q  
+
+> k∈T♯
+
+¯wk = Qm. For each k ∈ T ♯, choose a client ik ∈ C k
+
+such that wik = ¯ wk. Let S♯ := {ik : k ∈ T ♯}. By construction, S♯ contains one client from each of m distinct clusters. Let 
+
+X♯ ≜ [ϕik ]k∈T ♯ , (25) 
+
+U ♯ ≜ [uk]k∈T ♯ , (26) 
+
+E♯ ≜ X♯ − U ♯. (27) Each column of E♯ has norm at most δ, so ∥E♯∥2 ≤ ∥ E♯∥F ≤ √m δ . Consider the Gram matrix 
+
+(U ♯)⊤U ♯. Its diagonal entries are 1, and its off-diagonal entries satisfy 
+
+|(uk)⊤uℓ| ≤ μ, ∀(k̸ = ℓ). (28) By Gershgorin’s circle theorem, 
+
+λmin 
+
+ (U ♯)⊤U ♯ ≥ 1 − (m − 1) μ. (29) 15 Hence 
+
+σmin (U ♯) = 
+
+q
+
+λmin 
+
+ (U ♯)⊤U ♯ ≥ p1 − (m − 1) μ. (30) By Weyl’s inequality for singular values, 
+
+σj (X♯) ≥ σj (U ♯) − ∥ E♯∥2 ≥ σmin (U ♯) − √m δ ≥ ρ, (31) for all j ∈ [m]. Since ρ > 0, this yields 
+
+det( CS♯ ) = det  (X♯)⊤X♯ =
+
+> m
+
+Y
+
+> j=1
+
+σj (X♯)2 ≥ ρ2m. (32) 
+
+Step 3: Comparing the two determinants. Combining this with (20), 
+
+det  LS♯
+
+ =
+
+ Y 
+
+> k∈T♯
+
+wik
+
+ det( CS♯ ) ≥
+
+ Y 
+
+> k∈T♯
+
+¯wk
+
+ ρ2m = Qmρ2m. (33) From the condition in (13) and recall δ = 2 r/κ , we can show that 
+
+Qmρ2m > 16 r2 ¯wm/κ 2, (34) Let F (r) ≜ Qm(p1 − (m − 1) μ − 2r√m/κ )2m − 16 r2 ¯w m/κ 2. Since Qm > 0, we have F (0) = 
+
+Qm
+
+p1 − (m − 1) μ
+
+2m
+
+> 0. By continuity of F , there exists r⋆ > 0 such that F (r⋆) = 0 , or otherwise F (·) > 0 always holds for r ≥ 0, in which case r⋆ = + ∞. Thus, we obtain 
+
+det  LS♯
+
+ > det  LS
+
+. (35) We conclude that every subset containing a duplicate cluster has strictly smaller determinant than the particular distinct-cluster subset S♯. Therefore, no MAP maximizer can contain clients from a duplicate cluster. Since |S⋆
+
+> ADCS
+
+| = m, it follows that every exact MAP solution selects m
+
+distinct clusters. 
+
+Step 4: Bounding approximation error of ¯gS⋆ 
+
+> ADCS
+
+. The set S⋆ 
+
+> ADCS
+
+contains exactly one client from each cluster in T ⋆
+
+> ADCS
+
+, and none from the remaining clusters. Let ϵi ≜ gi − czi . We have ∥ϵi∥ ≤ r. Therefore, 
+
+¯gS⋆ 
+
+> ADCS
+
+= 1
+
+m
+
+X 
+
+> k∈T⋆
+> ADCS
+
+ck + 1
+
+m
+
+X
+
+> i∈S⋆
+> ADCS
+
+εi
+
+=
+
+> K
+
+X
+
+> k=1
+
+1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m ck + 1
+
+m
+
+X
+
+> i∈S⋆
+> ADCS
+
+εi. (36) Also, 
+
+¯gN =
+
+> K
+
+X
+
+> k=1
+
+nk
+
+N ck + 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+εi. (37) Therefore, 
+
+¯gS⋆ 
+
+> ADCS
+
+− ¯gN =
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − nk
+
+N
+
+
+
+ck +
+
+ 1
+
+m
+
+X
+
+> i∈S⋆
+> ADCS
+
+εi − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+εi
+
+ . (38) Applying the triangle inequality and using ∥εi∥2 ≤ r gives the bound. 16 B Proof of Corollary 1 
+
+Proof. Since gi = czi and the vectors c1, . . . , c K are orthonormal, each ck has unit norm. Hence 
+
+ϕi = gi 
+
+> ∥gi∥2
+
+= czi . Therefore Theorem 1 applies with uk = ck, r = 0 , μ = 0 . We have 
+
+ρ = p1 − (m − 1) μ − 2√mr/κ = 1 . (39) Moreover, since wi = e2αq i > 0 for all i, we have 
+
+Qmρ2m = Qm > 0 = 16 r2 ¯wm/κ, (40) so the strict inequality in Theorem 1 is satisfied. Thus every exact MAP solution S⋆ 
+
+> ADCS
+
+still selects m distinct clusters. Now apply Theorem 1. Since r = 0 and nk = N/K for all k,
+
+∥¯gS⋆ 
+
+> ADCS
+
+− ¯gN ∥2 ≤
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − 1
+
+K
+
+
+
+ck
+
+> 2
+
+. (41) Because the vectors c1, . . . , c K are orthonormal and |T ⋆
+
+> ADCS
+
+| = m,
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − 1
+
+K
+
+
+
+ck
+
+> 22
+
+=
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − 1
+
+K
+
+2
+
+. (42) There are exactly m indices in T ⋆ 
+
+> ADCS
+
+and K − m indices outside T ⋆
+
+> ADCS
+
+, so 
+
+> K
+
+X
+
+> k=1
+
+ 1{k ∈ T ⋆
+
+> ADCS
+
+}
+
+m − 1
+
+K
+
+2
+
+= m
+
+ 1
+
+m − 1
+
+K
+
+2
+
++ ( K − m)
+
+ 1
+
+K
+
+2
+
+= 1
+
+m − 1
+
+K . (43) Hence 
+
+∥¯gS⋆ 
+
+> ADCS
+
+− ¯gN ∥2 ≤
+
+r 1
+
+m − 1
+
+K . (44) 
+
+# C Proof of Theorem 2 
+
+Proof. We consider the global objective f (w) = 1
+
+> N
+
+PNi=1 fi(w), whose gradient is ∇f (w) = 
+
+> 1
+> N
+
+PNi=1 ∇fi(w). At each communication round t, the server selects a subset S(t) ⊆ [N ] of size 
+
+|S (t)| = m via some client selection optimization. At round t, the server broadcasts the global model w(t). Each selected client i ∈ S (t) runs E
+
+local SGD steps with local stepsize ηℓ > 0 after the initialization w(t, 0)  
+
+> i
+
+= w(t)
+
+w(t,e +1)  
+
+> i
+
+= w(t,e ) 
+
+> i
+
+− ηℓ g(t,e ) 
+
+> i
+
+, for all e = 0 , 1, . . . , E − 1, (45) where g(t,e ) 
+
+> i
+
+is a stochastic gradient ∇fi(w(t,e ) 
+
+> i
+
+; ξ(t,e ) 
+
+> i
+
+) using a mini-batch. From (45), for any selected client i ∈ S (t),
+
+w(t,E ) 
+
+> i
+
+= w(t) − ηℓE−1X
+
+> e=0
+
+g(t,e ) 
+
+> i
+
+. (46) 17 The server aggregates the local models in each round t
+
+w(t+1) = 1
+
+m
+
+X
+
+> i∈S (t)
+
+w(t,E ) 
+
+> i
+
+= 1
+
+m
+
+X
+
+> i∈S (t)
+
+w(t) − ηℓE−1X
+
+> e=0
+
+g(t,e )
+
+> i
+
+!
+
+= w(t) − ηℓE−1X
+
+> e=0
+
+ 1
+
+m
+
+X
+
+> i∈S (t)
+
+g(t,e )
+
+> i
+
+| {z }
+
+> ≜ˆgt,e
+
+.
+
+(47) Define η = Eη ℓ and Gt = 1
+
+> E
+
+PE−1 
+
+> e=0
+
+ˆgt,e . Then w(t+1) = w(t) − ηG t.
+
+By L-smoothness of f , for w(t+1) = w(t) − ηG t, we have 
+
+f (w(t+1) ) ≤ f (w(t)) + ⟨∇ f (w(t)), w(t+1) − w(t)⟩ + L
+
+2 ∥w(t+1) − w(t)∥2
+
+= f (w(t)) − η⟨∇ f (w(t)), G t⟩ + Lη 2
+
+2 ∥Gt∥2. (48) Taking conditional expectation given Ft yields 
+
+E[f (w(t+1) ) | F t] ≤ f (w(t)) −η
+
+D
+
+∇f (w(t)), E[Gt | F t]
+
+E| {z }
+
+> B1
+
++ Lη 2
+
+2 E[∥Gt∥2 | F t]
+
+| {z }
+
+> B2
+
+. (49) Now we start to bound B1. We first decompose Gt into gradient, bias, drift, and zero-mean noise. For each e, decompose ˆgt,e as 
+
+ˆgt,e = 1
+
+m
+
+X
+
+> i∈S (t)
+
+∇fi(w(t))
+
+| {z }
+
+> ¯gt
+
++ 1
+
+m
+
+X
+
+> i∈S (t)
+
+
+
+∇fi(w(t,e ) 
+
+> i
+
+) − ∇ fi(w(t))
+
+| {z }
+
+> dt,e
+
++ 1
+
+m
+
+X
+
+> i∈S (t)
+
+
+
+g(t,e ) 
+
+> i
+
+− ∇ fi(w(t,e ) 
+
+> i
+
+)
+
+| {z }
+
+> ξt,e
+
+. (50) Average over e = 0 , . . . , E − 1:
+
+Gt = ¯ gt + dt + ξt, dt ≜ 1
+
+E
+
+> E−1
+
+X
+
+> e=0
+
+dt,e , ξt ≜ 1
+
+E
+
+> E−1
+
+X
+
+> e=0
+
+ξt,e . (51) Next, decompose ¯gt into its conditional mean and deviation: 
+
+¯gt = E[¯ gt | F t] + ζt = ∇f (w(t)) + bt + ζt, (52) where bt = E[bt | F t] = E[¯ gt | F t] − ∇ f (w(t)) is the conditional bias and ζt = ¯ gt − E[¯ gt | F t] is the zero-mean selection deviation. Clearly, E[ζt | F t] = 0 . Combining with (51), 
+
+Gt = ∇f (w(t)) + bt + dt + ut, (53) where ut = ζt + ξt and E[ut | F t] = 0 . From (53), we obtain 
+
+E[Gt | F t] = ∇f (w(t)) + bt + E[dt | F t]. (54) Hence 
+
+− η
+
+D
+
+∇f (w(t)), E[Gt | F t]
+
+E
+
+= −η∥∇ f (w(t))∥2 − η⟨∇ f (w(t)), b t⟩ − η
+
+D
+
+∇f (w(t)), E[dt | F t]
+
+E
+
+.
+
+(55) 18 Apply Young’s inequality ⟨a, c ⟩ ≤ 14 ∥a∥2 + ∥c∥2 twice: 
+
+−η⟨∇ f (w(t)), b t⟩ ≤ η · 14 ∥∇ f (w(t))∥2 + η∥bt∥2, (56) 
+
+−η
+
+D
+
+∇f (w(t)), E[dt | F t]
+
+E
+
+≤ η · 14 ∥∇ f (w(t))∥2 + η∥E[dt | F t]∥2. (57) Therefore 
+
+− η
+
+D
+
+∇f (w(t)), E[Gt | F t]
+
+E
+
+≤ − η
+
+2 ∥∇ f (w(t))∥2 + η∥bt∥2 + η∥E[dt | F t]∥2
+
+≤ − η
+
+2 ∥∇ f (w(t))∥2 + η∥bt∥2 + η E[∥dt∥2 | F t], (58) where the last inequality is by Jensen’s inequality ∥E[dt | F t]∥2 ≤ E[∥dt∥2 | F t].Now we start to bound B2. Using ∥a + b + c + d∥2 ≤ 4( ∥a∥2 + ∥b∥2 + ∥c∥2 + ∥d∥2) in (53), we obtain 
+
+∥Gt∥2 ≤ 4
+
+
+
+∥∇ f (w(t))∥2 + ∥bt∥2 + ∥dt∥2 + ∥ut∥2
+
+. (59) Thus 
+
+E[∥Gt∥2 | F t] ≤ 4∥∇ f (w(t))∥2 + 4 ∥bt∥2 + 4 E[∥dt∥2 | F t] + 4 E[∥ut∥2 | F t]. (60) Now bound E[∥ut∥2 | F t]. Since ut = ζt + ξt,
+
+E[∥ut∥2 | F t] ≤ 2E[∥ζt∥2 | F t] + 2 E[∥ξt∥2 | F t]. (61) By the bound on selection randomness variance, E[∥ζt∥2 | F t] ≤ νsel . For ξt = 1
+
+> E
+
+PE−1 
+
+> e=0
+
+ξt,e and Assumption 4, a standard averaging bound gives E[∥ξt,e ∥2 | F t] ≤ σ2 
+
+> m
+
+and E[∥ξt∥2 | F t] ≤ σ2 
+
+> mE
+
+.Hence 
+
+E[∥ut∥2 | F t] ≤ 2νsel + 2σ2
+
+mE . (62) Next, we show 
+
+E[∥dt∥2 | F t] ≤ L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) 6 . (63) By L-smoothness, 
+
+∥∇ fi(w(t,e ) 
+
+> i
+
+) − ∇ fi(w(t))∥ ≤ L∥w(t,e ) 
+
+> i
+
+− w(t)∥. (64) We obtain 
+
+∥dt,e ∥ ≤ 1
+
+m
+
+X
+
+> i∈S (t)
+
+L∥w(t,e ) 
+
+> i
+
+− w(t)∥. (65) Using Cauchy–Schwarz inequality ( 1
+
+> m
+
+P ai)2 ≤ 1
+
+> m
+
+P a2 
+
+> i
+
+,
+
+∥dt,e ∥2 ≤ L2 · 1
+
+m
+
+X
+
+> i∈S (t)
+
+∥w(t,e ) 
+
+> i
+
+− w(t)∥2. (66) Moreover, from (45), 
+
+w(t,e ) 
+
+> i
+
+− w(t) = −ηℓe−1X
+
+> j=0
+
+g(i) 
+
+> t,j
+
+, (67) 19 and by Cauchy-Schwarz inequality, 
+
+∥w(t,e ) 
+
+> i
+
+− w(t)∥2 ≤ η2 
+
+> ℓ
+
+e
+
+> e−1
+
+X
+
+> j=0
+
+∥g(i) 
+
+> t,j
+
+∥2. (68) Taking conditional expectation and applying Assumption 3 yields 
+
+E[∥w(t,e ) 
+
+> i
+
+− w(t)∥2 | F t] ≤ η2 
+
+> ℓ
+
+e · e G 2 = η2 
+
+> ℓ
+
+e2G2. (69) Therefore, E[∥dt,e ∥2 | F t] ≤ L2η2 
+
+> ℓ
+
+e2G2. Finally, by dt = 1
+
+> E
+
+PE−1 
+
+> e=0
+
+dt,e and Jensen inequality, we have 
+
+E[∥dt∥2 | F t] ≤ 1
+
+E
+
+> E−1
+
+X
+
+> e=0
+
+E[∥dt,e ∥2 | F t]
+
+≤ L2η2 
+
+> ℓ
+
+G2
+
+E
+
+> E−1
+
+X
+
+> e=0
+
+e2
+
+= L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) 6 . (70) and 
+
+E[∥Gt∥2 | F t] ≤ 4∥∇ f (w(t))∥2 + 4 ∥bt∥2 + 2L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) 3 + 8 νsel + 2σ2
+
+mE . (71) Finally substituting the bound for B1 in (58) and the bound for B2 in (71) into (49), we obtain 
+
+E[f (w(t+1) ) | F t] ≤ f (w(t)) − η
+
+2 ∥∇ f (w(t))∥2 + η∥bt∥2 + η E[∥dt∥2 | F t]+ Lη 2
+
+2
+
+
+
+4∥∇ f (w(t))∥2 + 4 ∥bt∥2 + 4 E[∥dt∥2 | F t] + 4 E[∥ut∥2 | F t]
+
+
+
+= f (w(t)) −
+
+ η
+
+2 − 2Lη 2
+
+∥∇ f (w(t))∥2 +  η + 2 Lη 2 ∥bt∥2
+
++  η + 2 Lη 2 E[∥dt∥2 | F t] + 2 Lη 2 E[∥ut∥2 | F t]. (72) Assuming η ≤ 18L . Then we have 
+
+η
+
+2 − 2Lη 2 ≥ η
+
+4 , (73) and 
+
+η + 2 Lη 2 ≤ 5η
+
+4 . (74) Applying (73) and (74) to (72) gives 
+
+E[f (w(t+1) ) | F t] ≤ f (w(t)) − η
+
+4 ∥∇ f (w(t))∥2 + 5η
+
+4 ∥bt∥2 + 5η
+
+4 E[∥dt∥2 | F t]+ 2 Lη 2 E[∥ut∥2 | F t]. (75) Taking full expectation and using the bound on expected bias, (63), and (62), we obtain 
+
+E[f (w(t+1) )] ≤ E[f (w(t))] − η
+
+4 E∥∇ f (w(t))∥2 + 5η
+
+4 ε2
+
++ 5η
+
+4 · L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) 6 + 2 Lη 2
+
+
+
+2νsel + 2σ2
+
+mE 
+
+
+
+= E[f (w(t))] − η
+
+4 E∥∇ f (w(t))∥2 + 5η
+
+4 ε2
+
++ 524 ηL 2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) + 4 Lη 2
+
+
+
+νsel + σ2
+
+mE 
+
+
+
+. (76) 20 Summing (76) over t = 0 , 1, . . . , T − 1, we have 
+
+E[f (w(T ))] ≤ f (w0) − η
+
+4 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ f (w(t))∥2
+
++ T
+
+ 5η
+
+4 ε2 + 524 ηL 2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) + 4 Lη 2
+
+
+
+νsel + σ2
+
+mE 
+
+  
+
+. (77) Since f (w(T )) ≥ f ⋆, we have 
+
+η
+
+4 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ f (w(t))∥2 ≤ f (w0) − f ⋆ + 524 ηL 2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) T
+
++
+
+ 5η
+
+4 ε2 + 4 Lη 2
+
+
+
+νsel + σ2
+
+mE 
+
+ 
+
+T. (78) Divide both sides by (η/ 4) T to obtain 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ f (w(t))∥2 ≤ 4 f (w0) − f ⋆
+
+ηT + 56 L2η2 
+
+> ℓ
+
+G2(E − 1)(2 E − 1) + 5 ε2 + 16 Lη 
+
+
+
+νsel + σ2
+
+mE 
+
+
+
+, (79) which completes the proof. 21

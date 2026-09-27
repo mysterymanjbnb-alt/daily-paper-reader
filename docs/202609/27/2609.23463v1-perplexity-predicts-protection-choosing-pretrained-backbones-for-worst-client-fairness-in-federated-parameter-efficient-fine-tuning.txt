@@ -1,0 +1,374 @@
+Title: Perplexity Predicts Protection: Choosing Pretrained Backbones for Worst-Client Fairness in Federated Parameter-Efficient Fine-Tuning
+
+URL Source: https://arxiv.org/pdf/2609.23463v1
+
+Published Time: Tue, 22 Sep 2026 01:24:03 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+> Received: Accepted: Published:
+> Citation: Copyright: © 2026 by the authors. Submitted to Preprint for possible open access publication under the terms and conditions of the Creative Commons Attri- bution (CC BY) license (https://creativecommons.org/ licenses/by/4.0/).
+
+Article 
+
+# Perplexity Predicts Protection: Choosing Pretrained Backbones for Worst-Client Fairness in Federated Parameter-Efficient Fine-Tuning 
+
+Kiran Naseer 1, *, Samreen Azhar 1, Umar Shoaib 1, Haroon Mahmood 2, Muhammad Awais 3 
+
+> 1
+
+Department of Computer Science, University of Gujrat, Gujrat, Pakistan  
+
+> 2
+
+Department of Cybersecurity, College of Engineering, Al Ain University, Al Ain, UAE  
+
+> 3
+
+Department of Computer Science, College of Computer, Qassim University, Qassim 52571, Saudi Arabia 
+
+* Correspondence: 25016119-003@uog.edu.pk 
+
+Abstract 
+
+Federated learning lets multiple parties train a shared model without pooling their data, but a client with far less data than the others can end up poorly served even when the group’s average accuracy looks fine. We ask whether the choice of pretrained backbone affects this under LoRA fine-tuning, and whether per-word perplexity on the target text predicts which backbone helps the worst-off client before federated training starts. We ran 313 experiments across three text-classification datasets and three similarly sized backbones (RoBERTa, BERTweet, PubMedBERT), each compared against a task-specific baseline on identical data splits. Lower-perplexity backbones consistently produced larger gains for the worst-performing client, with a rank correlation of −0.87 across nine dataset-backbone pairs; a backbone held out of the analysis confirmed the pattern. Personalization with Ditto recovered only 4–12% of the gap between training alone and full federation, and removing aggregation entirely erased the benefit. A client’s update also showed no sign of conflicting with the group’s update; the two are close to orthogonal, ruling out one proposed explanation for this failure. Practically: measure perplexity on a sample of task text before choosing a backbone, and do not rely on personalization to protect a data-poor client. We release our code, predictions, and full results for others to test. 
+
+Keywords: federated learning; parameter-efficient fine-tuning; LoRA; worst-client fairness; model selection; non-IID data; healthcare 
+
+# 1. Introduction 
+
+Consider a hospital with two hundred labelled records that joins a federation of ten hospitals. The other nine hold tens of thousands each. After training, the shared model reports good average accuracy. Whether it works for the small hospital is a separate question, and it is the question this paper is about. Average accuracy across clients hides this case by construction. A federation of ten clients can report 90% average accuracy while one client sits at 30%, and the client left behind is often the one the federation was built to serve. Small hospitals, minority-language schools and community clinics join federations precisely because they cannot train alone. Reporting only the mean tells them nothing about what they will receive. Pretrained models are now the default starting point for federated text classification, and there is good reason to expect them to help. Nguyen et al. [1] showed that starting from pretrained weights narrows the gap between IID and non-IID federated training, and that 
+
+Version September 22, 2026 submitted to Preprint https://doi.org/ arXiv:2609.23463v1 [cs.CL] 20 Sep 2026 Version September 22, 2026 submitted to Preprint 2 of 22 
+
+client updates from pretrained weights are better aligned with one another than updates from random initialisation. Their comparison is pretrained against random, measured on average accuracy. Two questions remain open. A practitioner does not choose between a pretrained model and a random one. They choose among several pretrained models, and nothing in the literature says which to pick. Nor does average accuracy answer the question the small hospital is asking. We take up both. We ran 313 controlled experiments. Three text datasets are crossed with three pre-trained backbones, and the backbones are matched in capacity so that pretraining domain is the only systematic difference across the grid: all three are twelve-layer encoders of 110 to 125 million parameters, each pretrained from scratch on a different corpus. Every cell uses five random partitions. Every foundation model is compared against a task-specific convolutional baseline trained on the identical partition, which makes each comparison paired and removes the partition draw as a source of noise. We measure the client that does worst, not the average. Our primary metric scores each client’s model on the full global test set, restricted to that client’s classes but with out-of-class predictions counted as errors. This matters more than it may appear. A metric computed only on a client’s own test split is maximised by a constant predictor when that client holds a single class, so under extreme skew it rewards a model that has learned nothing. The protocol, including the hypotheses, the metrics and the analysis code, was fixed before the grid was run. Departures from it are recorded in a deviation log that we release with the code. One pre-registered prediction failed, and we report it as such in Section 4.1.1. Backbone choice can be settled before training starts. Ranking candidate backbones by per-word masked-language-model perplexity on the task text reproduces the ranking of their worst-client benefit. This holds in all three datasets, and across the nine grid cells the rank correlation is −0.867 ( p = 0.0025). Because that analysis was exploratory, we committed an interval in advance for a fourth backbone that had not been run, then ran it. The prediction held. Computing the score needs no federated training at all. Personalization gives up most of the benefit. Ditto [2] is designed to improve worst-case client utility, and it did not help here. It recovers between 4 and 12 percent of the distance between purely local training and FedAvg, and a hundredfold change in its regularisation strength moves that by 0.006 to 0.048 across the three cells. We read this as a limit set by client data volume rather than a flaw in the method: at our most extreme skew the smallest client holds roughly twenty examples, and personalization has little to work with at that scale. Aggregation carries the benefit; the frozen features alone do not. Removing aggregation destroys the effect. In all five cells we tested this way, the task-specific baseline beat the pretrained model on every single partition. We also measured the geometry of the adapter updates directly and found no sign of the interference that has been offered as an explanation. The smallest client’s update is not being overwritten by the majority. 
+
+1.1. Contributions and Scope 
+
+1. A backbone selection rule for federated PEFT that requires no federated training, validated out-of-sample on a backbone held out of the analysis. Version September 22, 2026 submitted to Preprint 3 of 22 
+
+2. Evidence across three domain-matched cells that personalization forfeits most of federation’s worst-client benefit when clients are data-poor, with the regularisation strength swept over two orders of magnitude. 3. Direct measurement of adapter-space geometry and of a no-aggregation control, which together rule out two standing explanations for worst-client behaviour under extreme skew. 4. A pre-registered protocol with a logged deviation record, including a pre-registered prediction that failed, and a public release of the code, the run manifest and all per-round results. 
+
+# 2. Related work 
+
+2.1. Federated Learning under Heterogeneous Data 
+
+FedAvg [3] set the standard protocol and is still the default baseline. Its weakness is well documented: when clients hold different label distributions, local models drift apart between rounds and the average of those models is worse than any of them would suggest. FedProx adds a proximal term that keeps each local model near the global one [4]. SCAFFOLD tracks control variates and subtracts the estimated drift [5]. Both are evaluated on how quickly and how high average accuracy converges. Label skew is usually simulated with a Dirichlet partition [6], and we follow that convention. A recent survey catalogues the many forms non-IID data can take and the metrics used to report them [7]. It notes that per-client evaluation is still uncommon, which is the gap our primary metric is designed to close. 
+
+2.2. Parameter-Efficient Fine-Tuning in Federated Settings 
+
+LoRA [8] has become the default way to perform parameter-efficient fine-tuning (PEFT) a large model with few trainable parameters, and it fits federated learning well because only the low-rank factors need to be sent. Aggregating those factors is harder than it looks. Averaging A and B separately is not the same as averaging their product, so the server’s update does not match what the clients computed. Several methods attack this problem from different angles. FFA-LoRA freezes the ran-domly initialised A matrices and aggregates only B, which makes aggregation linear again and halves communication [9]. FedSA-LoRA trains both factors locally but shares only A,keeping B on the client [10]. FLoRA stacks the clients’ modules instead of averaging them, which also handles clients that use different ranks [11]. Other work targets heterogeneous client resources [12,13] or federated instruction tuning at scale [14]. A recent survey covers the area in full [15]. These methods differ in how they aggregate, and they are compared on average accuracy and on communication cost. The frozen backbone is treated as given. We are asking a question one level up: given that some pretrained backbone will be used, which one, and what does that choice do to the client that does worst. 
+
+2.3. Pretrained Models and Fairness in Federated Learning 
+
+Nguyen et al. [1] give the clearest account of why pretraining helps. Starting from pretrained weights narrows the gap between independent-and-identically-distributed (IID) and non-IID federated training, and client updates from pretrained weights point in more similar directions than updates from random initialisation. Their comparison is between pretrained and random initialisation, measured on average accuracy. That result frames our question rather than answering it. In practice nobody chooses between a pretrained model and a random one. RoBERTa, BERTweet and PubMedBERT are all pretrained, all available, and all roughly the same size, and the literature offers no Version September 22, 2026 submitted to Preprint 4 of 22                                              
+
+> Table 1. Position of this work. ✓= addressed, P = partial, ×= not addressed. Fed. PEFT Worst client Backbone Mechanism Multi-seed varied measured FedProx [4] ××××✓
+> Ditto [2] ×✓××✓
+> Nguyen et al. [1] P××P✓
+> FFA-LoRA [9] ✓××P✓
+> FedSA-LoRA [10] ✓×××✓
+> FLoRA [11] ✓×××✓
+> This work ✓✓✓✓✓
+
+guidance on choosing among them for a federated deployment. Whether the choice matters at all for the worst client, and whether it can be settled cheaply, are open. Two families of methods address unequal outcomes across clients. The first changes the objective. Agnostic federated learning optimises for the worst mixture of client dis-tributions [16], and q-FedAvg reweights clients by their loss so that accuracy is spread more evenly [17]. The second gives each client its own model. Per-FedAvg uses a meta-learning formulation [18], pFedMe uses Moreau envelopes [19], and Ditto trains a personal model regularised toward the global one [2]. pFedLoRA carries the same idea into adapter space [20]. Ditto is the closest of these to our setting and the strongest reported baseline for worst-case client utility, so we take it as the method to beat. Recent surveys map the wider fairness landscape [21] and a benchmark has been proposed for client-level fairness in particular [22]. One assumption runs through all of this work. These methods were introduced and tested in settings where every client has enough data to train on, so the question of what personalization does to a client with twenty examples has not been asked. Our results suggest the assumption is doing real work. 
+
+2.4. Positioning of This Work 
+
+Table 1 places our study against the closest work. Three gaps remain open, and we address each. No study varies which pretrained backbone is used, at matched capacity, with the worst client as the primary outcome. Fairness-aware methods have not been evaluated at the level of skew where the smallest client holds tens of examples. The mechanism usually offered for worst-client failure, interference between the minority update and the aggregate, has been inferred from outcomes rather than measured in adapter space. An earlier conference version of this study looked at one backbone on two datasets with a single random partition, and reported the opposite pattern: DistilBERT+LoRA increased the worst-client gap relative to TextCNN under extreme skew [23]. The present work extends it to a nine-cell backbone-by-dataset grid, five partitions per cell, a per-client metric that does not degenerate under extreme skew (Section 3.3), and matched local computation. Each of these changes independently moves the result in the direction reported here; we do not attempt to apportion credit among them, since the design was not set up to isolate their separate contributions. 
+
+# 3. Experimental Design 
+
+3.1. Backbones, Datasets, and Partitions 
+
+The study crosses three text datasets with three pretrained backbones, giving nine cells. Figure 1 shows the grid. Version September 22, 2026 submitted to Preprint 5 of 22 AG News Sentiment140 PubMed 
+
+Task corpus 
+
+> RoBERTa BERTweet PubMedBERT
+> Pretrained backbone
+
+25 
+
+> per-word PPL
+> domain match
+
+161 
+
+> per-word PPL
+
+45 
+
+> per-word PPL
+
+65 
+
+> per-word PPL
+
+222 
+
+> per-word PPL
+> domain match
+
+172 
+
+> per-word PPL
+> mismatch
+
+222 
+
+> per-word PPL
+
+2459 
+
+> per-word PPL
+> mismatch
+
+10 
+
+> per-word PPL
+> domain match
+
+Figure 1. The backbone-by-dataset grid. Each cell gives the per-word masked-LM perplexity of that backbone on that corpus. Green marks a domain match, red the two strongest mismatches. 
+
+Table 2. The three backbones. All are base-scale twelve-layer encoders trained from scratch, so pretraining corpus is the only systematic difference across the grid. 
+
+Backbone Reference Params Pretraining corpus RoBERTa-base [24] 125M General web text BERTweet [25] 125M 850M English tweets PubMedBERT [26] 110M PubMed abstracts The backbones are matched in capacity on purpose. All three are twelve-layer encoders of 110 to 125 million parameters, and each was pretrained from scratch on a different corpus. If we had compared a small general-domain model against a large domain-specific one, any difference we found could be attributed to size rather than to pretraining domain. Matching capacity removes that explanation. Table 2 lists the three. Three cells pair a backbone with the corpus closest to its own pretraining domain. We call these the domain-matched cells. Two cells pair a backbone with the corpus furthest from it, BERTweet on biomedical abstracts and PubMedBERT on tweets. The remaining four fall in between. Predictions for every cell were written down before any federated run, as described in Section 3.4. Each cell is compared against a task-specific baseline, TextCNN [27], with 2.7M pa-rameters. We use the same tokenizer for the baseline across all three datasets so that tokenisation does not vary with the cell. We use three English classification corpora that differ in domain and in the number of classes. AG News is news topic classification with four classes [28]. Sentiment140 is binary tweet sentiment [29]. PubMed 20k RCT is five-way sentence-role classification drawn from the abstracts of randomised controlled trials [30]. We subsample every dataset to 20,000 training examples with a fixed seed. The three corpora differ in size by two orders of magnitude, so without subsampling, dataset size would vary together with domain and a difference between cells could not be attributed to either one. Section 4.4 reports a control at the full 120,000 examples for one cell. Sequences are truncated at 128 tokens throughout. Clients are formed with a label-Dirichlet partition [6] at concentration α, with K = 10 clients. Smaller α concentrates each class on fewer clients. At α = 0.1 the smallest client typically holds around twenty training examples while the largest holds several thousand. Version September 22, 2026 submitted to Preprint 6 of 22  
+
+> Table 3. Federated configuration. All conditions share these settings unless a control states otherwise.
+
+Parameter Value Clients K 10 Rounds 30, uniform across α
+
+Local epochs E 1 for both model classes Batch size 32 Optimiser AdamW Dirichlet α {0.1, 0.3, 1.0 }
+
+Seeds per cell 5LoRA r = 8, αLoRA = 32, dropout 0.1, Q and V
+
+Max sequence length 128 Training examples 20,000 per dataset Partition indices are generated once per (dataset, α, seed) and written to disk. Every model that runs at that seed reads the same file. A foundation model and its TextCNN baseline therefore see the identical clients holding the identical examples, which makes each model comparison paired and removes the partition draw as a source of variance — not a minor concern, since on one cell the worst-client score varies by more than 0.25 across partition draws, larger than most of the effects we report. Each client’s shard is split 80/10/10 into training, validation and test data. For PubMed the split is made at the level of the abstract rather than the sentence. Sentences from one abstract share topic, style and often vocabulary, so a sentence-level split would place near-duplicates in both the training and test halves of the same client and inflate every number we report. The dataset provides an abstract identifier, and our 20,000-sentence subsample spans 11,177 abstracts. For the other two datasets no such grouping is needed and the split is stratified by label. 
+
+3.2. Models, Adaptation, and Federated Protocol 
+
+Each backbone is used with its own tokenizer and kept frozen. We insert LoRA adapters [8] at the query and value projections of every attention sublayer, with rank r = 8, scaling αLoRA = 32 and dropout 0.1. A linear classification head is trained alongside the adapters. Only the adapters and the head are trained and communicated. We implement LoRA directly rather than through a library. Two reasons. The effective weight update ∆W = α 
+
+> r
+
+BA can then be extracted exactly for the geometry measurements in Section 4.3, and the FFA-LoRA variant, which freezes A, becomes a single flag rather than a separate code path. Table 3 gives the configuration. Rounds are uniform across α so that convergence budget does not vary with the condition. Local epochs are equal for both model classes, which removes a confound present in much of the literature: a foundation model given five local epochs against a baseline given one is not a controlled comparison. Section 4.4 reports a stronger version of the same control, in which the number of local gradient steps rather than epochs is equalised. We compare five aggregation strategies. FedAvg [3] is the default. FedProx [4] adds a proximal term with μ = 0.01. FFA-LoRA [9] freezes the A matrices and aggregates only 
+
+B. Ditto [2] trains a personal model per client, regularised toward the global model with strength λ, which we sweep over {0.1, 1, 10 }. Local-only training removes aggregation entirely and serves as the lower anchor: it tells us what each client could achieve alone. Version September 22, 2026 submitted to Preprint 7 of 22 
+
+3.3. Metrics and Evaluation 
+
+We use worst-client performance and max-min utility interchangeably in what follows; both are narrower than algorithmic fairness in general, and we make no broader fairness claim. Reporting the worst client requires a per-client score, and the obvious choices break down under extreme skew. We use three. 
+
+P1, client-local macro-F1. Macro-F1 on the client’s own held-out split. This is the utility the client experiences on data like its own. 
+
+P2, global balanced accuracy. Balanced accuracy of the client’s model on the global test set. 
+
+P3, client-class macro-F1. Macro-F1 restricted to the classes the client holds, but computed over the whole global test set. This is our primary endpoint. The distinction between P1 and P3 decides what the paper measures, so it is worth setting out. Consider a client that holds a single class, which is common at α = 0.1. Its held-out split contains only that class. A model that predicts that class for every input scores precision 1 and recall 1 on that split, so its macro-F1 is 1.0. Under P1 a model that has learned nothing is indistinguishable from a model that has learned everything. Any metric computed only on the client’s own data has this property, and it is exactly the regime where worst-client behaviour is interesting. P3 removes the degeneracy by scoring on the full global test set. The constant predictor still achieves recall 1 on its class, but it now produces a false positive on every example from the other classes, so precision falls to roughly 1/ C and macro-F1 falls with it. A model must be competent on the client’s classes and restrained on the others to score well. We log all three metrics at every evaluated round, so a reader can recompute any table under either endpoint. Where P1 and P3 disagree we report both and say so, as in Section 4.2. Across clients we report the minimum, the tenth percentile, mean, harmonic mean and standard deviation. The minimum over ten clients is a noisy order statistic, so the tenth percentile is reported for the primary grid in Table A7. 
+
+3.4. Perplexity Measurement 
+
+For every (backbone, dataset) pair we score how well the backbone models the task text, before any federated training. We sample 1,500 texts from the training corpus, mask 15% of tokens at random, and average the masked-language-model loss over three passes [31]. We also record subword fertility, which is the mean number of subword tokens per whitespace word, and vocabulary coverage [32]. Token-level perplexity cannot be compared across backbones, because a 64k byte-pair vocabulary and a 30k WordPiece vocabulary segment the same sentence into different numbers of pieces. We convert to per-word perplexity by multiplying the per-token negative log-likelihood by fertility before exponentiating. All perplexities in this paper are per-word. We pre-registered a derived quantity rather than the raw score. The protocol specified a two-way centred alignment score, which subtracts the backbone mean and the dataset mean and keeps the interaction. That score, its per-cell values and a signed prediction for every cell were computed and committed to the repository before the first federated run. Section 4.1.1 reports what happened to it. 
+
+3.5. Statistical Analysis and Reproducibility 
+
+The analysis plan was written and tested on pilot data before the grid was run, which keeps the choice of test independent of the results it is applied to. Version September 22, 2026 submitted to Preprint 8 of 22 
+
+Effects are paired differences taken per seed and tested with a paired t-test. We report exact p-values rather than thresholds, Cliff’s δ next to every test as a distribution-free effect size, and 95% bootstrap confidence intervals over seeds with 10,000 resamples. Where a table contains several comparisons we apply Holm–Bonferroni correction within that table. Five seeds is a deliberate choice with a known cost. The two-sided Wilcoxon signed-rank test cannot reach p < 0.05 at n = 5, since its smallest attainable p-value is 0.0625. We therefore use the paired t-test as the primary test and do not report a nonparametric companion at this sample size. Rank correlations across cells are Spearman coefficients, and we note the critical value at the relevant n wherever one is reported. The protocol, the metrics, the analysis code and the alignment scores with their signed per-cell predictions were fixed and committed before the grid was launched. Every subsequent departure is recorded in a deviation log with its date and its justification, including one pre-registered prediction that failed (Section 4.1.1) and the decision to reduce the number of conditions when measured compute exceeded our budget. The full study is 313 completed runs on a single Tesla T4, with no failures. Each run is a row in a manifest keyed by a hash of its configuration, and results are appended to a single log as one record per client per evaluated round. We release the code, the manifest, the committed alignment table, the deviation log and the complete result log. 
+
+# 4. Results 
+
+Every effect reported below is a paired difference in worst-client macro-F1 between the PEFT model and the TextCNN baseline. At a given seed the two models train on the same Dirichlet partition, so the difference is taken per seed and tested paired. A positive value means the pretrained backbone helped the client that did worst. Unless stated otherwise the metric is P3, the Dirichlet concentration is α = 0.1, and each cell rests on five partitions. 
+
+4.1. Perplexity Predicts Worst-Client Benefit 
+
+Table 4 lists all ten cells. Within each dataset we sort the backbones by per-word masked-LM perplexity on that dataset’s text. The benefit falls as perplexity rises, and it does so in every dataset. Ordering three backbones correctly by chance has probability 1/6; three datasets in agreement has probability about 0.005. This calculation treats the three datasets as independent tests, which they are not: the same three backbones appear in each, so a backbone that is simply stronger overall induces agreement across datasets. We report it as descriptive, for the same reason given for the rank correlation in Section 6. Figure 2 plots the same numbers. Across the nine grid cells the rank correlation between log per-word perplexity and worst-client benefit is −0.867 ( p = 0.0025). Two cells survive Holm correction within the table. PubMed × PubMedBERT gives 
+
++0.208 ( p = 0.004, Holm-adjusted p = 0.037) and PubMed × RoBERTa gives +0.140 (p = 0.004, Holm-adjusted p = 0.037). For PubMed × PubMedBERT, Cliff’s δ is 1.00: the foundation model beat the baseline on every one of the five partitions, with no overlap between the two sets of scores. Nine of the ten effects are positive. The exception is PubMed × BERTweet at −0.019, whose bootstrap interval [−0.054, +0.012 ] contains zero. We did not find a cell in which a pretrained backbone clearly harmed the worst client. The size of the benefit varies with how much room the baseline leaves. On PubMed the baseline reaches 0.292 and the best backbone adds 0.208. On Sentiment140 the baseline already reaches 0.640 on a binary task, and the largest gain there is 0.074. Perplexity orders the backbones within a task. It does not by itself say how large the gain will be. Version September 22, 2026 submitted to Preprint 9 of 22     
+
+> Table 4. All ten cells at α=0.1, grouped by dataset and sorted by per-word perplexity within each group. Every dataset is monotone. DistilBERT was held out of the analysis; its interval was committed before its runs executed. Holm–Bonferroni correction is applied across the ten comparisons in this table.
+
+Dataset Backbone PPL Effect p δ
+
+AG News RoBERTa 25.4 +0.124 0.013 +0.60 AG News BERTweet 65.0 +0.111 0.018 +0.52 AG News DistilBERT 76.6 +0.091 0.112 +0.52 AG News PubMedBERT 221.8 +0.017 0.657 +0.20 Sentiment140 RoBERTa 161.5 +0.074 0.291 +0.60 Sentiment140 BERTweet 222.3 +0.049 0.651 +0.60 Sentiment140 PubMedBERT 2458.9 +0.015 0.568 +0.28 PubMed PubMedBERT 10.4 +0.208 0.004 +1.00 PubMed RoBERTa 44.9 +0.140 0.004 +0.76 PubMed BERTweet 171.9 −0.019 0.357 −0.20 4.1.1. The predictor we pre-registered, and the one that replaced it We pre-registered a different predictor. Our protocol specified a two-way centred alignment score, which removes backbone quality and corpus difficulty as main effects and keeps only the interaction between them. The threshold was a Spearman correlation of at least 0.6 at p < 0.05. We measured ρ = 0.617 with p = 0.0769. The threshold was not met. Inspecting the cells showed why. The centred score marks PubMed × RoBERTa as a poor match, because RoBERTa fits news text better than it fits biomedical abstracts. In absolute terms, though, RoBERTa’s per-word perplexity on PubMed is 44.9, the second lowest value anywhere in our grid. That cell produced a benefit of +0.140, the second largest we measured. Centring had removed the variable that carries the signal. We then examined the uncentred per-word perplexity, which ordered the cells correctly in all three datasets. This analysis was exploratory, so we treated it as a hypothesis rather than a result. We chose a backbone that had not been run and was not used to build the relationship, DistilBERT on AG News. Its per-word perplexity is 76.6, which sits between BERTweet at 65.0 and PubMedBERT at 221.8. We recorded a predicted interval of 
+
+[+ 0.017, +0.111 ] in the deviation log, and only then ran the five partitions. The measured effect was +0.091. DistilBERT is drawn as an open marker in Figure 2. Adding it gives a four-point ordering on AG News that is monotone in perplexity: +0.124, +0.111, +0.091, +0.017 at perplexities of 25.4, 65.0, 76.6 and 221.8. We report the failed pre-registration and the out-of-sample test together because neither is interpretable without the other. To be explicit: the perplexity relationship itself was found by inspecting these same nine cells, and is exploratory. The single held-out test on DistilBERT is confirmatory for that one point; it is not a replication of the rule. 
+
+4.2. Personalization Forfeits Most of the Benefit 
+
+Ditto is designed to improve worst-case client utility. In our setting it did not close the gap. Table 5 and Figure 3 show what happened in the three domain-matched cells. At its default setting Ditto reaches −0.520 on AG News, −0.490 on Sentiment140 and −0.203 on PubMed. Purely local training, with no aggregation at all, reaches −0.584, 
+
+−0.476 and −0.221 in the same cells. Ditto lands within a few hundredths of the local-only bound every time. We swept the regularisation strength over two orders of magnitude, λ ∈ { 0.1, 1, 10 }.Larger λ pulls each personal model harder toward the global one, and it does help, but by Version September 22, 2026 submitted to Preprint 10 of 22 10 1 10 2 10 3
+
+Per-word masked-LM perplexity on task text          
+
+> −0.1 0.0 0.1 0.2
+> Worst-client benefit over baseline  Spearman ρ= -0.87
+> p= 0.0025, n= 9 AG News Sentiment140 PubMed held out
+> Figure 2. Per-word masked-language-model perplexity against worst-client benefit. Each point is one backbone-dataset pair averaged over five partitions; bars are 95% bootstrap intervals and marker shape denotes the dataset. The open marker is DistilBERT, held out of the analysis, whose interval was committed before its runs executed.
+> Table 5. Ditto across a hundredfold range of the regularisation strength λ, worst-client effect on P3. Every value sits close to the local-only bound. The final column is the fraction of the local-to-federated gap recovered at the best λ.
+
+Dataset Local λ=0.1 λ=1 λ=10 FedAvg Rec. AG News −0.584 −0.539 −0.520 −0.498 +0.124 12% Sentiment140 −0.476 −0.496 −0.490 −0.448 +0.049 5% PubMed −0.221 −0.208 −0.203 −0.202 +0.208 4% very little. On AG News the benefit moves from −0.539 to −0.498 across a hundredfold change. Expressed as a fraction of the distance between local training and FedAvg, the best setting of λ recovers 12% on AG News, 5% on Sentiment140 and 4% on PubMed. A reader may object that as λ grows without bound the personal model converges to the global one, so Ditto must eventually match FedAvg. That is true in the limit. What our sweep measures is the rate. A hundredfold increase in λ buys between 0.006 and 0.048 across the three cells, while the gap left to close is between 0.4 and 0.7. Within the range of 
+
+λ used in the literature, personalization gives up nearly all of the protection that federation provides. We read this as a statement about client data volume, not about the algorithm. At 
+
+α = 0.1 the smallest client holds roughly twenty training examples. A personal model fitted on twenty examples is a poor model, and regularising it toward a good one does not fix that. We cannot fully separate this explanation from others our design does not isolate, including the specific PEFT configuration and the interaction between local personalisation and the global training objective; data volume is the factor our sweep directly measures, not the only one that could contribute. The result depends on the metric. On P3 the recovered fractions are 12%, 5% and 4%. On P1, which scores each client only on its own held-out split, they are 0%, −22% and +23%. The direction is not stable. P1 is the metric that should favour a personalized model, and even there Ditto does not Version September 22, 2026 submitted to Preprint 11 of 22 AG News × RoBERTa Sentiment140 × BERTweet PubMed × PubMedBERT −0.6 −0.4 −0.2 0.0 0.2       
+
+> Worst-client benefit
+> 12% recovered 5% recovered 4% recovered
+> Local only λ=0.1 λ=1 λ=10 FedAvg
+
+Figure 3. Ditto across a hundredfold range of the regularisation strength λ, anchored by purely local training and by FedAvg. Every Ditto setting sits close to the local-only bound. AG News × RoBERTa Sentiment140 × BERTweet PubMed × PubMedBERT −0.6 −0.4 −0.2 0.0 0.2     
+
+> Worst-client benefit
+> FedAvg FedProx FFA-LoRA Ditto Local only
+
+Figure 4. Worst-client benefit by aggregation algorithm. The three non-personalised methods cluster above zero; the personalised method collapses onto the local-only bound. 
+
+consistently beat local training. We state the result for global competence, which is what a deployed client needs, and we report the local-split numbers alongside it rather than choosing between them. Other algorithms behave differently. Figure 4 compares five methods in the same three cells. FedAvg, FedProx and FFA-LoRA cluster together and all stay positive: on PubMed they give +0.208, +0.206 and 
+
++0.144. Ditto and local-only fall well below zero. The split is not between simple and sophisticated methods. It is between methods that keep every client on the shared model and methods that do not. 
+
+4.3. Aggregation Carries the Benefit 
+
+If a pretrained backbone protects the worst client because its frozen features already separate that client’s classes, then removing aggregation should not destroy the effect. We tested this directly with the local-only condition, in which each client trains alone on its own shard. The effect is large and negative in all five cells we ran: −0.584, −0.476, −0.414, −0.249 and −0.221. Cliff’s δ is −1.00 in every one of them. Table A10 gives the cell identity for each value. Without aggregation the baseline beat the pretrained model on every single Version September 22, 2026 submitted to Preprint 12 of 22 10 1 10 2 10 3      
+
+> Per-word perplexity
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Adapter conflict rate  (a) domain match mismatch
+> −1.0 −0.5 0.0 0.5 1.0
+> Cosine: smallest client vs aggregate
+> opposed aligned orthogonal
+> (b)
+
+Figure 5. Adapter-space geometry. (a) Conflict rate shows no trend with domain match. (b) The cosine between the smallest client’s update and the aggregate is near zero in every cell, so the two are close to orthogonal rather than opposed. 
+
+partition. Whatever the backbone contributes, it does not reach the worst client unless the clients train together. We also measured the geometry of the adapter updates, because our earlier conference version [23] proposed that the worst client suffers when its update conflicts with the aggregate. Figure 5 shows what we found. The cosine between the smallest client’s update and the aggregate update averages +0.013 over all cells, with a range from −0.025 to 
+
++0.033. The two are close to orthogonal. They are not opposed. Conflict rates point the same way. Averaged over the last ten rounds, the domain-matched cells show a conflict rate of 0.154 and the mismatched cells 0.123. An interference account predicts the opposite ordering, since conflict should be worst where the backbone fits the task least. We observed no such trend. Taken together, these two measurements find no evidence for the directional-conflict mechanism examined here. The minority client is not being overwritten by a conflicting majority. Its update carries little weight in the average, and it gains from the aggregate rather than losing to it. 
+
+4.4. Controls and Additional Analyses 
+
+Matched local computation. The two model classes could in principle differ because one received more local work per round. We reran the three domain-matched cells with the number of local gradient steps equalised across both models, giving the baseline its own matched-steps runs so that the comparison stays paired. Figure 6(a) shows the outcome. The benefit grows or holds in every cell: +0.338 against +0.124 on AG News, +0.121 against +0.049 on Sentiment140, and +0.210 against +0.208 on PubMed. Under a fairer compute budget the advantage is larger, not smaller. Sentiment140, the weakest cell under matched epochs, more than doubles. Dataset scale. Our main grid subsamples every dataset to 20,000 training examples so that corpus size does not vary with domain. To check that the effect is not an artefact of that choice, we repeated AG News × RoBERTa with the full 120,000 examples. The benefit fell from 
+
++0.124 to +0.083 on P3 and from +0.106 to +0.066 on P1, about two thirds of its original size on both metrics. The effect survives, but it shrinks. We take this as a boundary condition rather than a caveat to be minimised: the benefit is largest when the smallest client is most starved of Version September 22, 2026 submitted to Preprint 13 of 22 AG News × RoBERTa Sentiment140 × BERTweet PubMed × PubMedBERT    
+
+> 0.0 0.1 0.2 0.3 0.4
+> Worst-client benefit
+> (a) Matched epochs Matched steps
+> P3 (primary) P1
+> 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175 (b) 20k train 120k train
+
+Figure 6. Controls. (a) Under matched local gradient steps the benefit grows or holds in every cell. (b) With six times more training data per client the benefit falls to about two thirds of its size on both metrics. 0.1 0.3 1.0 
+
+Dirichlet α (lower is more heterogeneous) 
+
+−0.1 0.0 0.1 0.2 
+
+> Worst-client benefit
+> AG News × RoBERTa Sentiment140 × BERTweet PubMed × PubMedBERT
+
+Figure 7. Worst-client benefit against the Dirichlet concentration α for the three domain-matched cells. Bands are 95% bootstrap intervals over five partitions. 
+
+data, and it fades as every client acquires enough of its own. That is consistent with the rest of our results. Heterogeneity. Figure 7 shows the benefit across α ∈ { 0.1, 0.3, 1.0 }. Two of the three cells strengthen as heterogeneity increases: AG News moves from +0.044 to +0.124 and PubMed from 
+
++0.101 to +0.208 as α falls from 1.0 to 0.1. Sentiment140 does not follow the pattern, peaking at α = 0.3 with +0.142 before dropping to +0.049. Sentiment140 is a binary task on which the baseline already scores 0.640, and it is the same cell that behaves irregularly in Section 4.2 and under matched compute. We think the limited headroom explains all three observations, but we have not tested that directly. We also checked one cell at K = 50 instead of K = 10, keeping total training examples fixed so each client holds proportionally less data (AG News × RoBERTa, five seeds). The effect grows sharply: +0.740 against +0.124 at K = 10 ( p = 0.0001). TextCNN’s worst client fails outright, scoring zero worst-client P3 on two of five seeds, while RoBERTa holds between 0.79 and 0.84 across all five. We read this as consistent with the rest of our results: the benefit is largest when the smallest client is most starved of data, and K = 50 starves it further still. Version September 22, 2026 submitted to Preprint 14 of 22 
+
+# 5. Discussion 
+
+5.1. A Practical Selection Rule 
+
+The practical form of our main result is a procedure. Before committing to a federated deployment, a practitioner can rank candidate backbones as follows. 1. Draw a sample of the task text. We used 1,500 examples, which was enough for a stable score. 2. For each candidate backbone, mask 15% of tokens at random and average the masked-language-model loss over three passes. 3. Multiply the per-token loss by subword fertility, the mean number of tokens per whitespace word, before exponentiating. Without this step the scores are not compa-rable across tokenizers. 4. Rank by the resulting per-word perplexity and take the lowest. The whole procedure took a small amount of compute per cell on a single Tesla T4. It needs no federated training, no labels and no access to client data beyond a text sample. In our grid it recovered the correct ordering of worst-client benefit in every dataset, and it placed a fourth backbone correctly on a prediction committed in advance. Two limits are worth stating plainly. The rule orders backbones within a task; it does not say how large the gain will be. On PubMed the baseline reaches 0.292 and the best backbone adds 0.208, while on Sentiment140 the baseline already reaches 0.640 and the largest gain is 0.074. Available headroom sets the scale, and headroom is a property of the task rather than of the backbone. The rule is also relative: a low perplexity tells you which of your candidates fits best, not whether any of them fits well enough to deploy. The benefit is largest exactly where the stakes are highest. It grows as heterogeneity increases in two of our three cells, and it falls by about a third when every client holds six times more data. Both point the same way. A federation of well-resourced participants with similar data will see little difference between backbones. A federation in which one participant has a few dozen examples will see a large one. This is the setting that motivates federated learning in the first place. A small clinic joins a federation because it cannot train alone. Our results say that what it receives depends measurably on a choice its coordinator makes before training starts, and that the choice can be made well for the price of a few minutes of compute. 
+
+5.2. Why Personalization Fails 
+
+Ditto reduced worst-client performance in all three domain-matched cells, and sweep-ing its regularisation strength over two orders of magnitude changed the outcome by between 0.006 and 0.048. We do not read this as a defect in the method. Ditto performs as designed: it trains a personal model and pulls it toward the global one. The difficulty is what the personal model is fitted on. At α = 0.1 the smallest client holds roughly twenty examples. Regularising a model toward a good one helps only in proportion to how strongly it is pulled, and our sweep shows that proportion is small. The failure is set by client data volume, not by the algorithm. This suggests a boundary rather than a verdict. Personalization needs a client with enough data to personalize on. Where that condition fails, methods that keep every client on the shared model do better, and our comparison bears this out: FedAvg, FedProx and FFA-LoRA cluster together and stay positive, while Ditto and purely local training fall together well below zero. The dividing line is not between simple and sophisticated methods. It runs between methods that keep the worst client on the shared model and methods that do not. Version September 22, 2026 submitted to Preprint 15 of 22 
+
+The explanation offered for worst-client failure in our earlier conference version [23] is interference: the minority client’s update conflicts with the aggregate and is overwritten. We measured this directly rather than inferring it from outcomes, and it does not hold. The cosine between the smallest client’s update and the aggregate averages +0.013 across all cells. The geometry measured in Section 4.3 shows no such conflict. Conflict rates are slightly higher in the well-matched cells than in the mismatched ones, which is the reverse of what interference predicts. A second explanation is that the frozen representation does the work: a well-matched backbone already separates the client’s classes, so few local examples suffice. Our local-only condition tests this directly by removing aggregation. It fails as clearly. In all five cells we ran, the task-specific baseline beat the pretrained model on every single partition. What remains consistent with both measurements is a weaker and less tidy account. Aggregation supplies the worst client with information it cannot obtain locally, and the backbone governs how efficiently that information can be absorbed. We did not establish this, and we do not claim it. We report it as the hypothesis our evidence leaves standing, and note what would test it: an intervention that varies how much of the aggregate reaches the smallest client, holding the backbone fixed. 
+
+# 6. Limitations and Open Questions 
+
+Model scale. All three grid backbones are base-scale encoders of 110 to 125 million parameters. We did not test decoder-only models, instruction-tuned models, or anything above one billion parameters. Whether per-word perplexity orders backbones the same way at that scale is untested. It is a cheap experiment for anyone with the compute. Number of clients. The main grid uses ten cross-silo clients. A matched K = 50 check on one cell (AG News × RoBERTa, n = 5 seeds) shows the backbone-choice effect strengthening rather than weakening at higher client count ( +0.740 against +0.124 at K = 10, p = 0.0001): TextCNN’s worst client fails outright on two of five seeds, while RoBERTa’s holds between 0.79 and 0.84 throughout. This is one cell on one dataset and does not establish the pattern generally. Cross-device federations with hundreds or thousands of participants have a different structure again, and we would not extrapolate the selection rule that far without checking it. Language and task. All three corpora are English single-label classification. We have no evidence about generation, sequence labelling, multilingual settings, or languages with different mor-phology, where fertility behaves differently and may carry more of the signal than it does here. One adaptation method. We use LoRA at rank 8 on the query and value projections. Ranks 4 and 16 appear in the appendix at five seeds and give somewhat larger effects than rank 8 ( +0.160 and 
+
++0.164 against +0.124), consistent in sign and order of magnitude; other PEFT families are untested. Dataset scale. Our main grid subsamples every corpus to 20,000 training examples. At the full 120,000 the benefit fell to about two thirds of its size on both metrics. The effect survives, Version September 22, 2026 submitted to Preprint 16 of 22 
+
+but it is clearly a function of how data-starved the smallest client is, and our headline numbers come from the more starved regime. Five seeds. Five partitions per cell is enough for paired comparisons with bootstrap intervals, and it is not enough for a nonparametric test to reach conventional significance. Individual cells with small effects are consequently underpowered: six of our ten cells have intervals that contain zero. The conclusions we draw rest on the pattern across cells rather than on any single one. The same caution applies to the rank correlation in Section 4.1: the nine cells are not independent observations, since each of the three backbones and three datasets contributes to three points each, so the reported p-value should be read as descriptive rather than as evidence from nine exchangeable draws. A pre-registered prediction that failed. Our pre-registered alignment score did not meet its threshold ( ρ = 0.617, p = 0.077). The predictor we report instead was identified by exploratory analysis of the same data. We tested it on a backbone held out of that analysis, with the interval committed in advance, and it held. That is one out-of-sample test, not a replication, and the rule should be treated as provisional until it is checked on backbones and tasks we did not touch. The original prediction and the change are both recorded in the deviation log released with the code. Mechanism. We rule out two explanations and offer a third that we did not test. That third account should be read as a direction for future work rather than as a finding. Form of heterogeneity. All experiments use Dirichlet label skew, the standard construction in the literature we build on. It is one form of non-IID data among several; whether backbone perplexity orders worst-client benefit under feature skew or quantity skew is untested. Perplexity versus general model quality. Perplexity orders backbones by absolute worst-client, tenth-percentile, and mean-client scores, not only by the paired benefit reported in Table 4 (P10 results in Table A7). This shows the relationship is not an artefact of the TextCNN baseline comparison. It does not show that perplexity predicts worst-client protection specifically: mean-client score is ordered by perplexity just as cleanly, so our nine cells cannot separate a worst-client-specific effect from perplexity tracking overall model quality, of which worst-client protection is one visible consequence. One methodological point follows from our metric analysis and applies beyond this study. A per-client score computed only on the client’s own data is maximised by a constant predictor when that client holds a single class. Any paper reporting worst-client outcomes under extreme label skew should state which test set its per-client metric uses, because the two choices can order methods differently. In our own results the direction of the Ditto comparison reverses between them. We would also encourage reporting the tenth percentile alongside the minimum. With ten clients the minimum is a single order statistic and moves considerably with the partition draw. On one of our cells it varies by more than 0.25 across seeds, which is larger than most of the effects we report. Version September 22, 2026 submitted to Preprint 17 of 22 
+
+# 7. Conclusion 
+
+We asked which design choices protect the worst-off client when a federation fine-tunes a pretrained model with parameter-efficient methods. Across a nine-cell grid of backbones and datasets, with five partitions per cell and a task-specific baseline trained on the identical partition, three answers emerged. The choice of backbone matters, and it can be settled before training starts. Ranking candidate backbones by per-word masked-language-model perplexity on the task text reproduced the ranking of their worst-client benefit in all three datasets, with a rank correla-tion of −0.867 across nine cells. We committed an interval in advance for a fourth backbone that had been held out of the analysis, and the measurement fell inside it. Producing the score needs no federated training. Personalization forfeited most of the benefit for the client it targets. Ditto recovered between 4 and 12 percent of the distance between purely local training and FedAvg, and a hundredfold change in its regularisation strength moved that by 0.006 to 0.048 across the three cells. At our most extreme skew the smallest client holds around twenty examples, and pulling it toward a good global model recovers only a small fraction of what federation would have given it. Methods that keep every client on the shared model outperformed those that do not. The benefit depends on aggregation rather than on the frozen representation alone. With aggregation removed, the task-specific baseline beat the pretrained model on every partition in every cell we tested. We also measured the adapter geometry directly and found no sign of the interference that has been proposed as an explanation: the smallest client’s update is close to orthogonal to the aggregate, not opposed to it. For a practitioner the recommendation is short. Measure per-word perplexity on a sample of your task text before choosing a backbone, and prefer the lowest. Do not reach for personalization when your smallest participant has very little data. Report the worst client and the tenth percentile, not only the mean, because the mean cannot distinguish a federation that serves everyone from one that leaves a participant behind. Our alignment result rests on one out-of-sample test rather than a replication, so we treat the rule as provisional. Checking it on larger backbones, on generation tasks and on languages other than English would settle how far it carries. The code, the run manifest, the committed predictions and the full result log are released so that this is straightforward to do.      
+
+> Author Contributions: Conceptualization, K.N.; Methodology, K.N.; Software, K.N.; Formal analysis, K.N.; Investigation, K.N.; Data curation, K.N.; Visualization, K.N.; Writing – original draft, K.N.; Validation, S.A.; Writing – review and editing, S.A., U.S.; Supervision, U.S. All authors have read and agreed to the published version of the manuscript.
+> Funding: This research received no external funding. The APC was funded by Haroon Mahmood and Muhammad Awais.
+> Conflicts of Interest: The authors declare no conflict of interest.
+> Data Availability Statement: The code, the run manifest, the committed alignment table with its per-cell predictions, the protocol deviation log, and the complete per-round result log are available at https://github.com/KiranNaseer-AI/fedalign.
+> Acknowledgments: The authors thank the University of Gujrat for computational support.
+
+# Appendix H. Full results 
+
+Table A6 gives the worst-client effect for all nine grid cells under each of the three per-client metrics defined in Section 3.3. The main text reports P3; the other two are provided so that any comparison can be recomputed under a different endpoint. Under the Version September 22, 2026 submitted to Preprint 18 of 22 
+
+Table A6. Worst-client effect against the TextCNN baseline at α = 0.1 under all three per-client metrics. Five partitions per cell, paired differences. Dataset Backbone P3 P1 P2 Effect p Effect p Effect p
+
+AG News RoBERTa +0.124 0.013 +0.106 0.022 +0.089 0.013 AG News BERTweet +0.111 0.018 +0.081 0.014 +0.072 0.001 AG News PubMedBERT +0.017 0.657 −0.031 0.654 +0.025 0.121 Sentiment140 RoBERTa +0.074 0.291 +0.049 0.561 +0.089 0.062 Sentiment140 BERTweet +0.049 0.651 +0.003 0.973 +0.093 0.106 Sentiment140 PubMedBERT +0.015 0.568 +0.037 0.373 +0.020 0.394 PubMed RoBERTa +0.140 0.004 +0.104 0.081 +0.111 0.001 PubMed BERTweet −0.019 0.357 −0.033 0.551 +0.015 0.496 PubMed PubMedBERT +0.208 0.004 +0.171 0.029 +0.165 < 0.001 
+
+non-personalised algorithms every client holds the same global model, so the minimum of P2 across clients equals the global balanced accuracy of that model. P2 therefore measures global competence rather than dispersion, and it varies across clients only under Ditto and local-only training. Across the same nine cells, the rank correlation between log per-word perplexity and the paired benefit under P10 is ρ = −0.883 ( p = 0.0016), consistent with the primary result under the minimum ( ρ = −0.867). Table A7 reports the per-cell values. 
+
+Table A7. Worst-client benefit under the tenth percentile (P10) of client-class macro-F1, same nine grid cells and dataset ordering as Table 4. Paired difference against TextCNN, α = 0.1, five seeds. Dataset Backbone Effect p
+
+AG News RoBERTa +0.112 0.0224 AG News BERTweet +0.096 0.0043 AG News PubMedBERT +0.024 0.4114 Sentiment140 RoBERTa +0.046 0.5892 Sentiment140 BERTweet +0.022 0.8614 Sentiment140 PubMedBERT -0.009 0.8351 PubMed PubMedBERT +0.189 0.0030 PubMed RoBERTa +0.121 0.0063 PubMed BERTweet -0.010 0.6673 
+
+Table A8 reports every aggregation algorithm on the three domain-matched cells, and Table A9 gives the effect across the Dirichlet concentration. Table A10 gives the local-only condition for all five cells tested in Section 4, including the two off-diagonal cells not covered by Table A8. 
+
+# Appendix I. Ablations and controls 
+
+Table A11 collects the remaining conditions. The number of partitions is given on every row, because they differ. Conditions with fewer than five partitions are directional and support no claim in the main text; we report them so that a reader can see what was run rather than only what was conclusive. Two condition types need comment. The matched-gradient-step rows and the full-size row each use their own baseline, trained under the same condition, so the comparison stays paired. Without that, matching compute for the foundation model alone would reintroduce the confound the control exists to remove. Table A12 reports the client-count check. Version September 22, 2026 submitted to Preprint 19 of 22   
+
+> Table A8. Worst-client effect (P3) by aggregation algorithm on the three domain-matched cells,
+> α
+
+= 0.1, five partitions each. Algorithm AG News Sentiment140 PubMed FedAvg +0.124 +0.049 +0.208 FedProx +0.113 +0.058 +0.206 FFA-LoRA +0.117 +0.100 +0.144 Ditto −0.520 −0.490 −0.203 Local only −0.584 −0.476 −0.221    
+
+> Table A9. Worst-client effect (P3) across the Dirichlet concentration. Cell α
+
+= 0.1 α = 0.3 α = 1.0 AG News × RoBERTa +0.124 +0.085 +0.044 Sentiment140 × BERTweet +0.049 +0.142 +0.122 PubMed × PubMedBERT +0.208 +0.139 +0.101 
+
+# Appendix J. Protocol deviations 
+
+The protocol, the metrics, the analysis code and the alignment scores with their signed per-cell predictions were committed before the first federated run. Every departure since is recorded with its date and justification in the deviation log released with the code. The substantive entries are: • The grid backbones were changed to a matched-capacity set before any run, so that pretraining domain would not be confounded with model size. DistilBERT moved to a held-out role. • The alignment score was changed from a two-way centred quantity to uncentred per-word perplexity after the pre-registered threshold was not met. The out-of-sample prediction described in Section 4.1.1 was committed before the corresponding runs executed. • The primary endpoint was changed from P1 to P3 for the reason given in Section 3.3. All three metrics were logged from the first run, so no experiment was repeated because of this change. • Two condition blocks were cancelled when measured compute exceeded the available budget. Neither supports a claim in the paper. • Analysis excludes result records whose run identifier is absent from the final manifest. These are benchmark runs and runs from a superseded configuration. They were excluded by provenance, not by inspection of their values. • The per-dataset training subsample was set to 20,000 examples for the main grid, rather than the 120,000-example Sentiment140 target in the frozen protocol. The full-scale condition was retained as a single appendix control (Table A11, “120k training examples”) rather than the main-grid design. • Communication rounds were set to 30, uniform across α, rather than the 60 rounds specified in the frozen protocol, when measured compute exceeded the available budget. • The Dirichlet sweep was reduced from α ∈ { 0.05, 0.1, 0.3, 0.5, 1.0 } on five cells to 
+
+α ∈ { 0.1, 0.3, 1.0 } on the three domain-matched cells (Table A9), for the same reason. • “Two condition blocks were cancelled” above refers specifically to the Phase-2 method candidates ( ours_a/b/c ) and the 10-seed method-vs-Ditto endpoint; neither is re-ported in this paper. • The K = 50 baseline and the LoRA rank 4/16 conditions were completed to five seeds after initial submission preparation, closing gaps flagged during internal review. The Version September 22, 2026 submitted to Preprint 20 of 22 
+
+Table A10. Worst-client effect (P3) with aggregation removed, all five cells tested. Local-only training against the identical partition, five seeds. Cell Effect Cliff’s δ
+
+AG News × RoBERTa −0.584 −1.00 Sentiment140 × BERTweet −0.476 −1.00 PubMed × PubMedBERT −0.221 −1.00 PubMed × BERTweet −0.249 −1.00 Sentiment140 × PubMedBERT −0.414 −1.00 
+
+Table A11. Ablations and controls. Conditions with fewer than five partitions are directional and are not used to support any claim in the main text. The main-grid reference for AG News × RoBERTa is given in the final row; the references for the other two matched-gradient-step cells are the FedAvg values in Table A8. Condition Cell Effect n seeds LoRA rank 4 AG News × RoBERTa +0.160 5LoRA rank 16 AG News × RoBERTa +0.164 5DistilBERT (held out) AG News × DistilBERT +0.091 5FedAvgW β = 0.1 AG News × DistilBERT +0.237 2FedAvgW β = 0.5 AG News × DistilBERT +0.174 2Matched gradient steps AG News × RoBERTa +0.338 5Matched gradient steps Sentiment140 × BERTweet +0.121 5Matched gradient steps PubMed × PubMedBERT +0.210 5120k training examples AG News × RoBERTa +0.083 5Reference (main grid) AG News × RoBERTa +0.124 5
+
+K = 50 check shows the backbone effect strengthening at higher client count ( +0.740 vs +0.124 at K = 10); rank 4/16 give effects of similar order to rank 8. Full values in Tables A11 and A12. No claim in the main text was altered. 
+
+# Appendix K. Computational details 
+
+All experiments ran on a single NVIDIA Tesla T4. A foundation-model run of 30 rounds with ten clients on 20,000 training examples takes approximately 0.9 GPU-hours; the TextCNN baseline takes about one seventh of that. The complete study is 313 runs with no failures. Every run is a row in a manifest keyed by a hash of its full configuration, which makes duplicate work impossible and lets an interrupted session resume from a per-round checkpoint. Results are appended to a single log as one record per evaluated round, never overwritten. We release the code, the manifest, the committed alignment table, the deviation log and the complete result log, together with the scripts that regenerate every table and figure in this paper directly from that log. 
+
+# References 
+
+1. Nguyen, J.; Wang, J.; Malik, K.; Sanjabi, M.; Rabbat, M. Where to Begin? On the Impact of Pre-Training and Initialization in Federated Learning. In Proceedings of the International Conference on Learning Representations (ICLR), 2023. arXiv:2206.15387. 2. Li, T.; Hu, S.; Beirami, A.; Smith, V. Ditto: Fair and Robust Federated Learning Through Personalization. In Proceedings of the Proceedings of the 38th International Conference on Machine Learning (ICML), 2021, Vol. 139, PMLR , pp. 6357–6368. 3. McMahan, B.; Moore, E.; Ramage, D.; Hampson, S.; Agüera y Arcas, B. Communication-Efficient Learning of Deep Networks from Decentralized Data. In Proceedings of the Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS), 2017, pp. 1273–1282. Version September 22, 2026 submitted to Preprint 21 of 22 
+
+Table A12. Client-count check, paired against the matched-baseline design used throughout this paper. 
+
+Condition Worst-client P3 effect p n seeds 
+
+K = 10 (main grid) +0.124 0.013 5
+
+K = 50 +0.740 0.0001 5
+
+4. Li, T.; Sahu, A.K.; Zaheer, M.; Sanjabi, M.; Talwalkar, A.; Smith, V. Federated Optimization in Heterogeneous Networks. In Proceedings of the Proceedings of Machine Learning and Systems (MLSys), 2020, Vol. 2, pp. 429–450. 5. Karimireddy, S.P.; Kale, S.; Mohri, M.; Reddi, S.J.; Stich, S.U.; Suresh, A.T. SCAFFOLD: Stochastic Controlled Averaging for Federated Learning. In Proceedings of the Proceedings of the 37th International Conference on Machine Learning (ICML), 2020, pp. 5132–5143. 6. Hsu, T.M.H.; Qi, H.; Brown, M. Measuring the Effects of Non-Identical Data Distribution for Federated Visual Classification. arXiv preprint arXiv:1909.06335 2019 .7. Jimenez Gutierrez, D.M.; Solans, D.; Heikkilä, M.A.; Vitaletti, A.; Kourtellis, N.; Anagnostopou-los, A.; Chatzigiannakis, I. Non-IID Data in Federated Learning: A Survey with Taxonomy, Metrics, Methods, Frameworks and Future Directions. arXiv preprint arXiv:2411.12377 2024 .8. Hu, E.J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; Chen, W. LoRA: Low-Rank Adaptation of Large Language Models. In Proceedings of the International Conference on Learning Representations (ICLR), 2022. 9. Sun, Y.; Li, Z.; Li, Y.; Ding, B. Improving LoRA in Privacy-preserving Federated Learning. In Proceedings of the International Conference on Learning Representations (ICLR), 2024. arXiv:2403.12313. 10. Guo, P.; Zeng, S.; Wang, Y.; Fan, H.; Wang, F.; Qu, L. Selective Aggregation for Low-Rank Adaptation in Federated Learning. In Proceedings of the International Conference on Learning Representations (ICLR), 2025. arXiv:2410.01463. 11. Wang, Z.; Shen, Z.; He, Y.; Sun, G.; Wang, H.; Lyu, L.; Li, A. FLoRA: Federated Fine-Tuning Large Language Models with Heterogeneous Low-Rank Adaptations. In Proceedings of the Advances in Neural Information Processing Systems (NeurIPS), 2024, Vol. 37, pp. 22513–22533. 12. Cho, Y.J.; Liu, L.; Xu, Z.; Fahrezi, A.; Joshi, G. Heterogeneous LoRA for Federated Fine-tuning of On-Device Foundation Models. In Proceedings of the Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP), 2024, pp. 12903–12913. 13. Bai, J.; Chen, D.; Qian, B.; Yao, L.; Li, Y. Federated Fine-tuning of Large Language Models under Heterogeneous Tasks and Client Resources. In Proceedings of the Advances in Neural Information Processing Systems (NeurIPS), 2024. 14. Zhang, J.; Vahidian, S.; Kuo, M.; Li, C.; Zhang, R.; Yu, T.; Wang, G.; Chen, Y. Towards Building the Federated GPT: Federated Instruction Tuning. In Proceedings of the IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), 2024, pp. 6915–6919. 15. Yang, Y.; Long, G.; Lu, Q.; Zhu, L.; Jiang, J.; Zhang, C. Federated Low-Rank Adaptation for Foundation Models: A Survey. arXiv preprint arXiv:2505.13502 2025 .16. Mohri, M.; Sivek, G.; Suresh, A.T. Agnostic Federated Learning. In Proceedings of the Proceedings of the 36th International Conference on Machine Learning (ICML), 2019, Vol. 97, 
+
+PMLR , pp. 4615–4625. 17. Li, T.; Sanjabi, M.; Beirami, A.; Smith, V. Fair Resource Allocation in Federated Learning. In Proceedings of the International Conference on Learning Representations (ICLR), 2020. 18. Fallah, A.; Mokhtari, A.; Ozdaglar, A. Personalized Federated Learning with Theoretical Guarantees: A Model-Agnostic Meta-Learning Approach. In Proceedings of the Advances in Neural Information Processing Systems (NeurIPS), 2020, Vol. 33, pp. 3557–3568. 19. T. Dinh, C.; Tran, N.H.; Nguyen, T.D. Personalized Federated Learning with Moreau Envelopes. In Proceedings of the Advances in Neural Information Processing Systems (NeurIPS), 2020, Vol. 33, pp. 21394–21405. 20. Yi, L.; Yu, H.; Wang, G.; Liu, X.; Li, X. pFedLoRA: Model-Heterogeneous Personalized Federated Learning with LoRA Tuning. arXiv preprint arXiv:2310.13283 2023 .Version September 22, 2026 submitted to Preprint 22 of 22 
+
+21. Salazar, T.; Araújo, H.; Cano, A.; Abreu, P.H. A Survey on Group Fairness in Federated Learning: Challenges, Taxonomy of Solutions and Directions for Future Research. arXiv preprint arXiv:2410.03855 2024 .22. Heilmann, X.; Corbucci, L.; Cerrato, M. A Benchmark for Client-level Fairness in Federated Learning. In Proceedings of the Proceedings of the Fourth European Workshop on Algorithmic Fairness, 2025, Vol. 294, PMLR , pp. 434–438. 23. Naseer, K.; Shoaib, U. When More Parameters Hurt: Foundation Model Priors Amplify Worst-Client Disparity Under Extreme Federated Heterogeneity. arXiv preprint arXiv:2605.08992 
+
+2026 .24. Liu, Y.; Ott, M.; Goyal, N.; Du, J.; Joshi, M.; Chen, D.; Levy, O.; Lewis, M.; Zettlemoyer, L.; Stoyanov, V. RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv preprint arXiv:1907.11692 2019 .25. Nguyen, D.Q.; Vu, T.; Nguyen, A.T. BERTweet: A pre-trained language model for English Tweets. In Proceedings of the Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations, 2020, pp. 9–14. 26. Gu, Y.; Tinn, R.; Cheng, H.; Lucas, M.; Usuyama, N.; Liu, X.; Naumann, T.; Gao, J.; Poon, H. Domain-Specific Language Model Pretraining for Biomedical Natural Language Processing. 
+
+ACM Transactions on Computing for Healthcare 2021 , 3, 1–23. 27. Kim, Y. Convolutional Neural Networks for Sentence Classification. In Proceedings of the Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), 2014, pp. 1746–1751. 28. Zhang, X.; Zhao, J.; LeCun, Y. Character-level Convolutional Networks for Text Classification. In Proceedings of the Advances in Neural Information Processing Systems (NeurIPS), 2015, Vol. 28, pp. 649–657. 29. Go, A.; Bhayani, R.; Huang, L. Twitter Sentiment Classification using Distant Supervision. Technical report, Stanford University, 2009. CS224N Project Report. 30. Dernoncourt, F.; Lee, J.Y. PubMed 200k RCT: a Dataset for Sequential Sentence Classification in Medical Abstracts. In Proceedings of the Proceedings of the Eighth International Joint Conference on Natural Language Processing (IJCNLP), 2017, pp. 308–313. 31. Salazar, J.; Liang, D.; Nguyen, T.Q.; Kirchhoff, K. Masked Language Model Scoring. In Proceedings of the Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics (ACL), 2020, pp. 2699–2712. 32. Rust, P.; Pfeiffer, J.; Vuli´ c, I.; Ruder, S.; Gurevych, I. How Good is Your Tokenizer? On the Monolingual Performance of Multilingual Language Models. In Proceedings of the Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics (ACL), 2021, pp. 3118–3135.
