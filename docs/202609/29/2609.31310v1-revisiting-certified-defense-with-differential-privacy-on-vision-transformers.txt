@@ -1,0 +1,793 @@
+Title: Revisiting Certified Defense with Differential Privacy on Vision Transformers
+
+URL Source: https://arxiv.org/pdf/2609.31310v1
+
+Published Time: Mon, 28 Sep 2026 01:10:51 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Revisiting Certified Defense with Differential Privacy on Vision Transformers 
+
+## Jun Yan SHOU 
+
+> yanjun@ieee.org
+
+## Weiquan Huang Tongji University 
+
+> weiquanh@tongji.edu.cn
+
+## Qixian Zhang Tongji University 
+
+> zhangqx@tongji.edu.cn
+
+## Yan Bai Independent Researcher 
+
+> baiyan1996@icloud.com
+
+## Shutai Zhanng SHOU 
+
+> stzhang@shou.edu.cn
+
+## Abstract 
+
+Certified defenses that incorporate differential privacy have proven effective on Convolutional Neural Networks (CNNs), furnishing rigorous robustness guarantees against norm-bounded adversaries. However, the certified robustness behavior of Pixel Differential Privacy (PixelDP) remains largely unexplored with the self-attention architecture now dominating the deep-learning landscape. Given that the Transformer has a profound impact on our daily applica-tions from the digital world to the physical world, it is crucial to study certified robustness through differential-privacy-style stability. To fill this research gap, we revisit this construction in Vision Transformers and identify a fail-ure mode that is largely hidden in the convolutional set-ting. When noise is injected after the patch embedding, the Laplace mechanism with the inherited grouped ℓ1 sensitiv-ity bound collapses to chance-level accuracy across noise scales, whereas the Gaussian mechanism remains trainable. This contrast isolates the source of failure: not the injected noise itself, but the geometry of the sensitivity constraint. We show that the attenuation induced by the inherited ∆1,1
+
+projection increases with layer width and kernel size ac-cording to a random-matrix scale C/ (√M + √N ). Re-placing the ℓ1-type constraint with a spectral-norm con-straint eliminates the collapse across datasets and archi-tectures, but creates a fundamental obstacle: the repaired models no longer satisfy the sensitivity condition required by the standard Laplace certificate. We resolve this mis-match by deriving a dimension-free (ε, δ )-privacy guaran-tee for the Laplace mechanism under ℓ2 sensitivity through concentration of the privacy loss. The resulting certificate applies directly to the repaired models without retraining and avoids the √d privacy degradation incurred by the naive conversion from ℓ2 to ℓ1 sensitivity. Experiments on CIFAR-10, CIFAR-100, and SVHN reproduce the failure-and-repair pattern, while ImageNet confirms that the in-herited grouped-bound failure persists at scale. Finally, matched-budget experiments show that adversarial training improves certified accuracy at the evaluated positive radii. 
+
+## 1. Introduction 
+
+While deep neural networks (DNNs) empower social life, they also raise various security and privacy concerns [5]. During inference, a network may be threatened by adver-sarial examples. An attacker can cause the model to make incorrect predictions by adding imperceptible perturba-tions [20, 31]. It poses serious risks to safety-critical appli-cations such as autonomous driving [19] and robotics [42]. In addition to empirical defenses [31, 44, 45], the certi-fied defense approaches [11, 29, 46] offer provable robust-ness guarantees under explicit assumptions. PixelDP [28] is a general framework that leverages differential-privacy-style stability [1, 17] to certify robustness against norm-bounded input perturbations. It constrains the sensitivity of a pre-noise mapping and injects calibrated noise to stabilize the randomized prediction. However, previous research on the certified robustness of differential privacy mainly focuses on Convolutional Neural Networks (CNNs) [22, 38]. Transformers use self-attention to model global interactions between tokens [16, 40]. The recent scaling law [23] suggests that increasing model and data scale can improve predictive performance [23]. Trans-formers can be trained on huge amounts of data and are hardware friendly for large-scale parallel processing, mak-ing them widely used as the backbone for building gen-eral artificial intelligence base models [6]. The large lan-guage model serving the public in the cloud [21] and the general-purpose robot operating at the edge [26] are built on this transformer architecture that can predict the next token. Nevertheless, it is still insufficient to explore the robustness of defense with differential privacy in this new architecture. To bridge this gap, we rethink the certified defense with arXiv:2609.31310v1 [cs.CR] 25 Sep 2026 differential privacy on the vision transformer architectures. Our study aims to resolve such a research problem: 
+
+How can PixelDP be ported to self-attention architec-tures while preserving a valid and useful robustness certifi-cate? 
+
+This paper revisits the pipeline in the new setting, as il-lustrated in Fig. 1. Addressing this problem requires resolv-ing two technical challenges. First, standard dot-product self-attention is not globally Lipschitz on an unbounded do-main. We therefore inject noise immediately after the patch embedding, a linear layer whose sensitivity can be explicitly controlled, exactly as PixelDP treats a first convolution. Our experiments confirm the distinction sharply. Noise placed after an attention block is absorbed by training and leaves accuracy at the baseline for every noise level, which certi-fies nothing, whereas noise after the patch embedding be-haves as the theory prescribes. Second, PixelDP’s Gaussian arm degrades gracefully under the faithful port, while the Laplace arm may collapse to chance accuracy even at the smallest noise level. The failure is not a matter of noise magnitude, since the Gaussian mechanism injects a larger standard deviation at the same attack bound and trains with-out difficulty. Nor is it intrinsic to the Laplace distribution; the original PixelDP pipeline trains Laplace models on the same grid without incident, on convolutions. The culprit is the grouped convolution bound inherited by the Laplace route. For a non-overlapping patch embedding, this bound aggregates all spatial kernel locations of an input channel and is substantially more conservative than the exact stride-aware ℓ1 → ℓ1 operator norm. We prove a random-matrix law showing that, relative to the spectral projection used by the Gaussian route, the resulting attenuation scales as 
+
+C/ (√M + √N ) under the Gaussian initialization model. At the measured ViT patch embedding, this large norm ra-tio predicts a severe drop in the local signal-to-noise ra-tio, which makes optimization substantially harder and ac-counts for the failure we observe across all training recipes. This diagnosis suggests its own experiment. We decou-ple the constraint from the mechanism and train Laplace models under the spectral constraint of the Gaussian route, changing nothing else. The spectral repair also restores trainability across CIFAR-10, CIFAR-100, and SVHN. The grouped-bound failure also persists at ImageNet scale on the autoencoder configuration of the original pipeline. The causal chain is complete, but the repair is not yet a defense. The Laplace mechanism’s (ε, 0) guarantee is proved from an ℓ1 sensitivity bound, the spectral constraint provides an 
+
+ℓ2 bound, and the naive conversion between the two costs a factor of √d in the privacy budget, about 111 at our noise layer, which would demand a hundredfold larger noise. To close this certification gap in PixelDP, we specialize the existing ℓ2-sensitivity Laplace guarantee to our setting and give a direct privacy-loss derivation for completeness. The analysis framework needs only a closed form for the shifted first absolute moment of a Laplace variable and Ho-effding’s inequality applied to the privacy loss, whose coor-dinates are independent and bounded. The guarantee plugs directly into the PixelDP certification procedure, holds at every attack radius without group privacy, and applies to our trained checkpoints as a re-certification, with no retrain-ing. It also quantifies an honest cost. At matched (ε, δ ) the calibrated Laplace noise carries about 1.47 × the standard deviation of the Gaussian mechanism, so Gaussian remains the efficient choice for pure ℓ2 defense, and the value of the theorem is that it closes a gap the original framework left open and turns a diagnostic into a certified configuration. Finally we ask whether the certified accuracy of the faithful port can be improved rather than merely explained. Following the margin perspective of adversarially trained smoothing [37], we combine the noise layer with ℓ2 ad-versarial training under a matched-budget protocol that iso-lates the effect of the attack from the training recipe. On all three datasets, adversarial training improves certified ac-curacy over the nonzero operating region of the matched controls. On SVHN the joint training collapses to the class prior and a two-phase schedule, noisy pretraining followed by adversarial fine-tuning, restores it, which we report as a practical recipe. Our contributions are the following. • A faithful port of PixelDP to Vision Transformers with a placement analysis showing that the patch embedding provides a simple and directly enforceable pixel-space sensitivity bound. • We identify severe over-attenuation under the inherited grouped ℓ1 bound. A random-matrix law predicts its scale, while exact stride-aware and spectral controls iso-late the effect of the sensitivity constraint. • We connect the repaired spectral configuration to an existing approximate-DP guarantee for coordinatewise Laplace noise under ℓ2 sensitivity [3], derive the corre-sponding closed-form PixelDP calibration, and show that existing repaired checkpoints can be certified without re-training. • An ImageNet study across Inception and ViT-Base back-bones confirming the post-processing property empiri-cally, and a matched-budget adversarial training ablation showing certified gains at every radius on CIFAR-10, CIFAR-100, and SVHN. 
+
+## 2. Related Work 
+
+Certified defenses from noise. PixelDP [28] connects differential privacy [17, 18] to adversarial robustness. It injects calibrated noise after a sensitivity-constrained layer and certifies predictions through the stability of expected scores. Randomized smoothing [11] certifies randomized classifiers, with the standard Gaussian construction inject-(a) PixelDP on ViT    
+
+> Noise ViT Input Patch embed.
+> Δ ≤ 1
+> Post-process
+> Noise before attention (b) Diagnose & repair
+> Same Laplace noise
+> Inherited ℓ₁ bound Collapse Spectral ℓ₂ bound Recovered
+> Constraint-only repair
+> (c) Re-certification ℓ₂-sensitive Laplace
+> Dimension-free (ε, δ)-DP Monte Carlo scores DP bound Top Rest Certified
+> No retraining
+> Spectral repair restores trainability; dimension-free analysis enables certification. Figure 1. The framework of scaling PixelDP on ViT.
+
+ing noise directly at the input and admitting a tighter ℓ2 cer-tificate. Our goal is therefore diagnostic rather than to out-perform specialized input-space smoothing on pure ℓ2 cer-tification. SmoothAdv [37] shows that adversarially train-ing the smoothed classifier enlarges its margins and im-proves certified accuracy, and later work extends smooth-ing to further settings [2, 35, 39]. Gaussian differential privacy [15] offers an alternative accounting language that we use for a secondary calibration. Our study differs from this line in its object. We do not propose a new smooth-ing distribution. Instead, we study how PixelDP’s inherited mechanism–constraint pairings interact with ViT patch em-beddings and how the resulting spectral repair can be certi-fied under ℓ2 sensitivity. 
+
+Robustness of Vision Transformers. The Lipschitz be-havior of attention has been studied directly. Self-attention is not Lipschitz on unbounded domains [25], variants restore control through architectural change [34], and sharp bounded-domain estimates exist for normalized token sets [8, 24]. These results concern token-space smoothness of the attention map. They do not directly yield the sim-ple, enforceable pixel-space sensitivity bound required by PixelDP: an ℓp pixel perturbation generally affects multiple tokens, while existing attention-side bounds depend on do-main or architectural assumptions and do not directly con-trol the full normalization–attention prefix from pixels to to-kens. We therefore place the noise before the first attention block, immediately after the patch embedding, whose sen-sitivity can be explicitly constrained. On the empirical side, adversarial training recipes for ViTs have matured [13, 32], and we adopt the warmup and weak augmentation guidance of the light recipe [13] for our ablation, with robust overfit-ting handled by early stopping [36] and adaptive evaluation following standard guidance [4, 7, 12]. 
+
+Privacy and robustness together. Differentially private training protects the training set [1] and can be combined with smoothing for joint guarantees [30, 43]. PixelDP and our work use privacy as an analysis tool for inference-time robustness rather than for training data. The two goals are orthogonal and compatible. 
+
+## 3. Porting PixelDP to Vision Transformers 
+
+3.1. Where the Noise Can Go 
+
+The construction of Sec. A needs a pre-noise map g whose sensitivity can be bounded and enforced during training. Standard dot-product self-attention is not globally Lips-chitz on an unbounded token domain [25]. Although fi-nite bounds can in principle be derived on bounded do-mains, available attention-side bounds are architecture- and domain-dependent and do not directly provide the simple, enforceable pixel-space sensitivity bound required by our PixelDP protocol. We therefore place the noise immedi-ately after the patch embedding, whose sensitivity can be controlled explicitly. What remains is the patch embedding, a single strided convolution that is linear in the input. We therefore inject the noise immediately after the patch embedding and en-force its sensitivity to one after every optimizer step, ex-actly as PixelDP treats a first convolution. This choice has a convenient consequence. Because the noise sits directly after the linear embedding whose ∆2,2 equals one, token-space guarantees transfer to pixel space with constant ex-actly one, and no pullback factor appears. The patch em-bedding is therefore a simple and directly auditable place-ment for our PixelDP port. When we instead add noise af-ter the first attention block, training absorbs the perturbation completely, accuracy stays at the noise-free baseline for ev-ery noise level on SVHN, and nothing is certified because no sensitivity bound exists. We report this absorption ex-periment in the supplement as evidence that the placement analysis is not a formality. 
+
+3.2. Sensitivity-Induced Signal Collapse 
+
+Under the faithful port a sharp asymmetry appears. The Gaussian arm degrades gracefully along the standard grid 
+
+L ∈ { 0.03 , 0.1, 0.3, 1}, while the Laplace arm collapses to chance at L = 0 .03 on every dataset (Fig. 4). Noise mag-nitude does not explain this. At the same numerical radius 
+
+L, the Gaussian ℓ2 route injects standard deviation 2.54 L,while the Laplace ℓ1 route injects 1.41 L. This compari-son is a noise-amplitude diagnostic, not a like-for-like com-parison of the two threat sets. The mechanism itself does not explain it either, since the original paper trains Laplace models on the same grid on convolutions. The difference is the constraint that each mechanism inherits: a conservative grouped ℓ1 bound for Laplace and spectral ℓ2 control for Gaussian. Let sgrp (W ) = max j
+
+P 
+
+> m,a,b
+
+|Wm,j,a,b | denote the in-herited grouped bound of Eq. (10). Renormalizing sgrp (W )
+
+to one aggregates C = M k 2 coefficients per input-channel group. Renormalizing the spectral norm divides it by σmax ,which grows only like √M +√N . This gap predicts severe attenuation under the inherited grouped bound. 
+
+Proposition 3.1 (Norm-ratio law) .
+
+ρ ≥ Cp2/π − p2C ln(1 /δ 1)
+
+√M + √N + p2 ln(1 /δ 2) . (1) 
+
+Thus the lower bound has leading-order scale 
+
+ρ = Ω 
+
+ C
+
+√M + √N
+
+
+
+. (2) 
+
+Motivated by the leading Gaussian scales of the numerator and denominator, we use 
+
+ρpred = Cp2/π 
+
+√M + √N (3) 
+
+as an initialization-scale diagnostic. 
+
+The proof, in the supplement, uses Gaussian concentra-tion of the column mass and the Davidson–Szarek bound on the spectral norm [41]. The leading constant is accurate at initialization and provides a useful architecture-level scale. Evaluating Cp2/π/ (√M +√N ) at the three first layers in our study predicts 12 .5, 34 .8, and 118 , and direct measure-ment on the same weights gives 13 , 38 , and 123 (Fig. 2). 
+
+Corollary 3.1 (Linear-component attenuation) . Consider the same weight matrix W under the two scalar projections 
+
+Wgrp = W/s grp (W ), Wspec = W/σ max (W ).
+
+For every input x,
+
+Wgrp x = ρ−1grp Wspec x, ρgrp = sgrp (W )
+
+σmax (W ) .
+
+Hence, against the same additive noise scale, any homo-geneous signal-to-noise measure applied to the weight-dependent linear component is reduced by a factor ρgrp un-der the first projection. This statement does not include ad-ditive biases or subsequent positional embeddings. 
+
+At the ViT patch embedding, ρ ≈ 123 pushes the pro-jected signal to about 4% of the injected noise at L = 0 .03 ,while the spectral projection leaves it at 2.4 times the noise. This severe attenuation makes optimization substantially harder and is consistent with the failure observed across the training recipes we tested. The diagnosis implies a causal test. Decouple the con-straint from the mechanism and train the Laplace mecha-nism under the spectral constraint, changing nothing else. This diagnosis predicts that replacing the inherited ∆1,1
+
+constraint with the spectral constraint should substantially improve trainability. The observed recovery across datasets supports this constraint-based explanation (Sec. 4.2). The repaired configuration, however, is not yet certified, because the Laplace guarantee of Sec. A is proved from an ℓ1 bound that the spectral projection does not provide. The naive conversion ∥v∥1 ≤ √d ∥v∥2 costs a factor √d in the pri-vacy budget, and at our noise layer d = 192 × 8 × 8 gives √d ≈ 110 .9, which would demand a hundredfold larger noise. This is also, we believe, the quantitative reason the original framework never offered a 2-norm Laplace config-uration. 
+
+3.3. A Dimension-Free Certificate for Laplace un-der ℓ2 Sensitivity 
+
+Our main theoretical result removes the √d obstacle. Throughout, M (x) = g(x) + Z with Zi ∼ Lap( b) i.i.d., and 
+
+v = g(x′) − g(x)
+
+denotes the output shift. 
+
+Lemma 3.1 (Shifted absolute moment) . If z ∼ Lap(0 , b )
+
+then E |z − v| = |v| + b e −| v|/b for every v ∈ R, and con-sequently 
+
+E |z−v|−| z|  = b φ 
+
+ |v|
+
+b
+
+
+
+≤ v2
+
+2b , φ(t) = t+e−t−1.
+
+(4) 
+
+Lemma 3.2 (Tail bound implies DP) . Fix x, x ′ and let 
+
+PL( y) = ln  pM (x)(y)/p M (x′)(y) be the privacy loss. If 
+
+Pr y∼M (x)[PL( y) > ε ] ≤ δ, then Eq. (7) holds for this pair. 
+
+Approximate-DP guarantees for coordinatewise Laplace noise under an ℓ2 sensitivity bound have been established previously [3]. We specialize this result to the PixelDP set-ting and give a direct privacy-loss derivation for complete-ness. The role of the result here is not a new Laplace pri-vacy theorem, but to close the certification gap created by replacing the original ∆1,1 constraint with the spectral ∆2,2
+
+constraint. 
+
+Theorem 3.1 (Laplace mechanism under ℓ2 sensitivity) .
+
+Let M (x) = g(x) + Z with Z ∈ Rd, Zi ∼ Lap( b) i.i.d. For any pair x, x ′ with ∥g(x)−g(x′)∥2 ≤ S and any δ ∈ (0 , 1) ,the pair satisfies Eq. (7) with 
+
+ε = S2
+
+2b2 + Sb
+
+p2 ln(1 /δ ), (5) 
+
+independent of the dimension d.Proof sketch. The privacy loss decomposes coordinatewise, 
+
+PL = 1
+
+> b
+
+P
+
+> i
+
+ |zi−vi|−| zi| with z ∼ Lap( b)d. Each term is independent and bounded in [−| vi|/b, |vi|/b ] by the triangle inequality, and Lemma 3.1 bounds the mean by E[PL] ≤∥v∥22/(2 b2) ≤ S2/(2 b2). Hoeffding’s inequality over the 
+
+d independent terms, whose squared ranges sum to at most 
+
+4S2/b 2, gives Pr[PL ≥ E[PL] + τ ] ≤ exp  −τ 2b2/(2 S2).Choosing τ = ( S/b )p2 ln(1 /δ ) and applying Lemma 3.2 completes the proof. Full details are in the supplement. The dimension cancels because the fluctuation of the pri-vacy loss is controlled by ∥v∥2, the same quantity the spec-tral projection constrains, rather than by ∥v∥1. The guaran-tee holds directly at every shift size, so certification needs no group privacy. 
+
+Corollary 3.2 (Calibration and certification) . Enforce 
+
+∆2,2 ≤ 1 at the noise layer. To meet a target (ε0, δ ) at construction bound L, set 
+
+b = Lu , u = p2 ln(1 /δ ) + 2 ε0 − p2 ln(1 /δ ). (6) 
+
+At any candidate radius L′ the deployed mechanism satisfies (ε(L′), δ )-DP with ε(L′) = L′2/(2 b2) +(L′/b )p2 ln(1 /δ ), which plugs directly into Proposi-tion A.1. 
+
+Cost and consequences. At (ε0, δ ) = (1 , 0.05) , Eq. (6) gives b = 2.64 L and noise standard deviation √2 b =3.73 L, against 2.54 L for the Gaussian mechanism, a fac-tor of 1.47 . The Gaussian mechanism therefore remains the efficient choice when only ℓ2 robustness is wanted. The value of Theorem 3.1 is threefold. It closes the certifi-cation gap that the repair opened, turning every spectrally constrained Laplace checkpoint into a certified model by re-running only the certification pass. It replaces the naive factor √d ≈ 110 .9 with no dimension dependence at all, a 
+
+42 × noise reduction at our layer at ε0 = 1 . And it explains the shape of the original design space, in which the 2-norm Laplace row was absent for exactly this reason. 
+
+3.4. A Gaussian-DP Calibration Variant 
+
+Our tables also report a secondary accounting based on Gaussian differential privacy [15]. A Gaussian mechanism with ℓ2 sensitivity S and scale σ is exactly μ-GDP with 
+
+μ = S/σ . The variant fixes a target μ0 at construction, sets σ = L/μ 0, and certifies at radius L′ by converting 
+
+μ(L′) = L′/σ to (ε, δ ) through the duality of [15] at the same δ, then applying Proposition A.1. Laplace rows under this accounting match the ε implied by (μ0, δ ) at construc-tion. We emphasize that this fixes the privacy level at the construction bound and is an alternative calibration rather than the group-privacy scaling of the original framework. Exact formulas are in the supplement. 
+
+3.5. Certification Meets Adversarial Training 
+
+Proposition A.1 depends only on the deployed mechanism, not on how the network was trained, so any training pro-cedure that enlarges the score margins under noise raises certified accuracy with the certificate untouched. Following the margin view of adversarially trained smoothing [37], we train the noisy network with ℓ2 projected gradient descent whose inner attack uses expectation-over-transformation gradients [4], and we adopt the warmup and weak aug-mentation guidance of [13]. Two protocol choices matter for a fair reading. First, gains must be measured against a matched control that shares every training hyperparame-ter except the attack, since recipe differences alone move certified accuracy by several points. Second, on class-imbalanced data the joint objective can collapse to the class prior, because the attack suppresses the slow escape of noisy training from the prior basin. A two-phase schedule, noisy pretraining followed by adversarial fine-tuning from the shared checkpoint, removes the failure and yields the clean-est single-variable comparison. Section D.5 reports both phenomena. 
+
+## 4. Experiments 
+
+4.1. Setup 
+
+Datasets and models. We evaluate on CIFAR-10, CIFAR-100 [27], SVHN [33], and ImageNet [14]. The ViT ex-periments use ViT-Tiny with patch size 4 at resolution 32 ,trained from scratch, with noise after the patch embed-ding. CIFAR models train for 400 epochs with RandAug-ment and mixup, SVHN for 300 epochs with RandAugment only. The convolutional reference is ResNet-50 with a CI-FAR stem ( 3×3 first convolution), noise after the first con-volution. ImageNet follows the autoencoder configuration of [28], a three-layer tied-weight autoencoder with noise after its first convolution ( 10 ×10 ×32 , so C=3200 coeffi-cients per column), trained first, then frozen while a pre-trained backbone is fine-tuned on top for 20 k steps. We run this with both Inception-v3 [38] and ViT-Base backbones. All pipelines consume raw [0 , 1] pixels without input nor-malization, as the calibration requires. 
+
+Mechanisms and accounting. Unless stated otherwise, noise is calibrated at (ε0, δ )=(1 , 0.05) over the grid L ∈{0.03 , 0.1, 0.3, 1} under ℓ2 attack ( ℓ1 for the ∆1,1 Laplace rows). The f -DP variant of Sec. 3.4 uses μ0=0 .4. Sensi-tivity is renormalized to one after every optimizer step and verified at load time before any certification. 
+
+Measurement protocol. Sweep tables report test accu-racy under a single noise draw. Certified tables use n=300 
+
+draws, argmax scores, Clopper–Pearson bounds with a union bound at η=0 .95 , and report the expected prediction. Sweep tables report test accuracy under a single noise draw. Certified tables use n = 300 draws, argmax scores, and Clopper–Pearson bounds with a union bound at η = 0 .95 .These quantities need not coincide, and we do not mix the two protocols within a table. 
+
+4.2. Main Result 
+
+Table 1 shows the phenomenon and the causal test together. Under the faithful port the ∆1,1 Laplace configuration is destroyed at the smallest noise level, falling to 28 .9% on CIFAR-10, 7.5% on CIFAR-100, and exactly the majority-class prior on SVHN at every level. The same Laplace mechanism, the same noise scale, and the same training recipe under the ∆2,2 constraint recover to within a few points of the Gaussian arm, and on CIFAR-10 and CIFAR-100 exceed it at small L, consistent with the smaller stan-dard deviation the Laplace mechanism injects. The con-volutional reference completes the picture. On ResNet-50, whose first convolution has only C=576 coefficients per column, the ∆1,1 Laplace arm trains normally on all three datasets (Table 1), exactly as the norm-ratio law predicts for small C. An absorption control with noise after the first at-tention block instead of the patch embedding leaves SVHN accuracy at the baseline for every L (supplement), confirm-ing that placement, not architecture, determines whether the mechanism binds. Figure 2 compares the predicted and measured norm ra-tios for three first-layer configurations. Using the displayed values, the relative errors with respect to the measurements are approximately 3.9%, 8.3%, and 4.1%. The ImageNet results in Table 2 provide a separate accuracy-based evalu-ation of a front end with C = 3200 .
+
+4.3. ImageNet at Scale 
+
+Table 2 reports the faithful ImageNet configuration. The In-ception baseline of 77 .8% matches the 77 .5% of the origi-nal paper, validating the pipeline. Two observations follow. First, the accuracy drops of the two backbones are nearly identical at every noise level, for instance −4.1 against 
+
+−4.2 points for Gaussian at L=0 .1 and −27 .0 against 
+
+−29 .3 at L=1 . The certificate lives in the noisy front end 100.00 1000.00 coefficients per input column C
+
+10.00 100.00 attenuation  ρ
+
+3x3 conv (16f) meas. 13.00, pred. 12.49 3x3 conv (64f) meas. 38.00, pred. 34.83 patch-embed p4 (192f) meas. 123.00, pred. 117.93 predicted measured           
+
+> Figure 2. The norm-ratio law. Predicted attenuation
+> Cp2/π/ (√M+√N)against direct measurement at the three first layers of our study.
+
+and the backbone is post-processing, so a stronger frozen backbone shifts the whole curve up without changing its shape, and ViT-Base dominates Inception at every operat-ing point. Second, the ∆1,1 Laplace collapse reappears at scale on the configuration the original paper itself pre-scribes, whose first convolution holds 3200 coefficients per column, extending the fan-in series of Fig. 2 to a fourth ar-chitecture and a fourth dataset. 
+
+4.4. Certified Accuracy of the Repaired Laplace Mechanism 
+
+Corollary 3.2 turns every ∆2,2 Laplace checkpoint of Ta-ble 1 into a certified model by re-running only the certifica-tion pass with the new ε(L′) map. Table 3 reports the pro-tocol. The certified columns are produced by the released code and commands in the supplement. The certified radii of the Laplace route are necessarily smaller than the Gaus-sian ones at matched (ε0, δ ), both because the calibrated noise is 1.47 × larger and because ε(L′) grows superlin-early, and we report them as the honest price of certifying the heavier-tailed mechanism rather than as a new state of the art. 
+
+## 5. Conclusion 
+
+We ported PixelDP to Vision Transformers and found that the port is a stress test the original framework had never re-ceived. The placement analysis pins the noise to the patch embedding, the inherited grouped ℓ1 Laplace configuration collapses there, stride-aware control recovers much of the lost accuracy, and a closed-form norm-ratio law explains the grouped-bound attenuation across architectures. The repair created a certification gap, and the certified (ε, δ ) guaran-tee for the Laplace mechanism under ℓ2 sensitivity closes it Table 1. Accuracy (%) of ResNet-50 and ViT under standard DP and f -DP accounting. Gaussian noise uses the ∆2,2 constraint, while Laplace noise uses either the inherited grouped ¯∆1,1 bound or the spectral ∆2,2 constraint. The ViT results correspond to the 400-epoch runs. Values in parentheses denote the corresponding non-private baseline accuracies. SVHN chance level is the majority-class prior of 
+
+19 .60% .Dataset Backbone Mechanism L=0 .03 L=0 .10 L=0 .30 L=1 .00 
+
+DP f -DP DP f -DP DP f -DP DP f -DP CIFAR-10 ResNet-50 (94.48) Gaussian, ∆2,2 91.62 91.65 82.99 83.48 68.10 68.13 45.98 46.29 Laplace, ¯∆1,1 85.26 78.37 79.19 66.06 65.26 51.86 49.38 28.91 ViT (92.92) Gaussian, ∆2,2 84.81 84.00 70.17 70.79 42.98 42.94 21.58 22.33 Laplace, ¯∆1,1 28.87 19.21 18.48 12.26 11.67 10.50 10.38 10.35 Laplace, ∆2,2 85.50 81.68 80.28 56.69 54.66 33.41 31.31 18.44 CIFAR-100 ResNet-50 (73.28) Gaussian, ∆2,2 68.66 68.96 57.47 57.01 39.47 40.39 22.25 22.43 Laplace, ¯∆1,1 53.64 43.60 44.54 36.59 36.04 22.99 21.74 9.36 ViT (72.79) Gaussian, ∆2,2 56.18 55.99 39.67 40.47 19.85 19.97 5.30 5.48 Laplace, ¯∆1,1 7.51 3.58 3.39 1.10 1.22 1.05 1.08 1.04 Laplace, ∆2,2 59.92 53.89 52.17 29.71 29.71 12.70 10.96 3.60 SVHN ResNet-50 (97.12) Gaussian, ∆2,2 96.72 96.73 94.91 95.00 85.23 85.42 50.79 51.41 Laplace, ¯∆1,1 96.76 95.73 94.18 88.95 88.48 19.59 19.60 19.60 ViT (97.01) Gaussian, ∆2,2 95.17 95.36 83.53 81.08 19.59 41.86 19.59 19.59 Laplace, ¯∆1,1 19.59 19.59 19.59 19.60 19.60 19.59 19.60 19.59 Laplace, ∆2,2 96.36 93.13 92.18 64.16 60.09 19.60 19.59 19.59 Table 2. ImageNet accuracy (%) under standard DP and f -DP ac-counting for the autoencoder configuration with two backbones. Gaussian noise remains relatively stable across the two account-ing schemes, whereas the ∆1,1 Laplace degradation is substan-tially more severe under f -DP and persists at C=3200 . Values in parentheses denote the corresponding non-private baseline accura-cies. Backbone Mechanism L=0 .03 L=0 .10 L=0 .30 L=1 .00 
+
+Inception-v3 (77.81) DP Gaussian, ∆2,2 76.11 73.70 68.38 50.86 
+
+f -DP Gaussian, ∆2,2 76.30 73.55 69.34 51.00 DP Laplace, ¯∆1,1 58.20 36.71 13.99 2.74 
+
+f -DP Laplace, ¯∆1,1 40.66 14.51 3.51 0.64 ViT-Base (81.14) DP Gaussian, ∆2,2 79.32 76.95 71.73 51.83 
+
+f -DP Gaussian, ∆2,2 79.10 76.87 71.52 52.19 DP Laplace, ¯∆1,1 60.50 35.92 11.72 1.89 
+
+f -DP Laplace, ¯∆1,1 40.38 12.13 2.47 0.55 
+
+with a self-contained proof and a closed-form calibration, at an honestly quantified noise cost against the Gaussian mechanism. ImageNet experiments with a fixed autoen-coder front end and two downstream backbones illustrate the post-processing property empirically, and a matched-
+
+Table 3. Certified accuracy (%) of repaired Laplace models at the nominal construction setting L = 0 .1. All columns, including 
+
+T = 0 , use the Monte Carlo certification protocol with n = 300 
+
+draws and Theorem 3.1. DP/ f -DP row labels identify the check-point configuration, not different certification theorems. 
+
+T =0 T =0 .02 T =0 .03 
+
+CIFAR-10 (DP) 77.19 69.12 64.34 CIFAR-10 ( f -DP) 55.57 51.76 50.66 CIFAR-100 (DP) 55.01 48.21 46.59 CIFAR-100 ( f -DP) 28.22 25.20 24.48 SVHN (DP) 95.02 92.47 91.60 SVHN ( f -DP) 76.68 72.44 71.19 
+
+budget ablation shows that adversarial training improves certified accuracy over the nonzero operating region. 
+
+Limitations. Our ViT models are small and trained from scratch at low resolution, so absolute accuracies sit below modern large-scale recipes, and the study isolates mecha-nisms rather than chasing state of the art. The Laplace cer-tificate costs about 1.47 × the Gaussian noise at matched 
+
+(ε0, δ ), so it removes an inconsistency in the design space rather than improving the efficient frontier. The GDP rows are an alternative calibration that fixes the privacy level at the construction bound and should not be read as the group-privacy scaling of the original framework. Training results are single-seed, so we do not quantify optimization vari-ance. We therefore restrict our empirical claim to the large failure-and-repair effects reproduced across datasets and ar-chitectures, rather than small differences between individ-ual configurations. We study ℓ1 and ℓ2 threats only, and the interaction of the noise layer with ℓ∞ training is un-touched. 
+
+## References 
+
+[1] Martin Abadi, Andy Chu, Ian Goodfellow, H Brendan McMahan, Ilya Mironov, Kunal Talwar, and Li Zhang. Deep learning with differential privacy. In Proceedings of the 2016 ACM SIGSAC conference on computer and communications security , pages 308–318, 2016. 1, 3 [2] Motasem Alfarra, Adel Bibi, Philip HS Torr, and Bernard Ghanem. Data dependent randomized smoothing. In Uncer-tainty in Artificial Intelligence , pages 64–74, 2022. 3 [3] Joel Daniel Andersson, Rasmus Pagh, Teresa Anna Steiner, and Sahel Torkamani. Count on your elders: Laplace vs gaussian noise. arXiv preprint arXiv:2408.07021 , 2024. 2, 5 [4] Anish Athalye, Nicholas Carlini, and David Wagner. Obfus-cated gradients give a false sense of security: Circumventing defenses to adversarial examples. In International confer-ence on machine learning , pages 274–283, 2018. 3, 5, 15 [5] Yoshua Bengio, Geoffrey Hinton, Andrew Yao, Dawn Song, Pieter Abbeel, Trevor Darrell, Yuval Noah Harari, Ya-Qin Zhang, Lan Xue, Shai Shalev-Shwartz, et al. Managing ex-treme ai risks amid rapid progress. Science , 384(6698):842– 845, 2024. 1 [6] S´ ebastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Jo-hannes Gehrke, Eric Horvitz, Ece Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, et al. Sparks of artificial general intelligence: Early experiments with gpt-4. arXiv preprint arXiv:2303.12712 , 2023. 1 [7] Nicholas Carlini and David Wagner. Towards evaluating the robustness of neural networks. In 2017 ieee symposium on security and privacy (sp) , pages 39–57, 2017. 3 [8] Val´ erie Castin, Pierre Ablin, and Gabriel Peyr´ e. How smooth is attention? In International Conference on Machine Learn-ing , pages 5817–5840, 2024. 3 [9] Konstantinos Chatzikokolakis, Miguel E Andr´ es, Nicol´ as Emilio Bordenabe, and Catuscia Palamidessi. Broadening the scope of differential privacy using met-rics. In international symposium on privacy enhancing technologies symposium , pages 82–102, 2013. 9 [10] Charles J Clopper and Egon S Pearson. The use of confi-dence or fiducial limits illustrated in the case of the binomial. 
+
+Biometrika , 26(4):404–413, 1934. 10 [11] Jeremy Cohen, Elan Rosenfeld, and Zico Kolter. Certified adversarial robustness via randomized smoothing. In inter-national conference on machine learning , pages 1310–1320, 2019. 1, 2, 10 [12] Francesco Croce and Matthias Hein. Reliable evalua-tion of adversarial robustness with an ensemble of diverse parameter-free attacks. In International conference on ma-chine learning , pages 2206–2216, 2020. 3 [13] Edoardo Debenedetti, Vikash Sehwag, and Prateek Mittal. A light recipe to train robust vision transformers. In 2023 IEEE conference on secure and trustworthy machine learn-ing (SaTML) , pages 225–253, 2023. 3, 5 [14] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition , pages 248–255, 2009. 5 [15] Jinshuo Dong, Aaron Roth, and Weijie J Su. Gaussian differ-ential privacy. Journal of the Royal Statistical Society Series B: Statistical Methodology , 84(1):3–37, 2022. 3, 5, 11 [16] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-vain Gelly, et al. An image is worth 16x16 words: Trans-formers for image recognition at scale. In ICLR , 2021. 1 [17] Cynthia Dwork. Differential privacy. In International col-loquium on automata, languages, and programming , pages 1–12, 2006. 1, 2 [18] Cynthia Dwork and Aaron Roth. The algorithmic founda-tions of differential privacy. Found. Trends Theor. Comput. Sci. , 9(3-4):211–407, 2014. 2 [19] Kevin Eykholt, Ivan Evtimov, Earlence Fernandes, Bo Li, Amir Rahmati, Chaowei Xiao, Atul Prakash, Tadayoshi Kohno, and Dawn Song. Robust physical-world attacks on deep learning visual classification. In Proceedings of the IEEE conference on computer vision and pattern recogni-tion , pages 1625–1634, 2018. 1 [20] Ian J Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and harnessing adversarial examples. In ICLR ,2015. 1 [21] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645(8081):633– 638, 2025. 1 [22] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceed-ings of the IEEE conference on computer vision and pattern recognition , pages 770–778, 2016. 1 [23] Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 ,2020. 1 [24] Grigory Khromov and Sidak Pal Singh. Some fundamen-tal aspects about lipschitz continuity of neural networks. In 
+
+ICLR , 2024. 3 [25] Hyunjik Kim, George Papamakarios, and Andriy Mnih. The lipschitz constant of self-attention. In International Confer-ence on Machine Learning , pages 5562–5571, 2021. 3 [26] Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted Xiao, Ashwin Balakrishna, Suraj Nair, Rafael Rafailov, Ethan P Foster, Pannag R Sanketi, Quan Vuong, Thomas Kollar, Benjamin Burchfiel, Russ Tedrake, Dorsa Sadigh, Sergey Levine, Percy Liang, and Chelsea Finn. Openvla: An open-source vision-language-action model. In Proceedings of The 8th Conference on Robot Learning , pages 2679–2713, 2025. 1[27] Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical report, University of Toronto, 2009. 5[28] Mathias L´ ecuyer, Vaggelis Atlidakis, Roxana Geambasu, Daniel Hsu, and Suman Jana. Certified robustness to adver-sarial examples with differential privacy. In 2019 IEEE sym-posium on security and privacy (SP) , pages 656–672, 2019. 1, 2, 5, 9, 10 [29] Linyi Li, Tao Xie, and Bo Li. Sok: Certified robustness for deep neural networks. In 2023 IEEE symposium on security and privacy (SP) , pages 1289–1310, 2023. 1 [30] Saiyue Lyu, Shadab Shaikh, Frederick Shpilevskiy, Evan Shelhamer, and Mathias L´ ecuyer. Adaptive randomized smoothing: Certified adversarial robustness for multi-step defences. Advances in Neural Information Processing Sys-tems , 37:134043–134074, 2024. 3 [31] Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. Towards deep learning models resistant to adversarial attacks. In ICLR , 2018. 1 [32] Yichuan Mo, Dongxian Wu, Yifei Wang, Yiwen Guo, and Yisen Wang. When adversarial training meets vision trans-formers: Recipes from training to architecture. In Advances in Neural Information Processing Systems , 2022. 3 [33] Yuval Netzer, Tao Wang, Adam Coates, Alessandro Bis-sacco, Bo Wu, and Andrew Y. Ng. Reading digits in natural images with unsupervised feature learning. In NIPS Work-shop on Deep Learning and Unsupervised Feature Learning 2011 , 2011. 5 [34] Xianbiao Qi, Jianan Wang, Yihao Chen, Yukai Shi, and Lei Zhang. Lipsformer: Introducing lipschitz continuity to vi-sion transformers. In ICLR , 2023. 3 [35] Aref M Rekavandi, Farhad Farokhi, Olga Ohrimenko, and Benjamin I Rubinstein. Certified adversarial robustness via randomized alpha -smoothing for regression models. 
+
+Advances in Neural Information Processing Systems , 37: 134127–134150, 2024. 3 [36] Leslie Rice, Eric Wong, and Zico Kolter. Overfitting in ad-versarially robust deep learning. In International conference on machine learning , pages 8093–8104, 2020. 3 [37] Hadi Salman, Jerry Li, Ilya Razenshteyn, Pengchuan Zhang, Huan Zhang, S´ ebastien Bubeck, and Greg Yang. Provably robust deep learning via adversarially trained smoothed clas-sifiers. In Advances in Neural Information Processing Sys-tems , 2019. 2, 3, 5, 13 [38] Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jon Shlens, and Zbigniew Wojna. Rethinking the inception archi-tecture for computer vision. In Proceedings of the IEEE con-ference on computer vision and pattern recognition , pages 2818–2826, 2016. 1, 5 [39] Shubham Ugare, Tarun Suresh, Debangshu Banerjee, Gagandeep Singh, and Sasa Misailovic. Incremental ran-domized smoothing certification. In ICLR , 2024. 3 [40] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. 1 [41] Roman Vershynin. High-dimensional probability: An intro-duction with applications in data science . Cambridge Uni-versity Press, 2018. 4, 10 [42] Taowen Wang, Cheng Han, James Liang, Wenhao Yang, Dongfang Liu, Luna Xinyu Zhang, Qifan Wang, Jiebo Luo, and Ruixiang Tang. Exploring the adversarial vulnerabili-ties of vision-language-action models in robotics. In 2025 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 6948–6958, 2025. 1 [43] Jiapeng Wu, Atiyeh Ashari Ghomi, David Glukhov, Jesse C Cresswell, Franziska Boenisch, and Nicolas Papernot. Aug-ment then smooth: Reconciling differential privacy with cer-tified robustness. Transactions on Machine Learning Re-search , 2024. 3 [44] Jun Yan, Huilin Yin, Ziming Zhao, Wancheng Ge, and Jingfeng Zhang. Enhance adversarial robustness via geodesic distance. IEEE Transactions on Artificial Intelli-gence , 5(8):4202–4216, 2024. 1 [45] Hongyang Zhang, Yaodong Yu, Jiantao Jiao, Eric Xing, Lau-rent El Ghaoui, and Michael Jordan. Theoretically principled trade-off between robustness and accuracy. In International conference on machine learning , pages 7472–7482, 2019. 1 [46] Huan Zhang, Hongge Chen, Chaowei Xiao, Sven Gowal, Robert Stanforth, Bo Li, Duane Boning, and Cho Jui Hsieh. Towards stable and efficient training of verifiably robust neu-ral networks. In ICLR , 2020. 1 
+
+## A. Preliminaries 
+
+A.1. Differential Privacy over a Norm Metric 
+
+Differential privacy bounds how much a randomized com-putation can change when its input changes a little. Pix-elDP uses the definition over a general metric [9], taking the metric to be an ℓp norm on images rather than record replacement on databases. 
+
+Definition A.1 ((ε, δ )-DP over an ℓp metric) . A randomized mechanism M : Rn → Y satisfies (ε, δ )-DP at scale L in 
+
+ℓp if for all x, x ′ with ∥x − x′∥p ≤ L and all measurable 
+
+T ⊆ Y ,
+
+Pr[ M (x) ∈ T ] ≤ eε Pr[ M (x′) ∈ T ] + δ. (7) Two properties drive everything that follows. Post-processing preserves the guarantee: any function of M (x)
+
+is again (ε, δ )-DP. Bounded outputs have stable expecta-tions, which is the bridge to robustness. 
+
+Lemma A.1 (Expected output stability [28]) . If M satis-fies Def. A.1 and M (x) ∈ [0 , 1] almost surely, then for all 
+
+∥α∥p ≤ L, E[M (x)] ≤ eε E[M (x + α)] + δ.A.2. The PixelDP Construction 
+
+Write the scoring function of a network as Q = h◦g, where 
+
+g is the computation before a chosen noise layer and h the computation after it. PixelDP constrains the sensitivity of 
+
+g,
+
+∆p,q = sup 
+
+> x̸=x′
+
+∥g(x) − g(x′)∥q
+
+∥x − x′∥p
+
+, (8) and injects noise calibrated to ∆p,q and to a construc-tion bound L, producing the randomized scores A(x) = 
+
+h g(x) + Z. Two mechanisms are used. The Laplace mechanism draws Zi ∼ Lap( b) with b = ∆p, 1L/ε 
+
+and yields (ε, 0) -DP from an ℓ1 sensitivity bound. The Gaussian mechanism draws Zi ∼ N (0 , σ 2) with σ =p2 ln(1 .25 /δ ) ∆ p, 2L/ε and yields (ε, δ )-DP from an ℓ2
+
+bound, for ε ≤ 1. By post-processing, A inherits the guar-antee of the noised layer, provided no skip connection by-passes the noise. For the non-overlapping ViT patch embedding (kernel size equal to stride), the exact induced ℓ1 → ℓ1 norm of the flattened patch map is 
+
+∆exact 1,1 (W ) = max 
+
+> j,a,b
+
+X
+
+> m
+
+|Wm,j,a,b |. (9) The original PixelDP-style convolution treatment instead uses the grouped quantity 
+
+¯∆1,1(W ) = max 
+
+> j
+
+X
+
+> m,a,b
+
+|Wm,j,a,b |, (10) which is a valid but generally conservative upper bound for this non-overlapping patch operator. Our faithful-port ex-periments retain this inherited bound; consequently, the col-lapse diagnosed below should be interpreted as a property of this conservative PixelDP constraint rather than of the exact stride-aware ℓ1 → ℓ1 sensitivity. 
+
+A.3. Certified Prediction 
+
+At inference the expectation E[A(x)] is estimated by Monte Carlo over n noise draws, with per-class confidence bounds 
+
+ˆElb , ˆEub obtained from Hoeffding or Clopper–Pearson in-tervals [10] and a union bound over classes. 
+
+Proposition A.1 (Generalized robustness condition [28]) .
+
+Suppose A satisfies Def. A.1 at scale L in ℓp. If for some class k
+
+ˆElb  Ak(x) > e 2ε max 
+
+> i̸=k
+
+ˆEub  Ai(x) +  1 + eεδ, (11) 
+
+then the prediction arg max k ˆE(Ak(x)) is robust to every perturbation of ℓp size at most L, with probability at least η
+
+over the estimation. 
+
+Given a deployed noise scale, the largest L for which Eq. (11) holds is returned as the robustness certificate of the input, searching over L through the map L 7 → ε(L) of the mechanism. Certified accuracy at threshold T is the fraction of test points that are correct and certified at radius at least 
+
+T .
+
+A.4. Relation to Randomized Smoothing 
+
+Randomized smoothing [11] is the input-noise special case of this construction with Gaussian noise, for which a tighter certificate is available. Placing the noise after a trained layer, which is what makes PixelDP flexible, is also what creates the interaction we study, because the sensitivity con-straint then reshapes the layer that carries the signal. 
+
+## B. Proofs 
+
+B.1. Proof of Proposition 3.1 (norm-ratio law) 
+
+Let W have i.i.d. N (0 , τ 2) entries. Its flattened patch op-erator has size M × N with N = Cin k2. For each input channel, the inherited grouped bound aggregates C = M k 2
+
+weights across output channels and spatial kernel locations. 
+
+Grouped ℓ1 mass. For any fixed input-channel group, the column mass f (w) = PCi=1 |wi| is √C-Lipschitz with re-spect to the Euclidean norm, since 
+
+|f (w) − f (w′)| ≤ ∥ w − w′∥1 ≤ √C∥w − w′∥2.
+
+For w = τ g with g ∼ N (0 , I ), Gaussian concentration therefore gives 
+
+Pr[ f (w) < Ef (w) − t] ≤ exp 
+
+
+
+− t2
+
+2Cτ 2
+
+
+
+.
+
+Spectral norm. By the Davidson–Szarek bound [41], for a Gaussian matrix Pr[ σmax > τ (√M + √N + t)] ≤
+
+e−t2/2. Setting this to δ2 gives σmax ≤ τ (√M + √N +p2 ln(1 /δ 2)) with probability 1 − δ2.
+
+Ratio. Dividing the two bounds and applying a union bound proves Eq. (1). The common τ cancels, so the ratio is scale free, and the leading order is ρ = Ω  C/ (√M +
+
+√N ). For a square-ish matricization N = Θ( M ) this is 
+
+Θ( C/ √M ) = Θ( √C k ), increasing in both the filter count and the kernel size. 
+
+B.2. Proof of Lemma 3.1 (shifted absolute moment) 
+
+For z ∼ Lap(0 , b ) with density 12b e−| z|/b and v ≥ 0 (the case v < 0 is symmetric), 
+
+E |z − v| =
+
+Z ∞−∞ 
+
+|z − v| 12b e−| z|/b dz. Splitting at z = 0 and z = v and integrating each piece in closed form gives E |z − v| = v + b e −v/b . Since E |z| = b,
+
+E|z−v|−| z| = v−b+b e −v/b = b φ (v/b ), φ(t) = t−1+ e−t.
+
+Finally φ(t) ≤ t2/2 for all t ≥ 0, because ψ(t) = t2/2 −
+
+φ(t) satisfies ψ(0) = 0 and ψ′(t) = t−1+ e−t = φ(t) ≥ 0.Substituting t = |v|/b gives E[|z − v| − | z|] ≤ v2/(2 b).
+
+B.3. Proof of Lemma 3.2 (tail implies DP) 
+
+Let Sε = {y : PL( y) ≤ ε}. For any event T ,
+
+Pr  
+
+> M(x)
+
+[T ] = Pr  
+
+> M(x)
+
+[T ∩ Sε] + Pr  
+
+> M(x)
+
+[T ∩ Scε ].
+
+On Sε the density ratio is at most eε, so the first term is at most eε Pr M (x′)[T ]. The second term is at most 
+
+Pr M (x)[Scε ] ≤ δ by hypothesis. Adding gives Eq. (7). 
+
+B.4. Proof of Theorem 3.1 
+
+Write 
+
+v = g(x′) − g(x), ∥v∥2 ≤ S, 
+
+and let y = g(x) + z with z ∼ Lap( b)d. The privacy loss is 
+
+PL = 
+
+> d
+
+X
+
+> i=1
+
+|yi − gi(x′)| − | yi − gi(x)|
+
+b = 1
+
+b
+
+> d
+
+X
+
+> i=1
+
+ |zi−vi|−| zi|.
+
+They are independent. By the triangle inequality each lies in [−| vi|, |vi|]/b , so the i-th term has range 2|vi|/b and P
+
+> i
+
+(2 |vi|/b )2 = 4 ∥v∥22/b 2 ≤ 4S2/b 2. By Lemma 3.1, 
+
+E[PL] = 1
+
+b
+
+X
+
+> i
+
+b φ (|vi|/b ) ≤ 12b2
+
+X
+
+> i
+
+v2 
+
+> i
+
+= ∥v∥22
+
+2b2 ≤ S2
+
+2b2 .
+
+Hoeffding’s inequality for bounded independent variables gives, for τ > 0,
+
+Pr[PL ≥ E[PL]+ τ ] ≤ exp 
+
+ −2τ 2
+
+P
+
+> i
+
+(2 |vi|/b )2
+
+
+
+≤ exp 
+
+ −τ 2b2
+
+2S2
+
+
+
+.
+
+Set τ = ( S/b )p2 ln(1 /δ ), so the right side equals δ. Then with probability at least 1 − δ,
+
+PL ≤ S2
+
+2b2 + Sb
+
+p2 ln(1 /δ ) = ε. 
+
+Lemma 3.2 converts this tail bound into (ε, δ )-DP. No step depends on d. Because (x, x ′) was an arbitrary ordered neighboring pair, the same argument applies after exchang-ing x and x′. Thus the bound holds for every ordered pair required by Definition A.1. 
+
+B.5. Proof of Corollary 3.2 (calibration) 
+
+Enforcing ∆2,2 ≤ 1 makes S = L at construction bound 
+
+L. Writing r = p2 ln(1 /δ ) and solving ε0 = L2/(2 b2) + (L/b )r for L/b as a quadratic gives L/b = √r2 + 2 ε0−r =
+
+u, hence b = L/u . At a candidate radius L′ the sensitivity is S = L′, and substituting into Eq. (5) yields ε(L′) = 
+
+L′2/(2 b2) + ( L′/b )r.
+
+## C. Gaussian-DP Calibration Formulas 
+
+A Gaussian mechanism with ℓ2 sensitivity S and scale σ is 
+
+μ-GDP with μ = S/σ [15]. The dual (ε, δ ) profile is 
+
+δ(ε; μ) = Φ 
+
+
+
+− εμ + μ
+
+2
+
+
+
+− eεΦ
+
+
+
+− εμ − μ
+
+2
+
+
+
+,
+
+with Φ the standard normal CDF. Fixing μ0 at construction sets σ = L/μ 0. At radius L′ we have μ(L′) = L′/σ =
+
+μ0L′/L , and inverting δ(ε; μ(L′)) = δ for ε gives the value fed to Proposition A.1. This fixes the privacy level at the construction bound rather than scaling it by group privacy. For the Laplace rows, let ϵ(μ)0 denote the solution of 
+
+δ = Φ − ϵ(μ)0
+
+μ0
+
++ μ0
+
+2
+
+!
+
+− eϵ(μ)0 Φ − ϵ(μ)0
+
+μ0
+
+− μ0
+
+2
+
+!
+
+.
+
+For the grouped ℓ1 Laplace mechanism we set 
+
+b = Lϵ(μ)0
+
+.
+
+For the spectrally constrained Laplace mechanism, Corol-lary 3.2 gives 
+
+b = Lu0
+
+, u0 =
+
+q
+
+2 ln(1 /δ ) + 2 ϵ(μ)0 − p2 ln(1 /δ ).
+
+At radius L′, its privacy parameter is 
+
+ϵ(L′) = L′2
+
+2b2 + L′
+
+b
+
+p2 ln(1 /δ ).
+
+Attention-side absorption control. Figure 3 comple-ments the placement analysis of Sec. 3.1. When noise is injected after the first attention block, test accuracy remains close to the non-private baseline across the entire construc-tion grid, under both DP and f -DP accounting and for both noise distributions. The absence of systematic degradation as L increases indicates that training absorbs the perturba-tion at this location. This behavior should not be interpreted as enhanced robustness: because the pre-noise computa-tion crosses an attention block and is not assigned a certi-fied pixel-space sensitivity bound under our protocol, these models provide no valid PixelDP certificate. 
+
+## D. Additional Empirical Studies 
+
+D.1. The constraint-decoupling Study 
+
+Fig. 4 summarizes the constraint-decoupling experiment across CIFAR-10, CIFAR-100, and SVHN. At L = 0 .03 ,the ∆1,1 Laplace configuration reduces accuracy to 28.87% on CIFAR-10 and 7.51% on CIFAR-100, and reaches the majority-class prior on SVHN. Replacing ∆1,1 with ∆2,2
+
+substantially improves low-noise performance. This repair 0.03 0.10 0.30 1.00 
+
+L
+
+90.00% 92.00% 94.00% 96.00% 98.00% test accuracy 
+
+DP 0.03 0.10 0.30 1.00 
+
+L
+
+f-DP non-private baseline Gaussian Laplace Figure 3. Attention-side absorption control on SVHN. Noise is injected after the first attention block rather than after the patch embedding. Under both standard DP and f -DP accounting, Gaussian and Laplace models remain close to the non-private baseline across the full construction grid. This apparent invariance does not yield a robustness guarantee: no enforceable pixel-to-representation sensitivity bound is available at this placement, so the resulting models are not certifiable. Table 4. Sensitivity of repaired Laplace certification on CIFAR-10 to the number of Monte Carlo samples n and the certification parameter δ. An independently trained L = 0 .1 checkpoint is used for this sensitivity study; the same checkpoint and the same 1,000 stored noise draws are used throughout the table. 
+
+n δ EP Acc. T = 0 T = 0 .02 T = 0 .03 T = 0 .05 
+
+300 0.05 81.14 77.12 69.27 64.41 51.65 300 0.01 81.14 78.26 68.62 62.59 47.80 1000 0.05 81.20 78.42 70.99 66.43 56.30 1000 0.01 81.20 79.54 70.34 64.91 52.91 
+
+does not eliminate high-noise failures: the SVHN model still reaches the class prior at L = 1 . Exact sweep values and the ResNet-50 reference results are provided in Table 1. 
+
+D.2. Sensitivity to Monte Carlo sample size and δ
+
+Table 4 varies the certification sample count and δ on the same repaired CIFAR-10 checkpoint. Increasing n from 300 to 1,000 changes expected-prediction accuracy by only 0.06 points, but improves certified accuracy by up to 4.65 points over the reported thresholds, consistent with tighter Clopper–Pearson intervals. Reducing δ from 0.05 to 0.01 has a mixed but predictable effect: it slightly improves the T = 0 condition, where ϵ(0) = 0 , but reduces cer-tification at positive radii because ϵ(T ) increases through the p2 ln(1 /δ ) term. The main qualitative conclusions are therefore unchanged across these settings. 
+
+D.3. Norm-ratio evolution during training 
+
+Proposition 3.1 is derived for i.i.d. Gaussian weights, so its quantitative prediction is formally an initialization-scale 
+
+Table 5. Constraint-only control on CIFAR-10/ViT-Tiny with Laplace noise at L = 0 .03 . Only the patch-embedding sensitivity constraint is changed. Constraint Test Acc. (%) Inherited grouped ¯∆1,1 28.87 Exact stride-aware ∆exact 1,1 70.83 Spectral ∆2,2 85.50 
+
+statement. We therefore track ρ = s1/σ max throughout a 400-epoch CIFAR-10 run. Figure 5 shows that the Gaus-sian prediction is of the correct scale near initialization, but ceases to be quantitatively tight once optimization in-duces structure in the patch embedding: the measured ratio decreases from 136 .99 at initialization to 53 .83 by epoch 20 and remains near 55 thereafter, versus the initializa-tion prediction 117 .93 . Importantly, the ratio remains large throughout training, so the substantial separation between the two constraint geometries persists even outside the the-orem’s i.i.d. regime. 
+
+Exact stride-aware ℓ1 control. For the non-overlapping ViT patch embedding, we additionally replace the inherited grouped bound ¯∆1,1 with the exact induced ℓ1 → ℓ1 norm 
+
+∆exact 1,1 of Eq. (9), while keeping the Laplace noise scale and training recipe unchanged. At L = 0 .03 , accuracy increases from 28 .87% to 70 .83% , and spectral ∆2,2 control further reaches 85 .50% (Table 5). On the final exact-norm checkpoint, ∆exact 1,1 = 1.00 ,
+
+¯∆1,1 = 14 .14 , and σmax = 0 .290 , giving ρexact = 3 .45 
+
+and ρgrouped = 48 .78 .0.03 0.10 0.30 1.00 construction bound L                          
+
+> 0.00% 20.00% 40.00% 60.00% 80.00% 100.00% test accuracy
+> CIFAR-10: DP non-private baseline Gaussian, Δ2, 2
+> Laplace, Δ1, 1
+> Laplace, Δ2, 2
+> 0.03 0.10 0.30 1.00 construction bound L
+> CIFAR-100: DP 0.03 0.10 0.30 1.00 construction bound L
+> SVHN: DP 0.03 0.10 0.30 1.00 construction bound L
+> 0.00% 20.00% 40.00% 60.00% 80.00% 100.00% test accuracy
+> CIFAR-10: f-DP 0.03 0.10 0.30 1.00 construction bound L
+> CIFAR-100: f-DP 0.03 0.10 0.30 1.00 construction bound L
+> SVHN: f-DP
+
+Figure 4. Constraint-decoupling diagnostics for ViT-Tiny. The panels report one-seed test accuracy across three datasets and two noise-calibration variants. The spectral constraint substantially mitigates the low-noise degradation of Laplace models, although failures remain at large noise levels. Exact values are provided in Table 1. 
+
+D.4. Comparison with input randomized smoothing 
+
+On CIFAR-10, we additionally train a standard input Gaus-sian randomized-smoothing baseline using the same ViT-Tiny architecture and 400-epoch training budget (Table 6). At σ = 0.2537 , its Monte Carlo prediction accuracy (81.57%) is nearly identical to that of the repaired Laplace model (81.14%), but its specialized smoothing certificate is substantially tighter: CA@0.05 is 75.75% versus 51.65%. This gap is expected and clarifies the scope of our contribu-tion. Our goal is not to outperform input smoothing for pure 
+
+ℓ2 certification; rather, PixelDP permits noise to be placed after an internal representation, and our analysis charac-terizes the sensitivity-constraint interactions introduced by that flexibility. 
+
+D.5. Adversarial Training Lifts the Certificate 
+
+Table 7, Table 8, and Fig. 6 give the ablation. Under stan-dard DP calibration, adversarial training improves CIFAR-10 certified accuracy by 8.30 and 10.70 percentage points at T = 0 .05 and T = 0 .10 . Across the reported posi-tive thresholds up to T = 0 .15 , the gains increase from 2.68 to 4.22 points on CIFAR-100 and from 2.81 to 6.09 
+
+Table 6. Comparison with standard input Gaussian randomized smoothing (RS) on CIFAR-10. Both use ViT-Tiny and matched training budgets. RS uses σ = 0 .2537 Gaussian noise at the im-age input and its standard smoothing certificate; repaired Laplace injects noise after the patch embedding and uses the correspond-ing PixelDP-style certificate. Pred. Acc. denotes the Monte Carlo expected prediction.                     
+
+> Method Pred. Acc. T= 0 T= 0 .02 T= 0 .03 T= 0 .05
+> Input Gaussian RS 81.57 78.72 77.63 77.01 75.75 Repaired Laplace, ∆2,281.14 77.12 69.27 64.41 51.65
+
+points on SVHN. Both CIFAR-10 models have zero cer-tified accuracy at T = 0.20 and T = 0.30 . The pat-tern is the margin mechanism of [37] observed through a certificate. The attack enlarges the score gap under noise, and the higher the certification threshold, the more of that gap is converted into certified points. Near the certifica-tion boundary the matched AT model approaches the strong recipe trained with 2.7× the budget, on CIFAR-100 within 
+
+0.6 points at T =0 .15 . The comparison against the strong recipe also documents a pitfall. Read against that reference alone, adversarial training appears to lose everywhere, and 0 50 100 150 200 250 300 350 400 training epoch 60 80 100 120 140 norm ratio 
+
+measured = s1/ max 
+
+Gaussian leading prediction ÿÿ lower bound Initialization Figure 5. Evolution of the patch-embedding norm ratio ρ = s1/σ max during CIFAR-10 training. The dashed line is the leading-order Gaussian prediction, while the dotted line is the initialization lower bound. The prediction is initialization-scale rather than a theorem for trained weights: optimization rapidly moves the layer outside the i.i.d. regime, after which ρ stabilizes near 55 . The persistent ρ ≫ 1
+
+nevertheless preserves the qualitative separation between the inherited ∆1,1 and spectral constraints. 0.00 0.05 0.10 0.20 0.30 certified radius T          
+
+> 0.00% 20.00% 40.00% 60.00% 80.00% certified accuracy
+> CIFAR-10 noise only (matched) DP AT + PixelDP
+> f-DP AT + PixelDP noise only (strong) 0.00 0.05 0.10 0.125 0.15 certified radius T
+> 0.00% 20.00% 40.00% 60.00% 80.00%
+> CIFAR-100 0.00 0.05 0.10 0.125 0.15 certified radius T
+> 0.00% 20.00% 40.00% 60.00% 80.00%
+> SVHN (two-phase) noise only, 450 ep DP AT + PixelDP
+> f-DP AT + PixelDP noise only, 300 ep noise only (matched) DP AT + PixelDP
+> f-DP AT + PixelDP noise only (strong)
+
+Figure 6. Certified accuracy against radius under the matched protocol. Adversarial training improves certified accuracy across the reported nonzero operating region under the matched protocol. 
+
+only the matched control reveals that the deficit is the train-ing budget, not the attack. 
+
+Two-phase training on SVHN. Training the joint ob-jective from scratch on SVHN collapses to the class prior of 
+
+19 .6% and stays there for 300 epochs. The noisy gradient signal through the constrained embedding is weak early in training, the class imbalance offers a genuine prior basin, and the inner attack suppresses the slow escape that noise-only training exhibits. Forking a 300 -epoch noisy check-point into an adversarial fine-tune and a continued noise-only control isolates the attack cleanly and restores the pat-tern. The collapsed run is also instructive in itself. A con-stant classifier certifies every one of its majority-class pre-dictions at every radius, so certified accuracy in isolation can be gamed by a degenerate model, and we recommend always reading it jointly with conventional accuracy. 
+
+Empirical robustness and sanity checks. Table 9 places the certified arm next to a pure adversarial-training baseline under identical attacks. The AT-only model is em-pirically stronger, but it has no PixelDP certificate because Table 7. Certified accuracy (%) on CIFAR-10 at L=0 .1 with Gaussian noise. The matched noise-only control shares all hy-perparameters with the AT arm except for the adversarial attack. The strong recipe uses 400 epochs with mixup and is included as a reference rather than a matched control. Training setting T =0 .00 T =0 .05 T =0 .10 T =0 .20 T =0 .30 
+
+Matched noise only 64.65 45.04 32.67 0.00 0.00 AT (PixelDP) 66.62 53.34 43.37 0.00 0.00 AT ( f -DP) 66.42 53.28 43.02 0.00 0.00 Strong recipe 74.30 57.66 45.27 0.00 0.00 Table 8. Certified accuracy (%) on CIFAR-100 and SVHN at 
+
+L=0 .1 with Gaussian noise. For CIFAR-100, the matched noise-only control shares all hyperparameters with the AT arm except for the adversarial attack, while the strong recipe is included as a reference. For SVHN, the two main branches share a 300-epoch noisy prefix, followed by either 150 additional noise-only epochs or 150 epochs of AT fine-tuning.                                                                  
+
+> Dataset Training setting T=0 .00 T=0 .05 T=0 .10 T=0 .125 T=0 .15
+> CIFAR-100 Matched noise only 31.28 18.40 12.43 9.40 5.18 AT (PixelDP) 30.20 21.08 16.08 13.47 9.40 AT ( f-DP) 32.74 22.51 16.80 13.98 9.85 Strong recipe 42.96 27.63 19.93 15.80 9.98 SVHN Noise only (PixelDP), 450 epochs 83.48 63.74 46.34 36.41 27.42 Noise only ( f-DP), 450 epochs 84.52 65.52 49.10 39.61 30.76 AT fine-tuning (PixelDP), 150 epochs 82.90 66.55 51.32 42.40 33.51 AT fine-tuning ( f-DP), 150 epochs 83.42 66.79 52.48 44.10 35.56 Noise only (PixelDP), 300 epochs 82.63 62.02 44.29 34.80 25.88 Noise only ( f-DP), 300 epochs 86.08 66.38 48.74 38.47 29.12
+
+Table 9. Empirical ℓ2 robustness (%) on CIFAR-10 at ε=0 .5, eval-uated using the best checkpoints. † denotes evaluation of the av-eraged randomized prediction rule. “–” indicates that the AT-only model has no valid PixelDP certificate. Attack AT only AT + PixelDP Clean 75.84 66.72 FGSM 55.14 54.95 PGD-20 54.15 51.10 PGD-100 54.10 50.54 CW-100 53.39 49.80 BPDA 54.19 55.26 EOT-PGD 54.17 50.21 AutoAttack 52.26 41.52 †
+
+Certified T =0 .10 – 43.37 
+
+it lacks the required randomized, sensitivity-controlled mechanism. The table also passes the standard adaptive-evaluation checks. For the deterministic model, BPDA co-incides with PGD-20 as it must. For the randomized model, EOT is stronger than PGD and BPDA is weaker, the ex-pected ordering when gradients are averaged over noise [4]. 
+
+D.6. Takeaways from the Experiment 
+
+• Placement is binding. Only the patch embedding supports an enforceable sensitivity bound in a ViT, and attention-side noise is absorbed into a certificate-free model. • The inherited grouped constraint causes severe attenu-ation, whose initialization scale follows a closed-form law in the grouped coefficient count from C = 144 to 
+
+C = 3200 .• An ℓ2 certificate for the Laplace mechanism exists, is di-mension free, and re-certifies repaired checkpoints with-out retraining, at a quantified 1.47 × noise cost against Gaussian. • The certificate lives in the front end. Swapping a frozen Inception for a frozen ViT-Base moves ImageNet base-lines, not degradation curves. • Adversarial training improves certified accuracy over the nonzero operating region, but only a matched-budget con-trol isolates the gain. 
+
+## E. Reproduction 
+
+Hyperparameters. ViT-Tiny, patch 4, resolution 32 ,AdamW, weight decay 0.1 (AT) or 0.05 (clean), cosine schedule with linear warmup. CIFAR 400 epochs with RandAugment and mixup, SVHN 300 epochs with Ran-dAugment. Certification uses n=300 draws, argmax scores, Clopper–Pearson at η=0 .95 . Adversarial training uses ℓ2
+
+PGD with ϵadv = 0 .5, K = 7 steps, and step size α =2.5ϵadv /K . For PixelDP models, each PGD step uses EOT with two independent noise draws and averages the gradi-ents of the per-draw cross-entropy losses. The attack budget is linearly warmed up over the first 30 epochs. 
+
+Certifying repaired Laplace models. With the released code, a ∆2,2 Laplace checkpoint is certified under The-orem 3.1 by the certification pass with --noise mech laplace l2 , which uses the calibration b=L/u of Eq. (6) and the map ε(L′) of Corollary 3.2. The load-time sensitiv-ity guard refuses any checkpoint whose ∆2,2̸ = 1 , so an accidentally supplied AT-only checkpoint cannot produce an invalid certificate. 
+
+Two-phase SVHN. Train a noise-only checkpoint for 
+
+300 epochs, then fork into an adversarial fine-tune and a continued noise-only control, both for 150 epochs from the shared weights with reset schedules, so the two forks differ only in the presence of the attack. 
+
+AutoAttack protocol. For randomized checkpoints Au-toAttack attacks and judges the averaged prediction over 8
+
+draws, and accuracy is reported over 20 draws. Judging Au-toAttack per single draw, as an off-the-shelf run does, un-derestimates the deployed averaged prediction, so we report the averaged-rule number and mark it accordingly.

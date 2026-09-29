@@ -1,0 +1,866 @@
+Title: Learning Defensive Policies against Diverse Inference Attacks for Smart Meter Privacy
+
+URL Source: https://arxiv.org/pdf/2609.25484v1
+
+Published Time: Wed, 23 Sep 2026 00:36:58 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Learning Defensive Policies against Diverse Inference Attacks for Smart Meter Privacy 
+
+Ruichang Zhang 1 Mustafa A. Mustafa 1,2  
+
+> 1
+
+Department of Computer Science, The University of Manchester, Manchester, UK 
+
+> 2
+
+COSIC, KU Leuven, Leuven, Belgium 
+
+Abstract 
+
+Smart meter (SM) data provides fine-grained visibility into household energy con-sumption, but also exposes users to privacy risks. Inference attacks, known as non-intrusive load monitoring (NILM), can perform appliance-level inference from aggregate signals and recover sensitive behavioral patterns. In practice, attacker models are unknown and heterogeneous, making robust defense challenging. We formulate SM privacy protection as a black-box inference defense problem, aim-ing to reduce the recoverability of appliance-level information while generalizing across diverse and unseen attackers. We propose a proxy-guided hierarchical rein-forcement learning framework that learns battery-based load-shaping policies to inject realistic but misleading appliance-level signatures into the aggregate signal, thereby disrupting the structured patterns exploited by NILM. A self-supervised aggregate-structure privacy probe provides a reconstruction-error-based surrogate reward for disrupting recoverable load structure, while a signature library makes the perturbations appliance-relevant and physically realizable through battery control. We provide theoretical rationale showing that proxy-guided optimization improves inference robustness under attacker diversity. Experiments on real-world datasets UK-DALE and REDD demonstrate strong cross-model and cross-appliance general-ization. Across six unseen NILM attackers, covering four appliances on UK-DALE and five on REDD, our proposed defense increases average appliance-level RMSE by 107% and 166%, respectively, while reducing F1 score by 79% and 80%. 
+
+1 Introduction 
+
+Smart meters (SMs) record high-frequency, real-time electricity consumption time series, where aggregate load measurements encode structured appliance-level usage patterns that can be exploited by non-intrusive load monitoring (NILM) models [9]. Prior work [13, 11, 1, 28, 27, 25] has shown that diverse NILM methods can recover fine-grained appliance activities from aggregate signals without direct access to individual devices. Such appliance-level information reveals latent household behaviors and therefore raises serious privacy concerns. Existing SM privacy defenses largely optimize proxy objectives that are not explicitly aligned with the NILM disaggregation task. For example, prior battery-based or load-shaping methods often encourage curve smoothness [4, 31], reduce aggregate variance [15, 30], optimize other load-level proxies [6, 5], or rely on information-theoretic criteria [24, 22]. While these objectives can reshape aggregate trajectories, they are not explicitly aligned with the inference structure exploited by NILM attackers. As a result, their influence on appliance-level inference is only indirectly controlled, creating a privacy–task mismatch between the defender’s training signal and the attacker’s actual inference goal. The key challenge is therefore to learn defender policies that disrupt NILM-relevant load structures while remaining robust to diverse and unseen attackers. 
+
+> Preprint. arXiv:2609.25484v1 [cs.LG] 21 Sep 2026
+
+To address this challenge, we propose a proxy-guided appliance-signature mimicry framework that combines aggregate-structure disruption with a NILM-relevant signature-level intervention mechanism. Specifically, we use the reconstruction error of an aggregate-level sequence probe network as the training signal, encouraging the defender to disrupt recognizable load structures that NILM models rely on for appliance-level disaggregation. The probe is trained in a self-supervised aggregate-to-aggregate manner and does not require appliance-level labels or access to the deployed NILM attacker. Meanwhile, instead of injecting arbitrary perturbations, the defender inserts realistic appliance signatures drawn from a curated signature library through feasible battery control, thereby disrupting the appliance-level evidence exploited by NILM models. We formulate SM privacy protection as a black-box inference defense problem under attacker uncertainty, where the defender does not know the exact NILM model used during deployment. To solve this problem, we learn a hierarchical reinforcement learning (HRL) policy that decides when and which appliance signature to mimic, while a low-level battery executor realizes the selected signature under physical constraints. The resulting policy reshapes the reported aggregate load with realistic appliance-like patterns to reduce the recoverability of true appliance-level consumption. We evaluate the proposed framework on two benchmark SM datasets (UK-DALE and REDD). Experiments show that the proposed framework consistently degrades NILM reconstruction performance across a diverse set of unseen NILM attackers and remains effective across different datasets, households, and seasonal conditions. 
+
+Contributions. Our contributions can be summarized as follows: (1) We propose a privacy defense framework that injects realistic appliance signatures into aggregate load signals via a curated signature library to mask appliance-level consumption patterns. (2) We develop a proxy-guided hierarchical reinforcement learning (HRL) framework that learns a battery control policy using an aggregate-level privacy probe as the training signal. (3) We formulate SM privacy as a black-box inference defense problem under attacker uncertainty. We theoretically justify proxy-guided signature manipu-lation through the unified task formulation of NILM inference and the adversarial transferability of surrogate-based attacks. (4) We empirically demonstrate consistent degradation of attacker inference performance across multiple NILM models and datasets, including unseen attackers. The results show consistent effectiveness across different datasets and strong generalization across households and seasonal conditions. 
+
+2 Related work 
+
+NILM as inference threat. NILM methods recover appliance-level consumption from aggregate SM signals, ranging from combinatorial optimization [9] and factorial HMMs [13] to convolutional, recurrent, and transformer-based sequence models [11, 28, 27, 25, 19]. Despite this architectural diversity, recent surveys [21, 10] note that modern NILM models share a common task formulation: estimating appliance-level power or on/off state from a window of aggregate readings, evaluated under a shared family of reconstruction losses. This task-level commonality, combined with architectural diversity, motivates the black-box defense setting in this work, where the defender does not know the deployed NILM architecture but can exploit the shared structure of the inference task. 
+
+SM privacy defenses. Existing SM privacy approaches fall into data-centric and physical-layer categories. Data-centric mechanisms such as aggregation [7] and differential privacy [29] perturb or post-process reported readings, but implicitly assume that adversaries cannot tap the physical power line, which limits their applicability under realistic deployment. Physical-layer approaches reshape household consumption with a rechargeable battery before measurement [3, 23], providing local and real-time protection against attackers that exploit the structure of real load trajectories. Early battery-based methods rely on rule-based or heuristic strategies [3, 6, 5], while more recent work introduces RL to automate battery scheduling [23, 24, 4, 15, 22, 30, 31]. These RL-based methods typically optimize either load-level proxies such as smoothness [4, 31] or variance reduction [15, 30], or information-theoretic measures such as mutual information and information leakage [24, 22]. Load-level proxies do not explicitly model how attackers exploit appliance-level temporal patterns, leading to a privacy–inference gap when attackers rely on different representations. Information-theoretic objectives are conceptually principled but cannot be directly attributed to individual control actions, and existing schemes therefore rely on auxiliary estimators whose transferability to unseen attackers remains unclear. 2Figure 1: Defender πθ injects battery-driven mimic signatures Pbatt into user load signal Puser , aiming to deceive an NILM attacker fϕ who attempts to infer appliance patterns from aggregated SM data. 
+
+Adversarial robustness and transferability. Our formulation also connects to transfer-based black-box adversarial attacks, where perturbations crafted on a surrogate model transfer to unseen targets [18, 16, 8]. Work [2] formally analyze attack transferability and identify three governing factors: the target model’s intrinsic adversarial vulnerability, the surrogate’s complexity, and gradient alignment between surrogate and target. While most analyses focus on classification, recent work shows that surrogate-based attacks also transfer in time-series regression [17], and that selective, confidence-and-error-aware perturbations outperform unstructured ones under fixed budgets [26]. This motivates using a surrogate privacy probe to measure load-structure recoverability and guide the learning of transferable battery-based perturbation policies. Our work instantiates these principles in a physically constrained, RL-controlled setting, where perturbations are realized through battery actions and structured as appliance-signature mimicry. 
+
+3 Problem Formulation 
+
+We consider a black-box SM privacy setting in which the defender does not know the deployed NILM attacker (see Fig. 1). At time t, let Puser (t) denote the original household aggregate load before defense, and let Pbatt (t) denote the battery power controlled by the defender. We follow the convention that Pbatt (t) > 0 denotes charging and Pbatt (t) < 0 denotes discharging. The smart meter reports the masked aggregate load P πθ
+
+> mask
+
+(t) = Puser (t) + Pbatt (t) where the battery action is generated by a defender policy πθ and must satisfy physical constraints, including capacity limits, charging and discharging power limits, state-of-charge feasibility, and throughput constraints. For a window length τ , we denote the clean aggregate window by x0 
+
+> t
+
+= [ Puser (t − τ + 1) , . . . , P user (t)] 
+
+and the corresponding masked aggregate window induced by policy πθ by xπθ 
+
+> t
+
+= [ P πθ
+
+> mask
+
+(t − τ +1) , . . . , P πθ
+
+> mask
+
+(t)] . The appliance-level target within the same window is denoted by yt.An NILM attacker fϕ maps the reported aggregate to appliance-level predictions: ˆyt = fϕ(xπθ 
+
+> t
+
+). For a given attacker fϕ and defender policy πθ , we define the attacker’s inference risk as 
+
+R(fϕ, π θ ) = Et [L (fϕ(xπθ 
+
+> t
+
+), yt)] , (1) where L(·) denotes appliance-level reconstruction loss, such as RMSE, MAE, or SAE. For activation-state inference, we additionally report detection degradation using F1 reduction. A larger R(fϕ, π θ )
+
+indicates that appliance-level consumption is harder to recover from the reported aggregate signal, and therefore corresponds to stronger privacy protection. Since the deployed NILM attacker is unknown, we assume that the attacker belongs to a heterogeneous family fϕ ∈ F , covering optimization-based, probabilistic, and neural sequence prediction models. The ideal robust privacy objective is to maximize the expected NILM inference risk over this attacker family: 
+
+max  
+
+> θ
+
+Efϕ∼μ [R(fϕ, π θ )] , (2) where μ denotes an unknown distribution over possible NILM attackers. Direct optimization of Eq. (2) is infeasible because the deployed attacker and the distribution μ are not accessible during 3training. We therefore introduce a self-supervised aggregate-structure privacy probe in Section 4 to provide a proxy learning signal. 
+
+4 Theoretical Rationale 
+
+The black-box defense problem in Section 3 can be viewed as a physically constrained adversarial attack against NILM inference models, where the perturbation set ∆batt is determined by feasible battery actions rather than norm-bounded digital noise. We denote the ideal expected inference risk over the attacker family by Ravg (πθ ) = Efϕ∼μ[R(fϕ, π θ )] . This quantity is the robust privacy objective in Eq. (2). We therefore develop a computable proxy that serves as a tractable surrogate for 
+
+Ravg (πθ ), resting on two design choices: an aggregate-level privacy probe as the surrogate training signal, and signature mimic as the perturbation mechanism. 
+
+Proxy-guided adversarial optimization. We introduce an aggregate-level privacy probe fη trained on aggregate load data via identity self-supervision: the probe takes an aggregate window x0 as input and is trained to reconstruct x0 as output. The probe is kept fixed during defender training. Formally, we define the proxy inference risk as 
+
+Rp(πθ ) = Et
+
+L  fη (xπθ 
+
+> t
+
+), x0
+
+> t
+
+ . (3) The defender is then trained to increase this proxy inference risk: 
+
+max  
+
+> θ
+
+Rp(πθ ). (4) Because fη is trained to reconstruct clean aggregate windows, a larger Rp(πθ ) indicates that the masked aggregate window deviates from the clean aggregate patterns learned by the probe. Thus, Rp
+
+measures the degree to which the defender disrupts aggregate-level temporal regularities, rather than directly estimating appliance-level NILM error. We use Rp(πθ ) as a computable surrogate for Ravg (πθ ) during training. The surrogate replaces (i) the appliance-level target yt with the aggregate x0 
+
+> t
+
+, which is available without any appliance-level supervision, and (ii) the unknown attacker distribution μ with the fixed probe fη . The rationale for this substitution is that NILM attackers share a common dependence on aggregate temporal patterns, which the probe is designed to capture. 
+
+Task commonality across NILM attackers. Although NILM attackers differ substantially in formulation—from optimization-based disaggregation [9] and probabilistic state-space models [13] to neural sequence predictors [11]—they share a common premise: appliance-level outputs are inferred from aggregate signals under the assumption that the observed aggregate is consistent with the aggregate–appliance co-occurrence statistics seen during training or specified as a generative model. Optimization-based methods search for sparse signature combinations that explain the aggregate; probabilistic models treat the aggregate as an emission from a hidden appliance state with distribution learned from data; neural predictors learn a direct mapping from aggregate trajectories to appliance outputs. In all cases, inference degrades when the reported aggregate is pushed into a region where these training-time statistics no longer hold. Our probe fη , trained to reconstruct clean aggregate windows from the same data distribution, serves as a tractable summary of these statistics. A large Rp(πθ ) therefore certifies that xπθ 
+
+> t
+
+has been driven into such a region, even though the probe itself does not perform appliance-level inference. Pushing the masked aggregate away from these shared regularities is therefore expected to increase the inference risk of many unseen attackers in F,providing a tractable route for increasing Ravg (πθ ).This argument aligns with the surrogate-model principle of black-box adversarial attacks [18, 16, 8]: perturbations optimized against a fixed reference model transfer to other models that share its training data and inductive biases. Work[2] formally show that, under linearization of the attack loss, transferability is governed by the target’s intrinsic vulnerability, the surrogate’s complexity, and the gradient alignment between surrogate and target. Work [17] provide empirical evidence that the principle extends to time-series regression: adversarial perturbations crafted on a CNN regressor transfer with substantial reconstruction-error increase across LSTM and GRU regressors on power consumption data. The structural condition under which this transfer provably increases Ravg is given in Appendix B. 4Signature mimic as a task-aligned perturbation. Since NILM attackers recover appliance-level consumption from aggregate load, an effective perturbation interferes with the appliance-level evidence used for disaggregation rather than merely adding aggregate noise. We construct perturbations from a library S of real appliance signatures: 
+
+xπθ 
+
+> t
+
+= x0 
+
+> t
+
++ δsig , δsig ∈ ∆sig , (5) where δsig is induced by feasible battery actions that replay a selected signature trajectory. The perturbation is therefore physically realizable while retaining appliance-like temporal structure. By restricting the policy to signature-induced perturbations, the framework converts aggregate-structure disruption into plausible but misleading appliance-level evidence, thereby creating ambigu-ous disaggregation explanations for NILM attackers. This view is consistent with a broader trend in time-series adversarial attacks: informed, selective perturbations that exploit task structure outperform unstructured ones under fixed budgets [26]. In SM data privacy tasks, signature-based interventions provide a structured perturbation class better matched to the NILM inference task. The next section instantiates these principles in a hierarchical RL framework operationalizing proxy-guided signature mimic under realistic battery constraints. 
+
+5 Proxy-Guided HRL Policy Training 
+
+We instantiate the proxy-guided signature mimicry principle in Section 4 as a hierarchical RL framework: the fixed privacy probe provides the reward signal, while the signature library defines the high-level perturbation action space. The defender policy πθ learns when to apply signature mimicry and which appliance-like trajectory to replay, while all battery actions are executed under hard physical feasibility constraints. 
+
+Proxy-based privacy reward. The training objective in Eq. (4) maximizes the expected proxy inference risk Rp(πθ ). We optimize this objective with PPO by deriving a per-step privacy reward from its instantaneous form. Since the probe fη has nonzero residual reconstruction error even on clean aggregate windows in practice, we measure the defender’s contribution as the increase in probe error caused by signature insertion, relative to the probe’s residual on the unmodified window x0 
+
+> t
+
+:
+
+rpriv  
+
+> t
+
+= L  fη (xπθ 
+
+> t
+
+), x0
+
+> t
+
+ − L  fη (x0 
+
+> t
+
+), x0
+
+> t
+
+ . (6) Thus, the policy receives positive reward when the selected signature insertion makes the reported aggregate harder to reconstruct as the original clean aggregate structure under the fixed privacy probe. Battery operation also incurs both monetary energy cost Cenergy (t) and battery degradation cost Cdeg (t). Hence we use the combined reward 
+
+rt = λr priv  
+
+> t
+
+− (1 − λ)
+
+
+
+Cenergy  
+
+> t
+
++ Cdeg 
+
+> t
+
+
+
+, (7) where λ ∈ [0 , 1] controls the privacy-cost trade-off. The main privacy experiments use λ = 1 , in which Eq. (7) reduces to the privacy reward in Eq. (6). The cost model is detailed in Appendix A.1. 
+
+Hierarchical signature mimicry policy. We use a signature mimicry mechanism based on a library 
+
+S = {sk}Kk=1 , where each signature sk = [ p(k)1 , . . . , p (k) 
+
+> Lk
+
+] is extracted from real appliance usage and Lk denotes its duration. The hierarchical policy separates high-level signature selection from low-level battery execution. At each decision point, the manager observes the state st, including the current load, time encoding, time-of-use price, battery state of charge, and remaining throughput budget, and outputs a discrete action ahigh  
+
+> t
+
+∈ { 0, 1, . . . , 2K}. Here, ahigh  
+
+> t
+
+= 0 denotes no mimicry; actions 1, . . . , K replay the selected signature as a charging profile, while actions K + 1 , . . . , 2K
+
+replay the corresponding signature as a discharging profile. The low-level executor then replays the selected signature trajectory subject to battery feasibility constraints, including charge/discharge power limits, daily throughput budget, battery capacity, and the state-of-charge range. Detailed battery dynamics and constraint enforcement are provided in Appendix A.2. If a replay trajectory violates these constraints, the executor terminates the action. During replay, the manager remains inactive and resumes control only after the selected signature finishes or is stopped by battery constraints. 5Policy training and deployment. Only the high-level manager is optimized in our settings. The privacy probe is fixed, and the low-level executor deterministically replays selected signatures under battery constraints. We train the manager policy πθ with PPO using the privacy reward in Eq. (6). After training, only the learned manager policy, the signature library, and the deterministic battery executor are deployed. The privacy probe is used only during offline training for reward computation and is not required during deployment. Appliance-level labels are used only for constructing the signature library and for evaluation. The deployed policy operates online using the observed aggregate load, battery state, time, electricity price, and remaining throughput budget, without access to the attacker’s model. The complete hierarchical signature mimicry procedure is summarized in Appendix C. 
+
+6 Experiments 
+
+In this section, we evaluate whether a defender trained with a fixed privacy probe can generalize to heterogeneous black-box NILM attackers. We focus on three questions: whether the learned policy degrades unseen NILM models, whether the effect persists across datasets and test conditions, and which components of the proposed signature-mimicry mechanism contribute to the privacy gain. For reproducibility, the implementation code of our work will be released upon acceptance. 
+
+Experimental setup. Below we present our experimental setting. 
+
+Dataset. We conduct experiments on UK-DALE [12] and REDD [14] with consistent minute-level preprocessing and train–test protocols. UK-DALE serves as the primary benchmark for black-box NILM evaluation. We additionally repeat the defender policy, privacy probe training, and evaluation pipeline on REDD to test whether the proposed framework remains effective under a different dataset distribution. Full dataset details are provided in Appendix E.1. 
+
+Signature library. We construct a trajectory-level signature library from real appliance activations, including 10 representative short-burst and medium-duration patterns from intermittent high-power appliances. Details of signature extraction and library composition are provided in Appendix E.2. The library is constructed once from the UK-DALE House 1 training period and then fixed across all experiments, including the unseen-household and REDD evaluations; no appliance-level data from the target environments are used to adapt it. 
+
+Privacy probe. In the main experiments, we use a Transformer-encoder Seq2Seq (s2s) aggregate re-construction model with a sequence prediction head as the privacy probe. Detailed model architecture and training process are presented in Appendix E.3. To verify that our framework is not dependent on a specific probe architecture, we further test CNN- and LSTM-based probes in Sec. 6, where all three probes yield comparable defense performance. 
+
+Evaluation attackers. We evaluate transferability against six independently trained NILM attack-ers. These attackers span five representative NILM paradigms: optimization-based disaggregation (CO [9]), probabilistic state-space models (FHMM [13]), convolutional sequence-to-point learning (S2P [28]), denoising autoencoder-based NILM (DAE [11]), and Transformer-based NILM (ELEC-TRIcity [25] and BERT4NILM [27]). To ensure that the reported degradation reflects black-box transfer rather than overfitting to a specific inference architecture, all attacker models are trained independently following their original settings, with minor adjustments to match our sampling rate. 
+
+Defender training. The defender is implemented using PPO with Stable-Baselines3 [20]. Unless otherwise specified, the main experiments use λ = 1 , corresponding to the pure privacy objective in Eq. (6). Hyperparameters, observation features, battery settings, and training details are listed in Appendix E.4. 
+
+Evaluation metrics. Let π0 denote the no-defense policy with Pbatt (t) = 0 . To quantify privacy improvement during evaluation, we measure the increase in NILM inference risk caused by the defender relative to the unmasked baseline: ∆priv (fϕ, π θ ) = R(fϕ, π θ ) − R(fϕ, π 0). Positive values of ∆priv (fϕ, π θ ) indicate that the masked signal increases the attacker’s inference error compared with the original aggregate signal. In the experiments, we mainly report RMSE increase and F1 reduction because they respectively measure degradation in appliance-level power reconstruction and activation-state detection. MAE and SAE increases are reported as complementary error metrics. 6Figure 3: Main black-box transfer results on UK-DALE and REDD, averaged over five random seeds. Top: UK-DALE results over four target appliances and the aggregate channel. Bottom: REDD results over five target appliances and the aggregate channel. The proposed defense consistently increases NILM inference error and reduces appliance detection performance across six unseen attackers. Table 1: Overall black-box transfer performance averaged over five random seeds.                                
+
+> Dataset Cases RMSE Inc. ↑MAE Inc. ↑SAE Inc. ↑F1 Red. ↑RMSE Sig. MAE Sig. SAE Sig. F1 Sig.
+> UK-DALE 24 107.12% 118.92% 107.36% 79.32% 22/24 21/24 15/24 24/24
+> REDD 30 165.90% 127.35% 196.33% 80.10% 22/30 22/30 25/30 25/30
+
+Figure 2: Illustration of the learned defender policy strategy and battery SoC on test day. 
+
+Main results: Black-box transfer across NILM attackers. 
+
+Figure 2 illustrates that the learned defender selectively inserts realistic signature trajectories into the aggregate load while satisfying battery constraints. We evaluate black-box trans-fer against six unseen NILM attackers over five random seeds. RMSE and F1 are used as the primary privacy metrics, measur-ing appliance-level power reconstruction error and activation detection accuracy. Figure 3 reports attacker–appliance-level results on UK-DALE and REDD. Across both datasets, the masked signals consis-tently increase NILM reconstruction errors and reduce appli-ance detection performance. On UK-DALE, the defense substantially reduces F1 across all target appliances and attackers, while increasing RMSE for most attacker–appliance pairs. The same trend holds on REDD, despite its different appliance composition and data distribution. The only mixed cases are socket circuits, whose raw F1 scores are already low and whose composite plug-load patterns are less aligned with single-appliance signature mimicry. 7Table 2: Comparison with existing privacy defenses on UK-DALE.                                                           
+
+> Method RMSE Inc. ↑F1 Red. ↑RMSE Sig. F1 Sig. Energy Cost Deg. Cost Total Cost Train Time
+> No defense 0.00% 0.00% ––0.000 0.000 0.000 –Random baseline 18.58% 7.25% 7/24 8/24 0.036 0.029 0.065 –Rule-based baseline 32.44% 24.56% 10/24 10/24 0.177 0.207 0.384 –DDQL-flat 74.03% 70.06% 19/24 20/24 -0.686 0.456 -0.230 3.2h DDQL-MI 93.51% 72.67% 15/24 20/24 -0.482 0.600 0.118 6.6h
+> Ours 107.12% 79.32% 22/24 24/24 -1.224 0.460 -0.764 1.2h
+
+Table 3: Effect of privacy probe architecture on UK-DALE.                 
+
+> Probe RMSE Inc. F1 Red. RMSE Sig. F1 Sig.
+> Seq2Seq 107.12% 79.32% 22/24 24/24
+> LSTM 100.71% 78.75% 22/24 22/24 CNN 94.13% 77.46% 21/24 21/24
+
+Table 4: Effect of signature library size on UK-DALE.                         
+
+> Library Size RMSE Inc. F1 Red. RMSE Sig. F1 Sig.
+> 10 (main) 107.12% 79.32% 22/24 24/24
+> 9103.82% 77.54% 21/24 22/24 793.95% 61.87% 19/24 20/24 585.03% 68.65% 18/24 19/24 366.45% 53.54% 17/24 17/24
+
+Table 1 summarizes dataset-level relative changes, averaged over all attacker–appliance cases and seeds, excluding the aggregate channel. RMSE Sig. and F1 Sig. ratio denotes the proportion of cases with statistically significant changes( p < 0.05 ). The results show large average error increases and substantial F1 reductions on both datasets, indicating consistent degradation of unseen NILM attackers. Overall, the REDD results reinforce our central claim that proxy-guided signature mimicry pipeline remains effective under a different dataset distribution and transfers to different black-box NILM settings. Full numerical results are provided in Appendix F.1 
+
+Comparison with existing privacy defenses. Table 2 compares our method with random/rule-based battery baselines and two strong SM privacy defenses, DDQL-flat and DDQL-MI [24, 22]. Since existing work does not provide a directly comparable HRL and proxy-guided defense, these methods serve as the closest baselines with the same privacy-protection goal. Our method achieves the strongest privacy protection, improving over DDQL-MI by 13.61 percentage points in RMSE increase and 6.65 percentage points in F1 reduction. It also yields more significant degradation cases, reaching 22/24 for RMSE and 24/24 for F1. Meanwhile, our method has the lowest energy and total cost, and requires less training time than DDQL-based baselines because privacy rewards are computed only when a mimic signature is inserted. The negative energy cost is due to time-of-use arbitrage, where the battery charges during low-price periods and discharges during high-price periods. 
+
+Figure 4: Pareto frontier of privacy reward versus energy cost across the λ sweep. 
+
+Ablation studies. We conduct ablation studies to examine how the privacy probe architecture and signature library size affect black-box transfer performance. Table 3 shows that Seq2Seq, LSTM, and CNN probes all yield strong black-box transfer, with RMSE increases above 94% and F1 reductions above 77%. Seq2Seq performs best overall, suggesting that a more expressive surrogate probe provides a stronger learning signal, but the defense is not tied to a specific probe architecture. Table 4 shows that reducing the library generally weakens pri-vacy protection, with RMSE increase dropping from 107.12% using 10 signatures to 66.45% using 3 signatures. However, the 9-signature setting remains close to the full library, indicating that moderate pruning has limited impact while richer libraries improve mimicry diversity. 
+
+Robustness and practical constraints. Below we provide analysis about our defender robustness and physical configuration sensitivity. 
+
+Battery configuration sensitivity. Table 5 studies the effect of battery capacity Cmax , power limit 
+
+Pmax , and daily throughput budget Tmax , averaged over six unseen NILM attackers and four target appliances. Privacy protection improves substantially when capacity and throughput increase, but shows diminishing returns beyond 8 kWh capacity and 2 kW power. Among the three factors, daily 8Table 5: Battery configuration sensitivity on UK-DALE.                                                                                       
+
+> Impact Factor Battery Config RMSE Inc. ↑F1 Red. ↑Agg. ∆RMSE ↑RMSE Sig. F1 Sig.
+> Cmax (kWh) Pmax (kW) Tmax (kWh) Main setting 848107.1% 79.3% 413.9 22/24 24/24
+> Battery capacity 24856.0% 32.6% 239.2 12/24 14/24 44860.2% 42.2% 315.9 17/24 20/24 12 48107.2% 82.6% 405.4 22/24 24/24 Power limit 81885.1% 62.3% 247.9 13/24 14/24 828110.2% 79.3% 393.3 21/24 24/24 86898.0% 80.9% 392.6 22/24 24/24 Throughput budget 84235.7% 24.4% 176.0 11/24 11/24 84472.2% 59.0% 288.1 15/24 18/24 84690.2% 76.1% 411.1 21/24 23/24
+
+Table 6: Generalization across the main and UK-DALE test days.                                                    
+
+> Test Day Active App. RMSE Raw RMSE Masked RMSE Inc. ↑F1 Raw F1 Masked F1 Red. ↓
+> 2013-03-18 H1 (Spring-Monday, Main) 495.95 197.27 105.6% 0.773 0.161 79.2%
+> 2013-01-18 H1 (Winter-Friday) 4113.01 176.38 56.1% 0.687 0.361 47.5% 2013-03-30 H1 (Spring-Saturday) 17.39 89.76 1115.4% 0.225 0.014 93.6% 2013-03-30 H4 (Spring-Saturday) 264.36 135.08 109.9% 0.837 0.568 32.1% 2013-07-15 H1 (Summer-Monday) 472.62 150.57 107.3% 0.698 0.196 71.9% 2013-07-15 H2 (Summer-Monday) 358.85 164.06 178.8% 0.643 0.040 93.7%
+
+throughput budget has the strongest influence, since it directly limits how much mimic-signature replay can be sustained within a day. 
+
+Privacy-cost trade-off. Figure 4 shows that the privacy-cost trade-off factor λ provides a smooth control knob between privacy and energy cost. The λ = 0 policy minimizes energy cost through time-of-use arbitrage, whereas λ = 1 maximizes privacy reward. 
+
+Multi-day and multi-household robustness. Table 6 shows that the same defender generalizes without retraining across seasons, weekdays/weekends, and households. All test days show increased RMSE and reduced F1, with F1 reduction ranging from 32.1% to 93.7%. The effect size varies with appliance activity and raw NILM difficulty, so we report both raw and masked metrics rather than relying only on relative changes to avoid overstating gains on low-error or low-activity days. 
+
+7 Conclusion 
+
+We studied black-box NILM privacy defense under attacker uncertainty, and proposed a proxy-guided HRL framework in which a fixed self-supervised aggregate-structure probe provides a surrogate train-ing signal, while a curated signature library defines a physically realizable, task-aligned perturbation class. Experiments on UK-DALE and REDD show that the learned defender transfers to six unseen NILM attackers spanning optimization-based, probabilistic, and neural sequence architectures, and remains effective across households, seasons, and weekday/weekend conditions without retraining. These results suggest a more general design principle for black-box inference defense: pairing a task-aligned surrogate signal with a structured perturbation class can yield strong cross-attacker transfer without access to the deployed inference model. 
+
+8 Limitations and Future Work 
+
+Three limitations point to natural extensions. First , the curated signature library has finite coverage and is most effective for intermittent high-power appliances; composite low-power loads such as socket circuits on REDD remain harder to mask via single-signature mimicry. Learning the signature library jointly with the policy, or extending it to multi-appliance composite trajectories, is a promising direction. 
+
+Second , our theoretical analysis (Appendix B) establishes a local sufficient condition for proxy-guided improvement of the expected attacker risk; characterizing global behavior across attacker families, or quantifying the surrogate–target gap under specific NILM architectures, remains open. 
+
+Third , evaluation is conducted offline against trained but fixed NILM attackers; deployment in a live SM environment would additionally require handling forecasting uncertainty in user load, online 9Table 7: Generalization across the main and REDD test days. 
+
+Test Day Active App. RMSE Raw RMSE Masked RMSE Inc. ↑ F1 Raw F1 Masked F1 Red. ↓
+
+2011-04-29 H2 (Spring-Friday, Main) 5 44.48 115.47 165.9% 0.493 0.098 80.1% 
+
+2011-04-30 H2 (Spring-Saturday) 5 61.53 123.75 101.1% 0.545 0.125 77.1% 2011-04-26 H1 (Spring-Tuesday) 3 80.36 170.30 111.9% 0.698 0.308 55.9% 2011-05-25 H3 (Spring-Wednesday) 3 111.89 173.51 55.1% 0.580 0.336 42.2% 2011-05-01 H4 (Spring-Sunday) 1 57.36 71.04 23.8% 0.934 0.360 61.4% battery state estimation, and adaptive attackers that bserve the masked signal over time. Stress-testing the framework against adversarially adaptive NILM attackers is, in particular, an important direction for future work. 10 References 
+
+[1] Kunjin Chen, Qin Wang, Ziyu He, Kunlong Chen, Jun Hu, and Jinliang He. Convolutional sequence to sequence non-intrusive load monitoring. the Journal of Engineering , 2018(17):1860– 1864, 2018. [2] Ambra Demontis, Marco Melis, Maura Pintor, Matthew Jagielski, Battista Biggio, Alina Oprea, Cristina Nita-Rotaru, and Fabio Roli. Why do adversarial attacks transfer? explaining transferability of evasion and poisoning attacks. In 28th USENIX security symposium (USENIX security 19) , pages 321–338, 2019. [3] Ecenaz Erdemir, Pier Luigi Dragotti, and Deniz Gündüz. Privacy-cost trade-off in a smart meter system with a renewable energy source and a rechargeable battery. In ICASSP 2019-2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 2687–2691. IEEE, 2019. [4] Ecenaz Erdemir, Pier Luigi Dragotti, and Deniz Gündüz. Privacy-aware time-series data sharing with deep reinforcement learning. IEEE Transactions on Information Forensics and Security ,16:389–401, 2020. [5] Farhad Farokhi. A fundamental bound on performance of non-intrusive load monitoring algorithms with application to smart-meter privacy. IFAC-PapersOnLine , 53(2):2280–2285, 2020. [6] Farhad Farokhi and Henrik Sandberg. Fisher information privacy with application to smart meter privacy using hvac units. In Privacy in dynamical Systems , pages 3–17. Springer, 2019. [7] Jesus Gomez-Vilardebo and Deniz Gündüz. Smart meter privacy for multiple users in the presence of an alternative energy source. IEEE Transactions on Information Forensics and Security , 10(1):132–141, 2014. [8] Jindong Gu, Xiaojun Jia, Pau de Jorge, Wenqain Yu, Xinwei Liu, Avery Ma, Yuan Xun, Anjun Hu, Ashkan Khakzar, Zhijiang Li, et al. A survey on transferability of adversarial examples across deep neural networks. arXiv preprint arXiv:2310.17626 , 2023. [9] George W Hart. Nonintrusive appliance load monitoring. Proceedings of the IEEE , 80(12):1870– 1891, 1992. [10] Maria Kaselimi, Eftychios Protopapadakis, Athanasios Voulodimos, Nikolaos Doulamis, and Anastasios Doulamis. Towards trustworthy energy disaggregation: A review of challenges, methods, and perspectives for non-intrusive load monitoring. Sensors , 22(15):5872, 2022. [11] Jack Kelly and William Knottenbelt. Neural nilm: Deep neural networks applied to energy dis-aggregation. In 2nd ACM int. conf. on embedded systems for energy-efficient built environments ,pages 55–64, 2015. [12] Jack Kelly and William Knottenbelt. The uk-dale dataset, domestic appliance-level electricity demand and whole-house demand from five uk homes. Scientific data , 2(1):1–14, 2015. [13] J Zico Kolter and Tommi Jaakkola. Approximate inference in additive factorial hmms with application to energy disaggregation. In Artificial intelligence and statistics , pages 1472–1482. PMLR, 2012. [14] J Zico Kolter and Matthew J Johnson. Redd: A public data set for energy disaggregation research. In Workshop on data mining applications in sustainability (SIGKDD), San Diego, CA ,volume 25, pages 59–62, 2011. [15] Donghe Li, Qingyu Yang, Feiye Zhang, Yiqun Wang, Yingchen Qian, and Dou An. Research on privacy issues in smart metering system: An improved tcn-based nilm attack method and practical drl-based rechargeable battery assisted privacy preserving method. IEEE Transactions on Automation Science and Engineering , 2023. [16] Yanpei Liu, Xinyun Chen, Chang Liu, and Dawn Song. Delving into transferable adversarial examples and black-box attacks. arXiv preprint arXiv:1611.02770 , 2016. 11 [17] Gautam Raj Mode and Khaza Anuarul Hoque. Adversarial examples in deep learning for multivariate time series regression. In 2020 ieee applied imagery pattern recognition workshop (aipr) , pages 1–10. IEEE, 2020. [18] Nicolas Papernot, Patrick McDaniel, Ian Goodfellow, Somesh Jha, Z Berkay Celik, and Anan-thram Swami. Practical black-box attacks against machine learning. In Proceedings of the 2017 ACM on Asia conference on computer and communications security , pages 506–519, 2017. [19] Adrien Petralia, Philippe Charpentier, Youssef Kadhi, and Themis Palpanas. Nilmformer: Non-intrusive load monitoring that accounts for non-stationarity. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pages 4761–4772, 2025. [20] Antonin Raffin, Ashley Hill, Adam Gleave, Anssi Kanervisto, Maximilian Ernestus, and Noah Dormann. Stable-baselines3: Reliable reinforcement learning implementations. Journal of Machine Learning Research , 22(268):1–8, 2021. [21] Hasan Rafiq, Prajowal Manandhar, Edwin Rodriguez-Ubinas, Omer Ahmed Qureshi, and Themis Palpanas. A review of current methods and challenges of advanced deep learning-based non-intrusive load monitoring (nilm) in residential context. Energy and Buildings , 305:113890, 2024. [22] Mohammadhadi Shateri. Privacy-cost management in smart meters: Classical vs deep q-learning with mutual information. In 2023 IEEE 11th international conference on smart energy grid engineering (SEGE) , pages 109–113. IEEE, 2023. [23] Mohammadhadi Shateri, Francisco Messina, Pablo Piantanida, and Fabrice Labeau. Privacy-cost management in smart meters using deep reinforcement learning. In IEEE PES ISGT-Europe ,pages 929–933, 2020. [24] Mohammadhadi Shateri, Francisco Messina, Pablo Piantanida, and Fabrice Labeau. Privacy-cost management in smart meters with mutual-information-based reinforcement learning. IEEE Internet of Things Journal , 9(22):22389–22398, 2021. [25] Stavros Sykiotis, Maria Kaselimi, Anastasios Doulamis, and Nikolaos Doulamis. Electricity: An efficient transformer for non-intrusive load monitoring. Sensors , 22(8):2926, 2022. [26] Gamze Kirman Tokgoz, Onat Gungor, Tajana Rosing, and Baris Aksanli. Intarg: Informed real-time adversarial attack generation for time-series regression. arXiv preprint arXiv:2604.11928 ,2026. [27] Zhenrui Yue, Camilo Requena Witzig, Daniel Jorde, and Hans-Arno Jacobsen. Bert4nilm: A bidirectional transformer model for non-intrusive load monitoring. In Proceedings of the 5th International Workshop on Non-Intrusive Load Monitoring , pages 89–93, 2020. [28] Chaoyun Zhang, Mingjun Zhong, Zongzuo Wang, Nigel Goddard, and Charles Sutton. Sequence-to-point learning with neural networks for non-intrusive load monitoring. In AAAI conf. on artificial intelligence , volume 32, 2018. [29] Jiahao Zhang, Chenbei Lu, Hongyu Yi, and Chenye Wu. User-perceptional privacy protection in nilm: A differential privacy approach. Applied Energy , 382:125233, 2025. [30] Ruichang Zhang, Youcheng Sun, and Mustafa A Mustafa. Proactive load-shaping strategies with privacy-cost trade-offs in residential households based on deep reinforcement learning. In 2024 IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm) , pages 160–166. IEEE, 2024. [31] Ruichang Zhang, Kaiyue Wu, Youcheng Sun, and Mustafa A Mustafa. Privacy-preserving load-shaping strategies for smart meters using deep reinforcement learning. In 2024 IEEE PES Innovative Smart Grid Technologies Europe (ISGT EUROPE) , pages 1–5. IEEE, 2024. 12 Appendix 
+
+A Cost Modeling and Battery Constraints 
+
+This appendix provides the battery feasibility constraints and operational cost model used in this work. The feasibility constraints define the executable action space of the low-level battery executor, while the cost model quantifies the economic and degradation implications of battery operation. Unless otherwise specified, the main privacy experiments use λ = 1 , corresponding to privacy-focused optimization, and report electricity and battery degradation costs separately. 
+
+A.1 Cost Modelling: Battery Degradation and Operational Cost 
+
+Battery operation incurs both time-of-use electricity cost and battery degradation cost. These quantities correspond to Cenergy  
+
+> t
+
+and Cdeg  
+
+> t
+
+in Eq. (7). In the main privacy experiments, λ = 1 , so Eq. (7) reduces to the privacy reward in Eq. (6); the following costs are evaluated and reported separately. We adopt a time-of-use electricity tariff ce(t). Under the sign convention Pbatt (t) > 0 for charging and Pbatt (t) < 0 for discharging, the ToU energy cost is defined as 
+
+Cenergy  
+
+> t
+
+= ce(t) ∆ t
+
+
+
+Pbatt (t)
+
+ηc
+
+, Pbatt (t) > 0 (charging) ,ηd Pbatt (t), Pbatt (t) < 0 (discharging) ,
+
+0, Pbatt (t) = 0 .
+
+(8) Here, Cenergy  
+
+> t
+
+may take negative values, reflecting cost savings when the battery discharges to offset grid consumption during high-price periods. This corresponds to temporal energy shifting rather than feed-in tariffs, as no electricity is sold back to the grid. For simplicity and clarity of analysis, we set ηc = ηd = 1 in all experiments. Under this setting, Eq. (8) simplifies to 
+
+Cenergy  
+
+> t
+
+= ce(t) ∆ t P batt (t). (9) Battery cycling also induces long-term degradation. Following throughput-based cycle aging models, the degradation cost is modeled as proportional to the processed battery energy: 
+
+Cdeg  
+
+> t
+
+= cdeg |Pbatt (t)| ∆t, (10) where cdeg denotes the amortized degradation cost per processed kilowatt-hour. The overall operational cost at time t is therefore 
+
+Cop  
+
+> t
+
+= Cenergy  
+
+> t
+
++ Cdeg  
+
+> t
+
+. (11) When operational costs are considered during policy optimization, Cop  
+
+> t
+
+is combined with the privacy reward through the trade-off coefficient λ in Eq. (7). 
+
+A.2 Battery Feasibility Constraints 
+
+The masked load follows the sign convention: Pbatt (t) > 0 denotes battery charging and increases the reported aggregate load, while Pbatt (t) < 0 denotes battery discharging and decreases the reported aggregate load. All battery actions generated by the low-level executor are subject to hard physical constraints. First, the battery power is bounded by the maximum charging and discharging rates: 
+
+−P dis max ≤ Pbatt (t) ≤ P ch max , (12) where P ch max and P dis max denote the maximum charging and discharging power, respectively. The battery state of charge evolves according to 
+
+SoC t+1 = SoC t + ηc[Pbatt (t)] +∆tEmax 
+
+− [−Pbatt (t)] +∆tηdEmax 
+
+, (13) 13 where Emax is the battery capacity, ηc and ηd are the charging and discharging efficiencies, ∆t is the sampling interval, and [x]+ = max( x, 0) .To avoid unrealistic operation near full depletion or full charge, the battery is constrained to operate within a safe state-of-charge range: 
+
+0.1 ≤ SoC t ≤ 0.9. (14) When a daily throughput budget is used, the cumulative processed battery energy within one day is additionally constrained by X
+
+> t∈D
+
+|Pbatt (t)| ∆t ≤ Bday , (15) where D denotes the set of timesteps within the day and Bday is the daily throughput budget. During signature replay, a high-level action first defines a nominal battery trajectory: 
+
+˜Pbatt (t + τ ) = σ(ahigh  
+
+> t
+
+)p(k) 
+
+> τ
+
+, τ = 1 , . . . , L k, (16) where σ(ahigh  
+
+> t
+
+) = +1 denotes charging and σ(ahigh  
+
+> t
+
+) = −1 denotes discharging. The actually executed battery action Pbatt (t + τ ) is obtained by enforcing the constraints in Eqs. (12)–(15). If the nominal replay violates the charge/discharge power limits, the state-of-charge range, or the remaining throughput budget, the executor clips the action to the feasible range or terminates the replay. 
+
+B Theoretical Analysis for Proxy-Guided Signature Manipulation 
+
+This appendix provides a sufficient-condition analysis for the proxy-guided objective used in Section 4. The goal is not to establish a universal guarantee for transfer to all possible NILM attackers. Rather, the analysis formalizes a local condition under which optimizing a surrogate privacy probe can improve the expected inference risk over a heterogeneous attacker family. This condition can be viewed as a policy-constrained analogue of surrogate-target alignment in transfer-based black-box adversarial attacks. 
+
+B.1 Notation and Objective 
+
+Let D denote the data distribution over aggregate load windows and appliance-level targets. For a defense policy πθ , let xπθ denote the masked aggregate window induced by feasible battery actions. For a NILM attacker fϕ, the inference risk is 
+
+R(fϕ, π θ ) = E(x,y)∼D [L (fϕ(xπθ ), y)] , (17) where L measures appliance-level reconstruction error. The ideal robust objective under attacker uncertainty is 
+
+Ravg (πθ ) = Efϕ∼μ [R(fϕ, π θ )] , (18) where μ denotes the latent distribution over possible NILM attackers. Since μ is unknown during training, the defender instead optimizes the proxy risk induced by the fixed aggregate-structure privacy probe: 
+
+Rp(πθ ) = R(fη , π θ ). (19) Let 
+
+zθ = ψ(xπθ ) (20) denote the NILM-relevant representation induced by the current policy. The representation map ψ(·)
+
+is used only as an analytical abstraction of task-level commonality among NILM attackers, rather than as an explicitly learned feature extractor shared by all models. For compactness, we write the representation-level proxy risk and expected attacker-family risk as 
+
+rp(zθ ) = Rp(πθ ), ravg (zθ ) = Ravg (πθ ), (21) where the dependence on D is implicit. The corresponding representation-level risk gradients are 
+
+up = ∇z rp(zθ ), uavg = ∇z ravg (zθ ). (22) 14 B.2 Policy-Reachable Representation Directions 
+
+The defense policy cannot manipulate arbitrary directions in the representation space. It can only in-duce changes through feasible battery actions, subject to capacity, power, state-of-charge, throughput, and cost constraints. Therefore, the relevant transfer condition should be stated only for directions that are locally reachable by the policy. Let 
+
+Jθ = ∂z θ
+
+∂θ (23) denote the local policy-to-representation Jacobian. The local policy-reachable representation subspace is 
+
+Tθ = Range( Jθ ). (24) Let Pθ denote the orthogonal projection onto Tθ. For any representation-level gradient u, define its reachable component as 
+
+ureach = Pθ u. (25) Since directions orthogonal to Tθ cannot be induced by local policy changes, they do not affect the policy-gradient update: 
+
+J⊤ 
+
+> θ
+
+u = J⊤ 
+
+> θ
+
+ureach . (26) 
+
+B.3 Local Surrogate-Target Alignment 
+
+We now state a local sufficient condition connecting the proxy risk and the expected attacker-family risk. The condition is defined in the metric induced by the policy-to-representation mapping. Let 
+
+Mθ = Jθ J⊤ 
+
+> θ
+
+(27) denote the policy-induced metric on the reachable representation subspace. For any two reachable representation directions a, b ∈ T θ , their corresponding policy-gradient inner product is 
+
+J⊤ 
+
+> θ
+
+a, J ⊤ 
+
+> θ
+
+b = a⊤Mθ b. (28) 
+
+Condition A1: Policy-induced structure-to-risk alignment. At the current policy parameter θ,suppose the reachable proxy-risk direction and the reachable expected-risk direction satisfy 
+
+ ureach 
+
+> p
+
+⊤ Mθ ureach avg ≥ γ  ureach 
+
+> p
+
+⊤ Mθ ureach  
+
+> p
+
+− εtr , γ > 0, (29) where εtr ≥ 0 captures residual transfer error. This condition states that, after accounting for how feasible signature-mimicry actions change aggre-gate structures, the probe-risk direction is locally aligned with the expected NILM-risk direction over the attacker family. It does not require the probe to predict appliance-level outputs or replicate any deployed NILM attacker. Instead, it assumes that, within the signature-reachable action space, aggre-gate structures that strongly degrade probe reconstruction are also structures that affect downstream NILM disaggregation. Because the attacker distribution μ is unknown, this condition cannot be directly verified during training. Its practical relevance is evaluated empirically by testing whether policies trained against fη
+
+degrade unseen NILM attackers. 
+
+B.4 Policy-Level Alignment 
+
+The following proposition shows that Condition A1 directly induces alignment between the proxy-gradient direction and the expected-risk gradient in policy-parameter space. 
+
+Proposition 1: Policy-level proxy alignment. Under Condition A1, 
+
+⟨∇ θ Rp(πθ ), ∇θ Ravg (πθ )⟩ ≥ γ ∥∇ θ Rp(πθ )∥2 − εtr . (30) 15 Proof. By the chain rule and Eq. (26), 
+
+∇θ Rp(πθ ) = J⊤ 
+
+> θ
+
+ureach  
+
+> p
+
+, ∇θ Ravg (πθ ) = J⊤ 
+
+> θ
+
+ureach avg . (31) Therefore, 
+
+⟨∇ θ Rp(πθ ), ∇θ Ravg (πθ )⟩ = J⊤ 
+
+> θ
+
+ureach  
+
+> p
+
+, J ⊤ 
+
+> θ
+
+ureach avg 
+
+=  ureach 
+
+> p
+
+⊤ Jθ J⊤ 
+
+> θ
+
+ureach avg 
+
+=  ureach 
+
+> p
+
+⊤ Mθ ureach avg . (32) Applying Condition A1 gives 
+
+⟨∇ θ Rp(πθ ), ∇θ Ravg (πθ )⟩ ≥ γ  ureach 
+
+> p
+
+⊤ Mθ ureach  
+
+> p
+
+− εtr 
+
+= γ J⊤ 
+
+> θ
+
+ureach  
+
+> p
+> 2
+
+− εtr 
+
+= γ ∥∇ θ Rp(πθ )∥2 − εtr . (33) This proves Eq. (30). □
+
+B.5 Local Improvement of the Robust Objective 
+
+The previous proposition establishes policy-level alignment. We next state a local improvement result for a small proxy-gradient ascent step. 
+
+Condition A2: Local smoothness. Assume that Ravg (πθ ) is locally L-smooth as a function of θ.That is, for a sufficiently small update ∆θ,
+
+Ravg (πθ+∆ θ) ≥ R avg (πθ ) + ⟨∇ θ Ravg (πθ ), ∆θ⟩ − L
+
+2 ∥∆θ∥2. (34) 
+
+Proposition 2: Proxy-guided local improvement. Let the policy be updated by a small proxy-gradient ascent step: 
+
+θ+ = θ + η∇θ Rp(πθ ), (35) where η > 0 is the step size. Under Conditions A1 and A2, 
+
+Ravg (πθ+ ) − R avg (πθ ) ≥ η
+
+h
+
+γ ∥∇ θ Rp(πθ )∥2 − εtr 
+
+i
+
+− Lη 2
+
+2 ∥∇ θ Rp(πθ )∥2 . (36) Thus, for sufficiently small η, the proxy-guided update improves the expected attacker-family risk whenever the surrogate-target alignment term dominates the residual transfer error. 
+
+Proof. Set 
+
+∆θ = η∇θ Rp(πθ ). (37) Substituting this update into Eq. (34) gives 
+
+Ravg (πθ+ ) − R avg (πθ ) ≥ η ⟨∇ θ Ravg (πθ ), ∇θ Rp(πθ )⟩ − Lη 2
+
+2 ∥∇ θ Rp(πθ )∥2 . (38) Applying Proposition 1 yields Eq. (36). □
+
+B.6 Empirical evidence of Condition A1. 
+
+Although Condition A1 cannot be directly verified at training time, its empirical implication is testable: a policy trained against fη should degrade unseen NILM attackers in F. The cross-attacker transfer results in Section 6 (Table 1) provide consistent evidence: across 24 attacker–appliance pairs on UK-DALE and 30 on REDD, the proxy-guided policy increases attacker reconstruction error by over 100% on average and reduces F1 by 80%. This is the empirical signature of γ > 0 holding broadly across the attacker family. 16 Algorithm 1 Proxy-Guided HRL Training for Signature Mimicry 
+
+Input: Fixed privacy probe fη , signature library S, battery environment E
+
+Output: Trained manager policy πθ 
+
+> 1:
+
+Initialize manager policy πθ 
+
+> 2:
+
+for each training episode do  
+
+> 3:
+
+Reset environment and battery state  
+
+> 4:
+
+while episode not finished do  
+
+> 5:
+
+Observe state st 
+
+> 6:
+
+Sample high-level action ahigh  
+
+> t
+
+∼ πθ (·| st) 
+
+> 7:
+
+if ahigh  
+
+> t
+
+= 0 then  
+
+> 8:
+
+Apply no mimic action and advance one step  
+
+> 9:
+
+else  
+
+> 10:
+
+Select the signature and replay direction from ahigh  
+
+> t
+> 11:
+
+Replay the selected signature using the deterministic executor subject to hard battery constraints  
+
+> 12:
+
+end if  
+
+> 13:
+
+Construct the resulting masked window xπθ 
+
+> t
+> 14:
+
+Construct the corresponding unmodified window x0 
+
+> t
+> 15:
+
+Compute privacy reward using Eq. (6)  
+
+> 16:
+
+Store transition in the rollout buffer  
+
+> 17:
+
+end while  
+
+> 18:
+
+Update manager policy πθ using PPO  
+
+> 19:
+
+end for  
+
+> 20:
+
+Return trained policy πθ
+
+B.7 Signature Mimic as a Structured Perturbation Class 
+
+The main text motivates signature mimic as a task-aligned perturbation mechanism. Here we formalize this design choice at the level of feasible perturbation classes. Let ∆batt denote the set of perturbations that can be physically realized by the battery under capacity, power, state-of-charge, throughput, and cost constraints. A generic battery-induced perturbation satisfies 
+
+δπθ ∈ ∆batt . (39) Signature mimic restricts this feasible set to perturbations generated by replaying trajectories from a real appliance-signature library S:
+
+∆sig = {δ ∈ ∆batt : δ is induced by replaying a selected signature s ∈ S} . (40) Thus, 
+
+∆sig ⊆ ∆batt . (41) This restriction does not make the perturbation class more general. Instead, it makes the perturbations more task-aligned. The goal is not to maximize arbitrary distortion of the aggregate signal, but to introduce plausible appliance-like decoys that interfere with NILM disaggregation. Compared with unstructured random perturbations sampled from ∆batt , perturbations in ∆sig are constructed from real appliance trajectories and therefore retain appliance-like temporal structure. This provides a formal interpretation of signature mimic as a structured adversarial perturbation class tailored to NILM inference. The effectiveness of this design choice is evaluated empirically through comparisons with random or unstructured perturbation baselines and through ablations over the signature library. 
+
+C Algorithm 
+
+The full training procedure is summarized in Algorithm 1. 17 D Broader Impact 
+
+This work develops a privacy defense for smart meter users against appliance-level inference attacks, aiming to restore user control over fine-grained behavioral information that smart meter deployments would otherwise expose. The intended societal benefit is improved residential energy privacy without requiring changes to the metering infrastructure or assumptions about the deployed inference model. We acknowledge two potential concerns. Misuse risk. The same proxy-guided framework that learns to inject misleading appliance signatures could in principle be repurposed to obscure malicious load patterns, such as energy theft, from utility-side monitoring. We note that the framework operates under hard battery feasibility constraints and does not alter the user’s actual energy consumption—only the reported aggregate trajectory. Distinguishing legitimate privacy protection from concealment of misuse requires utility-side detection mechanisms and is a policy-level question beyond the scope of this work. Grid-level effects. Wide-scale deployment of battery-based load shaping interacts with grid demand forecasting and could affect distribution-network operations if adopted at scale. Coordinated deployment protocols and forecasting-aware extensions are an important direction for practical adoption. 
+
+E Experiment Settings 
+
+E.1 Dataset Description 
+
+We evaluate our method on the UK-DALE dataset [12], a widely used public dataset for NILM research. It contains appliance-level and aggregate power readings from multiple UK households. We use data from House 1, downsampled to 1-minute resolution, following prior works [30, 31]. We extract 10 days of user load data (from March 19 to March 29, 2013) as the training set, and reserve a separate day (March 18, 2013) as the test set. During attacker training, the 10-day data is further split into a training and a cross-validation subset (80:20). The test day is only used to evaluate the performance of the learned defender policy. To assess cross-dataset applicability, we additionally conduct experiments on the REDD dataset [14]. REDD contains aggregate and appliance-level power measurements from multiple residential build-ings in the United States. Similar to the UK-DALE setup, we use continuous data from Building 2, downsampled to 1-minute resolution. We select 11 consecutive days, using the first 10 days (from April 19 to April 29, 2011) for training and the 11th day (April 30, 2011) for testing. The REDD dataset is used to evaluate how well the proposed defense framework performs when facing a range of mainstream NILM attackers under a different data distribution. 
+
+E.2 Appliance Signature Selection 
+
+We construct a trajectory-level appliance signature library S from the UK-DALE House 1 dataset, which contains power traces of 37 labeled household appliances. All candidate and selected signatures are extracted exclusively from the UK-DALE House 1 training period, with no temporal overlap with any evaluation day. Once constructed, the library is frozen and reused without target-specific adaptation. The purpose of this library is to provide realistic appliance-level usage patterns that can be replayed by the battery controller during mimicry. Since NILM attackers often rely on distinctive appliance activation patterns in the aggregate load, we focus on intermittent high-power appliances whose signatures are visually and statistically salient, such as kettles, toasters, microwaves, ovens, washer–dryers, and dishwashers. 
+
+Candidate event extraction. We first identify the top-6 energy-consuming intermittent high-power appliances and extract candidate usage trajectories from a 10-day period. For each appliance, we apply a threshold-based event segmentation scheme. A device-specific activation threshold is used to determine whether the appliance is operating. The appliance-level power sequence is scanned sequentially: when the power first exceeds the threshold, a new event is initiated and its start time is recorded. Consecutive samples above the threshold are grouped into the same event, forming a continuous usage trajectory. The event is terminated once the power falls below the threshold. To remove noise and spurious activations, events shorter than a predefined minimum duration are discarded. This process yields 188 candidate appliance usage trajectories. 18 Filtering and ranking. To keep the mimic actions physically meaningful and to simplify the reinforcement learning action space, we further filter the candidate trajectories by duration and power magnitude. Specifically, we retain events whose duration is between 5 and 35 minutes and whose median power lies between 300 and 2500 W. These constraints remove extremely short, low-power, or unusually long events that are less suitable for battery-based replay. The remaining candidates are ranked according to two criteria. First, we prioritize trajectories with larger standard deviation, as they exhibit stronger temporal variation and therefore provide more distinctive usage patterns. Second, we rank by median power, since higher-power events are more visible in the aggregate load and are more likely to affect NILM inference. To avoid the final library being dominated by a single appliance type, we impose a balancing constraint and retain at most two signatures per appliance category. Signatures are then selected greedily from the ordered candidate list until the final library contains 10 representative trajectories. 
+
+Final signature library. The resulting library S contains 10 appliance signatures covering short high-power bursts and medium-duration usage patterns. Typical examples include kettle, toaster, microwave, washer-dryer, and dishwasher signatures. All selected signatures have durations between 5 and 35 minutes, with most concentrated in the 5–10 minute range. In terms of power magnitude, most signatures fall between 1500 and 2500 W, corresponding to common high-power intermittent household appliances. Figure 5 visualizes representative trajectories from the final mimic library. The selected signatures exhibit diverse temporal lengths, power magnitudes, and usage patterns, supporting realistic appliance-level mimicry under battery control. 
+
+E.3 Privacy Probe Training 
+
+The architecture of the Transformer-based Seq2Seq privacy probe model consists of a linear em-bedding layer projecting input to a 64-dimensional latent space, followed by sinusoidal positional encoding. The encoder comprises 3 Transformer layers with 4 attention heads and a dropout rate of 0.1. A final linear projection maps each hidden state to a 1D power prediction. The LSTM probe uses a two-layer LSTM encoder with a hidden size of 64. A single-channel input sequence is first processed by the stacked recurrent layers, which output a 64-dimensional hidden representation at each time step. A final linear projection maps each hidden state to a scalar power estimate. The 1D-CNN probe is built with three temporal convolutional layers. After reshaping the input to channel-first format, the model applies two hidden Conv1D blocks (64 channels, kernel size 3), each followed by ReLU activation, and a final Conv1D layer that maps features to a single output channel. Symmetric padding is used to preserve sequence length throughout the network, and the output is reshaped back to time-first format. We first generate candidate 60-minute segments via repeated sliding-window passes (stride = 30 minutes) over the 14,400-minute (10-day) period, with each pass beginning at a randomly sampled starting offset uniformly drawn from [0, 1439] and proceeding to the end of the sequence. Within each pass, the first 80% of generated segments (by temporal order) are tentatively tagged as the training set and the last 20% as the validation set. To eliminate leakage arising from the randomized offsets, we discard any training-tagged segment whose end time extends into the final two validation days(i.e., exceeds 11,520 minutes), and any validation-tagged segment whose start time extends into the first eight training days (i.e., precedes 11,520 minutes). This guarantees strict non-overlap in absolute time between the training and validation sets. The procedure repeats across independently sampled offsets until 5,000 segments are collected for each set. The remaining one-day data is reserved exclusively for evaluation. The model is trained using mean squared error (MSE) loss as loss function. 
+
+E.4 Defender Training Parameters and SM environment Settings 
+
+The PPO defender training proceeds for 300 PPO episodes, with 1,440 time steps per episode (corresponding to one full day). The PPO optimizer uses a learning rate of 2 × 10 −5, a discount factor γ = 0 .99 , GAE parameter λ = 0 .95 . We adopt a rollout horizon of 4,096 steps, 4 optimization epochs per update, a minibatch size of 2,048, and a clipping range of 0.1. Entropy regularization is 19 Figure 5: Representative signature trajectories in the constructed signature library. All trajectories are padded to a unified length of 35 minutes for visualization. The signatures exhibit diverse temporal lengths, power magnitudes, and usage patterns, illustrating the diversity and realism of the signature library used for mimicry. enabled with a coefficient of 0.01 to encourage early exploration, and a target KL divergence of 0.01 is used to stabilize policy updates. The defender operates within a simulated battery and SM environment with the following constraints: a maximum capacity of 8 kWh, peak charge/discharge power of 4 kW, and a SoC constraint between 10% and 90%. The SoC is initialized to 50% at the beginning of each episode. All actions are applied at 1-minute resolution. 
+
+E.5 Computational resources. 
+
+All experiments were conducted on a single NVIDIA RTX 3050 Ti GPU. Defender training takes approximately 1.2 hours per run; full reproduction of the main results (both datasets, five seeds, six attackers) requires roughly 30 GPU-hours. 20 Table 8: Detailed Raw, Masked, Delta, and p-value results on UK-DALE over five random seeds. 
+
+> Attacker
+
+Appliance Raw Data Masked Data Delta (Masked - Raw) p-value RMSE MAE SAE F1 RMSE MAE SAE F1 RMSE MAE SAE F1 RMSE MAE SAE F1 CO Aggregate 176.97 31.53 0.07 – 393.16 ±26.34 194.98 ±7.13 0.84 ±0.07 – 216.18 ±26.34 163.44 ±7.13 0.77 ±0.07 – 0.00 0.00 0.00 –Fridge freezer 79.24 41.01 0.81 0.70 82.41 ±1.33 40.33 ±0.86 0.84 ±0.01 0.16 ±0.03 3.17 ±1.33 -0.68 ±0.86 0.02 ±0.01 -0.54 ±0.03 0.01 0.19 0.02 0.00 
+
+Kettle 86.62 4.85 0.05 0.95 274.23 ±11.35 33.14 ±2.83 0.59 ±0.29 0.25 ±0.14 187.61 ±11.35 28.29 ±2.83 0.54 ±0.29 -0.70 ±0.14 0.00 0.00 0.02 0.00 
+
+Microwave 41.76 2.37 0.02 0.96 167.45 ±24.36 18.83 ±5.02 0.49 ±0.29 0.08 ±0.11 125.70 ±24.36 16.46 ±5.02 0.47 ±0.29 -0.87 ±0.11 0.00 0.00 0.03 0.00 
+
+Toaster 94.89 6.40 0.21 0.89 188.11 ±9.56 20.57 ±2.22 0.90 ±0.12 0.00 ±0.00 93.23 ±9.56 14.17 ±2.22 0.69 ±0.12 -0.89 ±0.00 0.00 0.00 0.00 0.00 
+
+> FHMM
+
+Aggregate 150.54 20.62 0.02 – 389.00 ±26.01 183.97 ±7.81 0.74 ±0.07 – 238.46 ±26.01 163.35 ±7.81 0.72 ±0.07 – 0.00 0.00 0.00 –Fridge freezer 77.11 39.07 0.78 0.70 82.87 ±2.22 40.64 ±1.26 0.83 ±0.02 0.16 ±0.03 5.76 ±2.22 1.57 ±1.26 0.05 ±0.02 -0.54 ±0.03 0.01 0.07 0.01 0.00 
+
+Kettle 86.62 4.85 0.05 0.95 274.23 ±11.35 33.14 ±2.83 0.59 ±0.29 0.25 ±0.14 187.61 ±11.35 28.29 ±2.83 0.54 ±0.29 -0.70 ±0.14 0.00 0.00 0.02 0.00 
+
+Microwave 41.76 2.37 0.02 0.96 167.45 ±24.36 18.83 ±5.02 0.49 ±0.29 0.08 ±0.11 125.70 ±24.36 16.46 ±5.02 0.47 ±0.29 -0.87 ±0.11 0.00 0.00 0.03 0.00 
+
+Toaster 94.89 6.40 0.21 0.89 188.11 ±9.56 20.57 ±2.22 0.90 ±0.12 0.00 ±0.00 93.23 ±9.56 14.17 ±2.22 0.69 ±0.12 -0.89 ±0.00 0.00 0.00 0.00 0.00 
+
+> DAE
+
+Aggregate 46.09 22.38 0.01 – 471.59 ±36.74 224.61 ±11.86 0.46 ±0.08 – 425.50 ±36.74 202.23 ±11.86 0.44 ±0.08 – 0.00 0.00 0.00 –Fridge freezer 62.07 28.91 0.10 0.74 78.79 ±1.08 40.09 ±1.17 0.63 ±0.03 0.24 ±0.02 16.72 ±1.08 11.18 ±1.17 0.53 ±0.03 -0.50 ±0.02 0.00 0.00 0.00 0.00 
+
+Kettle 172.13 35.48 0.25 0.72 323.42 ±16.39 70.15 ±8.34 0.57 ±0.31 0.24 ±0.09 151.29 ±16.39 34.67 ±8.34 0.32 ±0.31 -0.48 ±0.09 0.00 0.00 0.11 0.00 
+
+Microwave 121.10 33.13 1.29 0.31 198.14 ±15.75 50.26 ±5.29 2.22 ±0.21 0.16 ±0.05 77.04 ±15.75 17.13 ±5.29 0.93 ±0.21 -0.15 ±0.05 0.00 0.00 0.00 0.00 
+
+Toaster 151.07 36.44 0.74 0.57 216.61 ±17.21 49.77 ±5.81 0.67 ±0.44 0.15 ±0.13 65.54 ±17.21 13.33 ±5.81 -0.06 ±0.44 -0.42 ±0.13 0.00 0.01 0.79 0.00 
+
+> S2P
+
+Aggregate 26.62 12.72 0.00 – 489.24 ±34.84 233.44 ±12.27 0.47 ±0.08 – 462.62 ±34.84 220.71 ±12.27 0.46 ±0.08 – 0.00 0.00 0.00 –Fridge freezer 38.28 19.45 0.10 0.87 80.18 ±2.13 40.86 ±0.62 0.67 ±0.02 0.17 ±0.03 41.90 ±2.13 21.41 ±0.62 0.57 ±0.02 -0.70 ±0.03 0.00 0.00 0.00 0.00 
+
+Kettle 127.35 15.49 0.36 0.91 278.11 ±18.24 44.24 ±4.88 0.28 ±0.18 0.21 ±0.17 150.75 ±18.24 28.75 ±4.88 -0.08 ±0.18 -0.70 ±0.17 0.00 0.00 0.42 0.00 
+
+Microwave 150.39 24.99 1.14 0.37 223.62 ±21.83 43.87 ±7.30 2.12 ±0.54 0.18 ±0.05 73.23 ±21.83 18.88 ±7.30 0.97 ±0.54 -0.19 ±0.05 0.00 0.01 0.02 0.00 
+
+Toaster 80.27 10.80 0.03 0.94 224.70 ±25.56 41.86 ±8.95 0.67 ±0.53 0.11 ±0.07 144.44 ±25.56 31.06 ±8.95 0.64 ±0.53 -0.83 ±0.07 0.00 0.00 0.07 0.00 
+
+> ELECTRICITY
+
+Aggregate 16.20 14.11 0.05 – 495.12 ±35.71 250.55 ±12.46 0.53 ±0.08 – 478.92 ±35.71 236.43 ±12.46 0.48 ±0.08 – 0.00 0.00 0.00 –Fridge freezer 33.13 17.19 0.12 0.84 83.88 ±1.65 42.80 ±0.63 1.00 ±0.01 0.07 ±0.03 50.75 ±1.65 25.61 ±0.63 0.88 ±0.01 -0.77 ±0.03 0.00 0.00 0.00 0.00 
+
+Kettle 88.04 8.37 0.21 0.94 323.55 ±44.29 53.82 ±11.85 0.24 ±0.14 0.24 ±0.09 235.51 ±44.29 45.45 ±11.85 0.03 ±0.14 -0.70 ±0.09 0.00 0.00 0.68 0.00 
+
+Microwave 172.84 25.86 1.20 0.50 188.11 ±25.85 35.08 ±8.12 0.96 ±0.69 0.19 ±0.06 15.27 ±25.85 9.22 ±8.12 -0.24 ±0.69 -0.31 ±0.06 0.30 0.09 0.53 0.00 
+
+Toaster 129.56 21.01 0.14 0.76 249.34 ±28.75 51.65 ±10.71 0.84 ±0.53 0.20 ±0.11 119.79 ±28.75 30.64 ±10.71 0.70 ±0.53 -0.56 ±0.11 0.00 0.00 0.06 0.00 
+
+> BERT4NILM
+
+Aggregate 11.86 11.32 0.04 – 491.00 ±34.54 247.27 ±12.20 0.53 ±0.08 – 479.14 ±34.54 235.95 ±12.20 0.48 ±0.08 – 0.00 0.00 0.00 –Fridge freezer 31.46 16.22 0.09 0.84 83.43 ±0.46 42.73 ±0.41 1.02 ±0.01 0.05 ±0.02 51.97 ±0.46 26.50 ±0.41 0.92 ±0.01 -0.79 ±0.02 0.00 0.00 0.00 0.00 
+
+Kettle 55.75 6.79 0.17 0.97 336.92 ±43.63 57.87 ±12.34 0.31 ±0.07 0.25 ±0.12 281.17 ±43.63 51.08 ±12.34 0.14 ±0.07 -0.72 ±0.12 0.00 0.00 0.02 0.00 
+
+Microwave 164.56 26.23 0.94 0.52 193.75 ±22.96 44.02 ±8.14 0.67 ±0.41 0.18 ±0.04 29.19 ±22.96 17.79 ±8.14 -0.26 ±0.41 -0.35 ±0.04 0.06 0.01 0.27 0.00 
+
+Toaster 121.86 16.81 0.34 0.76 262.04 ±32.90 51.07 ±11.57 0.94 ±0.84 0.20 ±0.11 140.18 ±32.90 34.26 ±11.57 0.60 ±0.84 -0.57 ±0.11 0.00 0.00 0.23 0.00 
+
+F Original Experiment results 
+
+F.1 Detailed Main Results 
+
+Tables 8 and 9 report the detailed Raw, Masked, Delta, and p-value results used to generate Fig. 3. 21 Table 9: Detailed Raw, Masked, Delta, and p-value results on REDD over five random seeds. 
+
+> Attacker
+
+Appliance Raw Data Masked Data Delta (Masked - Raw) p-value RMSE MAE SAE F1 RMSE MAE SAE F1 RMSE MAE SAE F1 RMSE MAE SAE F1 CO Aggregate 69.69 13.72 0.03 – 444.12 ±44.37 281.58 ±13.68 0.56 ±0.09 – 374.44 ±44.37 267.86 ±13.68 0.53 ±0.09 – 0.00 0.00 0.00 –Fridge 77.27 56.16 0.33 0.87 118.83 ±1.01 83.55 ±0.83 0.92 ±0.02 0.19 ±0.02 41.56 ±1.01 27.39 ±0.83 0.59 ±0.02 -0.68 ±0.02 0.00 0.00 0.00 0.00 
+
+Light 48.79 22.11 0.26 0.22 46.99 ±1.33 22.19 ±0.88 0.73 ±0.04 0.06 ±0.07 -1.80 ±1.33 0.08 ±0.88 0.48 ±0.04 -0.16 ±0.07 0.04 0.84 0.00 0.01 
+
+Microwave 138.65 33.33 2.89 0.06 326.20 ±21.71 81.38 ±9.53 8.62 ±1.24 0.00 ±0.01 187.55 ±21.71 48.05 ±9.53 5.73 ±1.24 -0.05 ±0.01 0.00 0.00 0.00 0.00 
+
+Sockets 1 33.86 8.92 0.44 0.20 33.29 ±0.13 4.71 ±0.42 0.88 ±0.04 0.13 ±0.18 -0.57 ±0.13 -4.21 ±0.42 0.44 ±0.04 -0.06 ±0.18 0.00 0.00 0.00 0.49 
+
+Sockets 2 148.77 98.30 7.95 0.07 75.18 ±3.35 13.35 ±2.69 0.68 ±0.26 0.06 ±0.08 -73.59 ±3.35 -84.95 ±2.69 -7.27 ±0.26 -0.01 ±0.08 0.00 0.00 0.00 0.85 
+
+> FHMM
+
+Aggregate 73.52 41.97 0.08 – 446.71 ±81.86 262.56 ±25.94 0.34 ±0.13 – 373.19 ±81.86 220.59 ±25.94 0.26 ±0.13 – 0.00 0.00 0.01 –Fridge 66.89 40.61 0.32 0.76 102.32 ±1.56 79.73 ±1.13 0.45 ±0.02 0.54 ±0.01 35.43 ±1.56 39.12 ±1.13 0.13 ±0.02 -0.21 ±0.01 0.00 0.00 0.00 0.00 
+
+Light 96.23 71.92 2.84 0.30 45.07 ±2.60 20.90 ±1.71 0.81 ±0.11 0.07 ±0.13 -51.16 ±2.60 -51.02 ±1.71 -2.04 ±0.11 -0.23 ±0.13 0.00 0.00 0.00 0.02 
+
+Microwave 141.72 34.66 3.06 0.06 349.26 ±51.61 89.13 ±18.17 9.62 ±2.37 0.00 ±0.01 207.53 ±51.61 54.47 ±18.17 6.56 ±2.37 -0.05 ±0.01 0.00 0.00 0.00 0.00 
+
+Sockets 1 33.50 5.43 0.81 0.01 33.38 ±0.06 4.91 ±0.32 0.91 ±0.05 0.03 ±0.07 -0.12 ±0.06 -0.52 ±0.32 0.10 ±0.05 0.03 ±0.07 0.01 0.02 0.01 0.43 
+
+Sockets 2 80.39 17.65 0.61 0.40 73.40 ±1.10 11.34 ±0.50 0.70 ±0.03 0.05 ±0.06 -6.99 ±1.10 -6.31 ±0.50 0.09 ±0.03 -0.35 ±0.06 0.00 0.00 0.00 0.00 
+
+> DAE
+
+Aggregate 28.92 15.25 0.01 – 480.67 ±62.38 285.13 ±16.30 0.37 ±0.11 – 451.75 ±62.38 269.88 ±16.30 0.35 ±0.11 – 0.00 0.00 0.00 –Fridge 29.06 14.88 0.01 0.95 114.22 ±3.72 82.69 ±2.77 0.78 ±0.04 0.26 ±0.06 85.16 ±3.72 67.81 ±2.77 0.77 ±0.04 -0.69 ±0.06 0.00 0.00 0.00 0.00 
+
+Light 33.81 15.63 0.03 0.30 45.57 ±12.39 14.67 ±3.43 0.47 ±0.19 0.10 ±0.15 11.76 ±12.39 -0.96 ±3.43 0.44 ±0.19 -0.19 ±0.15 0.10 0.57 0.01 0.04 
+
+Microwave 26.07 6.01 0.52 0.75 118.84 ±23.04 26.41 ±7.32 2.50 ±0.92 0.00 ±0.00 92.77 ±23.04 20.40 ±7.32 1.99 ±0.92 -0.75 ±0.00 0.00 0.00 0.01 –Sockets 1 33.06 8.01 0.53 0.24 34.32 ±0.11 13.06 ±0.46 1.98 ±0.09 0.30 ±0.06 1.26 ±0.11 5.05 ±0.46 1.45 ±0.09 0.05 ±0.06 0.00 0.00 0.00 0.10 
+
+Sockets 2 37.49 12.42 0.21 0.28 226.49 ±53.25 73.36 ±10.66 4.30 ±1.05 0.09 ±0.09 189.00 ±53.25 60.95 ±10.66 4.09 ±1.05 -0.20 ±0.09 0.00 0.00 0.00 0.01 
+
+> S2P
+
+Aggregate 39.09 12.63 0.01 – 468.86 ±32.56 274.56 ±14.17 0.44 ±0.09 – 429.78 ±32.56 261.93 ±14.17 0.43 ±0.09 – 0.00 0.00 0.00 –Fridge 34.43 16.12 0.08 0.95 117.25 ±2.33 84.07 ±2.18 0.87 ±0.03 0.15 ±0.05 82.82 ±2.33 67.95 ±2.18 0.79 ±0.03 -0.81 ±0.05 0.00 0.00 0.00 0.00 
+
+Light 17.71 7.92 0.06 0.46 40.57 ±0.84 18.38 ±0.52 0.80 ±0.11 0.14 ±0.17 22.86 ±0.84 10.46 ±0.52 0.74 ±0.11 -0.33 ±0.17 0.00 0.00 0.00 0.01 
+
+Microwave 21.71 5.99 0.54 0.67 88.40 ±14.50 14.01 ±2.84 0.30 ±0.24 0.00 ±0.00 66.69 ±14.50 8.02 ±2.84 -0.24 ±0.24 -0.67 ±0.00 0.00 0.00 0.09 –Sockets 1 35.96 9.22 0.65 0.26 40.08 ±8.52 7.18 ±3.00 0.58 ±0.16 0.06 ±0.09 4.12 ±8.52 -2.04 ±3.00 -0.07 ±0.16 -0.20 ±0.09 0.34 0.20 0.38 0.01 
+
+Sockets 2 22.87 4.56 0.21 0.78 180.42 ±60.98 43.52 ±16.65 2.60 ±1.66 0.08 ±0.09 157.54 ±60.98 38.96 ±16.65 2.39 ±1.66 -0.70 ±0.09 0.00 0.01 0.03 0.00 
+
+> ELECTRICITY
+
+Aggregate 7.72 6.00 0.02 – 510.80 ±50.87 301.77 ±14.85 0.40 ±0.10 – 503.08 ±50.87 295.77 ±14.85 0.38 ±0.10 – 0.00 0.00 0.00 –Fridge 22.57 8.84 0.01 0.97 121.09 ±1.54 85.05 ±2.07 0.96 ±0.03 0.03 ±0.06 98.52 ±1.54 76.21 ±2.07 0.95 ±0.03 -0.94 ±0.06 0.00 0.00 0.00 0.00 
+
+Light 19.34 7.93 0.08 0.40 38.21 ±0.17 11.57 ±0.07 0.60 ±0.01 0.01 ±0.02 18.86 ±0.17 3.64 ±0.07 0.52 ±0.01 -0.40 ±0.02 0.00 0.00 0.00 0.00 
+
+Microwave 11.81 3.91 0.14 1.00 333.52 ±55.63 89.82 ±22.03 8.74 ±3.02 0.01 ±0.01 321.71 ±55.63 85.92 ±22.03 8.60 ±3.02 -0.99 ±0.01 0.00 0.00 0.00 0.00 
+
+Sockets 1 7.60 3.85 0.05 0.04 37.14 ±0.80 18.88 ±1.98 2.70 ±0.26 0.27 ±0.20 29.55 ±0.80 15.03 ±1.98 2.64 ±0.26 0.23 ±0.20 0.00 0.00 0.00 0.07 
+
+Sockets 2 12.32 5.17 0.17 0.71 92.20 ±15.54 19.80 ±3.62 0.44 ±0.28 0.05 ±0.05 79.88 ±15.54 14.63 ±3.62 0.27 ±0.28 -0.66 ±0.05 0.00 0.00 0.10 0.00 
+
+> BERT4NILM
+
+Aggregate 4.22 3.24 0.01 – 498.50 ±41.98 300.22 ±12.80 0.43 ±0.09 – 494.29 ±41.98 296.98 ±12.80 0.42 ±0.09 – 0.00 0.00 0.00 –Fridge 19.68 8.34 0.01 0.98 120.19 ±1.14 85.62 ±1.58 0.95 ±0.03 0.19 ±0.03 100.51 ±1.14 77.29 ±1.58 0.94 ±0.03 -0.79 ±0.03 0.00 0.00 0.00 0.00 
+
+Light 19.84 7.96 0.03 0.43 38.14 ±0.02 11.36 ±0.03 0.60 ±0.00 0.01 ±0.02 18.30 ±0.02 3.41 ±0.03 0.57 ±0.00 -0.42 ±0.02 0.00 0.00 0.00 0.00 
+
+Microwave 11.82 3.24 0.12 0.89 418.96 ±29.23 116.65 ±13.85 12.38 ±1.89 0.00 ±0.01 407.14 ±29.23 113.41 ±13.85 12.25 ±1.89 -0.88 ±0.01 0.00 0.00 0.00 0.00 
+
+Sockets 1 11.10 3.99 0.19 0.04 34.00 ±0.23 8.08 ±0.41 1.67 ±0.08 0.00 ±0.00 22.90 ±0.23 4.09 ±0.41 1.48 ±0.08 -0.04 ±0.00 0.00 0.00 0.00 –Sockets 2 28.64 9.27 0.62 0.52 74.28 ±0.06 20.34 ±0.07 1.91 ±0.01 0.00 ±0.00 45.64 ±0.06 11.08 ±0.07 1.29 ±0.01 -0.52 ±0.00 0.00 0.00 0.00 –
+
+22

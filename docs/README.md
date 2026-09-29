@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-27</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-29</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 24 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>9</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-27 22:26:34 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-29 00:40:05 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-27 日报精选 24 篇，精读 9 篇，重点覆盖联邦世界模型自动驾驶的想象投毒防御与机会约束 LLM 微调两项 9 分工作。最值得关注的是安全对齐正从平均风险转向尾部风险与攻击面防护，同时 VLM 迁移机器人控制、联邦 PEFT 最差客户端公平性和多语言 Agent 基准也值得速读。普通读者可优先读两篇 9 分精读，再按兴趣浏览速读中的评测与公平性方向。</p>
+<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
+<p>精读：《Prompt Injection Detection for Email Agents Through Attack Chain Modeling》（9.0/10）, 《Why Jailbreaks Succeed in Diffusion Language Models: An Energy Landscape Analysis》（9.0/10）</p>
+<p>速读：《AGATE: Provenance-Based Runtime Defense Against Compositional Attacks on LLM Agents》（8.0/10）, 《TempQ-Jail: Query-Constrained Candidate Ranking for Text-to-Video Jailbreak Attacks》（8.0/10）, 《Frame the adversary: a structure-aware attack methodology》（8.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +74,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">9 篇</strong>
+    <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Poster: FedWM-Guard: Thwarting Imagination Poisoning in Federated World Model-based Autonomous Driving">Poster: FedWM-Guard: Thwarting Imagination Poisoning in Federated World Model-based Autonomous Driving</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Average Safety: Chance-Constrained LLM Fine-tuning">Beyond Average Safety: Chance-Constrained LLM Fine-tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="From Capability to Assurance in Autonomous Penetration-Testing Harnesses: A Framework and Reference Implementation">From Capability to Assurance in Autonomous Penetration-Testing Harnesses: A Framework and Reference Implementation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Prompt Injection Detection for Email Agents Through Attack Chain Modeling">Prompt Injection Detection for Email Agents Through Attack Chain Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Why Jailbreaks Succeed in Diffusion Language Models: An Energy Landscape Analysis">Why Jailbreaks Succeed in Diffusion Language Models: An Energy Landscape Analysis</span></li><li><span class="dpr-home-dashboard-paper-title" title="MetaPermit: Scalable and Auditable Access Control for AI Agents via LLM-Inferred Meta-Attributes">MetaPermit: Scalable and Auditable Access Control for AI Agents via LLM-Inferred Meta-Attributes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +90,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Transferring the Intelligence of VLMs to Robotic Control">Transferring the Intelligence of VLMs to Robotic Control</span></li><li><span class="dpr-home-dashboard-paper-title" title="Perplexity Predicts Protection: Choosing Pretrained Backbones for Worst-Client Fairness in Federated Parameter-Efficient Fine-Tuning">Perplexity Predicts Protection: Choosing Pretrained Backbones for Worst-Client Fairness in Federated Parameter-Efficient Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="BabelArena: A Large-Scale Multilingual Benchmark for LLM Agents">BabelArena: A Large-Scale Multilingual Benchmark for LLM Agents</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="AGATE: Provenance-Based Runtime Defense Against Compositional Attacks on LLM Agents">AGATE: Provenance-Based Runtime Defense Against Compositional Attacks on LLM Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="TempQ-Jail: Query-Constrained Candidate Ranking for Text-to-Video Jailbreak Attacks">TempQ-Jail: Query-Constrained Candidate Ranking for Text-to-Video Jailbreak Attacks</span></li><li><span class="dpr-home-dashboard-paper-title" title="Frame the adversary: a structure-aware attack methodology">Frame the adversary: a structure-aware attack methodology</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
 </section>
 </div>
 
