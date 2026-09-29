@@ -1,0 +1,682 @@
+Title: Probabilistic Robustness-driven Universal Adversarial Perturbations with Explainability against Deep Reinforcement Learning-based Intrusion Detection System
+
+URL Source: https://arxiv.org/pdf/2609.30605v1
+
+Published Time: Mon, 28 Sep 2026 00:20:08 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Probabilistic Robustness-driven Universal Adversarial Perturbations with Explainability against Deep Reinforcement Learning-based Intrusion Detection System 
+
+Hongsen Zhang 
+
+WMG University of Warwick Coventry, CV4 7AL 
+
+Hongsen.Zhang@warwick.ac.uk 
+
+Lu Zhang 
+
+Wolfson School of Mechanical, Electrical and Manufacturing Engineering Loughborough University Loughborough, LE11 3TU 
+
+L.Zhang12@lboro.ac.uk 
+
+Mingjing Xu 
+
+Faculty of Science and Engineering Swansea university Swansea, SA2 8PP 
+
+2596785@swansea.ac.uk 
+
+Yi Zhang 
+
+WMG University of Warwick Coventry, CV4 7AL 
+
+Yi.Zhang.16@warwick.ac.uk 
+
+Gregory Epiphaniou 
+
+WMG University of Warwick Coventry, CV4 7AL 
+
+Gregory.Epiphaniou@warwick.ac.uk 
+
+Carsten Maple 
+
+WMG University of Warwick Coventry, CV4 7AL 
+
+CM@warwick.ac.uk 
+
+# Abstract 
+
+Deep reinforcement learning (DRL) enables adaptive intrusion detection in dy-namic network environments but also exposes intrusion detection systems (IDS) to adversarial threats such as universal adversarial perturbations (UAPs), which apply a single input-agnostic perturbation to degrade detection performance across traffic. Probabilistic Robustness (PR), as a post-hoc evaluation metric, provides a principled, population-level measure of adversarial impact that conceptually aligns with the universality objective of UAPs, i.e., PR quantifies the prevalence of misclassification in the input space, making it a natural signal for guiding UAP gen-eration. Hence, we propose PR-based UAP, which represents the first integration of an explicit PR-driven objective into generating UAPs against DRL-based IDS. Building on this formulation, we introduce PX-UAP, which leverages explainable artificial intelligence (XAI) to guide perturbation shaping under realistic domain constraints, and provides a rigorous theoretical analysis of its design. Extensive experiments demonstrate that PX-UAP consistently outperforms state-of-the-art UAP methods in attack effectiveness. arXiv:2609.30605v1 [cs.LG] 24 Sep 2026 1 Introduction 
+
+Deep learning (DL) has been extensively applied to intrusion detection systems (IDS) to model high-dimensional network-flow features and improve detection performance [1, 2]. More recently, deep reinforcement learning (DRL) has emerged as an alternative paradigm, enabling IDS to learn adaptive decision policies through interaction-driven reward feedback and to better cope with dynamic network environments and evolving attack patterns [3, 4]. Despite these advantages, DL-based IDS are susceptible to adversarial attacks, where carefully crafted input perturbations can induce erroneous predictions [5]. For DRL-based IDS, this vulnerability has been empirically demonstrated in prior work by applying adversarial examples (AEs), exposing critical security risks at inference time [6]. In a typical deployment (Fig. 1), an IDS continuously monitors network flows and classifies each flow as benign or malicious. An adversary can generate adversarial perturbations by manipulating observed traffic through practical actions, such as packet padding, packet fragmentation, traffic injection, or transmission-timing adjustments, thereby perturbing flow-level features and inducing misclassifications [7]. Universal adversarial perturbations (UAPs) constitute a practical and severe threat, by using a single input-agnostic perturbation to induce misclassification across a large fraction of samples, in contrast to instance-specific attacks that require per-sample optimization [8]. In intrusion detection, a UAP corresponds to a universal flow-level manipulation applied at inference time, enabling an adversary to consistently degrade detection performance across observed traffic. This universality makes UAP attacks even more serious in real-world IDS deployments, as they can be precomputed and applied efficiently across traffic samples to compromise IDS even under latency constraints and limited attacker resources [9, 10]. Probabilistic Robustness (PR) has been proposed as a principled framework for characterizing robustness properties of DL models by quantifying the probability that a model’s prediction remains invariant within a specified perturbation region [11]. Unlike conventional adversarial robustness that focuses on worst-case guarantees, PR provides a distribution-aware, population-level perspective on adversarial impact. Recent studies incorporate PR into adversarial-learning pipelines in the computer vision area, providing instance-specific AE analysis [12, 13] and leveraging PR as a post-hoc selection or evaluation criterion in adversarial training [14, 15]. Importantly, PR can capture adversarial effectiveness as a probability over the data distribution rather than on individual samples. This conceptually aligns with the objective of UAPs, i.e., both quantify the portion of misclassification in the input space: PR focuses on a neighborhood of a given input and UAPs target the whole input space, which makes PR a natural signal for guiding UAP generation. Hence, for the first time, we propose an explicit PR-driven objective for generating effective UAP attacks against DRL-based IDS. Explainable artificial intelligence (XAI) [16] provides feature-level attributions that reveal how DL models make decisions and has been adopted in IDS to analyze feature relevance [17, 18]. In adver-sarial settings, such attributions can guide perturbations toward the most influential features under a limited adversarial budget. However, XAI-guided adversarial attacks remain largely unexplored for UAPs, particularly in IDS scenarios. Hence, in this work, to enhance the attack performance of the proposed PR-based UAP, we further advance XAI to guide the perturbation refinement in UAP generation. We also provide a theoretical analysis of PX-UAP, showing that the refinement admits an entropy-regularized perturbation budget allocation interpretation and is theoretically aligned with the targeted universal evasion objective. In summary, the key contributions of this work include: 
+
+• We propose a Probabilistic Robustness–driven Universal Adversarial Perturbation ( PR-based UAP ) framework for attacking DRL-based IDS, introducing the concept of PR into UAP generation for the first time. 
+
+• Building on the PR-based UAP framework, we further enhance attack performance by leveraging XAI, denoted as PX-UAP , which is the first approach to use feature attributions to shape a universal perturbation attack strategy in IDS. 
+
+• We provide a rigorous theoretical justification for PX-UAP, by establishing a constrained uni-versal evasion objective and an attribution-guided, entropy-regularized perturbation scheme with a first-order improvement guarantee. 
+
+• We conduct extensive experiments demonstrating that PX-UAP consistently outperforms state-of-the-art UAP methods for intrusion detection in terms of attack effectiveness. 22 Related Works 
+
+2.1 Adversarial Attack on Network IDS 
+
+In network IDS applications, network traffic is modeled as flow-based samples, each representing a network connection with temporal behaviors aggregated into statistical features [19]. Adversaries can induce IDS misclassification by perturbing such features at inference time, thereby undermining the reliability of IDS predictions [20, 21]. Beyond instance-specific attacks (e.g., FGSM, PGD) [22, 23], recent works also demonstrate IDS vulnerability to input-agnostic UAPs [9, 24]. However, these two UAP-on-IDS researches do not consider realistic domain constraints, including protocol compliance, valid feature ranges, and inter-feature mathematical dependencies [7, 25]. Zhang et al. [10] address this gap by integrating inter-feature relationships with feature grouping to maintain validity during UAP generation. Despite the above progress and the inherent universality target of UAPs, no existing work explicitly incorporates a distribution-level objective into the UAP design for a principled generalizable adversarial impact across the distribution. 
+
+2.2 Probabilistic Robustness 
+
+PR is a distribution-aware robustness notion defined over a bounded perturbation region [11]. In contrast to worst-case robustness, which considers the maximum classification loss of any AE in the region, PR quantifies the probability that the model’s prediction remains unchanged over the region [14]. The concept of PR was first introduced by Webb et al. [11] for AE detection in a white-box threat model and later evolved into a principled framework for robustness evaluation, with extensions to black-box settings [12, 26] and broader multimodal tasks [13]. However, these works are limited to using PR for robustness assessment. More recently, Zhang et al. [15] for the first time combined PR with adversarial attacks to evaluate the attack effectiveness of candidate AEs for adversarial training. To the best of our knowledge, despite the conceptual compatibility between PR’s distribution-aware characterization of adversarial impact and UAPs’ universality objective, existing research has used PR only in a post-hoc manner to assess robustness or attack performance, leaving PR-driven UAP design unexplored. 
+
+Figure 1: (a): Adversarial scenario for a network-flow-based IDS. (b): Comparison between worst-case robustness (i) and probabilistic robustness (ii), adapted from [15]. 
+
+# 3 Methodology 
+
+In this section, we describe the proposed PR-based UAP, which is the first attempt to integrate PR into UAP generation against DRL-based IDS under realistic domain constraints. We first outline the rationale and intuition behind the proposed PR-based UAP, and then present the detailed attack framework and algorithm. Building upon the PR-based UAP, we introduce PX-UAP, which leverages XAI signals to guide perturbation shaping and further enhance attack performance, representing the first XAI-guided UAP approach in IDS. Furthermore, we provide a rigorous theoretical justification to substantiate the effectiveness of the proposed attack method. 
+
+3.1 Threat model 
+
+In this work, the IDS task is formulated as a binary benign–malicious classification problem. We consider a white-box attacker who has full access to the deployed IDS model (architecture, parame-ters, and gradients) and the feature preprocessing pipeline for the publicly available CICIDS2018 dataset [27], seeking a targeted evasion attack that maps malicious flows to the benign decision. The 3attacker is constrained to L2-bounded feature-space perturbations with realistic domain constraints. Specifically, following Zhang et al. [10], we partition features into Modified Features (MF), Related Features (RF), and Unmodified Features (UF): only MF can be perturbed within feasible feature ranges, then the values of RF are recalculated based on the modified MF, and the UF remain un-changed. This MF-RF recalculation rule is enforced throughout this work. More details are provided in Appx. C. 
+
+3.2 Rationale behind the proposed PR-based UAP 
+
+Given an input x with the ground-truth label y, we consider perturbations δ ∼ Pr( · | x) constrained within an Lp-norm ball of radius ϵ (i.e., ∥δ∥p ≤ ϵ), yielding the AE xadv = x + δ. PR is defined as follows [14]: 
+
+PR( x, ϵ ) = Eδ∼Pr( ·| x)
+
+> ∥δ∥≤ ϵ
+
+I{fθ (x+δ)= y}(x + δ) (1) where the indicator I{fθ (x+δ)= y} equals 1 if classifier fθ predicts ground truth label y for xadv , and 0
+
+otherwise. Intuitively, in contrast to worst-case robustness (Fig. 1.b(i)), PR( x, ϵ ) measures the fraction of the perturbation region for which fθ (x + δ) = y, with perturbation distribution Pr( · | x) [12, 15], as illustrated in Fig. 1.b(ii). Thus, a smaller PR( x, ϵ ) implies that more data samples are misclassified, indicating a larger AE-dominated ϵ-bounded neighborhood of x. Motivated by this interpretation, prior studies [14, 15] employ a PR-based variable k as a post-hoc criterion to select the most effective AE among multiple candidates generated by Projected Gradient Descent attack [28], as formalized in Eq. 2: 
+
+k : PR( x + δ, k ) = 0 , ∀ δ ∈ PGD( x), ∥δ∥ ≤ ϵ. (2) As illustrated in Fig. 2(a), two PGD runs yield perturbations δ1 and δ2 under an ϵ budget. Centered at the corresponding AEs x + δ, the condition PR( x + δ, k ) = 0 implies that the neighborhood with radius k (denoted as B(x + δ, k ) later) contains no label-preserving samples, i.e., all input points within it are AEs. Hence, a larger k indicates a stronger attack, inducing misclassification over a larger neighborhood. However, in such an approach, k is a post-hoc metric and does not participate in the perturbation generation process. 
+
+Figure 2: (a) : Illustration of mapping between PR-based variable k and Misclassification-Guaranteed Region in the UAP setting. Two examples δ1 and δ2 are provided in (i) and (ii), respectively. UAP by 
+
+δ1 (larger k) induces a larger size Misclassification-Guaranteed Region B(x + δ1, k 1), while smaller size B(x + δ2, k 2) by δ2. (b) : Main Procedures of the PR-based UAP: (1) Attack initialization. (2) AE candidate selection. (3) k-driven optimization. Now we present the rationale for the proposed PR-based UAP attack by providing an intuitive expla-nation of the compatibility between the PR-driven optimization and UAP generation. Specifically, using δ1 and δ2 in Fig. 2(a) as representative examples, a UAP targets misclassification for most data samples x in the distribution X with a shared perturbation [8]. Let δn (n ∈ { 1, 2}) be such a shared perturbation. Applying δn to any input induces a distribution-level translation x 7 → x + δn
+
+(shaded regions in Fig. 2(a)), which shifts the dashed-circle neighborhood around x to the solid-circle neighborhood around x + δn (follow the two arrows, respectively). In this context, PR also provides a distribution-aware view of adversarial impact, naturally aligning with the distribution-level target and translation mapping of UAPs. By Eq. 2, the notion of PR( x+δ, k ) = 0 implies ∀z ∈ B (x+δ, k ),fθ (z)̸ = y, i.e., all input points within B(x + δ, k ) are AEs, which yields a converse implication: 
+
+(∀z ∈ B (x + δn, k n), f θ (z)̸ = y) ∧ (B(x, k n) + δn ⊆ B (x + δn, k n)) 
+
+⇒ ∀ x′ ∈ B (x, k n), f θ (x′ + δn)̸ = y. (3) 4Given the UAP mapping from B(x, k n) to B(x + δn, k n), any point x′ ∈ B (x, k n) will satisfy 
+
+fθ (x′ + δn)̸ = y. Therefore, δn induces a misclassification-guaranteed region B(x, k n) around x
+
+(dashed circles in Fig. 2(a)). A larger k yields a broader affected neighborhood around x, as shown by the larger dashed circle for δ1 compared with the circle for δ2, thereby a larger portion of the input space X will be misclassified, which directly aligns with the objective of UAP generation. Thus, it is reasonable and intuitive to incorporate PR as an explicit objective in the optimization process for UAP generation. 
+
+3.3 The proposed PR-based UAP attack 
+
+In this section, we detail the PR-based UAP attack, which reformulates the PR-derived variable k as an explicit optimization objective and integrates it into the UAP update. This turns the post-hoc discrete selection of maximal k into a direct continuous optimization problem, yielding a more principled UAP generation process. Our method comprises two algorithms: a UAP generation framework (details shown in Alg. 2 in Appx. B) and PR-based gradient computation (Alg. 1). Specifically, Alg. 1 computes the PR-based update gradient and forwards it to Alg. 2 in Appx. B, which iteratively updates the perturbation to obtain the final PR-based UAP. Alg. 2 in Appx. B displays the UAP generation framework. In line 1, we sample a seed set Seedset ⊂
+
+T r and initialize uap = 0 ∈ Rd with d = dim( x). During UAP generation, Seedset is shuffled at the beginning of each iteration in line 4. The target classifier C denotes the pre-trained DRL-based agent. For each x ∈ Seedset , the predictions C(x) and C(x + uap ) are computed at line 5. If the predicted labels are identical (line 6), the current uap fails to fool C on x, and we then perform one update step by generating an update perturbation ptb . Specifically, we compute the gradient g via the PR-based gradient calculation in Alg. 1 at line 7. Using g as the update direction, we apply an element-wise mask to restrict modifications to MF only, and form ptb by an L2-normalized FGM-style step with magnitude ϵ [5]. The accumulated uap is then projected onto the L2 ball to maintain the perturbation budget. The loop continues by updating the iteration number iter _num 
+
+until reaching the max iteration max _iter , after which the final uap is returned (line 12). 
+
+Algorithm 1 UAP Direction via the Gradient of k∗
+
+Input: target model C, data instance x with label y, perturbation budget ϵ, PGD attack number N ,PGD iteration step nstep , PGD step size α, SGD max iteration SGD _num 
+
+Output: the gradient of k∗ with respect to x: ∇xk∗ 
+
+> 1:
+
+Initialize Xadv ← [ ] , D ← [ ]  
+
+> 2:
+
+Xadv [0] ← PGD( x, y, n step , α, ϵ, ℓ 2) 
+
+> 3:
+
+while len( Xadv ) < N do  
+
+> 4:
+
+z ∼ N (0 , I ), r ∼ Uniform(0 , ϵ ), xinit ← x + r · z 
+
+> ∥z∥2
+> 5:
+
+ϵ′ ← Unif(0 .98 ∗ ϵ, ϵ ), α′ ← Unif(0 .9 ∗ α, 1.1 ∗ α), n′ 
+
+> step
+
+← Unif(0 .9 ∗ nstep , 1.1 ∗ nstep ) 
+
+> 6:
+
+Append PGD( xinit , y, ϵ ′, α ′, n ′
+
+> step
+
+) to Xadv  
+
+> 7:
+
+end while  
+
+> 8:
+
+for each xadv ∈ X adv do  
+
+> 9:
+
+x′ ← xadv , i ← 0 
+
+> 10:
+
+while C(x′)̸ = y ∧ i < SGD _num do  
+
+> 11:
+
+x′ ← x′ − α ∇x′ L
+
+ Clogit (x′),y 
+
+ 
+
+> ∇x′L
+
+ Clogit (x′),y 
+
+
+
+> 2
+
+, i ← i + 1  
+
+> 12:
+
+end while  
+
+> 13:
+
+Append ∥xadv − x′∥2 to D 
+
+> 14:
+
+end for  
+
+> 15:
+
+k∗ ← max D 
+
+> 16:
+
+return ∇xk∗
+
+Next, we detail Alg. 1, which computes the PR-driven update gradient for our PR-based UAP. As shown in Fig. 2(b), it consists of three main steps. Concretely, aiming to maximize the radius k in Eq. 2, we first employ the candidate-search method proposed by Zhang et al. [15] to identify the AE corresponding to local maximum loss in Steps (1)–(2): 
+
+(1) Attack initialization: Multiple random PGD attacks are launched on input x to obtain a set of AE candidates Xadv .
+
+(2) AE candidate selection: For each AE candidate, the distance from xadv to the decision boundary 5is estimated and treated as the corresponding k in Eq. 2. The candidate with the largest k (denoted 
+
+k∗) is selected as the starting point for the subsequent step. The key difference from Zhang et al. [15] lies in Step (3). The discrete selection of k∗ may be constrained by limited search resolution and finite exploration steps. Therefore, motivated by our rationale, selecting the largest value in D as k∗ chooses the candidate that causes the largest 
+
+misclassification-guaranteed region B(x, k ∗), inducing the most promising local region for UAP generation. Consequently, we formulate k∗ as an explicit optimization objective and adopt a continu-ous k-driven optimization scheme, enabling more effective and principled radius maximization. 
+
+(3) k-driven optimization: The gradient of k∗ with respect to x, ∇xk∗ is calculated and served as the update gradient g in Alg. 2 (Eq. 4). By perturbing x along the direction of g to maximize the radius k∗, a more effective perturbation can be obtained, corresponding to δ′, k ′ and x′ 
+
+> adv
+
+in Fig. 2(a). 
+
+∇xk∗(x) = ∇xk x, δ ∗, (4) where δ∗ ≜ arg max  
+
+> δ
+
+k(x, δ ) s.t. δ ∈ PGD( x), ∥δ∥ ≤ ϵ. 
+
+Specifically, Alg. 1 illustrates the computation of ∇xk∗. After initialization, multiple PGD attacks from random starting points xinit are launched (line 4), where xinit is sampled by z ∼ N (0 , I ),
+
+r ∼ Uniform(0 , ϵ ), and xinit = x + r · z 
+
+> ∥z∥2
+
+. We further randomize the attack hyperparameters 
+
+(ϵ′, α ′, n ′
+
+> step
+
+) within predefined ranges to generate an AE set Xadv (lines 5-6). For each AE candidate 
+
+xadv , we iteratively update the current point x′ via a gradient descent-based method until it becomes non-adversarial or the maximum number of steps SGD _num is reached (lines 10–12). This pro-cedure yields a new point x′ that can be regarded as an approximate “projection” of xadv onto the decision boundary. At line 13, we compute ∥xadv − x′∥2 as the radius k and store these k values in a distance set D, from which we take the maximum as k∗ (line 15). Thus, we compute ∇xk∗ (obtained by automatic differentiation since k∗ is computed without hard clipping or arg max ) and return it as the update gradient g to Alg. 2. Then x is perturbed along the direction of ∇xk∗, with k∗ serving as the optimization objective to be maximized, ultimately generating the proposed PR-based UAP. 
+
+3.4 PX-UAP attack 
+
+This section introduces the PX-UAP attack, which leverages XAI to guide perturbation shaping and further enhance attack effectiveness. Before presenting the technical details, we first provide the rationale behind PX-UAP. XAI comprises techniques that improve the interpretability of ML/DL models by providing human-understandable explanations, typically in the form of feature-level attributions that identify decision-critical inputs for a given prediction [29, 30]. In adversarial settings, such attributions offer a principled mechanism for prioritizing the perturbations under a limited adversarial budget, which is especially relevant for IDS where realistic domain constraints restrict arbitrary feature modifications [17, 18]. Under these constraints, XAI-derived signals enable the identification of influential and permissible features, thereby facilitating more effective UAPs. Prior studies show that attribution-guided pertur-bations facilitate per-instance AE generation in IDS [17, 31]. However, these efforts do not consider realistic network domain constraints and have not explored XAI’s role in input-agnostic UAP generation. Motivated by this observation, we incorporate XAI to guide the proposed PR-based UAP, resulting in the PX-UAP attack, representing the first XAI-guided universal adversarial attack in IDS. Now we introduce PX-UAP (Alg. 3 in Appx. B), which calculates the feature-level importance scores and selects effective perturbations based on detection performance. Specifically, the PR-based UAP 
+
+P Ruap is first recalculated for realistic constraints and projected onto the L2 budget ϵ (line 1). We use the predictions of realistic AEs (T r + P Ruap ) and clean samples T r to compute the false negative rate (FNR) as a reference performance metric for later comparison (line 2). A higher FNR indicates that more malicious samples are misclassified as benign, aligning with the adversary’s objective in this work. At line 3, a batch B with B instances is sampled from the training set T r to estimate feature-level importance. In this research, the benign class is used as the target class, and Integrated Gradients [32] as XAImtd to compute feature attribution scores, as shown in Eq. 5: 
+
+IG( x; x′) ≜ (x−x′) ⊙ R 10 ∇x Clogit (x′ +α(x−x′)) d α. (5) IG is well suited to our white-box threat model and the case of tabular data, as it provides gradient-based attributions with low computational overhead [33]. In practice, we use the discrete m-step 6approximation in Eq. 6. The attribution scores for each x ∈ B are averaged to obtain an aggregated importance vector imp (lines 4–5). 
+
+cIG( x; x′) ≜ (x−x′) ⊙ 1
+
+m
+
+> m
+
+P
+
+> t=1
+
+∇x Clogit (x′ + tm (x−x′)) . (6) In line 6, we normalize imp by ∥imp ∥∞, scaling its values to a standard range [−1, 1] . This mitigates batch-sampling variability in estimating imp , ensuring a standardized XAI-based weighting and a fair comparison across attacks. We then obtain P Xuap by XAI-weighting P Ruap as in Eq. 7: 
+
+imp ← mask ⊙ imp  
+
+> ∥imp ∥∞
+
+, imp ∈ [−1, 1] d, u ← PRuap ⊙ Softmax( imp ), PXuap ← ϵ · u 
+
+> ∥u∥2
+
+.
+
+(7) Specifically, taking imp as input, a feature mask is applied to restrict weighting only on the top-n
+
+most important features. We then transform imp via Softmax( ·) to obtain feature-wise scaling coefficients, which nonlinearly map relative differences in importance scores and concentrate the limited perturbation budget on the most influential features. For example, imp = [1 , −1, 0] yields 
+
+Softmax( imp ) ≈ [0 .66 , 0.09 , 0.24] . After the projection and recalculation, the FNR of P Xuap 
+
+is computed at line 7. Due to the stochasticity introduced by batch sampling, we compare the performance of P Xuap with P Ruap and select the one with a higher FNR as the final PX-UAP. 
+
+3.5 Theoretical analysis 
+
+This subsection provides a rigorous analysis of the PX-UAP design in Eq. 7 by (i) formalizing the targeted universal evasion objective under feasibility constraints, (ii) establishing IG as a principled feature-priority signal, (iii) showing that Softmax weighting arises as an entropy-regularized allocation rule, and (iv) giving a first-order improvement guarantee for the resulting weighted perturbations. 
+
+Formal objective: targeted universal evasion under feasibility. The adversary targets mali-cious →benign evasion in white-box setting. Let X1 ⊆ T r denote the malicious subset ( x with ground-truth y = 1 ), and let the target class be yt = 0 (benign). We denote by eu ≜ recalculate( u, ϵ, ℓ 2) the feasibility-enforced perturbation returned by the realistic constraints in Alg. 3. The targeted universal evasion objective can be written as 
+
+max 
+
+> u∈Rd
+
+Ex∼X 1
+
+h
+
+I{C(x+eu)= yt}
+
+i
+
+s.t. ∥eu∥2 ≤ ϵ, eu satisfies realistic constraints. (8) Eq. 8 is aligned with the metric used in Alg. 3: maximizing the probability of predicting benign on malicious inputs corresponds to increasing FNR. Moreover, the PR-based construction (Sec. 3.2) aims to enlarge the misclassification-guaranteed neighborhood via the PR-derived radius k (Eq. 2). It increases the measure of inputs mapped into the adversarial region, consistent with the universal objective above. 
+
+Integrated Gradients as a principled feature priority signal. PX-UAP uses IG-based feature attributions as imp (Eq. 5). The following formalizes why IG is appropriate for deciding which features deserve more perturbation. 
+
+Proposition 1 (Completeness of Integrated Gradients) Let F : Rd → R be differentiable and x, x ′ ∈ Rd. Define IG( x; x′) as in Eq. 5. Then IG satisfies the completeness identity 
+
+Pdi=1 IG i(x; x′) = F (x) − F (x′). When F (·) = Clogit (·) for the target class yt, positive 
+
+IG i(x; x′) identifies features whose increase along the path from x′ to x raises the target logit, and thus are natural candidates for priority perturbation in targeted evasion. 
+
+In lines 5–6 in Alg. 3, we aggregate IG over B to obtain imp , so that (by Prop. 1) imp acts as an empirical estimate of which dimensions contribute to increasing Clogit (·) toward the target class yt
+
+across the data distribution. 
+
+Why Softmax weighting: an entropy-regularized allocation view. PX-UAP transforms imp into nonnegative coefficients via Softmax and uses them to reallocate the perturbation of P Ruap (Eq. 7). This can be derived as the unique solution of an entropy-regularized linear allocation. Let ∆mask 
+
+denote masked probability: ∆mask ≜ {w ∈ Rd 
+
+> ≥0
+
+: 1⊤w = 1 , (1mask) ⊙ w = 0}.Define Shannon entropy H(w) ≜ − Pdi=1 wi log wi for w ∈ ∆mask [37]. Then: 7Table 1: UAP baseline with loss functions for comparison with PR-based UAP. 
+
+INDEX BASELINE UAP LOSS FUNCTION TO MAXIMIZE 
+
+(1) PD_ MEAN _UAP [34] log 
+
+Qki=1 mean( li + eps) 
+
+ 
+
+> WHERE
+
+li = activation( x + δ), eps = 1 × 10 −8
+
+(2) PD_L2_UAP [35] log 
+
+Qki=1 ∥li∥2 + eps 
+
+ 
+
+> WHERE
+
+li = activation( x + δ), eps = 1 × 10 −8
+
+(3) COSSIM_L3_UAP [36] −cossim(activation li (x + δ), activation li (x)) , WHERE li = l3
+
+(4) COSSIM_L4_UAP [36] −cossim(activation li (x + δ), activation li (x)) , WHERE li = l4
+
+(5) PCC_UAP [10] PCCsim(activation li (x + δ), activation li (δ)) , WHERE li = l4
+
+Lemma 1 (Softmax as the entropy-regularized maximizer) Fix a score vector s ∈ Rd and tem-perature τ > 0. The optimization problem max w∈∆mask ⟨s, w ⟩ + τ H (w) has a unique solution given by 
+
+w⋆i = exp( si/τ )
+
+P  
+
+> j: mask j=1
+
+exp( sj /τ ) for all i with mask i = 1 , w⋆i = 0 if mask i = 0 , (9) 
+
+i.e., the Softmax distribution on the masked coordinates. 
+
+Lemma 1 provides an interpretation of the Softmax step in Eq. 7: it allocates a unit budget across feasible features by trading off exploitation (large ⟨s, w ⟩) and diversity/stability (large entropy). In PX-UAP we set s ≡ imp (after normalization and masking), and use τ = 1 , yielding the weighting in Eq. 7. Due to space limits, the rest of the theoretical analysis is provided in Appx. A. 
+
+# 4 Experiments 
+
+In this section, we describe the experimental setup and provide the experimental results to validate the effectiveness of our algorithm design. More results are provided in Appx. F. 
+
+4.1 Experimental Settings 
+
+In this study, we train a DQN agent [38] on CICIDS2018 dataset [27], keeping benign traffic as the 
+
+benign class and merging all remaining categories into the malicious class. Then we use the agent’s policy network as the IDS classifier C, which is a fully-connected MLP with four hidden layers (64 units each) and ReLU activations. C outputs Q(x, a ) for a ∈ { 0, 1} corresponding to the two classes, and predicts ˆy = arg max a Q(x, a ). Each network flow is represented as a feature vector x ∈ R76 ,where each feature is normalized to [0 , 1] , with one-hot encoding for categorical features, and under--sampling for class imbalance. We evaluate the attack effectiveness in all experiments by FNR and accuracy (ACC), with the adversarial budget ϵ on the x-axis under the L2 constraint. For allocating sufficient perturbation budget for effective attacks while preserving the imperceptible property in the normalized feature space, we set ϵ ∈ [0 .04 , 0.15] . To mitigate potential bias from algorithmic ran--domness, we report results averaged over 150 runs, ensuring a fair comparison across methods. The hyperparameter settings for all algorithms are provided in Appx. D. 84.2 PR-based UAP result 
+
+Figure 3: (a): False Negative Rate (FNR) and (b): Accuracy of the proposed PR-based UAP and other UAP baselines. (c): FNR and (d): ACC of PX-UAP with different Topn values. (e): FNR and (f): ACC for ablation study. We now report the results of the proposed PR-based UAP against several state-of-the-art UAP baselines, whose details are summarized in Tab. 1. As shown in Fig. 3(a) and (b), the PR-based UAP consistently outperforms all baselines across the evaluated ϵ range. Starting from ϵ = 0 .04 , all evaluated UAP methods exhibit comparable effectiveness, with FNR ≈ 0.2 and ACC ≈ 0.93 . As ϵ
+
+increases to 0.09, all attacks become progressively more effective, while the PR-based UAP remains the top performer. Notably, PCC_UAP (pink) rises sharply near ϵ = 0 .09 and matches the proposed method at ϵ = 0 .09 , achieving FNR = 0 .72 and ACC = 0 .73 . After this point, the proposed PR-based UAP continues to improve and stabilizes for ϵ ≥ 0.13 . Overall, these results demonstrate that our PR-based UAP framework is effective and successfully surpasses other state-of-the-art UAPs. 
+
+4.3 PX-UAP result 
+
+Building upon the PR-based UAP, we report the results of PX-UAP in Fig. 3(c) and (d) with different 
+
+Topn values, i.e., only the Topn most important features in imp are used for XAI-based weighting in Alg. 3. During the early “cold-start” stage ( ϵ ∈ [0 .04 , 0.07] ), all PX-UAP variants consistently strengthen the attack, with an ≈10% improvement in effectiveness (higher FNR and lower ACC) over the PR-based baseline. In the mid-range ( ϵ ∈ [0 .07 , 0.10] ), the XAI-induced benefit is comparatively limited. Only Topn = 3 (red) achieves a ≈5% improvement around ϵ ≈ 0.075 . Later, XAI guidance further improves the PR-based UAP, even though it already outperforms state-of-the-art baselines in ϵ ∈ [0 .10 , 0.15] . All four PX-UAP variants provide additional gains in this “stable” range, with 
+
+Topn = 3 achieving the best overall performance. Overall, the results show that incorporating XAI enables PX-UAP to outperform the proposed PR-based UAP, with particularly pronounced gains at small budgets and in the high-ϵ range where performance saturates. In these cases, XAI helps allocate the limited perturbation budget to influential features, thereby improving attack effectiveness. 
+
+4.4 Ablation Studies 
+
+As described in Sec. 3.3, Alg. 1 comprises three key components: (i) PGD-based attack initialization, (ii) k-based selection of AE candidates, and (iii) k∗-driven optimization. To verify that the observed effectiveness stems from the combination of the components rather than any single factor, we conduct ablation studies by comparing the proposed PR-based UAP with several ablated variants in which specific components are removed or modified. Details and explanations of the variants are summarized in Tab. 4 in Appx. E. The results of the ablation study are reported in Fig. 3(e) and (f). For ϵ < 0.06 , all candidates exhibit similar performance, with FNR ≈ 0.28 and ACC ≈ 0.90 . Then, PR-based UAP gradually outperforms the others across the remaining ϵ range. Among the variants, 
+
+AE selection improves effectiveness under FGM initialization, as evidenced by FUAP (1) versus 9KFUAP (2), but limited benefit under PGD initialization (PUAP and KPUAP; (3) and (4)). All var-iants indicate that changing Attack initialization and AE selection has a limited impact on overall attack effectiveness. Taking the best-performing PR-based UAP and the basic FUAP as the references, the ablation study indicates that combining all three components jointly in Alg. 3 yields a substantial performance improvement, with the k∗-driven optimization playing a critical role in this performance gain, which further validates the effectiveness of our proposed rationale and algorithm design. 
+
+4.5 Additional Results 
+
+Beyond the results above, we conduct extensive additional experiments for a comprehensive evalua-tion of the proposed attack method, detailed results and analysis are shown in Appx. F. In summary: 
+
+• We report the F1 scores of the above three experiments, providing a more balanced and compre-hensive metric to evaluate the effectiveness of the proposed PR-based UAP and PX-UAP. 
+
+• We apply the proposed attack methods to two other dataset and further use different DRL agents and network architectures as target classifiers on CICIDS2018. The results demonstrate the generaliz-ability of the proposed attack across datasets, DRL agents, and model architectures. 
+
+• We further evaluate the proposed attack methods under a black-box threat model by generating UAPs on a surrogate model and applying them to different target models. The results demonstrate that the proposed attacks exhibit strong cross-model transferability under the black-box setting. 
+
+• We conduct an ablation study on ϵ-steps to verify that the significant performance gain of our proposed PR-based UAP stems from the attack design itself rather than favorable step-size selection. The results show that PR-based UAP consistently outperforms the baselines under both the fixed unified ϵ-step setting and the setting where ϵ-steps are tuned for each method. 
+
+# 5 Conclusion 
+
+In this work, for the first time, we integrate the concept of PR into the UAP generation process and propose a novel UAP attack against DRL–based IDS. We further enhance attack performance by advancing XAI techniques to guide the perturbation shaping for the proposed PR-based UAP framework under realistic domain constraints, with providing a rigorous theoretical justification. Extensive experiments demonstrating that PX-UAP consistently outperforms state-of-the-art UAP methods for intrusion detection in terms of attack effectiveness. 
+
+# References 
+
+[1] Ansam Khraisat, Iqbal Gondal, Peter Vamplew, and Joarder Kamruzzaman. Survey of intrusion detection systems: techniques, datasets and challenges. Cybersecurity , 2(1):1–22, 2019. [2] Jamal Awwad Alkharman, Sonia Abed ALhamed Drawsheh, Majid Mohammad Al-Khataybeh, Zein Bassam BaniYounes, Najwa Abdel Hamid Darawsheh, and Hanadi Alrashdan. Cyber attacks and its implication to national security: The need for international law enforcement. 
+
+Pakistan Journal of Criminology , 16(3), 2024. [3] Richard S Sutton, Andrew G Barto, et al. Reinforcement learning: An introduction , volume 1. MIT press Cambridge, 1998. [4] Manuel Lopez-Martin, Belen Carro, and Antonio Sanchez-Esguevillas. Application of deep reinforcement learning to intrusion detection for supervised problems. Expert Systems with Applications , 141:112963, 2020. [5] Ian J Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and harnessing adversar-ial examples. arXiv preprint arXiv:1412.6572 , 2014. [6] Hongsen Zhang and Carsten Maple. Deep reinforcement learning-based intrusion detection in iot system: a review. In International Conference on AI and the Digital Economy (CADE 2023) ,volume 2023, pages 88–97. IET, 2023. [7] Islam Debicha, Benjamin Cochez, Tayeb Kenaza, Thibault Debatty, Jean-Michel Dricot, and Wim Mees. Adv-bot: Realistic adversarial botnet attacks against network intrusion detection systems. Computers & Security , 129:103176, 2023. 10 [8] Seyed-Mohsen Moosavi-Dezfooli, Alhussein Fawzi, Omar Fawzi, and Pascal Frossard. Univer-sal adversarial perturbations. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 1765–1773, 2017. [9] Sicong Zhang, Yang Xu, and Xiaoyao Xie. Universal adversarial perturbations against machine learning-based intrusion detection systems in industrial internet of things. IEEE Internet of Things Journal , 2024. [10] Hongsen Zhang, Lu Zhang, Gregory Epiphaniou, and Carsten Maple. A novel and practical universal adversarial perturbations against deep reinforcement learning based intrusion detection systems. arXiv preprint arXiv:2511.18223 , 2025. [11] Stefan Webb, Tom Rainforth, Yee Whye Teh, and M Pawan Kumar. A statistical approach to assessing neural network robustness. arXiv preprint arXiv:1811.07209 , 2018. [12] TIT Karim, Teddy Furon, and Mathias Rousset. Gradient-informed neural network statistical robustness estimation. In International Conference on Artificial Intelligence and Statistics ,pages 323–334. PMLR, 2023. [13] Yi Zhang, Yun Tang, Wenjie Ruan, Xiaowei Huang, Siddartha Khastgir, Paul Jennings, and Xingyu Zhao. Protip: Probabilistic robustness verification on text-to-image diffusion models against stochastic perturbation. In European Conference on Computer Vision , pages 455–472. Springer, 2024. [14] Xingyu Zhao. Probabilistic robustness in deep learning: A concise yet comprehensive guide. 
+
+arXiv preprint arXiv:2502.14833 , 2025. [15] Yi Zhang, Yuhang Chen, Zhen Chen, Wenjie Ruan, Xiaowei Huang, Siddartha Khastgir, and Xingyu Zhao. Adversarial training for probabilistic robustness. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 1675–1685, 2025. [16] Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. " why should i trust you?" explaining the predictions of any classifier. In Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , pages 1135–1144, 2016. [17] Daniel L Marino, Chathurika S Wickramasinghe, and Milos Manic. An adversarial approach for explainable ai in intrusion detection systems. In IECON 2018-44th Annual Conference of the IEEE Industrial Electronics Society , pages 3237–3243. IEEE, 2018. [18] Hangsheng Zhang, Dongqi Han, Shangyuan Zhuang, Zhiliang Wang, Jiyan Sun, Yinlong Liu, Jiqiang Liu, and Jinsong Dong. Explainable and transferable adversarial attack for ml-based network intrusion detectors. IEEE Transactions on Dependable and Secure Computing , 2025. [19] Nour Moustafa and Jill Slay. Unsw-nb15: a comprehensive data set for network intrusion detec-tion systems (unsw-nb15 network data set). In 2015 military communications and information systems conference (MilCIS) , pages 1–6. IEEE, 2015. [20] Lu Zhang, Sangarapillai Lambotharan, Gan Zheng, Guisheng Liao, Basil AsSadhan, and Fabio Roli. Attention-based adversarial robust distillation in radio signal classifications for low-power iot devices. IEEE Internet of Things Journal , 10(3):2646–2657, 2022. [21] Lu Zhang, Sangarapillai Lambotharan, Gan Zheng, Guisheng Liao, Xuekang Liu, Fabio Roli, and Carsten Maple. Vision transformer with adversarial indicator token against adversarial attacks in radio signal classifications. IEEE Internet of Things Journal , 2025. [22] Yulexis Pacheco and Weiqing Sun. Adversarial machine learning: A comparative study on contemporary intrusion detection datasets. In ICISSP , pages 160–171, 2021. [23] Uliya Ashfaque Ali, Krish Dogra, and Seema Sharma. White-box adversarial exploitation of nids: Insights from fgsm, pgd, and c&w. In 2025 2nd International Conference on Compu-tational Intelligence, Communication Technology and Networking (CICTN) , pages 668–673. IEEE, 2025. 11 [24] Ryan Sheatsley, Nicolas Papernot, Michael J Weisman, Gunjan Verma, and Patrick McDaniel. Adversarial examples for network intrusion detection systems. Journal of Computer Security ,30(5):727–752, 2022. [25] Martin Teuffenbach, Ewa Piatkowska, and Paul Smith. Subverting network intrusion detection: Crafting adversarial examples accounting for domain-specific constraints. In International Cross-Domain Conference for Machine Learning and Knowledge Extraction , pages 301–320. Springer, 2020. [26] Tianle Zhang, Wenjie Ruan, and Jonathan E Fieldsend. Proa: A probabilistic robustness assessment against functional perturbations. In Joint European Conference on Machine Learning and Knowledge Discovery in Databases , pages 154–170. Springer, 2022. [27] Iman Sharafaldin, Arash Habibi Lashkari, Ali A Ghorbani, et al. Toward generating a new intrusion detection dataset and intrusion traffic characterization. ICISSp , 1(2018):108–116, 2018. [28] Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. Towards deep learning models resistant to adversarial attacks. arXiv preprint arXiv:1706.06083 ,2017. [29] Finale Doshi-Velez and Been Kim. Towards a rigorous science of interpretable machine learning. 
+
+arXiv preprint arXiv:1702.08608 , 2017. [30] Riccardo Guidotti, Anna Monreale, Salvatore Ruggieri, Franco Turini, Fosca Giannotti, and Dino Pedreschi. A survey of methods for explaining black box models. ACM computing surveys (CSUR) , 51(5):1–42, 2018. [31] Satoshi Okada, Houda Jmila, Kunio Akashi, Takuho Mitsunaga, Yuji Sekiya, Hideki Takase, Gregory Blanc, and Hiroshi Nakamura. Xai-driven black-box adversarial attacks on network intrusion detectors. International Journal of Information Security , 24(3):1–15, 2025. [32] Mukund Sundararajan, Ankur Taly, and Qiqi Yan. Axiomatic attribution for deep networks. In 
+
+International conference on machine learning , pages 3319–3328. PMLR, 2017. [33] Md Tanzib Hosain, Jamin Rahman Jim, MF Mridha, and Md Mohsin Kabir. Explainable ai approaches in deep learning: Advancements, applications and challenges. Computers and electrical engineering , 117:109246, 2024. [34] Konda Reddy Mopuri, Utsav Garg, and R Venkatesh Babu. Fast feature fool: A data independent approach to universal adversarial perturbations. arXiv preprint arXiv:1707.05572 , 2017. [35] Konda Reddy Mopuri, Aditya Ganeshan, and R Venkatesh Babu. Generalizable data-free objective for crafting universal adversarial perturbations. IEEE transactions on pattern analysis and machine intelligence , 41(10):2452–2465, 2018. [36] Zhixing Ye, Xinwen Cheng, and Xiaolin Huang. Fg-uap: Feature-gathering universal adversarial perturbation. In 2023 International Joint Conference on Neural Networks (IJCNN) , pages 1–8. IEEE, 2023. [37] Annick Lesne. Shannon entropy: a rigorous notion at the crossroads between probability, information theory, dynamical systems and statistical physics. Mathematical Structures in Computer Science , 24(3):e240311, 2014. [38] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A Rusu, Joel Veness, Marc G Bellemare, Alex Graves, Martin Riedmiller, Andreas K Fidjeland, Georg Ostrovski, et al. Human-level control through deep reinforcement learning. nature , 518(7540):529–533, 2015. [39] Arnulf Jentzen and Peter E Kloeden. Taylor approximations for stochastic partial differential equations . SIAM, 2011. [40] Mohamed Amine Merzouk, Frédéric Cuppens, Nora Boulahia-Cuppens, and Reda Yaich. Investigating the practicality of adversarial evasion attacks on network intrusion detection. 
+
+Annals of Telecommunications , 77(11):763–775, 2022. 12 [41] Mahbod Tavallaee, Ebrahim Bagheri, Wei Lu, and Ali A Ghorbani. A detailed analysis of the kdd cup 99 data set. In 2009 IEEE symposium on computational intelligence for security and defense applications , pages 1–6. Ieee, 2009. [42] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. [43] Volodymyr Mnih, Adria Puigdomenech Badia, Mehdi Mirza, Alex Graves, Timothy Lillicrap, Tim Harley, David Silver, and Koray Kavukcuoglu. Asynchronous methods for deep reinforce-ment learning. In International conference on machine learning , pages 1928–1937. PmLR, 2016. 
+
+# A Supplementary Materials for Theoretical Analysis 
+
+We provide (iv) a first-order improvement guarantee for the resulting weighted perturbations under standard local assumptions. The previous theoretical analysis is placed in Sec. 3.5. 
+
+First-order improvement guarantee under weighted perturbations. We now connect the entropy-allocation view to a first-order targeted-evasion surrogate. Let v ≜ P Ruap be the feasibility-enforced PR-based UAP, and define the family of reweighted perturbations 
+
+u(w) ≜ v ⊙ w, δ(w) ≜ ϵ · u(w)
+
+∥u(w)∥2
+
+, w ∈ ∆mask . (10) Consider the targeted logit function F (x) ≜ Clogit (x) for yt and its local first-order Taylor approxi-mation: F (x + δ) ≈ F (x) + ∇xF (x)⊤δ for small ∥δ∥2 [39]. Averaging over the batch B in Alg. 3, let ¯g ≜ 1
+
+> |B|
+
+P 
+
+> x∈B
+
+∇xF (x). Ignoring the (direction-preserving) normalization in Eq.10 yields the standard linear surrogate gain: 
+
+G(w) ≜ ⟨¯g, u (w)⟩ =
+
+> d
+
+X
+
+> i=1
+
+ ¯givi
+
+| {z } 
+
+> si
+
+wi = ⟨s, w ⟩, (11) where s ≜ ¯g ⊙ v is a per-feature score that combines (i) how much increasing feature i raises the target logit via ¯gi, and (ii) the PR-based universal direction already discovered under PR optimization via vi.
+
+Corollary 1 (Connection to PX-UAP with IG scores) Suppose imp (Eq. 5) is used as a proxy score for s in 11, which is justified by IG completeness (Prop. 1) since IG decomposes the target-logit difference across features along a path and thus preserves feature ranking for targeted logit increase. Then the PX-UAP weighting in Eq. 7 implements the maximizer of an entropy-regularized first-order setting over ∆mask , and reallocating the fixed ℓ2 budget ϵ toward the most influential feasible features while maintaining stable (non-degenerate) allocation through the entropy term. 
+
+Overall, this analysis explains why P Xuap can outperform P Ruap under feasibility constraints: 
+
+P Ruap identifies a strong universal direction via PR/ k optimization, and the IG →Softmax step then performs a principled budget reallocation toward decision-critical feasible dimensions. It can improve the expected targeted-evasion gain under a fixed ℓ2 budget. 
+
+# B Addition Algorithims 
+
+In this section, we show the two addition algorithms that not shown in the content of main paper, inclduing the UAP generation framework in Alg. 2 and the PX-UAP attack generation in Alg. 3. 13 Algorithm 2 UAP Generation for Classifier C
+
+Input: Trainset T r , Classifier C, Modified feature group mask mask , seedset size size , max iteration number max _iter , perturbation budget ϵ
+
+Output: Universal adversarial perturbation uap  
+
+> 1:
+
+Seedset ← Sample( T r, size · | T r |), uap ← 0, iter _num ← 0 
+
+> 2:
+
+while iter _num < max _iter do  
+
+> 3:
+
+Randomly shuffle Seedset  
+
+> 4:
+
+for each x ∈ Seedset do  
+
+> 5:
+
+L1, L 2 ← C(x), C (x + uap ) 
+
+> 6:
+
+if L1 = L2 then  
+
+> 7:
+
+g ← gradient from Alg. 1, ptb ← ϵ · mask ⊙ g
+
+∥mask ⊙ g∥2
+
+, uap ← Project ℓ2 (uap + ptb ) 
+
+> 8:
+
+end if  
+
+> 9:
+
+end for  
+
+> 10:
+
+iter _num ← iter _num + 1  
+
+> 11:
+
+end while  
+
+> 12:
+
+return uap 
+
+Algorithm 3 PX-UAP attack 
+
+Input: Trainset T r , target model C, epsilon ϵ, batch size B, XAI feature selection mask mask 
+
+Output: XAI enhanced UAP P Xuap  
+
+> 1:
+
+uap ← PR-based UAP( C, T r, ϵ ), P Ruap ← recalculate( uap, ϵ, ℓ 2) 
+
+> 2:
+
+FNR ← ComputeFNR( C(T r ), C (T r + P Ruap ))  
+
+> 3:
+
+Sample a batch B ⊂ T r with |B| = B 
+
+> 4:
+
+imp batch ← XAImtd( B, target _class ) ▷ B × d 
+
+> 5:
+
+imp ← 1
+
+> |B|
+
+P 
+
+> x∈B
+
+imp batch (x) ▷ d  
+
+> 6:
+
+Compute P Xuap according to Eq. 7  
+
+> 7:
+
+P Xuap ← recalculate( P Xuap, ϵ, ℓ 2), FNR ′ ← ComputeFNR( C(T r ), C (T r + P Xuap ))  
+
+> 8:
+
+if FNR ′ < FNR then  
+
+> 9:
+
+P Xuap ← P Ruap  
+
+> 10:
+
+end if  
+
+> 11:
+
+return P Xuap 
+
+# C Network Realistic Domain Constraints 
+
+In this section, we present the feature categorization for the CICIDS2018 dataset adopted in this study, together with brief descriptions and recalculation formulations, as shown in Tab. 2. We partition the input features into three groups: Modified Features (MF) , Related Features (RF) , and Unmodified Features (UF) [10]. Specifically, for any input flow feature vector x ∈ X (where xi denotes the i-th feature of x), the adversarial perturbation δ is applied only to the Modified Features (MF) first, with the perturbed value (x + δ)i must remain within its valid range (e.g., protocol compliance and admissible feature bounds [40]), as formalized in Eq. 12: 
+
+∀x ∈ X , ∀i ∈ M F, (x + δ)i ∈ R i(X ) (12) Regarding to RF, whenever the adversary modifies any feature in M F (denoted as the i-th feature), the corresponding features in RF (denoted as the j-th feature) must be recalculated to preserve inter-feature mathematical dependencies, shown in Eq. 13: 
+
+∀x ∈ X , ∀j ∈ RF, (x + δ)j = Recalculate (x + δ)i (13) The remaining features are assigned to Unmodified Features (UF) and remain fixed throughout the attack, since their values cannot be altered via feasible manipulation actions. After these steps, the resulting perturbation is projected onto the L2 ball of radius ϵ to enforce the prescribed attack budget. 14 Table 2: Feature categorization, descriptions, and formulations 
+
+FEATURE NAME DESCRIPTION RECALCULATE FORMULATION GROUP 
+
+Tot Fwd Pkts Total packets in the forward direction –Modified Features Tot Bwd Pkts Total packets in the backward direction –TotLen Fwd Pkts Total size of packet in forward direction –TotLen Bwd Pkts Total size of packet in backward direction –Flow Duration Duration of the flow in Microsecond –Fwd Pkts/s Number of forward packets per second Tot Fwd Pkts × 10 6 / Flow Duration Bwd Pkts/s Number of backward packets per second Tot Bwd Pkts × 10 6 / Flow Duration Flow Pkts/s Number of flow packets per second Fwd Pkts/s + Bwd Pkts/s Flow Byts/s Number of flow bytes per second 
+
+(TotLen Fwd Pkts + TotLen Bwd Pkts ) × 10 6
+
+Flow Duration Related Features Pkt Size Avg Average size of packet TotLen Fwd Pkts + TotLen Bwd Pkts Tot Fwd Pkts + Tot Bwd Pkts Fwd Seg Size Avg Average size in the forward direction TotLen Fwd Pkts / Tot Fwd Pkts Bwd Seg Size Avg Average size in the backward direction TotLen Bwd Pkts / Tot Bwd Pkts Down/Up Ratio Download and upload ratio int (Tot Bwd Pkts / Tot Fwd Pkts )
+
+Other Features Remaining features not in above groups – Unmodified Features 
+
+15 D Hyperparameter Setting for Algorithms 
+
+In this section, we report the hyperparameter settings for three algorithms in the main paper, shown in Tab. 3. Specifically, to balance computational efficiency with sufficient coverage of the training distribution, we generate the UAP using a small portion of the training set and set the seedset size to 
+
+1 × 10 −4 (corresponding to 600 network data samples as the seedset for UAP generation). For the same reason, we set the XAI batch size B=10,000 to improve sample coverage for more representative XAI estimation, while keeping the computational overhead manageable. All the attack methods and their variants shown in Sec. 4 are evaluated under identical iteration settings (e.g. max _iter , N ,
+
+nstep , SGD _num , α). Table 3: Hyperparameter Setting for algorithms                           
+
+> FEATURE NAME FEATURE DESCRIPTION FEATURE VALUE
+> ϵAdversarial Budget [0 .04 ,0.15]
+> size Seedset size 1×10 −4
+> max _iter Max Iteration Number 20
+> NPGD Attack Number 10
+> nstep PGD Iteration Step 50
+> αPGD Step Size ϵ/n step
+> SGD _num SGD Max Iteration Number 50
+> BXAI Batch Size 10000
+> mIG Iteration Step 500
+
+# E Variants detail for Ablation Study 
+
+To verify that the observed attack effectiveness stems from the combination of the components rather than any single factor, we list the ablation variants in which specific components are removed or modified. Reviewing the three key components described in Alg. 1: (i) PGD-based attack initialization, (ii) k-based selection of AE candidates, and (iii) k∗-driven optimization. We abbreviate these three components as AE Initia. , K-Sel. , and Opt. , respectively, in the following Table 4. Table 4: Deatils of PR-based UAP attack and ablation variants.                          
+
+> INDEX NAME AE I NITIA .K-S EL .OPTZ .(1): FUAP FGM(1) ××
+> (2): KFUAP FGM(N) √×
+> (3): PUAP PGD(1) ××
+> (4): KPUAP PGD(N) √×
+> (5): PR-BASED UAP PGD(N) √√
+
+For the attack-initialization component, in addition to the PGD-based initializer in Alg. 1, we replace it with a random-start FGM initializer to form an alternative strategy. The resulting variants are denoted as FUAP and KFUAP in Tab. 4. For variants that include AE candidate selection (K-Sel.), the initialization attack is repeated multiple times, denoted by ’(N)’ after the corresponding attack name. In parallel, variants that select the AE candidate with the largest k are prefixed with ’K’. Otherwise, the sole available AE candidate is used as the selected result . Finally, to validate the effectiveness of the optimization, only the proposed PR-based UAP updates the perturbation using ∇xk∗, whereas the other variants directly adopt the AE candidate selected in the previous step as the generated perturbation. 
+
+# F Additional Experimental Result 
+
+In this section, in addition to FNR and Accuracy results shown in main paper, we provide additional experimental results with a different evaluation metric for the two experiments and the ablation study mentioned in Sec. 4. Besides, we also report attack performance across multiple intrusion detection 16 datasets and different DRL architectures, transferability evaluation under the black-box setting, and ablation study of epsilon step. 
+
+F.1 F1 score of the results in main paper 
+
+The classifier’s F1 score over the displayed ϵ range are provided for a more comprehensive assessment of overall performance, which is calculated according to Eq. 14: F1-score = 2 · True Positives 
+
+2 · True Positives + False Positives + False Negatives . (14) The F1 score complements accuracy and FNR by offering a more balanced assessment by capturing both false alarms and missed detections in a single metric. This offers an additional evaluation perspective and enables a more comprehensive view of overall detection performance. 
+
+Figure 4: F1 score of the proposed PR-based UAP and other UAP baselines Fig. 4 presents the F1 score of the proposed PR-based UAP and other UAP baselines. Consistent with the findings delivered in Sec. 4, the proposed PR-based UAP achieves the lowest F1 score among all the other baselines reported in Tab. 1 over the considered ϵ range, indicating the strongest degradation of detection performance,i.e., strongest attack effectiveness. Notably, even at ϵ = 0 .09 , where the FNR of the PR-based UAP is the same as that of PCC_UAP previously introduced in Fig. 3(b), the PR-based UAP still attains a lower F1 score, specifically it is the only candidate whose F1 score drops below 0.3 for ϵ > 0.13 , thereby achiving a stronger attack. 
+
+Figure 5: F1 score of (a): PX-UAP with different Topn values. (b): The ablation study We next report the F1 score of PX-UAP with different Topn values (Fig. 5(a)) and the ablation study (Fig. 5(b)). Overall, the trends in both subfigures are consistent with the results shown in main paper. Specifically, PX-UAP yields additional performance degradation in a wide range of perturbation, i.e., 
+
+ϵ < 0.07 and ϵ ≥ 0.10 . Among all settings, Topn = 3 produces the largest reduction in the F1 score. Turning to the ablation study, the PR-based UAP achieves the lowest F1 score relative to all ablation variants, indicating the most pronounced degradation in detection performance and the most effective attack. 17 In summary, the reported F1-score results provide a complementary evaluation perspective and further substantiate the effectiveness of our proposed UAP methods. 
+
+F.2 Generalizability across Datasets and DRL Architectures 
+
+In the main paper, we report the results of the proposed PR-based UAP on the CICIDS2018 dataset. To further evaluate its generalizability across different scenarios, we additionally launch the proposed PR-based UAP attacks against multiple classifiers with different DRL architectures and on two commonly used network intrusion detection datasets, namely NSL-KDD [41] and UNSW-NB15 [19]. 
+
+Figure 6: FNR of proposed PR-based UAP on DRL-based IDS (DQN-4-64) on (a): NSL-KDD over 
+
+ϵ ∈ [0 , 0.45] , (b) : UNSW-NB15 over ϵ ∈ [0 , 0.15] .Specifically, since the two datasets differ in dimensionality and feature structure, we adopt dataset-specific ϵ ranges to better demonstrate attack performance, with ϵ ∈ [0 , 0.45] for NSL-KDD and 
+
+ϵ ∈ [0 , 0.15] for UNSW-NB15, resceptively. The data preprocessing follows the same procedure described in Section 4.1. It can be shown in Fig. 6 that the proposed PR-based UAP attack and PX-UAP attack consistently outperform the state-of-the-art PCC_UAP on the other two datasets with FNR ≈ 0.43 and 0.78, respectively, demonstrating the generalizability of our proposed method in different scenarios in the intrusion detection area. Furthermore, in addition to the DRL-based IDS architecture as the target classifier as used in the main paper, we further assess the attack performance on the same CICIDS2018 dataset but under different DRL agents and network architectures to assess whether the proposed attack can consistently compromise diverse DRL-based IDS models. It should be noted that the notation in parentheses indicates the DRL agent and network architecture used by the target IDS. For example, DQN-6-128 denotes a DQN-based target model with six hidden layers, each containing 128 units. 
+
+Figure 7: FNR of proposed PR-based UAP on different DRL-based IDS on CICIDS2018 dateset with the taget model of (a): DQN-6-128, (b): PPO-4-64, (c): A2C-4-64. As shown in Fig. 7, in addition to DQN, we further consider two widely used DRL architectures (agents): Proximal Policy Optimization (PPO) [42] and Advantage Actor-Critic (A2C) [43]. Specifi-cally, the three target models used for evaluation are DQN-6-128, PPO-4-64, and A2C-4-64. It can be observed that the proposed PR-based UAP consistently outperforms PCC_UAP across all three target models and PX-UAP further improves the attack performance based on that, further demonstrating 18 the generalizability of our method under different intrusion detection scenarios and the effectiveness of our algorithmic design. 
+
+F.3 Transferability Evaluation under the Black-Box Setting 
+
+Figure 8: FNR for Cross-model Transferability of AE (PR-based UAP) among different DRL-based IDS model on CICIDS2018 at ϵ = 0 .15 
+
+In some real-world cybersecurity scenarios, attackers may not have access to the internal structure or parameters of the target model, corresponding to a black-box attack setting. Therefore, this setting should also be considered for a comprehensive evaluation of attack effectiveness. We conduct additional transferability experiments, where UAPs are crafted on a surrogate model with white-box access and then applied to other target models to evaluate their transferability. The four models used as the surrogate and target models are those considered in the previous CICIDS2018 evaluation in the above section, together with the model used in the main paper, i.e., DQN-4-64. The results shown in Fig. 8 show the performance of the generated AEs under different surrogate-target model pairs. It can be observed that, across different transfer scenarios, i.e., the off-diagonal entries, the proposed PR-based UAP still achieves decent attack performance, which provides evidence of the proposed attack’s effectiveness even beyond the original white-box setting, as well as the transferability of the generated AEs across different models and architectures. 
+
+F.4 Ablation study of epsilon step 
+
+In this section, we conduct an ablation study on the setting of ϵ-steps to verify that the strong effectiveness of our proposed attack stems from the attack design itself, rather than being attributable to favorable ϵ-step selection. The results demonstrate that our proposed PR-based UAP consistently outperforms the two baselines, both under the fixed unified ϵ-step setting and when ϵ-steps are tuned for each method. Specifically, in the experimental setting of Alg. 2 in the main paper, we set the number of ϵ-steps to 1, which means each update performs a full-ϵ step at line 7. This design choice is intended to ensure a unified fairness criterion, as different UAP methods may benefit from different small or adaptive step-size schedules. If each candidate were allowed to use its own step-size schedule, the performance comparison would be affected by step-size tuning as well, rather than reflecting only the difference in UAP design. Therefore, we adopt the same full-ϵ update rule across all methods in the experiments shown in Chapter 4 to ensure a fair comparison. Despite this setting, in order to provide a more comprehensive evaluation of our proposed attack method and rule out the influence of ϵ-step selection, we further conduct an additional step-size sensitivity analysis for all attack candidates. Namely, we compare the attack performance of the proposed PR-based UAP, PCC_UAP, and UAP under different step sizes, identify the best-performing step size for each candidate method, and finally report a best-step-size comparison. Fig. 9 show attack performance of PR-based UAP, PCC_UAP, UAP under different ϵ stepsize. We set the step size to ϵ (the original setting), ϵ/5, ϵ/10, ϵ/20, and an adaptive step-size scheme. In the adaptive setting, the step size is gradually reduced over the 30 iterations (Alg. 2 line 2): ϵ/5 for 19 Figure 9: FNR of (a): PR-based UAP (b): PCC_UAP (c): UAP with different stepsize on CICIDS2018 dateset. The applied stepsize are show in parentheses. iterations 1–10, ϵ/10 for iterations 11–20, and ϵ/20 for iterations 21–30. As discussed above, different attack methods may benefit from different step-size schedules. Therefore, according to the results in Fig. 9(a)–(c), we select the best-performing step-size setting for each attack method, namely UAP (adaptive) and PCC_UAP ( ϵ/ 10 ) and then compare them with two comparably good settings of the proposed PR-based UAP (Fig. 9(a)), including ϵ/ 5 and the original full-ϵ step setting. 
+
+Figure 10: FNR of best-step-size comparison for PR-based UAP, PCC_UAP and UAP attack. As shown in Fig. 10, the two PR-based UAP variants (black solid and dashed lines) still outperform the other two baselines under their respective best-performing settings. Together with the original comparison under a unified full-ϵ step size, this supports a more comprehensive conclusion that the proposed PR-based UAP significantly outperforms the state-of-the-art PCC_UAP under both a fairness setting with the same step size and a fairness setting with the best step size, which further demonstrates the effectiveness of our proposed attack method. 
+
+# G Limitation and future work 
+
+In our opinion, the limitation of this work and the corresponding directions for the future work are as follows: Although this work evaluates the transferability of the proposed attacks to provide evidence of their effectiveness under black-box settings, our main threat model remains white-box. Future work can further extend this study to more restrictive black-box scenarios. This would enable a closer approximation of practical deployment environments. 
+
+# H Experiment Device 
+
+All experiments in this study were conducted on a laptop workstation equipped with an AMD Ryzen 9 5900HX processor, an NVIDIA GeForce RTX 3080 Laptop GPU with 16 GB VRAM, 32 GB DDR4 RAM, and 2 TB PCIe Gen3 SSD storage. The operating system used throughout the experiments was Windows 10 64-bit. 20 I Broader Impact 
+
+This work may have both positive and negative societal impacts. Positively, by exposing the vulnera-bility of DRL-based intrusion detection systems to universal adversarial perturbations, this study can help the research community and security practitioners better understand potential weaknesses in current IDS models and motivate the development of more robust and reliable cybersecurity defenses. This is particularly important for improving the trustworthiness of intelligent security systems in practical deployment. Negatively, since the work studies adversarial attack methods, the proposed techniques could potentially be misused to evade real-world intrusion detection systems. Therefore, the study is conducted in controlled offline experimental settings and is intended to support academic research and defensive security development. 21
