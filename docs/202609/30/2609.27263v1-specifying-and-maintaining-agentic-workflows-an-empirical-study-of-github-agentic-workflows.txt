@@ -1,0 +1,715 @@
+Title: Specifying and Maintaining Agentic Workflows: An Empirical Study of GitHub Agentic Workflows
+
+URL Source: https://arxiv.org/pdf/2609.27263v1
+
+Published Time: Thu, 24 Sep 2026 00:28:59 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> 1
+
+# Specifying and Maintaining Agentic Workflows: An Empirical Study of GitHub Agentic Workflows 
+
+Jasem Khelifi, Issam Oukhay, Ali Ouni, Mohammed Sayagh, and Mohamed Aymen Saied 
+
+Abstract —Agentic workflows shift software development from prompting AI agents for individual tasks to defining recurring work that agents execute automatically. GitHub Agentic Work-flows (gh-aw) enables this approach through Markdown files that combine natural-language instructions with configuration and compile into executable GitHub Actions workflows. Unlike conventional workflows that primarily prescribe scripted oper-ations, these files delegate tasks requiring interpretation to AI agents. They also couple agent instructions with execution triggers, making those instructions operational specifications for repeated repository activities. However, how developers structure and maintain these specifications, and which execution requirements and safeguards they express, remains insufficiently understood. In this paper, we examine the structure, evolution, and instruction content of gh-aw Markdown files to inform how practitioners define and maintain agent-run work. We analyze 1,248 files from 276 repositories, 20,841 commit-file events, and 288 resolved instruction-label sets from a sample of 294 files. Our results show that workflow instructions extend beyond short prompts, with a median of 556.5 words and code blocks in 62.1% of files. Among files with at least 120 days of observed activity, 78.2% still receive updates in month 4, while size-normalized churn decreases after the first month. Tasks, outputs, constraints, and process instructions each appear in over 93% of labeled workflows, yet only 9.4% explicitly address prompt-injection defense. LLM classification achieves an F1 score of 0.818 and Cohen’s κ of 0.715 against the resolved human labels. These findings suggest that developers should account for the evolution of workflows copied or referenced across repositories and consider adding prompt-injection defenses, resource budgets, and evidence-credibility checks where applicable 
+
+Index Terms —Agentic workflows, empirical software engineer-ing, GitHub Actions, Markdown, mining software repositories. 
+
+I. I NTRODUCTION 
+
+# AGENTIC AI extends software assistance from generating answers to planning and carrying out tasks through tools, including writing code, running tests, and revising generated output [1], [2]. Coding agents are already being adopted across GitHub projects [3]. Agentic workflows extend this model to recurring automation: developers define work that agents execute in response to schedules or repository events, without requiring a person to initiate and guide each run [4]. This shift toward recurring agent-driven work is echoed in 
+
+J. Khelifi, I. Oukhay, A. Ouni, and M. Sayagh are with École de technologie supérieure (ÉTS), University of Quebec, Montreal, Quebec, Canada. E-mail: jasem.khelifi.1@ens.etsmtl.ca, issam.oukhay.1@ens.etsmtl.ca, ali.ouni@etsmtl. ca, mohammed.sayagh@etsmtl.ca. M. A. Saied is with Université Laval, Quebec City, Quebec, Canada. E-mail: mohamed-aymen.saied@ift.ulaval.ca. This work was supported by LLM token credits from the Google Research Credits program. 
+
+Sundar Pichai’s description of how Google’s engineers are using agentic workflows: 
+
+“We’re now shifting to truly agentic workflows. Our engineers are orchestrating fully autonomous digital task forces, firing off agents and accomplishing incredible things.” 
+
+Sundar Pichai, CEO, Google and Alphabet April 22, 2026 [5] 
+
+GitHub Agentic Workflows (gh-aw) supports this model by allowing developers to specify repository tasks in Markdown files that combine natural-language instructions with execution configuration [4], [6]. Its compiler translates these files into GitHub Actions YAML workflows that invoke agents on schedules or repository events [7]. Developers can use these workflows to investigate failing tests, review changes, or update documentation [4]. Where conventional workflows primarily prescribe scripted operations, gh-aw allows developers to delegate tasks requiring interpretation and reasoning while configuring when and how agents execute. Agentic workflows make natural-language instructions per-sistent specifications for recurring repository operations. In gh-aw, developers combine instructions describing the agent’s work with configuration specifying triggers, permissions, and tool access [4], [7]. Workflow authors must specify what the agent should accomplish, which information it should consider, and what outputs and constraints should guide its execution [4]. Execution configuration and task instructions thus express complementary aspects of the delegated behavior. Understand-ing and reviewing these workflows requires examining both their configuration and their natural-language content. Recurring execution makes the quality and maintenance of these instructions consequential. The same workflow can invoke an agent repeatedly on schedules or repository events [4], [7]. An unclear requirement or outdated assumption may therefore affect successive runs, potentially producing unsuitable changes or additional review work. Understanding what developers specify and how they revise these instructions can inform how such workflows are written and maintained. Prior research has examined repository workflow automation from several perspectives, including the maintenance of GitHub Actions YAML workflows [8], [9], tool support for extracting GitHub Actions build metrics [10], and the performance, failures, and recovery of CI workflows in microservice-based systems [11]. In parallel, studies of agent context and skill files have characterized the structure, evolution, and content of natural-language guidance [12], [13]. More recently, GHAW-H has provided a dataset linking gh-aw Markdown histories to arXiv:2609.27263v1 [cs.SE] 23 Sep 2026 2
+
+compiled YAML snapshots [14]. Although these efforts provide foundations for investigating agentic automation, they leave open how developers maintain Markdown sources that combine agent instructions with execution configuration for recurring automation. In particular, further empirical evidence is needed to characterize how maintenance activity evolves after adoption, how edits are distributed between configuration and instructions, and which operational requirements and safeguards developers explicitly encode. In this paper, we aim to address this gap through an empirical study of the structure, evolution, and instruction content of gh-aw Markdown workflows. Our objective is to understand how developers specify recurring agent tasks and maintain these specifications after adoption, providing an empirical foundation for workflow review and instruction-analysis tools. We analyze 1,248 gh-aw Markdown files from 276 GitHub repositories and manually examine a sample of 294 files. Our analysis characterizes workflow composition, distinguishes changes to execution configuration from changes to agent instructions, and develops a taxonomy of instruction types. We also evaluate whether LLMs can identify these types to support instruction analysis at scale. The following research questions guide our study:  
+
+> •
+
+RQ 1. What are the characteristics of GitHub Agentic Workflows?  
+
+> •
+
+RQ 2. How are GitHub Agentic Workflows maintained over time?  
+
+> •
+
+RQ 3.What agentic instructions do developers set in GitHub Agentic Workflows?  
+
+> •
+
+RQ 4. Can LLMs assign instruction labels in GitHub Agentic Workflows? 
+
+Our results show that gh-aw workflows contain substantial instructions, with a median of 556.5 words per file. Moreover, among files with at least 120 days of observed activity, 78.2% receive updates in month 4. Size-normalized churn decreases after the first month, but maintenance’s share of repository commits shows no statistically significant month-to-month change. Additionally, we identify ten instruction categories. Tasks (97.6%) and outputs (95.8%) dominate, specifying what agents should do and what results they should produce. In contrast, safety (25.0%) and communication (63.9%) are the least common, covering protective instructions and how agents should communicate. Finally, LLM classification achieves an F1 score of 0.818 and Cohen’s κ of 0.715 against the resolved human labels, indicating substantial agreement [15]. 
+
+A. Novelty statement 
+
+This study provides new empirical findings on how develop-ers specify, maintain, and reuse gh-aw Markdown files. The main contributions of this paper can be summarized as follows:  
+
+> •
+
+We develop a taxonomy of instructions in gh-aw Mark-down files, with ten categories and 42 subcategories. Based on manual analysis, it describes how developers define tasks, outputs, execution steps, constraints, and safeguards, with definitions and examples to support workflow review.  
+
+> •
+
+We examine how developers maintain and reuse gh-aw Markdown files across projects. We distinguish changes to frontmatter configuration from changes to instruction bod-ies and track maintenance over four months, accounting for workflow size and repository activity.  
+
+> •
+
+We characterize the size, structure, and composition of gh-aw Markdown files, including how developers combine instructions, code blocks, and template expressions.  
+
+> •
+
+We provide a replication package to support independent replications and further research on agentic workflows. 
+
+B. Open Science 
+
+We provide a replication package containing our dataset, scripts, labeling material, and experiments online [16], for future replications and extensions. II. B ACKGROUND 
+
+GitHub Agentic Workflows (gh-aw) is a GitHub CLI extension and workflow authoring system for defining AI-powered repository automation in Markdown and running it through GitHub Actions [17]. In a gh-aw workflow, the source artifact is not a conventional hand-written Actions YAML file. Instead, developers write a Markdown file, typically under .github/workflows/ , that combines structured configuration with natural-language instructions for an AI agent. The gh-aw compiler then turns the Markdown source into a generated Actions workflow that can be triggered by standard GitHub events, schedules, or manual dispatches. This source format gives gh-aw files a two-part structure. The YAML frontmatter at the top specifies operational parameters such as triggers, permissions, model or engine choices, and tool access. The Markdown body below the frontmatter describes the task the agent should perform, the context it should inspect, the steps it should follow, and the expected output. Figure 1 shows an example from our corpus. The example illustrates how executable configuration and prose instructions coexist in one 
+
+.md file: the frontmatter decides when and with what authority the workflow runs, while the body states the agent-facing triage policy. 
+
+A. Motivating Example 
+
+To illustrate some of the key characteristics of agentic workflows, we consider the CI maintenance workflows in 
+
+dotnet/runtime ,3 the repository hosting the .NET runtime and core libraries. Figure 2 presents selected information flows among three workflows and the human review process for proposed updates to shared guidance. Together, these workflows illustrate recurring execution, coordination through repository artifacts, and maintenance of agent instructions. Every 12 hours, ci-failure-scan.md directs an agent to investigate CI failures and file issues. A second work-flow, ci-failure-fix.md , reads those issues, consults domain-specific skills, and attempts repairs. It opens draft pull requests or asks the relevant owners for help when a fix cannot be established [18], [19]. A third workflow, 
+
+ci-failure-scan-feedback.md , runs daily to assess                 
+
+> 2Commit-pinned source: workflow snapshot.
+> 3https://github.com/dotnet/runtime 3
+> ---#Auto-Triage Workflow -adds triage/accepted when Copilot is assigned to an issue on: issues: types: [assigned] permissions: issues: write safe-outputs: report-failure-as-issue: false noop: false add-labels: max: 3---
+
+## Auto-Triage on Copilot Assignment 
+
+You monitor issues for Copilot assignment. When Copilot is assigned to an issue, you add the triage/accepted label. 
+
+## When to Run 
+
+Only process when:  
+
+> •
+
+The assignee is Copilot (the GitHub Copilot coding agent)  
+
+> •
+
+The issue has the ai-fix-requested label 
+
+## Your Task 
+
+When Copilot is assigned to an issue with ai-fix-requested :1) Add the triage/accepted label - This indicates the issue is accepted for work 2) Add the ai-processing label - This shows the issue is being actively worked on 
+
+## Do Nothing If  
+
+> •
+
+The assignee is NOT Copilot  
+
+> •
+
+The issue doesn’t have ai-fix-requested label  
+
+> •
+
+The issue already has triage/accepted label 
+
+## Important  
+
+> •
+
+Copilot’s login is exactly Copilot (case-sensitive)  
+
+> •
+
+Do not post any comments - just add the labels silently  
+
+> •
+
+This workflow is triggered by the “Assign to Copilot” button in the GitHub UI      
+
+> Fig. 1. Auto-triage workflow in kubestellar/console
+> (auto-triage.md ). 2
+
+both agents’ outputs and maintainer feedback. It proposes edits to their Markdown instructions and shared issue-authoring guidance through a draft pull request [20]. The workflows operate on independent schedules and ex-change information through issues, pull requests, and run records. The arrows in Figure 2 represent information flows rather than direct execution triggers. Existing issues and pull requests help avoid repeated work, while a KPI tracker issue preserves the feedback workflow’s tracking window across runs [18]–[20]. Proposed instruction changes affect subsequent runs after review and integration. A concrete incident illustrates why these instructions require maintenance. A rejected attempt to modify a platform-specific cryptography test led the feedback workflow to propose a rule directing such cases to domain owners. After an automated push failed, the proposal was preserved as an issue and subsequently implemented in a reviewed, merged pull request [21], [22]. The resulting change revised the guidance available to future agent runs, refining the boundary between tasks delegated to agents and cases requiring domain expertise. This example illustrates three concerns that motivate our study. First, recurring agent work depends on both execution ci-failure-scan.md ci-failure-fix.md ci-failure-scan-feedback.md       
+
+> [Domain skills
+> SKILL.md
+> AShared guidance create-kbe.instructions.md
+> ¤Human review
+> õKPI tracker issue Cross-run state
+> Issues PRs / comments Merge Read / update
+> Fig. 2. CI maintenance loop in dotnet/runtime . Selected information flows and reviewed updates to shared guidance.
+
+configuration and natural-language instructions, including refer-ences to shared guidance. Second, those instructions can evolve as experience reveals limits in the tasks delegated to agents. Third, specifying agent work involves defining the conditions under which agents should act, refrain from acting, or seek human assistance. Markdown therefore serves as a maintained specification of delegated behavior and can itself become the target of agent-proposed revisions subject to human review. Although this example demonstrates these concerns in one project, it does not establish how common they are across repositories. Our study examines the structure of gh-aw Markdown workflows, the evolution of their configuration and instructions, and the requirements and constraints developers explicitly express. III. S TUDY DESIGN 
+
+Figure 3 outlines our study. We select projects (Sec-tion III-A), collect Markdown sources and their commit histories (Section III-B), clean the data (Section III-C), and develop an instruction taxonomy (Section III-D). 
+
+A. Project Selection 
+
+We select projects by first identifying gh-aw generated GitHub Actions workflow files through GitHub REST API code search [23] using the following search query: 
+
+"This file was automatically generated by gh-aw" path:.github/workflows extension:yml 
+
+GitHub code search allows at most 1,000 results per query across all pages [23]. To retrieve more matches, we divide the query into non-overlapping file-size buckets, such as size:48001..60000 and size:60001..72000 
+
+(bytes). Each bucket has the same 1,000-result limit. We repeatedly split buckets reporting more than this limit into smaller ranges. All final buckets reported fewer than 1,000 matches. We then retrieve every page and removed duplicate repository/path pairs, targeting all indexed gh-aw-generated YAML files matching the query rather than only the first 1,000. After deduplicating all returned search results by repository and file path, we identify 4,533 generated gh-aw workflow 41. Project Selection 
+
+§ Z  
+
+> GitHub Search API Star filter
+> gh-aw search query ≥10 GitHub stars
+> 4,533 gh-aw YAML workflows 1,528 repositories 1,435 gh-aw YAML workflows 365 repositories
+> 2. Data Collection
+> Map gh-aw Markdown sources
+> Collect commit histories
+> 1,295 gh-aw Markdown files 21,435 file-level changes 281 repositories
+> 3. Data Cleaning
+
+  Remove 18 non-English 
+
+> and 29 empty bodies
+> 1,248 gh-aw Markdown files 20,841 file-level changes 276 repositories
+> 4. Taxonomy Sampling
+> Representative sample
+> 95% confidence, 5% margin of error
+
+ç
+
+> 294 gh-aw Markdown files
+> Body text for instruction analysis
+> RQ1: gh-aw Markdown Characteristics RQ2: gh-aw Markdown Maintenance RQ3: gh-aw MD instructions Taxonomy RQ4: gh-aw MD instructions LLM classification
+
+Fig. 3. Overview of our study design. 
+
+YAML files across 1,528 repositories. We retain repositories with at least 10 GitHub stars as a proxy for relevance and quality and to reduce the inclusion of toy projects, following prior studies [24]–[26]. This left 365 repositories and 1,435 generated gh-aw workflow YAML files. 
+
+B. Data Collection 
+
+We map each YAML workflow to its Markdown source using its source comments (e.g., # Source: owner/repo/path.md@sha ). When no source comment was available, we infer the Markdown path in the same repository by replacing the YAML filename suffix with .md 
+
+(e.g., test.lock.yml becomes test.md ). We deduplicate sources by repository and Markdown path, since workflows in different repositories can reference the same Markdown file hosted in another repository. Starting from the 1,435 gh-aw generated YAML workflows, this mapping, deduplication, and snapshot collection yield 1,295 distinct gh-aw Markdown source files hosted by 281 repositories. Of the 365 projects with generated YAML workflows, 108 (29.6%) reference Markdown from another repository for at least one workflow, using a shared source rather than a project-local file to generate its YAML. For these Markdown files, we collect their commit histories, yielding 7,653 distinct commits involving 21,435 changes to Markdown files. For each change, we record the lines added and deleted, file status, commit identifier, message, author, committer, and dates. We save Markdown snapshots at the modifying commits, or pre-deletion versions for deleted files. 
+
+C. Data Cleaning 
+
+We filter the 1,295 Markdown files by removing ( i) 29 files with empty body text, and ( ii ) 18 files confidently classified as non-English. To identify non-English files, we use 
+
+langdetect [27], a Python library that detects language by comparing short character sequences with stored language profiles. We apply it to the body text of the 1,295 latest snapshots, excluding YAML frontmatter and code blocks. Short or uncertain-language bodies are retained unless empty. This leaves 1,248 files from 276 repositories. We retain the histories of these files, covering 7,446 distinct commits that touch at least one retained Markdown file and 20,841 file-level changes. Table I summarizes the resulting dataset. 
+
+TABLE I MARKDOWN CORPUS SUMMARY .
+
+Measure Value Total Markdown files 1,248 Source repositories 276 Distinct commits ( ≥1 Markdown file) 7,446 Total Markdown file changes 20,841 Commit-history span 2025-07-31 to 2026-08-04 
+
+D. Instruction Taxonomy 
+
+We select a representative sample of 294 files from the 1,248 Markdown sources using Cochran’s sample-size formula with finite-population correction, choosing 95% confidence, a 5% margin of error, and a conservative population proportion of 
+
+p = 0 .5. We inspect each file’s pinned latest snapshot, coding only its Markdown body without expanding imports or inferring instructions from YAML frontmatter. Coding is multi-label, as one file can contain several instruction types. We use thematic analysis [28], organizing the process into four steps [29]: 1) Initial reading. Two authors jointly review 30 files to familiarize themselves with the instructions and calibrate their coding. They then inspect the sampled bodies to identify what developers ask agents to do and the conditions placed on that work. 2) Generating descriptive labels. The authors independently assign labels to instructions supported by the text. Labels describe the instruction’s purpose rather than its wording. For example, limits on time, retries, or tokens fall under 
+
+Resource Budget . A file receives multiple labels when it contains different instruction types. 3) Reviewing and refining labels. We compare related labels, review their scope against the bodies, and distinguish overlapping concepts. For instance, we merge Expert Role 
+
+and Role Scope into Role Assignment .4) Grouping labels into themes. We organize labels by their shared purpose and define the resulting categories. For example, Required Sequence , Decision Branch , and 
+
+Within-Run Iteration belong to Process , as they specify how work proceeds. We report the taxonomy with definitions, frequencies, and examples from the files. 5      
+
+> TABLE II MARKDOWN SIZE ,STRUCTURE ,AND READABILITY .Metric Min Mean Median Max
+
+Size and structure             
+
+> Body lines 2144 104 1,661 Frontmatter lines 687 58 1,237 Code block lines 031 5.5 603
+
+Heading levels                         
+
+> Total headings (H1–H6) 010.3 973 H1 00.9 119 H2 04.8 422 H3 04.0 344 H4 00.5 036 H5 00.0 03
+
+Text and readability                     
+
+> Body words 1710 556.5 10,551 Sentences 155 43 887 Syllables 91,593 1,186 23,155 Pictographic symbols 04.4 0171 Flesch Reading Ease -555.6 33.5 38.8 84.8
+
+IV. R ESULTS 
+
+This section reports and discusses the results for our four research questions. 
+
+A. RQ1: What are the characteristics of GitHub Agentic Workflows? 
+
+Motivation. Writing a workflow in natural language does not necessarily make it easier to maintain compared to YAML. Before running, modifying, or copying a gh-aw workflow, developers need to review both its configuration and the instructions that guide the agent. Prior work on agent context files highlights readability and organization as concerns for developers who write and maintain these instructions [12]. Our goal is to characterize the amount of text developers must review, its readability, and how it is organized, providing a baseline for creating and maintaining gh-aw workflows. 
+
+Approach. To address RQ1, we analyze the latest available snapshots of the 1,248 Markdown files from three perspectives: size, structure, and readability. We first count each file’s body, frontmatter, and code-block lines. We then count heading levels per file and the most frequent used words in these headings to understand how developers divide these files into sections or phases. For the word cloud, we remove common English stopwords and standalone numbers to emphasize heading content, following prior word-cloud analyses [30], [31]. To measure readability, we use the Flesch Reading Ease (FRE) metric, where higher scores indicate easier reading [32], along with sentence and syllable counts. These measurements are applied on the complete Markdown body, including headings, tables, code, and template expressions.Finally, we summarize measurements using minimum, mean, median, and maximum values. 
+
+Results. 
+
+Finding #1: gh-aw Markdown files contain a median of 9 headings per file, with “step,” “phase,” and “issue” as the most frequent heading words.  
+
+> Fig. 4. Frequent Markdown heading terms, sized by total occurrences.
+
+Table II summarizes workflow size, structure, and readability, while Figure 4 shows the most frequent heading terms. In our set of markdown files, We find that heading counts range from zero to 73 per file (Table II). Developers typically organize sections into a shallow hierarchy having H2 and H3 headings account for 85.5% of all headings, with per file medians of four and three, respectively. At the file level, step , issue , and phase appear in headings in 31.3%, 28.4%, and 11.7% of the files. Upon further investigation of these terms, we noticed that step headings specify individual actions for the agent to follow, which aligns with the natural YAML workflow composition of steps. 
+
+Issue headings cover both handling existing GitHub issues and reporting findings through new ones, as illustrated by headings such as “Issue Triage” and “Issue Format.” Meanwhile, 
+
+phase headings divide the work into numbered stages, such as gathering context in Phase 1 and checking its completeness in Phase 2. Other frequent terms include context , task , and output ,further emphasizing the nature of a workflow and context provided to the AI agents. 
+
+Finding #2: gh-aw Markdown files fall within the conven-tional difficult range to read, with a median Flesch Reading Ease score of 38.8. 
+
+Our results suggest that gh-aw Markdown bodies are not easy to read under the FRE scale, with a median of 38.8 in its conventional difficult range (Table II). For comparison, prior studies report mean scores of 29.5–41.1 for requirements/user stories [33], [34] and about 14–21 for SE abstracts [35], compared with medians of 56.9 for ChatGPT responses and 68.8 for developer prompts [36]. These comparisons provide context rather than a direct ranking, since our scores include the complete Markdown body rather than only natural-language text. One possible explanation is that these bodies mix written instructions with code blocks (62.1% of files), template expres-sions (60.4%), and pictographic symbols (47.4%). Code and template syntax can affect the word and sentence counts used by FRE. Symbols also convey information beyond ordinary words. For example, the smoke-proxy test workflow contains 171 symbols, using check marks and crosses to report test outcomes instead of the English keywords “success” and “failure” [37]. This mix may reflect a focus on agent execution rather than human reading, but the scores alone do not establish that developers have little need to read or review these files. 6
+
+B. RQ2: How are GitHub Agentic Workflows maintained over time? 
+
+Motivation. In our dataset, 108 of 365 projects (29.6%) refer-ence Markdown sources from another repository for at least one generated workflow. This reuse makes the evolution of those sources relevant beyond their original projects. Incorporating upstream changes and recompiling can alter the generated YAML [7], potentially changing workflow behavior in ways developers overlook without reviewing the updated source. Rather than assume that reused sources remain fixed after creation, we examine the pace and nature of their maintenance to understand the changes that projects may inherit over time. 
+
+Approach. To address RQ2, we analyze 348 gh-aw Markdown files from 43 repositories, each file having at least 120 days between its first and last observed changes. Day 0 is the file’s first observed appearance at its tracked path. For projects, day 0 is the earliest appearance of a collected gh-aw Markdown file. We track the first four months, including all collected Markdown files in each project and those introduced later. We measure monthly commits, end-of-month size, and churn (added plus deleted lines) per 100 lines, using the average Markdown size during the month [38]. Initial file commits are excluded from maintenance, and months without changes are retained. Projects sum file sizes and churn but count each commit once. Inspired by prior comparisons of workflow maintenance with project code [8], we also divide maintenance commits by all repository commits in the same month. This contextualizes maintenance against overall project activity. We collect this baseline through GitHub’s commits API [39]. We compare each month with the preceding month using project-paired sign tests [40], with Holm correction across the 12 comparisons [41]. Months without repository commits have no defined maintenance share. For change targets, each unique commit-Markdown-file pair is one event. Within each project, we divide events touching frontmatter or body by all maintenance events, counting both-region events in both shares. 
+
+Results. Figures 5 and 6 show maintenance activity and size across four months. Figure 7 compares change targets across projects. 
+
+Finding #3: Gh-aw total Markdown size grows significantly during the first 4 months at the project level 
+
+Figure 6 shows that median total Markdown size per project rises from 395 lines in month 1 to 429, 430, and 467 lines in months 2, 3, and 4, respectively. The increases from month 1 to month 2 and from month 3 to month 4 are statistically significant (both Holm-adjusted p < . 001 ). The exception is month 2 to month 3 (adjusted p = .511 ). In contrast, median file size remains near 200 lines throughout the four months (Figure 5). This contrast may reflect projects adding workflows rather than primarily expanding existing ones. However, the file panel follows long-lived files, whereas project totals also include newly introduced files, so these medians alone do not establish the source of growth. Moreover, median project-level churn drops from 31.2 to 5.6 changed lines per 100 lines between months 1 and 2 (adjusted p = .011 ), with no significant differences between later consecutive months. This suggests more extensive re-visions near adoption, followed by fewer edits relative to workflow size as the project’s collection grows. Nevertheless, the share of project commits touching these workflows does not differ significantly between consecutive months (all adjusted 
+
+p ≥ .561 , Figure 6(b)). Thus, the early churn drop should not be taken as evidence that workflow maintenance declines independently of overall project activity. 
+
+Finding #4: At project level, a median of 74.5% of Mark-down maintenance changes touch frontmatter, compared with 50.0% touching the body. 
+
+From Figure 7, we observe that the project-level medians suggest that maintenance more often touches frontmatter than body text during the observed period. Changes touching both regions enter both percentages, and the three projects without maintenance changes receive 0%. Across the 8,575 analyzed changes, counting each commit once per Markdown file it touches, 44.8% affect only frontmatter, 37.8% only the body, and 17.3% both. The remaining 0.1% have no content change or an unknown location. These pooled percentages differ from the violin plot’s medians, which give each project equal weight. Upon further investigation, frontmatter-only changes account for 36.7%, 29.9%, 54.5%, and 71.7% of all changes in months 1 through 4, respectively, showing a larger share in the later months when changes are pooled across projects. One possible explanation is that execution settings, such as schedules, permissions, and tool access, may require adjustments even when the workflow’s underlying task remains unchanged. Frontmatter maintenance may therefore reflect adapting how a workflow runs rather than rewriting what its agent should do. 
+
+C. RQ3: What agentic instructions do developers set in GitHub Agentic Workflows? 
+
+Motivation. RQ1 characterizes the size, readability, and struc-ture of gh-aw Markdown files. However, these measurements do not reveal what developers instruct agents to do or which rules they should follow. The Markdown file defines the intended behavior and serves as the source from which gh-aw generates the YAML workflow [7]. The generated .lock.yml 
+
+files discourage direct edits with the warning “ This file was automatically generated by gh-aw . . . DO NOT EDIT. ” [42]– [44]. RQ3 therefore qualitatively examines these instructions to build a taxonomy and measure how often each type appears. The taxonomy brings together common and less-used instructions that practitioners can consider when defining their GitHub agentic workflows. 
+
+Approach. To address RQ3, we apply the thematic analysis described in Section III-D to the sampled Markdown bodies. We assess agreement over binary file-label decisions on shared labeled files before resolution using percentage agreement and Cohen’s kappa [45]. Agreement was 83.61% ( κ = 0 .61 ), indicating substantial agreement [15]. The two authors then met to reconcile disagreements, leading to a refined and fully agreed coding set. We calculate prevalence from the resolved labels, counting each label once per file and excluding Cannot Label cases. 
+
+Results. 71 2 3 4
+
+Month   
+
+> 0510 15 20 Commits per month
+> 5322
+
+(a) Maintenance commits    
+
+> 1234
+
+Month   
+
+> 050 100 150 200 Changed lines per 100 lines
+> 21.3 33.3 3.8
+
+(b) Size-normalized churn    
+
+> 1234
+
+Month    
+
+> 0200 400 600 800 Lines at month end
+> 201 206.5 201.5 203
+
+(c) Markdown size 
+
+File level 
+
+Fig. 5. Monthly maintenance across 348 files. Commits and churn are monthly, not cumulative. Numbers show medians. 1 2 3 4
+
+Month       
+
+> 010 20
+> Commits per month
+> 4311
+> .72 .18 1.00
+> (a) Maintenance commits 1234
+
+Month       
+
+> 0510 15 20
+> Repository commits (%)
+> 2.4 3.2 1.8 2.5
+> 1.00 .56 1.00
+> (b) gh-aw share of project commits 1234
+
+Month       
+
+> 050 100 150
+> Changed lines per 100 lines
+> 31.2 5.6 0.9 3.4
+> .01 .56 1.00
+> (c) Size-normalized churn 1234
+
+Month   
+
+> 02000 4000 6000
+> Lines at month end
+> 395 429 430 467
+> <.001 .51 <.001
+> (d) Markdown size
+
+Project level 
+
+Fig. 6. Monthly maintenance across 43 projects. Numbers show medians. Holm-adjusted p-values above the boxes compare each month with the previous month (significance at p < 0.05 ). 
+
+Finding #5: Tasks, outputs, constraints, and execution processes are common elements of gh-aw Markdown, each appearing in at least 93.4% of labeled files. 
+
+Table III presents the instruction taxonomy and its prevalence, while Snippets 1 to 20 illustrate these instructions in gh-aw Markdown files. The dominant categories show that workflow Markdown files usually combine a substantive task with explicit delivery, behavioral, and execution-control instructions. Most coded files contain TASK (97.6%), OUTPUT (95.8%), CONSTRAINT (93.8%), and PROCESS (93.4%) labels. At the subcategory level, the most frequent patterns are Required Sequence (88.2%), Decision Branch (87.2%), Scope Bound-ary (76.7%), Quality Standard (74.7%), and Repository Context (70.1%). Categories and their subcategories are presented in descending prevalence order in both the table and the descriptions below, with ties ordered alphabetically. All descriptions use the same file-level denominator. The two most frequent subcategories in each category have boxed excerpts, while the remaining examples appear inline. Excerpts preserve the source’s Markdown formatting, with [...] marking internal omissions. Repository and filename labels link to the pinned sources, as do the compact source links after inline quotations. Every example’s source carries its illustrated label in the resolved export. 
+
+X 1 TASK (97.6%). Task instructions define the work the agent should perform. Evidence Investigation (51.7%) includes diagnosing failures, researching a topic, comparing alternatives, and summarizing evidence. For example, in Snippet 1, OpenVINO’s CI doctor investigates every failing pipeline on a pull request and identifies possible remedies. The agent must explain the failures rather than simply report that the checks failed. 
+
+> Your mission is to investigate every failing pipeline on that PR and post a single, consolidated summary comment describing each failure and a possible remedy. Snippet 1. Evidence Investigation. openvinotoolkit/openvino/ci-doctor.md
+
+Artifact Change (33.3%) covers creating, editing, repairing, 8
+
+TABLE III INSTRUCTION TAXONOMY AND PREVALENCE AFTER LABEL RESOLUTION (288 FILES ). Label and prevalence Definition 
+
+TASK (97.6%) 
+
+Evidence Investigation (51.7%) Investigates failures, researches topics, compares alternatives, or summarizes evidence. Artifact Change (33.3%) Creates, edits, repairs, translates, or removes code, documentation, or other project files. Artifact Review (25.0%) Assesses existing code, documents, or proposals and reports findings or improvements. Executable Validation (20.8%) Runs tests, builds, linters, benchmarks, or service and behavior checks. Work Item Management (17.4%) Triages, assigns, labels, closes, or updates issues and pull requests. 
+
+OUTPUT (95.8%) 
+
+Control Signal (52.1%) Requires a status or control action, such as noop, labeling, closure, approval, or dispatch. New Thread (41.7%) Requires a new issue or discussion as the primary published result. Existing Thread Response (39.6%) Adds a comment, reply, or review to an existing issue, pull request, or discussion. Repository Change (29.9%) Requires a repository update through a commit, pull request, merge, or release change. Standalone Artifact (13.9%) Requires a standalone report, file, diagram, chart, archive, or upload. 
+
+CONSTRAINT (93.8%) 
+
+Scope Boundary (76.7%) Restricts allowed files, repositories, actions, targets, or changes. Quality Standard (74.7%) Requires clear, accurate, concise, complete, or well-formatted work. Resource Budget (38.2%) Limits time, retries, tokens, cost, files inspected, issues created, or analysis depth. Evidence Grounding (36.1%) Requires facts, citations, or source locations to support claims and avoid speculation. 
+
+PROCESS (93.4%) 
+
+Required Sequence (88.2%) Sets prerequisites or a required order of execution steps. Decision Branch (87.2%) Chooses actions by condition, including fallbacks, early stops, and error handling. Within-Run Iteration (35.8%) Repeats work within one run through loops, batches, retries, or review passes. Cross-Run Memory (18.1%) Reads or updates state retained between runs, such as past findings or processed items. Work Delegation (9.0%) Assigns a task to another agent, worker, skill, or workflow. 
+
+RESOURCE (89.9%) 
+
+GitHub Interface (60.4%) Uses GitHub APIs, GitHub MCP tools, the gh CLI, or GitHub data retrieval. Local Workspace (57.6%) Uses local files, source code, logs, scripts, or general shell commands. Agent Resource (21.5%) Uses subagents, reusable skills, model calls, or agent memory services. Development Toolchain (18.8%) Uses tools for building, testing, linting, benchmarking, or static analysis. Web Retrieval (14.2%) Retrieves information from websites, search engines, feeds, docs, or external services. 
+
+CONTEXT (84.7%) 
+
+Repository Context (70.1%) Describes repository structure or the relevant issue, pull request, branch, or event. Domain Context (34.0%) Explains subject knowledge, business rules, API conventions, or protocols. Execution Environment (34.0%) Describes available software, operating systems, containers, paths, or pre-fetched inputs. Historical Context (8.3%) Supplies information about earlier runs, releases, findings, baselines, or decisions. 
+
+EVALUATION (70.1%) 
+
+Rule Conformance (47.2%) Checks an artifact against a specification, schema, style rule, or acceptance criterion. Risk Assessment (29.9%) Judges severity, likely impact, confidence, security risk, or priority. Execution Check (25.7%) Checks whether code builds, tests pass, services respond, or behavior matches expectations. Evidence Credibility (11.1%) Checks evidence reliability, recency, completeness, or agreement with other sources. 
+
+EXAMPLE (68.1%) 
+
+Output Template (61.1%) Shows a report, message, table, or other output layout with fields to fill in. Technical Snippet (30.2%) Illustrates commands, code, queries, JSON, configuration, or diagram syntax. Worked Case (19.4%) Shows acceptable, unacceptable, or borderline cases to explain a rule or decision. 
+
+COMMUNICATION (63.9%) 
+
+Role Assignment (46.9%) Assigns a specialist role, such as reviewer, research assistant, or language expert. Automation Disclosure (25.0%) Requires outputs to disclose automation, limitations, uncertainty, or missing checks. Audience Voice (20.1%) Specifies the audience, language, tone, or communication style. 
+
+SAFETY (25.0%) 
+
+Execution Isolation (13.9%) Specifies sandbox, filesystem, network, permission, or read-only restrictions. Prompt Injection Defense (9.4%) Addresses untrusted instructions and which sources may direct the agent. Information Confidentiality (7.3%) Addresses secrets, credentials, personal data, or other sensitive information. Vulnerability Handling (6.3%) Directs finding, assessing, fixing, or reporting exploitable weaknesses. Denominator: 288 files with resolved semantic labels. Six Cannot Label cases are excluded from the corrected 294-file sample. Each label counts once per file. Multi-label percentages do not sum to 100%. 
+
+translating, or removing code, documentation, tests, and other project files. For instance, in Snippet 2, OpenMS’s workflow adds missing changelog entries for recent changes. It asks the agent to update the file, not merely report that entries are missing. 
+
+Your Task   
+
+> Your goal is to identify noteworthy recent code changes (from the last 7 days) that are not yet reflected in the top-level CHANGELOG file and open a pull request with the necessary updates. Snippet 2. Artifact Change. OpenMS/OpenMS/changelog-sync.md
+
+Artifact Review (25.0%) asks for an assessment of existing code, documentation, specifications, or proposals, with findings or suggested improvements. For example, a specification planner asks the agent to “review repository specification documents” , making the existing specifications the subject of its assessment. [source] Executable Validation (20.8%) asks the agent to run tests, builds, linters, benchmarks, or service checks. For instance, one workflow asks the agent to “Test GitHub MCP tool access under this guard policy by performing these operations and reporting results.” [source] Work Item Management (17.4%) covers triaging, assigning, labeling, 9Frontmatter Markdown body 020 40 60 80 100 Maintenance file events per project (%)  74.5% 50.0% 
+
+Fig. 7. Percentage of each project’s gh-aw Markdown maintenance changes touching frontmatter or body. Median values are shown. 
+
+closing, or updating issues and pull requests. For example, Handbookbot requests “Process unlabelled issues and PRs. Apply labels from: [...] Remove misapplied labels.” , covering both assigning and correcting labels. [source] 
+
+A 2 OUTPUT (95.8%). Output instructions specify how and where the agent delivers its result. Control Signal (52.1%) covers status or control actions, such as returning noop ,applying a label, closing an issue, or approving a pull request. For example, in Snippet 3, Thaw’s triage workflow requires a priority label to be attached to the issue. The result is recorded in the issue’s labels rather than only described in a response.       
+
+> 3. Assign a Priority Label
+> For bug and regression issues, assess severity and impact, then apply
+> exactly one priority label using add_labels :Snippet 3. Control Signal. thaw-app/Thaw/issue-triage.md
+
+New Thread (41.7%) requires publishing the result as a new issue or discussion, such as a bug report, investigation, or work plan. For instance, in Snippet 4, Elastic’s CI detective opens a separate issue for a newly identified failure, giving that failure its own discussion thread.     
+
+> If this is a new or distinct failure: Call create_issue with the following format:
+> Issue title: Brief summary of the CI failure Snippet 4. New Thread. elastic/ai-github-actions/gh-aw-branch-actions-detective.md
+
+Existing Thread Response (39.6%) covers comments, replies, and reviews attached to an existing issue, pull request, or dis-cussion. For example, Issue Monster instructs the agent to “For each issue you assign, use the [...] tool [...] to add a comment” ,keeping the response in the existing conversation. [source] 
+
+Repository Change (29.9%) requires a commit, pull re-quest, merge, or release update. For example, the documen-tation updater in microsoft/agentrc specifies “Call the create_pull_request MCP tool” , requiring the documentation edits to be submitted as a pull request. [source] 
+
+Standalone Artifact (13.9%) asks for a separate report, file, chart, diagram, or archive. For instance, a smoke test requests 
+
+“Write a test results file to [...] with a brief summary.” , giving the run a separate results file. [source] 
+
+. 3 CONSTRAINT (93.8%). Constraint instructions limit the agent’s actions and set standards for its work. Scope Boundary (76.7%) specifies allowed files, repositories, actions, or types of changes. For example, in Snippet 5, Elastic’s issue-response workflow allows local modifications but prohibits direct commits or pushes to the repository. This separates the changes the agent may prepare from the repository actions it may perform. 
+
+Constraints      
+
+> •CAN : Read files, search code, modify files locally, run tests and commands, comment on issues, create pull requests, create issues
+> •CANNOT : Directly push or commit to the repository — use
+> ready_to_make_pr then create_pull_request to propose changes Snippet 5. Scope Boundary. elastic/ai-github-actions/gh-aw-mention-in-issue.md
+
+Quality Standard (74.7%) sets expectations for clear, accurate, complete, well-formatted, or maintainable work. For instance, in Snippet 6, the code-simplifier requires readable changes that preserve behavior and follow project conventions. Shorter code alone does not meet its stated standard.     
+
+> Quality Standards
+> •Test first : Always run tests after simplifications (when available)
+> •Preserve behavior : Functionality must remain identical
+> •Follow conventions : Apply project-specific patterns consistently
+> •Clear over clever : Prioritize readability and maintainability Snippet 6. Quality Standard. githubnext/agentics/code-simplifier.md
+
+Resource Budget (38.2%) limits time, retries, tokens, cost, files inspected, issues created, or analysis depth. For example, 
+
+news-weekly-review.md instructs “Plan to call [...] by agent minute 42 (hard deadline 45)” , leaving a three-minute buffer for publication. [source] Evidence Grounding (36.1%) requires supporting facts, citations, or source locations and prohibits invented claims. For instance, one workflow states: 
+
+“Be factual and specific. Cite issue numbers.” , tying claims to traceable issue records. [source] 
+
+¨ 4 PROCESS (93.4%). Process instructions specify the order, repetition, conditions, and division of work. Required Sequence (88.2%) sets prerequisites or an ordered series of steps, such as checking CI before editing and testing before submitting. For example, in Snippet 7, the avenger workflow checks CI status before updating its checkout, making the order explicit. 
+
+Step 0: Verify CI Status 
+
+> Before doing anything: [...]
+
+Step 1: Merge origin/main 
+
+> Bring your checkout up to date with the latest main branch: Snippet 7. Required Sequence. github/gh-aw/avenger.md 10
+
+Decision Branch (87.2%) specifies what to do when a condition holds, including fallback actions, early stops, and error handling. For instance, in Snippet 8, the documentation validator inspects logs and opens an issue if deployment fails, but continues with site validation if it succeeds. 
+
+When triggered by workflow_run   
+
+> If the Deploy Docusaurus workflow failed , check the deployment logs and create an issue about the deployment failure. If it succeeded , proceed with the full validation below. Snippet 8. Decision Branch. tosin2013/mcp-adr-analysis-server/docs-site-validator.md
+
+Within-Run Iteration (35.8%) repeats work within one run, such as processing each file, retrying a failed command, or making another review pass. For example, a performance scanner instructs “For each pattern below, run the bash commands, then read the flagged files” , repeating the inspection for each pattern. [source] Cross-Run Memory (18.1%) reads or updates state retained between runs, such as processed-issue lists, previous findings, or cleanup notes. For instance, one workflow asks the agent to “check the cache folder for notes about previous cleanups” , carrying information from earlier runs into the current cleanup. [source] 
+
+Work Delegation (9.0%) assigns a task to another agent, worker, skill, or workflow. For example, Elastic’s breaking-change detector requests “spawn 3 general-purpose sub-agents, each analyzing the recent commits from a different angle” . It divides the analysis among agents that examine interface changes, documented guarantees, and downstream compatibility. [source] 
+
+{ 5 RESOURCE (89.9%). Resource instructions identify tools and information sources the agent should use. GitHub Interface (60.4%) includes GitHub APIs, GitHub MCP tools, the gh CLI, and retrieval of issues, pull requests, or workflow runs. For example, in Snippet 9, the OpenCode smoke test directs the agent to retrieve pull-request details through GitHub MCP tools, explicitly naming the interface it should use to access repository information.  
+
+> 1. GitHub MCP Testing : Use GitHub MCP tools to fetch details of exactly 2 merged pull requests from ${{ github.repository }} (title and number only) Snippet 9. GitHub Interface. github/gh-aw/smoke-opencode.md
+
+Local Workspace (57.6%) directs the agent to read or manipulate local files, source code, logs, and scripts, including shell commands such as find , cat , and git diff . For instance, in Snippet 10, the SDK consistency reviewer explicitly asks the agent to read files in other SDK directories. Those local implementations provide the material for its cross-language comparison. Before resolution, this label had the lowest agreement (61.81%, κ = 0 .238 ). Its assignment to 145 files by the primary annotator versus 81 by the second suggests different treatment of local inspection and shell commands within broader GitHub tasks.    
+
+> 4. Cross-reference other SDKs : Check if the equivalent functionality exists in other language implementations:
+> •Read the corresponding files in other SDK directories
+> •Compare method signatures, behavior, and documentation Snippet 10. Local Workspace. github/copilot-sdk/sdk-consistency-review.md
+
+Agent Resource (21.5%) directs use of subagents, reusable skills, model calls, or agent memory services. For example, 
+
+journey-e2e-test.md directs the agent to read a reusable skill before running a selected journey: “Read .github/ skil ls/journey-runner/ SKILL.md to understand the execution pipeline.” The workflow points to a reusable skill for guidance on carrying out that work. [source] 
+
+Development Toolchain (18.8%) names tools for building, testing, linting, benchmarking, or static analysis, such as Gradle, Clang, and Playwright. For instance, one smoke test requests 
+
+“Use the playwright tools to navigate to https://github.com” ,naming the browser tools for its page-title check. [source] Web Retrieval (14.2%) requests information from websites, search engines, feeds, documentation, or external services. For exam-ple, a content-campaign workflow asks the agent to “confirm whether content is relevant to the intent [...] use the Tavily search tool” , using web search to check whether technologies mentioned in the content are outdated. [source] 
+
+ò 6 CONTEXT (84.7%). Context provides background for interpreting the task. Repository Context (70.1%) supplies repository structure or details of the triggering issue, pull request, branch, release, or commit. For example, in Snippet 11, Handbookbot identifies its repository as a plugin monorepo with a separate documentation website. It explains what the directories contain, without itself asking the agent to change them. 
+
+Context     
+
+> This is a Claude Code plugin monorepo containing:
+> •Multiple distributable plugins in plugins/
+> •A Docusaurus documentation website in website/
+> Snippet 11. Repository Context. NikiforovAll/claude-code-rules/handbookbot.md
+
+Domain Context (34.0%) supplies subject knowledge, such as API conventions, compatibility rules, business concepts, or protocol definitions. For instance, in Snippet 12, the model-mapping updater lists which API endpoints it expects different model families to support. These rules guide its mapping task. They describe assumptions in the collected snapshot, not a claim about current model support.              
+
+> 3. For OpenAI models:
+> •GPT-5.x family and newer →responses only (unless docs explicitly state chat/completions support)
+> •o-series reasoning models (o1, o3, o4) →check docs for dual support
+> •GPT-4.x and older →typically chat_completions (some support both) Snippet 12. Domain Context. github/gh-aw-firewall/model-api-mapping-updater.md
+
+Execution Environment (34.0%) describes available software, operating systems, containers, paths, or pre-fetched inputs. For instance, one workflow explains that “The service containers run on the host, and AWF routes traffic through the host gateway.” 11 
+
+This describes the network environment in which the agent operates. [source] Historical Context (8.3%) supplies information about earlier runs, releases, findings, or decisions. For example, 
+
+flaky-test-catcher.md in Elastic’s Terraform provider repository states that “A deterministic pre-activation step has already queried CI run history and computed issue capacity for this run.” It supplies failed-run identifiers and counts as context for the agent’s investigation. [source] 
+
+¥ 7 EVALUATION (70.1%). Evaluation instructions specify what the agent must check and how to judge the result. 
+
+Rule Conformance (47.2%) checks code, documentation, or other artifacts against a specification, style rule, schema, or acceptance criterion. For example, in Snippet 13, the MCP checker verifies response structure and checks that error responses set isError . It checks compliance with a protocol, not just whether a tool runs.           
+
+> Check 1: Tool Response Pattern Consistency
+> [...] 1. Read the file 2. Find all return statements that produce tool responses 3. Verify each returns { content: [{ type: "text", text: ... }] }
+> 4. Flag any tool that returns a different structure 5. Check that error responses set isError: true
+> Snippet 13. Rule Conformance. tosin2013/mcp-adr-analysis-server/mcp-tool-checker.md
+
+Risk Assessment (29.9%) judges severity, likely impact, confidence, security risk, or priority. For instance, in Snippet 14, the change-risk assessor classifies changes as breaking, risky, or safe according to their effect on downstream users. This asks the agent to assess consequences, not merely list changed files.       
+
+> 4. For each risk found, assess severity: breaking (consumers will fail),
+> risky (may cause subtle issues), or safe (backward-compatible) Snippet 14. Risk Assessment. githubnext/ado-aw/risk.md
+
+Execution Check (25.7%) evaluates whether code builds, tests pass, a service responds, or observed behavior matches expectations. For example, the code-simplifier instructs “Run tests before and after to ensure no behavioral changes” , using the test outcomes to check that the edits preserve behavior. [source] 
+
+Evidence Credibility (11.1%) checks whether evidence is reliable, current, complete, or supported by other sources. For instance, the Scout workflow asks the agent to evaluate 
+
+“Authority: Source credibility and expertise” and “Recency: How current the information is” . It also requests “Cross-reference information from multiple sources” , checking the basis of the evidence rather than accepting a search result at face value. [source] 
+
+Ð 8 EXAMPLE (68.1%). Examples show concrete formats, code, or cases that clarify the instructions. Output Template 
+
+(61.1%) provides a report layout, message skeleton, table, or other structure with fields to fill in. For example, in Snippet 15, the Ollama smoke test supplies an issue-title pattern and a Haiku section with a placeholder. The example shows where the generated content belongs.       
+
+> Then create an issue with:
+> •Title: BYOK Ollama Test -- ${{ github.run_id }}
+> •Body:
+> [...] ### Haiku <your haiku here>
+> Snippet 15. Output Template. github/gh-aw/daily-byok-ollama-test.md
+
+Technical Snippet (30.2%) provides sample commands, code, queries, JSON, configuration, or diagram syntax. For instance, in Snippet 16, the integrity-filtering audit in 
+
+github/gh-aw-mcpg gives an explicitly marked example command for counting integrity events in logs. It illustrates a possible query, rather than merely naming a tool or prescribing a mandatory command.             
+
+> #Example: Count DIFC events in JSONL grep -c ’difc_integrity’ "$ARTIFACT_DIR"/*/mcp-logs/rpc-messages.jsonl 2>/dev/null || true
+> Snippet 16. Technical Snippet. github/gh-aw-mcpg/integrity-filtering-audit.md
+
+Worked Case examples (19.4%) illustrate acceptable, unac-ceptable, or borderline cases, such as which changes to flag or which label to choose. For example, a Go API reviewer accepts language-specific API forms when equivalent functionality exists in other SDKs: “do not flag it solely because the shape is idiomatic to Go.” Its contrasting “Bad: Divergent behavior” 
+
+case concerns changes that alter behavior relative to the .NET and Python implementations. [source] 
+
+Ü 9 COMMUNICATION (63.9%). Communication in-structions shape how the agent presents itself and addresses readers. Role Assignment (46.9%) assigns a role such as SDK reviewer, research assistant, or language expert. For example, in Snippet 17, Go Fan introduces the agent as a Go module expert responsible for reviewing dependencies. This specifies the expertise expected for the task, beyond identifying it as an AI agent.   
+
+> You are the Go Fan - an enthusiastic Go module expert who performs daily deep reviews of the Go dependencies used in this project. Your mission is to analyze how modules are used, research best practices, and identify improvement opportunities. Snippet 17. Role Assignment. github/gh-aw/go-fan.md
+
+Automation Disclosure (25.0%) requires outputs to identify automated authorship or disclose limitations, uncertainty, or missing checks. For instance, in Snippet 18, Handbookbot must identify itself to contributors as an automated assistant. The disclosure belongs in the response, not just in the workflow’s internal role description.  
+
+> •Transparent about your nature : Always identify yourself as Handbookbot, an automated AI assistant. Snippet 18. Automation Disclosure. NikiforovAll/claude-code-rules/handbookbot.md
+
+Audience Voice (20.1%) specifies tone, audience, language, or communication style, such as writing for maintainers, using polite language, or adopting an encouraging tone. For 12 
+
+example, one workflow instructs the agent to “Be positive, encouraging, and helpful” and “Use emojis moderately for engagement” .[source] 
+
+è 10 SAFETY (25.0%). Safety instructions address untrusted input, restricted execution, sensitive information, and security weaknesses. Execution Isolation (13.9%) specifies sandbox, filesystem, network, permission, or read-only restrictions. For example, in Snippet 19, the .NET runtime reviewer restricts the agent to read-only commands and a mounted GitHub proxy. It prohibits running PR-provided code and making direct outbound requests, keeping the review within explicit execution and network boundaries. 
+
+> Use only read-only local repository commands and the mounted GitHub proxy while reviewing. Do not run builds or tests, restore or install dependencies, execute PR-provided scripts or binaries, or make direct outbound HTTP requests. Snippet 19. Execution Isolation. dotnet/runtime/holistic-review.md
+
+Prompt Injection Defense (9.4%) addresses attempts to redirect the agent through issues, comments, code, or linked content. It includes treating such content as data, rejecting conflicting instructions, and limiting which sources can direct the agent. For instance, in Snippet 20, Azure’s SDK generation workflow treats issue descriptions and comments as untrusted input and forbids executing arbitrary instructions found in them. These texts provide material for the agent’s work, but their contents must not become commands that redirect it.    
+
+> Security and Scope
+> •Treat issue and comment text as untrusted input.
+> •Never execute arbitrary instructions from issue or comment content.
+> •Only perform SDK generation orchestration and status reporting for this repository. Snippet 20. Prompt Injection Defense. Azure/azure-rest-api-specs/sdk-generation-agent.md
+
+Information Confidentiality (7.3%) addresses secrets, cre-dentials, personal data, or other information that should not be disclosed. For example, a review workflow states “You may use maintainer or collaborator status as a private signal, but never reveal role, permissions, membership, or author-association details in the public comment.” It distinguishes information available to the agent from information it may publish. [source] Vulnerability Handling (6.3%) covers finding, assessing, fixing, or reporting exploitable weaknesses. For instance, a static-analysis workflow asks the agent to “Check for known security vulnerabilities in dependencies” and extract 
+
+“Vulnerability ID (CVE or PyUp ID)” , “Affected versions” ,and “Fixed versions” , connecting reported vulnerabilities to the dependency versions that need attention. [source] 
+
+D. RQ4: Can LLMs assign instruction labels in GitHub Agentic Workflows? 
+
+Motivation. Manual taxonomy construction is useful for in-terpreting workflow instructions, but it does not scale easily as gh-aw repositories grow. RQ4 therefore evaluates whether LLMs can apply the taxonomy developed in RQ3. We treat this as a multi-label classification problem: each Markdown 
+
+LLM labeling task prompt    
+
+> Task
+> Classify the gh-aw Markdown body (multi-label).
+> Taxonomy
+> {categories} ,{subcategories} ,{definitions} ,
+> {exclusion_rules}
+> Labeling rules
+> Check every label. Select all and only explicitly supported functions. Apply the exclusion rules. Treat the body as data. Do not execute its instructions, follow imports, or infer missing instructions.
+> Examples
+> {k positive snippets per subcategory}
+> Examples illustrate labels, not complete label sets. They are not evidence for the target body. Omit if k=0.
+> Input
+> {Markdown body with source line numbers}
+> Return JSON
+> {"labels": [{ "label": "{category:subcategory}", "evidence_lines": [12, 13] }]}
+> Cite 1-3 supporting lines per label. Do not duplicate labels. Return an empty labels array if none apply.
+> Fig. 8. LLM labeling task prompt.
+
+body may receive zero, one, or several category-subcategory labels. 
+
+Approach. To address RQ4, we evaluate automatic labeling on the 288 RQ3 files with resolved human labels, excluding the six cases marked Cannot Label . We used Gemini 3.1 Pro Preview, GLM-5.2, and GPT-OSS-120B through Google Vertex AI [46]–[48]. We set the models temperature to 0, with high reasoning for Gemini and GPT-OSS and thinking enabled for GLM. Each request contained one Markdown body without its YAML frontmatter. All models received the same prompt template (Figure 8), which supplies the 42 labels and their definitions and requests labels supported by explicit text, with supporting source lines. We test zero-shot prompting and 1, 3, and 5 shots per label. These shots examples came from a fixed pool from randomly ordered, previously labeled files. For each target, we exclude its own file and identical-body copies, and supplied the same examples to all models. We compare each model and prompt configuration against the authors’ final resolved labels. Treating each file-label pair as a binary decision, we then calculate agreement, Cohen’s κ,precision, recall, and F1.
+
+Results. Tables IV and V summarize automatic-labeling perfor-mance and the subcategories with the largest reference-model disagreements. 
+
+Finding #6: One-shot Gemini reaches the highest observed 
+
+F1 (0.818), with 86.81% subcategory agreement and Cohen’s κ = 0 .715 .
+
+Gemini has the highest F1 at every shot setting, followed by GLM and GPT-OSS (Table IV). One-shot and three-shot 13    
+
+> TABLE IV SUBCATEGORY CLASSIFICATION AGAINST THE FINAL RESOLVED LABELS . S HOTS DENOTE POSITIVE SNIPPETS PER SUBCATEGORY . T HE SHADED ,BOLD ROW HAS THE HIGHEST UNROUNDED F1.
+
+Model Shots Agreement κ Precision Recall F1
+
+Gemini 3.1 Pro 
+
+Preview 0 85.91% 0.699 0.763 0.863 0.810 
+
+1 86.81% 0.715 0.786 0.853 0.818 
+
+3 86.81% 0.715 0.787 0.852 0.818 5 86.67% 0.711 0.788 0.844 0.815 
+
+GLM-5.2 
+
+0 84.90% 0.680 0.741 0.869 0.800 1 86.00% 0.697 0.778 0.835 0.806 3 86.42% 0.704 0.790 0.830 0.810 5 86.30% 0.700 0.794 0.820 0.806 
+
+GPT-OSS-120B 
+
+0 80.73% 0.575 0.724 0.720 0.722 1 81.56% 0.585 0.758 0.690 0.722 3 82.28% 0.602 0.766 0.706 0.735 5 82.41% 0.606 0.767 0.710 0.738 
+
+Gemini both round to 0.818, with a slight advantage for one-shot before rounding. GLM peaks at three shots (0.810), whereas GPT-OSS improves from 0.722 at zero shots to 0.738 at five shots. More examples therefore do not benefit every model equally. These differences are descriptive, not evidence of statistical superiority across repeated runs. We inspect one-shot Gemini further because it has the highest observed F1. Its 86.81% agreement includes jointly absent labels; it assigns 15.86 subcategories per file, compared with 14.62 in the resolved reference. The largest disagreement concerns Domain Context : Gemini assigns it to 174 files, versus 98 in the resolved reference, with 83 false positives and seven false negatives (Table V). Rule Conformance differs on 79 files, and Control Signal on 70. Domain Context’s errors are predominantly additional assign-ments, suggesting that Gemini sometimes reads background knowledge into an instruction. For example, check-emulator-updates.md in 
+
+drehelis/gcp-emulator-ui asks the agent to “Check the loaded text specifically for any mentions of” emulator ,then lists services such as Pub/Sub, Datastore, and Spanner. Gemini cites this line for Domain Context , which the resolved labels omit. 4 The line specifies what to search for; it does not explain emulator behavior or supply a domain rule. Gemini’s assignment is consistent with treating the technical concepts implied by the task as background knowledge. This illustrates how an LLM may label an instruction’s implied context as well as its explicit function. It does not establish the model’s internal reasoning or show that every additional label is unsupported. The practical boundary is between knowledge an instruction supplies and knowledge its execution may require. V. D ISCUSSION AND IMPLICATIONS 
+
+In this section, we discuss implications for developers and researchers. 
+
+> 4https://github.com/drehelis/gcp-emulator-ui/blob/744f45c95a03fdfcec7f0 fabb3f547a3e0975b1e/.github/workflows/check-emulator-updates.md#L51
+
+A. For Developers 
+
+(1) Developers should monitor cross-project copied or referenced gh-aw Markdown workflows as evolving dependencies, not as static templates. In our dataset, 108 of 365 projects (29.6%) reference Markdown sources from another repository for at least one generated workflow. Developers can regenerate the YAML from these sources using gh aw compile . RQ1 shows that these Markdown sources are already substantial artifacts: the median body contains 104 lines and 556.5 words, and the median YAML frontmatter contains 58 lines. Among RQ2’s files with at least 120 days of activity, 78.2% still receive updates in month 4, despite a drop in size-normalized churn after the first month. Moreover, one-third of content-changing file events in their repositories leave the line count unchanged, so size alone cannot reveal changes to instructions. Therefore, when a project copies or references a Markdown workflow from another repository, developers should treat that source file like an external workflow dependency. They should track upstream changes, pin or review the commit used to generate their YAML, and recompile only after checking whether the new instructions change permissions, tools, runtime cost, output behavior, or agent authority. 
+
+(2) Developers should consider how an agent carries out recurring work, not only which tasks it executes. RQ3 identifies instruction choices beyond task descriptions that developers can consider for their workflows. For example, resource budgets can set limits on searches, retries, or token use to support cost control. Moreover, workflows that read issues, comments, or online documents can include prompt-injection defenses that distinguish external content from instructions to follow, as illustrated in Snippet 20. For recurring work, cross-run memory can retain earlier findings or completed actions, allowing the agent to build on previous runs rather than start from scratch. These options should be selected for the workflow’s needs. Our taxonomy documents their use, but does not establish their effects on cost, security, or repeated work. 
+
+(3) Developers should distinguish rules enforced through 14                                
+
+> TABLE V LOWEST SUBCATEGORY AGREEMENT FOR ONE -SHOT GEMINI AGAINST THE FINAL RESOLVED LABELS (288 FILES ). R EFERENCE AND GEMINI COUNT POSITIVE ASSIGNMENTS ; FP AND FN DENOTE FALSE POSITIVES AND FALSE NEGATIVES .
+> Subcategory Reference Gemini FP FN Agreement κ
+> Domain Context 98 174 83 768.75% 0.414 Rule Conformance 136 123 33 46 72.57% 0.447 Control Signal 150 170 45 25 75.69% 0.510
+
+frontmatter from instructions the agent is asked to follow in the Markdown body. RQ2 shows that de-velopers maintain both frontmatter and Markdown bod-ies, while RQ3 shows that body instructions specify how agents should work, not only their tasks. Some of these rules can also be enforced through frontmatter. For ex-ample, in dotnet/aspnetcore ’s triage-comment reviewer.md [49], the body instructs the agent to “post 
+
+at most one comment”, while the corresponding frontmatter settings limit the safe-output handler to one comment:  
+
+> safe-outputs: add-comment: max: 1
+
+Developers should use supported configuration controls for firm limits, while using body instructions to explain task-specific conditions and expectations. When a rule appears in both regions, they should keep the two consistent as the workflow evolves. 
+
+B. For Researchers 
+
+(1) Researchers should evaluate whether pictographic symbols make agent-facing Markdown more efficient or more error-prone than plain text. RQ1 shows that 47.4% of files contain at least one pictographic symbol, and the largest case contains 171 symbols. That workflow uses check-mark and cross symbols in its test-result table [37]. Prior work has studied prompt evolution, agent manifests, skills, and repository context files [13], [50]–[52], but we did not find work that isolates whether symbol-heavy Markdown improves agent task completion, reduces tokens, or introduces interpretation errors. Future experiments should compare icon-based and text-based variants of the same workflow under controlled task, model, and tokenizer settings. 
+
+(2) Researchers should measure which instruction pat-terns actually help agents, instead of treating all Markdown guidance as equally useful context. RQ3 shows substantial variation in how workflows guide agents: 89.9% provide resources, 68.1% provide examples, 63.9% include commu-nication guidance, and 19.4% include a worked case. These differences create a natural research agenda for controlled ablations: remove or add resources, worked examples, commu-nication roles, output templates, and budget constraints, then measure task completion, correctness, tool calls, runtime, and token usage. This is especially important because recent work on repository-level context files shows that additional agent-facing Markdown can increase exploration and inference cost by more than 20%, while producing mixed effects on task success [52]. VI. T HREATS TO VALIDITY 
+
+Internal Validity: Instruction types can be interpreted differ-ently by coders. To reduce this risk, two authors calibrated their coding on 30 files, used shared definitions, assessed agreement before resolution, and reconciled disagreements against the Markdown bodies. For automatic labeling, examples from the target could reveal its assignments. We excluded the target and identical-body copies from its examples and kept the prompt and examples consistent across models. 
+
+Construct Validity: FRE is designed for prose, whereas our full-body scores include code, Markdown syntax, and template expressions. We therefore report these as descriptive formula outputs, not validated measures of human or agent compre-hension, and document the input text and preprocessing. For instruction classification, mentioning a technical concept does not necessarily supply domain context, as illustrated by the RQ4 disagreement example. We required explicit textual support for labels rather than inferring instructions from terminology or frontmatter. Similarly, unchanged file size does not imply unchanged instructions, as the RQ2 command-replacement example shows. We compared consecutive snapshots to measure additions, deletions, and affected regions rather than relying on net size changes. Events whose regions could not be reliably compared were left unclassified. 
+
+Conclusion Validity: Repository activity declined during our observation window, so fewer Markdown commits alone would not establish a workflow-specific slowdown. We compared maintenance commits with overall repository commits in the same months. Moreover, we used non-cumulative activity and size-normalized churn to distinguish monthly editing from accumulated changes and file growth. Statistical tests paired projects rather than treating their files as independent, with Holm correction for multiple comparisons. For automatic labeling, agreement includes labels absent from both predictions and human annotations. We therefore also reported Cohen’s 
+
+κ, precision, recall, and F1, and inspected the largest label disagreements. We describe model rankings as observed results, not statistical superiority across repeated runs. GPT-OSS recovery requests changed generation settings, so the comparison concerns the tested configurations rather than an identical reasoning budget. 
+
+External Validity: GitHub’s search limit could restrict corpus coverage. We split searches into size buckets and retrieved all pages from buckets below that limit, then randomly sampled collected Markdown files for RQ3. These steps reduce missing search results and bias from choosing particular files, but do not establish generalizability beyond our selection criteria. In particular, RQ2 uses the 43 projects in our dataset containing 15 
+
+files whose observed changes span at least 120 days. This requirement supports comparison over a common period but selects already-maintained files. Our findings therefore describe their maintenance patterns, not how often all gh-aw workflows remain static after creation. VII. R ELATED WORK 
+
+A. GitHub Actions Workflows 
+
+Existing research on GitHub Actions examines how projects adopt, configure, and maintain repository automation. For instance, Decan et al. [53] study workflow usage across 68,000 repositories and show that reuse is concentrated in a small set of actions. With regard to workflow maintenance, Valenzuela-Toledo et al. [8] identify bug fixing and CI/CD improvements as major drivers of workflow changes. More recently, Rostami Mazrae et al. [9] find that workflow edits are usually small and mainly concern task specification and configuration. Together, these studies show that YAML workflows require continued maintenance even though they automate repetitive work. Moreover, Studies on GitHub Actions investigated AI-based automation. For example, Sun et al. [54] examine 16 AI code-review actions and found that concise comments containing code snippets are more likely to lead to changes. Focusing on CI reliability, Chouchen et al. [55] analyze 11,771 agent- and human-authored pull requests to examine CI failures, repair responsibility, and time to fix. They find that agent-authored fixes are faster, but human developers remain involved in resolving failures. Furthermore, Ghaleb [56] examines agents edits to CI/CD configurations, finding that these edits are uncommon and mainly target GitHub Actions. Ghaleb and Rathnayake [57] evaluate LLMs generating GitHub Actions YAML from natural-language descriptions, identifying missing steps and misinterpreted requirements. Extending this line of work, Ghaleb’s Doc2CI study [58] shows that generated configurations can parse as YAML yet violate a CI service’s schema, and evaluates schema-guided repair. These studies examine AI-generated configurations, work-flow maintenance, and agents’ contributions to CI. However, using an agent to create or edit a YAML pipeline differs from defining a workflow whose recurring task is carried out by an agent. We study the Markdown sources that specify such tasks in gh-aw, examining their structure, maintenance, and instruction content. In particular, we distinguish changes to execution configuration from changes to the instructions that guide the agent. 
+
+B. Agent Instructions and Context Files 
+
+In today’s agentic AI era, natural-language instructions such as skills.md are themselves maintained as software artifacts. Tafreshipour et al. [50] study prompt evolution in software repositories, finding that additions and modifications commonly accompany feature development and are often poorly documented. For agent-facing Markdown, Chatlatanagulchai et al. [51] identify build commands, implementation details, and architecture as common contents of CLAUDE.md files. Their broader study of agent context files finds frequent, small additions and an emphasis on functional guidance over security and performance requirements [12]. Similarly, Mohsenimofidi et al. [59] report varied structures and ways of expressing instructions in AGENTS.md files. Beyond general project context, Hong et al. [13] derive a taxonomy of SKILL.md contents and identify violations of skill-authoring recommendations. Thus, existing research already covers procedural knowledge, not only descriptive documentation. Studies also test whether instructions benefit agents. Lulla et al. [60] associate AGENTS.md with lower runtime and output-token consumption in their experiment. In a different evaluation, Gloaguen et al. [52] find that context files do not generally improve task success and increase inference costs. These results caution against treating the presence of instructions as evidence of their effectiveness. Valenzuela-Toledo et al. [14] recently released GHAW-H, a dataset linking gh-aw Markdown histories to compiled YAML snapshots. Our study provides complementary empirical evidence through a separately collected dataset, a maintenance analysis, a manually developed instruction taxonomy, and an evaluation of automatic labeling. The distinction from general context and skill files is therefore not the use of Markdown or the presence of pro-cedures. In gh-aw, instructions and execution configuration together define a workflow invoked by repository events or schedules [4], [7]. We examine how developers maintain these combined specifications and which instruction types they use for recurring work. Our taxonomy describes those choices, while our classification experiment evaluates whether LLMs can identify them, not whether the instructions improve execution outcomes. VIII. C ONCLUSION 
+
+This study examined gh-aw Markdown files as software artifacts that combine executable workflow configuration with natural-language instructions for agents. Our analysis of 1,248 files shows that these artifacts contain substantial, structured specifications: their instruction bodies combine prose with lists, code blocks, templates, and headings, while their frontmatter de-fines execution settings such as triggers, tools, and permissions. They also require continued maintenance. Among the 348 files with at least 120 days of observed activity, 78.2% received updates in the fourth month. Although size-normalized churn declined after the first month, the share of repository commits devoted to workflow maintenance did not change significantly between adjacent months. Changes affected both configuration and instructions, with instruction bodies accounting for most changed lines in the analyzed workflow files. Our taxonomy shows that developers express a broad range of operational requirements in these instructions, including tasks, expected outputs, constraints, procedures, context, and resources. Safety instructions and resource budgets are less frequently explicit, identifying areas for closer review without establishing that corresponding runtime protections are absent. Together, these findings show that adopting natural language for workflow specification introduces an additional body of maintained instructions whose content deserves explicit attention during workflow review. 16 
+
+Future work should investigate how instruction patterns and revisions affect execution outcomes, including task success, reliability, cost, and safety. These evaluations can inform vali-dation and regression-testing techniques for agent instructions, as well as guidance on when to modularize complex workflows. Our dataset and taxonomy provide a foundation for this work by characterizing the specifications developers currently write and maintain. ACKNOWLEDGMENT 
+
+This work was supported by the Fonds de recherche du Québec – Nature et technologies (FRQNT) and the Natural Sci-ences and Engineering Research Council of Canada (NSERC). Additionally, we thank the Google Research Credits program for providing credits to run the RQ4 experiments on Vertex AI. We declare that AI solutions (i.e., Grammarly and OpenAI’s Codex) were used for grammar checking and rephrasing. We declare that the content of this article and the whole research procedure were developed and fully conducted by the authors, taking full responsibility for the publication’s content. REFERENCES [1] J. Yang, C. E. Jimenez, A. Wettig, K. Lieret, S. Yao, K. Narasimhan, and O. Press, “SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering,” in Advances in Neural Information Processing Systems , A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, Eds., vol. 37. Curran Associates, Inc., 2024, pp. 50 528–50 652. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2024/hash/5a7c947568c 1b1328ccc5230172e1e7c-Abstract-Conference.html [2] N. Carlini, “Building a C compiler with a team of parallel Claudes,” https://www.anthropic.com/engineering/building-c-compiler, 2026, anthropic Engineering, February 5, 2026. Accessed 2026-09-15. [3] R. Robbes, T. Matricon, T. Degueule, A. Hora, and S. Zacchiroli, “Agentic Much? Adoption of Coding Agents on GitHub,” arXiv:2601.18341, 2026. [4] GitHub, “About GitHub Agentic Workflows,” https://docs.github.com/en /copilot/concepts/agents/about-github-agentic-workflows, 2026, gitHub Docs. Accessed 2026-09-15. [5] S. Pichai, “Cloud Next ’26: Momentum and innovation at Google scale,” https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-c loud/cloud-next-2026-sundar-pichai/, 2026, google Blog, April 22, 2026. Accessed 2026-09-15. [6] D. Syme and P. de Halleux, “Automate repository tasks with GitHub Agentic Workflows,” https://github.blog/ai-and-ml/automate-repository-t asks-with-github-agentic-workflows/, 2026, gitHub Blog, February 13, 2026. Accessed 2026-09-10. [7] GitHub, “Compilation Process,” https://github.github.com/gh-aw/referenc e/compilation-process/, 2026, gitHub Agentic Workflows documentation. Accessed 2026-09-10. [8] P. Valenzuela-Toledo, A. Bergel, T. Kehrer, and O. Nierstrasz, “The hidden costs of automation: An empirical study on GitHub Actions workflow maintenance,” in International Conference on Source Code Analysis and Manipulation , 2024, pp. 213–223. [9] P. Rostami Mazrae, A. Decan, T. Mens, and M. Wessel, “An Empirical Study of the Evolution of GitHub Actions Workflows,” Journal of Systems and Software , vol. 236, p. 112824, 2026. [10] J. Khelifi, Y. Benzina, M. Chouchen, A. Ouni, M. Sayagh, and S. Bouktif, “Ghaminer: An open source tool to extract github actions build metrics,” in IEEE International Conference on Software Analysis, Evolution and Reengineering (SANER) , 2025, pp. 834–838. [11] J. Khelifi, A. Ouni, M. Sayagh, M. A. Saied, S. Khelifi, and S. Bouk-tif, “Continuous integration workflows in microservice-based systems: Performance, failures, and recovery,” ACM Transactions on Software Engineering and Methodology , 2026. [12] W. Chatlatanagulchai, H. Li, Y. Kashiwa, B. Reid, K. Thonglek, P. Leelaprute, A. Rungsawang, B. Manaskasemsak, B. Adams, A. E. Hassan, and H. Iida, “Agent READMEs: An Empirical Study of Context Files for Agentic Coding,” arXiv:2511.12884v2, 2026, version 2, revised August 9, 2026. [Online]. Available: https://arxiv.org/abs/2511.12884v2 [13] D. B. Hong, A. Imani, and I. Ahmed, “From Anatomy to Smells: An Empirical Study of SKILL.md in Agent Skills,” arXiv:2607.01456, 2026. [14] P. Valenzuela-Toledo, T. Kehrer, and S. Panichella, “GHAW-H: A dataset of GitHub Agentic Workflow histories,” Zenodo, version 0.1.2, 2026, dataset and companion report. Accessed September 18, 2026. [Online]. Available: https://pavt.github.io/GHAW-H/assets/GHAW-H.pdf [15] J. R. Landis and G. G. Koch, “The Measurement of Observer Agreement for Categorical Data,” Biometrics , vol. 33, no. 1, pp. 159–174, 1977. [16] J. Khelifi, I. Oukhay, A. Ouni, S. Mohammed, and M. A. Saied, “ghaw replication package,” https://github.com/stilab-ets/ghaw, 2026, accessed 2026-08-13. [17] GitHub, “GitHub Agentic Workflows (gh-aw) repository,” https://github .com/github/gh-aw, 2026, accessed 2026-09-08. [18] .NET Contributors, “CI Outer-Loop Failure Scanner,” https://github.c om/dotnet/runtime/blob/8f769f811a4b5b69328c175c9e2ae5d09cdc7c23/ .github/workflows/ci-failure-scan.md, 2026, commit-pinned workflow snapshot. Accessed 2026-09-15. [19] ——, “CI Outer-Loop Failure Fixer,” https://github.com/dotnet/runtime/ blob/8f769f811a4b5b69328c175c9e2ae5d09cdc7c23/.github/workflows /ci-failure-fix.md, 2026, commit-pinned workflow snapshot. Accessed 2026-09-15. [20] ——, “CI Outer-Loop Failure Scanner: Feedback,” https://github.com /dotnet/runtime/blob/8f769f811a4b5b69328c175c9e2ae5d09cdc7c23/ .github/workflows/ci-failure-scan-feedback.md, 2026, commit-pinned workflow snapshot. Accessed 2026-09-15. [21] ——, “Route platform-specific crypto-config failures to loop-in,” https: //github.com/dotnet/runtime/issues/131037, 2026, feedback workflow output, issue 131037. Accessed 2026-09-15. [22] ——, “Route platform-specific crypto-config failures to loop-in,” https: //github.com/dotnet/runtime/pull/131469, 2026, pull request 131469, merged July 29, 2026. Accessed 2026-09-15. [23] GitHub, “REST API endpoints for search,” https://docs.github.com/en/r est/search/search#search-code, 2026, search code. Accessed 2026-09-11. [24] M. Watanabe, H. Li, Y. Kashiwa, B. Reid, H. Iida, and A. E. Hassan, “On the Use of Agentic Coding: An Empirical Study of Pull Requests on GitHub,” ACM Transactions on Software Engineering and Methodology ,2026. [Online]. Available: https://arxiv.org/abs/2509.14745 [25] H. He, C. Miller, S. Agarwal, C. Kästner, and B. Vasilescu, “Speed at the Cost of Quality: How Cursor AI Increases Short-Term Velocity and Long-Term Complexity in Open-Source Projects,” in International Conference on Mining Software Repositories , 2026, pp. 181–193. [26] F. Salzano, L. Marchesi, C. K. Antenucci, S. Scalabrino, R. Tonelli, R. Oliveto, and R. Pareschi, “Bridging the gap: a comparative study of academic and developer approaches to smart contract vulnerabilities,” 
+
+Empirical Software Engineering , vol. 31, no. 2, 2026. [27] M. M. Danilak, “langdetect: Language detection library for Python,” https://github.com/Mimino666/langdetect, 2021, version 1.0.9. Accessed 2026-09-11. [28] V. Braun and V. Clarke, “Thematic analysis,” in APA Handbook of Research Methods in Psychology, Vol. 2: Research Designs: Quantitative, Qualitative, Neuropsychological, and Biological , H. Cooper, P. M. Camic, D. L. Long, A. T. Panter, D. Rindskopf, and K. J. Sher, Eds. American Psychological Association, 2012, pp. 57–71. [29] M. Chouchen, N. Bessghaier, M. Begoug, A. Ouni, E. A. AlOmar, and M. W. Mkaouer, “How do software developers use ChatGPT? an exploratory study on GitHub pull requests,” in International Conference on Mining Software Repositories . ACM, 2024, pp. 212–216. [30] K. Johnson, C. Morais, and E. Patelli, “Enhancing procedure quality: Advanced language tools for identifying ambiguity and high-potential violation triggers,” Reliability Engineering & System Safety , vol. 264, p. 111308, 2025. [31] I. Ali and D. Kannan, “Mapping research on healthcare operations and supply chain management: A topic modelling-based literature review,” 
+
+Annals of Operations Research , vol. 315, no. 1, pp. 29–55, 2022. [32] D. Eleyan, A. Othman, and A. Eleyan, “Enhancing software comments readability using flesch reading ease score,” Information , vol. 11, no. 9, p. 430, 2020. [33] J. Wouters, A. Menkveld, S. Brinkkemper, and F. Dalpiaz, “Crowd-based requirements elicitation via pull feedback: Method and case studies,” 
+
+Requirements Engineering , vol. 27, pp. 429–455, 2022. [34] S. Bala, K. Sahling, J. Haase, and J. Mendling, “ChatGPT for tailoring software documentation for managers and developers,” in Agile Processes in Software Engineering and Extreme Programming – Workshops , ser. Lecture Notes in Business Information Processing. Springer, 2024, vol. 524, pp. 103–109. 17 
+
+[35] L. Prechelt, L. Montgomery, J. Frattini, and F. Zieris, “How (not) to write a software engineering abstract,” arXiv preprint arXiv:2506.21634 ,2025. [36] R. Ehsani, S. Pathak, E. Parra, S. Haiduc, and P. Chatterjee, “What characteristics make ChatGPT effective for software issue resolution? an empirical study of task, project, and conversational signals in GitHub issues,” Empirical Software Engineering , vol. 31, no. 22, 2026. [37] GitHub, “gh-aw-mcpg smoke-proxy-github-script workflow Markdown snapshot,” https://github.com/github/gh-aw-mcpg/blob/45a6fb81de50cc5 e4c7dd0232522492a74ca8160/.github/workflows/smoke-proxy-github-s cript.md, 2026, accessed 2026-08-13. [38] N. Nagappan and T. Ball, “Use of relative code churn measures to predict system defect density,” in International Conference on Software Engineering , 2005, pp. 284–292. [Online]. Available: https://www.micr osoft.com/en-us/research/wp-content/uploads/2016/02/icse05churn.pdf [39] GitHub, “REST API endpoints for commits,” https://docs.github.com/en /rest/commits/commits, 2026, accessed 2026-08-09. [40] National Institute of Standards and Technology, “Sign test,” https://www. itl.nist.gov/div898/software/dataplot/refman1/auxillar/signtest.htm, 2023, dataplot reference manual. Accessed 2026-09-11. [41] S. Holm, “A Simple Sequentially Rejective Multiple Test Procedure,” 
+
+Scandinavian Journal of Statistics , vol. 6, no. 2, pp. 65–70, 1979. [42] Activiti contributors, “supply-chain-review.lock.yml: Generated gh-aw workflow,” https://github.com/Activiti/Activiti/blob/11e0c28347ca68e378 48ae50710829e94488be7c/.github/workflows/supply-chain-review.lock .yml, 2026, pinned snapshot. Accessed 2026-09-13. [43] GitHub awesome-copilot contributors, “duplicate-resource-detector.lock.yml: Generated gh-aw workflow,” h t t p s : / / g i t h u b . c om/github/awesome-copilot/blob/4b6430ee3ed78c4029bbb7360ba117 b5ce53a78d/.github/workflows/duplicate-resource-detector.lock.yml, 2026, pinned snapshot. Accessed 2026-09-13. [44] Pydantic contributors, “pydantic-ai-attention-triage.lock.yml: Generated gh-aw workflow,” https://github.com/pydantic/pydantic-ai/blob/a1defdf9e 078bbb6cce979a98c931b342f7e05d8/.github/workflows/pydantic-ai-att ention-triage.lock.yml, 2026, pinned snapshot. Accessed 2026-09-13. [45] J. Cohen, “A coefficient of agreement for nominal scales,” Educational and Psychological Measurement , vol. 20, no. 1, pp. 37–46, 1960. [46] Google DeepMind, “Gemini 3.1 Pro: Model card,” 2026, accessed September 14, 2026. [Online]. Available: https://deepmind.google/mode ls/model-cards/gemini-3-1-pro/ [47] Z.ai, “GLM-5.2: Model card,” 2026, accessed September 14, 2026. [Online]. Available: https://huggingface.co/zai-org/GLM-5.2 [48] OpenAI, “Introducing gpt-oss,” 2025, accessed September 14, 2026. [Online]. Available: https://openai.com/index/introducing-gpt-oss/ [49] .NET Contributors, “triage-comment-reviewer.md: Triage Comment Reviewer for dotnet/aspnetcore,” https://github.com/dotnet/aspnet core/blob/5a09c126653d5bd295262f2ca96c9388b854cb24/.github/wor kflows/triage-comment-reviewer.md, 2026, collected commit-pinned workflow snapshot. [50] M. Tafreshipour, A. Imani, E. Huang, E. Almeida, T. Zimmermann, and I. Ahmed, “Prompting in the Wild: An Empirical Study of Prompt Evolution in Software Repositories,” in Proceedings of the 22nd IEEE/ACM International Conference on Mining Software Repositories ,2025. [51] W. Chatlatanagulchai, K. Thonglek, B. Reid, Y. Kashiwa, P. Leelaprute, A. Rungsawang, B. Manaskasemsak, and H. Iida, “On the Use of Agentic Coding Manifests: An Empirical Study of Claude Code,” in International Conference on Product-Focused Software Process Improvement , 2025. [52] T. Gloaguen, N. Mundler, M. Muller, V. Raychev, and M. Vechev, “Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?” arXiv preprint arXiv:2602.11988 , 2026. [53] A. Decan, T. Mens, P. Rostami Mazrae, and M. Golzadeh, “On the use of GitHub Actions in software development repositories,” in International Conference on Software Maintenance and Evolution , 2022, pp. 235–245. [54] K. Sun, H. Kuang, S. Baltes, X. Zhou, H. Zhang, X. Ma, G. Rong, D. Shao, and C. Treude, “Does AI code review lead to code changes? a case study of GitHub Actions,” IEEE Transactions on Software Engineering , vol. 52, no. 7, pp. 2111–2126, 2026. [55] M. Chouchen, J. Khelifi, M. Begoug, A. Ouni, M. Sayagh, and M. A. Saied, “On the reliability of agentic AI in continuous integration pipelines,” in Proceedings of the 23rd International Conference on Mining Software Repositories . ACM, 2026, pp. 837–841. [56] T. A. Ghaleb, “When AI agents touch CI/CD configurations: Frequency and success,” in International Conference on Mining Software Reposito-ries . ACM, 2026, pp. 817–821. [57] T. A. Ghaleb and D. Rathnayake, “Can LLMs write CI? a study on automatic generation of GitHub Actions configurations,” in 2025 IEEE International Conference on Software Maintenance and Evolution (ICSME) . IEEE, 2025, pp. 767–772. [58] T. A. Ghaleb, “Doc2CI: A multi-service study of CI configuration generation using large language models,” arXiv:2608.01451, 2026. [59] S. Mohsenimofidi, M. Galster, C. Treude, and S. Baltes, “Context engineering for AI agents in open-source software,” in Proceedings of the 23rd International Conference on Mining Software Repositories .ACM, 2026, pp. 194–198. [60] J. L. Lulla, S. Mohsenimofidi, M. Galster, J. M. Zhang, S. Baltes, and C. Treude, “On the impact of AGENTS.md files on the efficiency of AI coding agents,” arXiv:2601.20404, 2026.

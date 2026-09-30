@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-29</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-30</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 43 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>23</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>20</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-29 23:54:43 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-30 23:14:54 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日完成43篇AI安全论文筛选，精读23篇、速读20篇，重点覆盖邮件代理的提示注入检测与结构化攻击方法论。最值得看的是两项9分研究：基于攻击链建模的邮件代理提示注入检测，以及结构感知的攻击方法；速读中视频越狱、DRL入侵检测鲁棒性及分布式代理身份令牌也值得关注。建议普通读者优先了解邮件/代理场景的提示注入防护，再按兴趣延伸阅读。</p>
+<p>今日精读10篇、速读15篇，重点扫描AI智能体与机器人安全防线。最值得看的是《MetaPermit》提出的可扩展、可审计的智能体访问控制，以及《AuthGuard-R》针对LLM控制机器人的双门防御。普通读者可先关注AI权限与劫持防护这两条主线，再按需跟进蜜罐测量与扩散模型越狱机理。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">23 篇</strong>
+    <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Prompt Injection Detection for Email Agents Through Attack Chain Modeling">Prompt Injection Detection for Email Agents Through Attack Chain Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Frame the adversary: a structure-aware attack methodology">Frame the adversary: a structure-aware attack methodology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Escaping Alignment: A Physical Trap Model of Best-of-N Jailbreaking">Escaping Alignment: A Physical Trap Model of Best-of-N Jailbreaking</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MetaPermit: Scalable and Auditable Access Control for AI Agents via LLM-Inferred Meta-Attributes">MetaPermit: Scalable and Auditable Access Control for AI Agents via LLM-Inferred Meta-Attributes</span></li><li><span class="dpr-home-dashboard-paper-title" title="AuthGuard-R: Safety-Compliant Mission Hijacking and Dual-Gate Defense for LLM-Controlled Robots">AuthGuard-R: Safety-Compliant Mission Hijacking and Dual-Gate Defense for LLM-Controlled Robots</span></li><li><span class="dpr-home-dashboard-paper-title" title="Revisiting Certified Defense with Differential Privacy on Vision Transformers">Revisiting Certified Defense with Differential Privacy on Vision Transformers</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>12</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>6</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>4</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">20 篇</strong>
+    <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Probabilistic Robustness-driven Universal Adversarial Perturbations with Explainability against Deep Reinforcement Learning-based Intrusion Detection System">Probabilistic Robustness-driven Universal Adversarial Perturbations with Explainability against Deep Reinforcement Learning-based Intrusion Detection System</span></li><li><span class="dpr-home-dashboard-paper-title" title="Crypto-bound identity-verified capability tokens for coordinating distributed AI agents: A proposal">Crypto-bound identity-verified capability tokens for coordinating distributed AI agents: A proposal</span></li><li><span class="dpr-home-dashboard-paper-title" title="TempQ-Jail: Query-Constrained Candidate Ranking for Text-to-Video Jailbreak Attacks">TempQ-Jail: Query-Constrained Candidate Ranking for Text-to-Video Jailbreak Attacks</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="OllamaDrama: Designing and Deploying a Honeypot to Measure Attacks on Exposed LLM Infrastructure">OllamaDrama: Designing and Deploying a Honeypot to Measure Attacks on Exposed LLM Infrastructure</span></li><li><span class="dpr-home-dashboard-paper-title" title="Why Jailbreaks Succeed in Diffusion Language Models: An Energy Landscape Analysis">Why Jailbreaks Succeed in Diffusion Language Models: An Energy Landscape Analysis</span></li><li><span class="dpr-home-dashboard-paper-title" title="Momentum-Guided Federated Split Distillation for Personalized Temporal Edge Intelligence">Momentum-Guided Federated Split Distillation for Personalized Temporal Edge Intelligence</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>7</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span></div>
 </section>
 </div>
 

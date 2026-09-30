@@ -1,0 +1,518 @@
+Title: Deduplication-while-Training: A Resilient Paradigm for Privacy-Preserving Cross-Client Deduplication in Federated Learning
+
+URL Source: https://arxiv.org/pdf/2609.31262v1
+
+Published Time: Mon, 28 Sep 2026 01:07:02 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Deduplication-while-Training: A Resilient Paradigm for Privacy-Preserving Cross-Client Deduplication in Federated Learning 
+
+## Rongxi Wang 
+
+College of Cryptology and Cyber Science, Nankai University Tianjin, China 
+
+## Guanxiong Ha 
+
+College of Cryptology and Cyber Science, Nankai University Tianjin, China 
+
+## Chunfu Jia 
+
+College of Cryptology and Cyber Science, Nankai University Tianjin, China 
+
+## Yongsheng Lin 
+
+College of Cryptology and Cyber Science, Nankai University Tianjin, China 
+
+## Minfen Gao 
+
+School of Mathematical Science, Nankai University Tianjin, China 
+
+## Hanmiaomiao Wang 
+
+College of Cryptology and Cyber Science, Nankai University Tianjin, China 
+
+## Abstract 
+
+Cross-client duplicate data in large language model train-ing corpora degrades the efficiency of federated learning (FL) while exacerbating model memorization and privacy risks. Privacy-preserving cross-client deduplication effec-tively mitigates this issue by eliminating duplicate training data. However, existing schemes all follow a "Deduplication-before-Training" paradigm. This serially coupled paradigm incurs high fault-tolerance costs and lacks support for dy-namic client joining. To this end, we propose an unexplored paradigm called "Deduplication-while-Training (DwT)", which enables con-current deduplication and training. DwT transforms cross-client deduplication from a one-time, globally synchronous preprocessing operation into a continuous online service with state management, concurrent claiming, and failure re-covery. By enabling state synchronization and task takeover, it minimizes the impact of client disconnections on the over-all training progress while supporting the dynamic joining of clients. We design DwT-FL, a privacy-preserving dedupli-cation system, to support DwT. By designing a concurrent state-claim mechanism and a hot-cold dual-queue sched-uling strategy, DwT-FL enables the parallel execution of secure deduplication and model training, while effectively handling client disconnections and dynamic joins. Experi-mental evaluations demonstrate that, compared to the state-of-the-art scheme, DwT-FL significantly reduces the time overhead of failure recovery and dynamic joining by up to 
+
+93 .04% and 94 .18% , respectively. This provides an efficient and elastic concurrent deduplication scheme for dynamic and unstable FL environments. 
+
+Keywords: Federated learning, Privacy-preserving data deduplication, Cross-client deduplication, Deduplication-while-Training paradigm 
+
+> Conference’17, July 2017, Washington, DC, USA
+> 2026. ACM ISBN 978-x-xxxx-xxxx-x/YY/MM. . . $15.00
+> https://doi.org/10.1145/nnnnnnn.nnnnnnn
+
+## 1 Introduction 
+
+The performance of large language models (LLMs) [16, 23, 36, 37, 47] depends strongly on the scale and quality of their training data. However, large real-world text corpora com-monly contain noise, bias, and substantial duplicate content [1]. Duplicated sequences can cause a model to overempha-size a limited set of sample patterns, weaken generalization, and increase the risk that training data are memorized and reproduced. Prior work shows that duplicate training data are closely associated with model memorization and can further increase the success of privacy attacks [11], includ-ing membership inference attacks [32, 44] and data extrac-tion attacks [6, 12, 18, 35, 39]. Duplicate samples also incur unnecessary computation and storage overhead, lengthen training time, and increase energy costs. Therefore, the dedu-plication of training data serves as a crucial step for enhanc-ing model quality, privacy, and resource utilization in LLM training [8, 31, 38, 43]. Federated learning (FL) [13, 20, 33, 48] provides a practi-cal approach for collaborative training on private data dis-tributed across users or devices. Clients train models locally and upload only model updates to a central server, avoid-ing direct exchange of raw data [34]. FL has been applied to mobile input prediction [24], healthcare [5], smart cities [25], and edge computing [49]. However, different clients in FL can hold identical text fragments, samples, or data records, and local-only deduplication cannot identify dupli-cates across clients [1, 24, 50]. To perform cross-client dedu-plication while preserving data privacy, the system must de-tect duplicates without exposing the original data content. Thus, privacy-preserving cross-client deduplication represents a critical challenge in FL .Existing privacy-preserving cross-client deduplication schemes [1, 50] rely mainly on trusted execution envi-ronments (TEEs) or cryptographic techniques to identify duplicates without directly disclosing data content. These approaches organize deduplication and training through arXiv:2609.31262v1 [cs.CR] 25 Sep 2026 a Deduplication-before-Training (DbT) paradigm. DbT re-quires all participants to complete a duplicate-detection pro-tocol synchronously before clients train on the deduplicated data. By treating deduplication as a preprocessing step, DbT ensures that clients avoid training on duplicate data, thereby reducing training costs and mitigating model memorization. However, this serially coupled design paradigm has two lim-itations. 1) Significant fault-tolerance costs : If some clients unexpectedly disconnect during deduplication or training, the system commonly needs to roll back its state and re-execute the prescribed protocol, introducing significant ad-ditional communication and computation overhead. 2) No support for dynamic client joining : DbT requires all clients to uniformly complete deduplication before jointly enter-ing the training phase. When a new client joins, it is re-quired to execute the deduplication protocol with all exist-ing clients, which introduces high communication and com-putation overhead and restricts the system’s scalability. The limitations of DbT motivate us to explore a novel paradigm called Deduplication-while-Training (DwT) para-digm, which enables concurrent deduplication and training. Rather than requiring all participants to establish a common synchronized state before duplicate detection and training, DwT reduces the granularity of these operations to individ-ual data items. Clients can come online asynchronously. Af-ter completing duplicate detection through interaction with the FL server, a client can immediately train on data for which it has obtained training rights, without waiting for other participants to be online or for global deduplication to finish. The challenge of implementing DwT lies in ensuring that duplicate content in the training data across all clients is trained exactly once, while providing both privacy preserva-tion and high system performance within complex network environments characterized by unexpected client dropouts and dynamic joining. We design DwT-FL, a system that implements the DwT paradigm. By designing a concurrent state-claim mecha-nism based on compare-and-swap (CAS) and a hot-cold dual-queue scheduling strategy , DwT-FL enables privacy-preserving cross-client duplicate detection and client-local training to proceed in parallel. It consists of clients, an ag-gregation server ( AS ), and a key server ( KS ). Each client first runs an Oblivious Pseudorandom Function (OPRF) pro-tocol [10] with KS to generate protected duplicate detection data tags for local training data. AS performs duplicate de-tection and model-parameter aggregation. Additionally, it maintains a critical data structure for implementing DwT, the state table , which records each data item’s tag, its current state, and owner information. The data states are EMPTY ,
+
+PENDING , and COMMITTED , indicating that the data item is unclaimed, being trained, and successfully trained in the current round, respectively. When multiple clients submit the same tag, AS identi-fies cross-client duplicate data. AS uses lock-free updates and CAS operations to handle concurrent requests and en-sure a unique training right for each data item. A client that successfully claims a training right receives a training iden-tifier, moves the data item to its local hot queue, and trains it. Other clients that own the data item receive a deduplica-tion identifier and retain the data item in a cold queue rather than deleting it. If a training client 𝑈 disconnects unexpect-edly, AS uses the heartbeat mechanism and the owner infor-mation recorded in the state table to schedule training rights. 
+
+AS transfers the training rights of the data to other clients that possess the same data as client 𝑈 . These clients then move the data from their cold queues to their hot queues and execute the training, preventing data loss caused by client disconnections. When a new client joins during system ex-ecution, AS incrementally updates the state table without interrupting existing clients or rerunning a global dedupli-cation protocol. In addition, AS retains historical trainers and disconnection information during cross-round sched-uling to support efficient and stable multi-round federated training. The central advantage of DwT is that it transforms cross-client deduplication in FL from a one-time, globally synchro-nized preprocessing operation into a continuously available service with state management, concurrent claiming, and fail-ure recovery . This paradigm allows clients that have com-pleted duplicate detection to enter training promptly, reduc-ing idle waiting. It reduces the impact of client disconnec-tions on overall training progress through state recovery and task takeover, and incrementally handles dynamically joined clients without repeating the complete deduplication process. Without changing the privacy objective that cross-client data content remains hidden, DwT coordinates the execution of data deduplication and federated training and provides a more resilient system organization for FL envi-ronments with unstable networks and dynamic participants. In summary, our contributions are as follows: 
+
+• We propose the DwT paradigm, which for the first time transforms cross-client duplicate detection in FL from a one-time, globally synchronized preprocessing operation into a continuously available service with state management, concurrent claiming, and failure recovery. The paradigm handles client disconnections and supports dynamic client joining. 
+
+• We design DwT-FL to support DwT. Through a CAS-based concurrent state-claim mechanism and a hot-cold dual-queue scheduling strategy, DwT-FL enables privacy-preserving cross-client data deduplication and client-local training to proceed in parallel, while en-suring high scalability and resilience to client discon-nections. 
+
+• We conduct a systematic evaluation of DwT-FL along the dimensions of system performance, and fault toler-ance. Experimental results show that, compared to the state-of-the-art scheme, DwT-FL reduces the failure recovery time by up to 93 .04% , and decreases the time overhead for dynamic client joining by up to 94 .18% 
+
+and 78 .87% in the deduplication and training phases, respectively. Furthermore, we make the source code of DwT-FL publicly available 1.
+
+## 2 Background and Motivation 
+
+2.1 Federated Learning 
+
+FL is a distributed machine learning paradigm [13, 20, 33, 48]. In conventional model training, data are collected at a central server; in FL, data remain on clients’ personal de-vices [34]. A typical FL system trains a model through mul-tiple rounds of interaction between a server and multiple clients. In each round, the central server distributes the cur-rent global model parameters to participating clients. Each client uses locally stored private data to execute an opti-mization algorithm, such as stochastic gradient descent, and computes a local model update, such as a gradient. Clients upload only model updates to the server, which aggregates the collected updates with an algorithm such as federated averaging (FedAvg [34]), produces a new global model, and begins the next round. Under this architecture, raw data re-main on local devices, avoiding direct sharing or centralized storage of private data. Notably, our scheme is independent of the specific FL approach employed. By retaining raw data locally during training, FL miti-gates privacy risks associated with conventional centralized training. However, because clients do not upload their data to the server, duplicate training records are difficult to de-tect. Training the same data repeatedly at multiple clients in-curs additional computation and communication overhead. More importantly, repeated training can cause overfitting to duplicate data and make the model more susceptible to security threats such as membership inference attacks [32, 44] and data extraction attacks [6, 12, 18, 35, 39]. Privacy-preserving cross-client data deduplication is therefore im-portant for FL. 
+
+2.2 Existing Privacy-Preserving Cross-Client Deduplication Schemes for FL 
+
+Existing schemes transform global deduplication among FL participants into multi-party cryptographic interaction pro-tocols, thereby detecting duplicate data without directly ex-posing plaintext. Abadi et al. [1] propose EP-MPD, a privacy-preserving multi-party deduplication protocol based on a binary-tree structure. With assistance from TEEs, clients are paired at each tree level and use group private set intersec-tion (PSI) [2, 3, 19] based on symmetric encryption or OPRF to identify duplicate data, after which one endpoint removes the duplicate. This interaction recurses upward through the tree until the root is reached, eliminating cross-client data 
+
+> 1https://anonymous.4open.science/r/DwT-FL
+
+redundancy. Ye et al. [50] further consider the frequency of duplicate data, adjust training weights according to that fre-quency, and decompose cross-client duplicate identification into multiple rounds of PSI-based secure two-party compu-tation. However, all existing privacy-preserving cross-client deduplication schemes [1, 50] for FL follow the DbT para-digm. As described in Section 1, this paradigm treats dedu-plication as preprocessing before training and is vulnerable to unexpected client disconnections. If a client disconnects during deduplication or training, the system must rerun the complete protocol, introducing substantial communication and computation overhead. Moreover, DbT does not support dynamic client joining and therefore has limited scalability. 
+
+## 3 System Overview 
+
+3.1 Architecture 
+
+As shown in Fig. 1, DwT-FL consists of a AS , a KS , and multiple clients. KS generates and securely stores a system-wide OPRF key, and it assists clients in generating protected data tags used for duplicate detection. AS performs dedu-plication on the training data of clients, receives and aggre-gates federated model parameters, and manages client ses-sions and data item states during deduplication and training. Clients in the system interact with KS to generate a dupli-cate detection tag for each training data item, and they send these tags to AS to execute cross-client duplicate detection. After AS executes duplicate detection, it determines a unique trainer for each training data item based on a con-current state-claim mechanism. The client that acquires the training right places the data into the hot queue and per-forms training immediately; other clients place the data into the cold queue for temporary storage, and this data is used for failure recovery. After clients complete the training, they send model updates to AS , and after AS aggregates these updates, it obtains a new global model and prepares to start the next training round. If a client unexpectedly discon-nects, other clients can submit their own requests to replace the disconnected client and continue training, and this does not impact the overall performance of the system. Further-more, the system incrementally handles dynamically joined clients, and it does not affect other clients. 
+
+Remark. It should be noted that the DwT paradigm does not restrict the adopted deduplication methods (for exam-ple, exact deduplication or MinHash-based fuzzy deduplica-tion). The primary focus of DwT-FL is the efficient imple-mentation of failure recovery and the support for dynamic client joining. Therefore, the deduplication method primar-ily implemented by DwT-FL is exact deduplication. If fuzzy deduplication is required, the exact deduplication method in DwT-FL can simply be replaced with existing schemes [4, 26, 42, 45]. …       
+
+> Client 1
+> …
+> GPU
+> Hot queue
+> TRAIN
+> Local data
+> …
+> Cold queue
+> DEDUP
+> Train
+> Transfer
+> Aggregation server (AS)
+> State table
+> 𝑆𝐼𝐷 Tags
+> Inverted user table
+> Duplicate detection FedAvg
+> Update table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑡𝑎𝑔 𝑘
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> EMPTY
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> None
+> 𝑠𝑖𝑑 1
+> 𝑠𝑖𝑑 1
+> 𝑠𝑖𝑑 𝑛
+> ……
+> 𝑡𝑎𝑔 1, 𝑡𝑎𝑔 𝑘
+> 𝑡𝑎𝑔 1, 𝑡𝑎𝑔 2
+> Key server (KS)
+> OPRF key Evaluate
+> Update tags
+> Operation identifier
+> Heartbeat
+> Heartbeat
+> Upload
+> Update
+> Client n
+> …
+> GPU
+> Hot queue TRAIN
+> Train
+> Transfer
+> DEDUP
+> …
+> Cold queue Local data
+> Update
+> Upload
+> Protected tags
+
+Figure 1. Architecture of DwT-FL. 
+
+3.2 Threat Model 
+
+We assume that AS is honest-but-curious. That is, it fol-lows the prescribed protocol but attempts to infer user data from received information. KS is also honest-but-curious, meaning that it correctly evaluates OPRF but may attempt to infer information about data from client inputs. Follow-ing existing schemes [22, 27, 29, 30], we assume that AS 
+
+and KS do not collude. This assumption is feasible in prac-tical scenarios [21]. Typically, AS and KS are not oper-ated by the same service provider. Model aggregation can be hosted by a public cloud provider with sufficient train-ing resources, while cryptographic services can be hosted by an independent third-party security organization. This deployment strategy not only leverages the powerful com-putational capacity of the public cloud but also strengthens data security, effectively circumventing the risk of collusion between AS and KS . We assume that clients are honest and do not collude with AS or KS , but may disconnect or delay their participation in FL because of network conditions. All communication channels among clients, AS , and KS are authenticated, for example through TLS. 
+
+Remark. Similar to the scheme proposed by Abadi et al. [1], our design deploys a third-party KS to strengthen se-curity. Although Ye et al. [50] do not rely on a third-party server, they require clients to execute pairwise PSI while all clients remain online and can implement only the DbT paradigm. When a client disconnects, these schemes must roll back state and rerun the prescribed protocol, which in-troduces substantial communication and computation over-head. They also do not support dynamic client joining. 
+
+## 4 Detailed Method 
+
+4.1 Design Goals 
+
+DwT-FL targets federated learning scenarios characterized by unstable network connections and dynamically partici-pating clients. Its objective is to achieve the parallel execu-tion of cross-client duplicate data identification and client-local training while preserving data privacy. Specifically, DwT-FL has three design goals. 1) Data privacy preservation .During cross-client duplicate detection, the system needs to ensure that the local plaintext data of all participants is not disclosed. 2) Resilience to client dropouts . When some clients experience network disconnections during dedupli-cation or training, the system needs to avoid blocking the deduplication or training of other online clients. 3) Support for dynamic client joining . To accommodate dynamically par-ticipating clients, the system needs to process joining re-quests asynchronously. Specifically, the duplicate detection and training of new clients should not interrupt the ongoing execution of existing online clients, nor should it require a global re-execution of the deduplication protocol. 
+
+4.2 Construction of DwT-FL System initialization. During system initialization, KS 
+
+generates a security parameter 𝜆 and, based on this param-eter, generates and securely stores an OPRF key 𝑘 ∈ 𝑍 ∗ 
+
+> 𝑝
+
+,where 𝑍 ∗ 
+
+> 𝑝
+
+denotes the multiplicative group of integers mod-ulo a large prime 𝑝 . To support efficient duplicate detection and failure recovery under concurrent requests from multi-ple clients, AS initializes a lock-free bidirectional concurrent hash index . The index contains a state table and an inverted user table. The state table is keyed by 𝑓 𝑝 𝑀 , where 𝑓 𝑝 𝑀 de-notes the protected tag of data item 𝑀 . Each entry records the current processing state of the corresponding data item (EMPTY , PENDING , or COMMITTED ), the set of data owners (a list of 𝑆𝐼𝐷 s, where each 𝑆𝐼𝐷 is the identifier of a client owning the data), and the client selected to train the data item in the current round. EMPTY indicates that the data item has not been claimed, PENDING indicates that it is being trained, and COMMITTED indicates that its training has completed successfully in the current round. The inverted user table is keyed by 𝑆𝐼𝐷 and records the set of protected tags for all data owned by that client. When a new client (e.g., 𝑈 𝑖 ) joins the network, AS assigns it a globally unique 𝑆𝐼𝐷 𝑖 and establishes a heartbeat mecha-nism . Specifically, the system configures a fixed heartbeat interval Δ𝑡 and a timeout threshold 𝜏 . After successfully joining the network and obtaining 𝑆𝐼𝐷 𝑖 , the client starts a background timer that continuously sends heartbeat mes-sages to AS every Δ𝑡 . AS maintains an independent timer for each online client and resets the corresponding timer upon receiving a valid heartbeat. If a timer has not been refreshed for longer than 𝜏 , AS marks that client as dis-connected. During subsequent deduplication and training, 
+
+AS determines whether a client has disconnected based on whether this timer exceeds 𝜏 and triggers the failure recov-ery mechanism when this condition is met (detailed in the 
+
+failure recovery paragraph). 
+
+Protected-tag generation. Suppose that client 𝑈 𝑖 joins the network with a local plaintext dataset 𝐷 𝑖 . The dataset contains both records duplicated at other clients and records unique to 𝑈 𝑖 . 𝑈 𝑖 interacts with KS to generate a protected tag for each data item in 𝐷 𝑖 . For a training data item 𝑚 𝑗 ∈ 𝐷 𝑖 ,
+
+𝑈 𝑖 first computes its cryptographic hash 𝐻 (𝑚 𝑗 ), samples a random value 𝑟 ← { 0, 1}𝜆 , and sends the blinded value 
+
+𝐻 (𝑚 𝑗 )𝑟 to KS . KS evaluates (𝐻 (𝑚 𝑗 )𝑟 )𝑘 using the OPRF key 
+
+𝑘 and returns the result. 𝑈 𝑖 then computes (( 𝐻 (𝑚 𝑗 )𝑟 )𝑘 )𝑟 −1
+
+=
+
+𝐻 (𝑚 𝑗 )𝑘 locally and obtains the protected tag 𝑓 𝑝 𝑚 𝑗 = 𝐻 (𝑚 𝑗 )𝑘 .After applying this procedure to every data item in 𝐷 𝑖 , 𝑈 𝑖 ob-tains the tag set 𝐹 𝑃 𝑖 = {𝑓 𝑝 𝑚 1 , 𝑓 𝑝 𝑚 2 , · · · , 𝑓 𝑝 𝑚 𝑛 }, where 𝑛 is the number of local data items. Subsequently, 𝑈 𝑖 sends 𝐹 𝑃 𝑖 
+
+together with its identifier 𝑆𝐼𝐷 𝑖 to the AS to initiate a dedu-plication request. 
+
+Bidirectional-index update. After receiving a client deduplication request, AS performs a lock-free update of the bidirectional index. For a newly joined client 𝑈 𝑖 , AS ini-tializes an empty tag set for 𝑈 𝑖 in the inverted user table and appends 𝐹 𝑃 𝑖 . Subsequently, AS updates the state table based on 𝐹 𝑃 𝑖 . AS checks whether the tag in 𝐹 𝑃 𝑖 has already been stored in the state table. If it has been stored, it indi-cates that this data item is duplicated; otherwise, it is unique. 
+
+AS iterates through each 𝑓 𝑝 𝑚 𝑗 in 𝐹 𝑃 𝑖 and performs differ-ent operations depending on whether the data is a duplicate. Client 1   
+
+> …
+> GPU
+> Hot queue
+> Local data
+> …
+> Cold queue
+> DEDUP
+> Train
+> Aggregation server (AS)
+> Client n
+> …
+> GPU
+> Hot queue TRAIN
+> Train
+> …
+> Cold queue Local data
+> State table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑡𝑎𝑔 𝑘
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> EMPTY
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> None
+> 𝑠𝑖𝑑 1
+> 𝑚 1
+> 𝑚 1
+> 1. CAS operation
+> 2. Fail
+> 2. Success
+> State table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑡𝑎𝑔 𝑘
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> PENDING
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> 3. Update
+> state and trainer
+> 3. Move data 3. Move data
+
+Figure 2. Unique trainer selection for contested data. Specifically, for the tags corresponding to data unique to 𝑈 𝑖 ,
+
+AS creates new entries in the state table, initializes their states to EMPTY , and records 𝑆𝐼𝐷 𝑖 as the sole owner. For duplicate data, two cases arise depending on whether other clients in the network concurrently submit the same tag. 1. Concurrent submission. If another client 𝑈 𝑗 concur-rently submits the corresponding tag 𝑓 𝑝 𝑚 𝑗 to AS , to prevent concurrency conflicts, AS performs a lock-free insertion of the tag. This operation ensures that under concurrent contention, only one thread success-fully allocates memory for the tag and initializes its state to EMPTY . The remaining threads directly ob-tain this memory reference to subsequently compete for the data’s training right. Following this, the iden-tifiers of both 𝑈 𝑖 and 𝑈 𝑗 are safely appended to the data’s owner set. 2. Non-concurrent submission. If no other client concur-rently submits the tag for this data to AS , the system directly and safely appends 𝑈 𝑖 ’s identifier to the data’s owner set. It is worth noting that when AS successfully allocates memory space for the tag, it does not directly assign the training right to the corresponding client. The system de-couples data entry creation from training-right allocation to handle client disconnections during the deduplication phase. If AS directly binds the training right when allo-cating memory, the data would be invalidly occupied if the client disconnects during this stage. By deferring the allocation of training rights until the subsequent competi-tion using CAS operations, the system ensures that even if the client that successfully allocated the memory space disconnects during deduplication, the data’s state remains 
+
+EMPTY , thereby allowing other clients to normally claim the training right. 
+
+Unique trainer selection. After the bidirectional index is updated, AS determines the unique trainer for every data item submitted by 𝑈 𝑖 in the current round through the concurrent state-claim mechanism . Under optimistic concur-rency control [28], when attempting to acquire the training right, the thread processing the client request first performs a lock-free initial memory read of the data entry state. If, during this initial memory read phase, the processing thread discovers that the data entry state is already PENDING or 
+
+COMMITTED (indicating that the data has been success-fully claimed by another client that arrived earlier), AS de-termines that the client has failed to claim this tag. Conversely, if the data entry state is EMPTY , two cases arise. 1) For contested data, where multiple concurrent threads (e.g., 𝑈 𝑖 and 𝑈 𝑗 ) read the entry state as EMPTY si-multaneously, AS requires these threads to execute a CAS operation on the data entry state variable, as shown in Fig. 2. During execution, the CAS operation receives three pa-rameters: the memory address of the data entry state, the expected old value ( EMPTY ), and the new value to be writ-ten ( PENDING ). Using these parameters, CAS atomically compares the actual value at the memory address with the expected old value. If they match, it proves that the data en-try has not been modified by any other concurrent threads. CAS then writes the new value PENDING into memory and binds the current-round trainer field to the thread’s cor-responding 𝑆𝐼𝐷 𝑖 (assuming 𝑈 𝑖 ’s thread executes the fastest), resulting in a successful claim. If they do not match (e.g., the actual value has already been modified to PENDING 
+
+by 𝑈 𝑖 ’s thread), the CAS operation directly aborts the modi-fication. 2) For uncontested data (including unique data and duplicate data without concurrent access), 𝑈 𝑖 ’s processing thread executes the aforementioned CAS operation and can successfully complete the state binding via the CAS opera-tion. 
+
+Training and deduplication. The system implements the hot-cold dual-queue scheduling strategy to assign training rights and manage local data based on the duplicate detec-tion results. After AS has processed all tags in a client dedu-plication request, it aggregates the results and returns a re-sponse message to that client. This message contains a state mapping table that records each of the client’s tags and its corresponding operation identifier. For successfully claimed tags (including unique data and successfully claimed dupli-cate data), the TRAIN operation identifier is attached. For un-successfully claimed tags, the DEDUP operation identifier is attached. Upon receiving this response message, the client can locate the plaintext data in its local dataset based on the state mapping table within the message, and route the data to a hot queue or a cold queue respectively according to the operation identifiers. Specifically, 𝑈 𝑖 moves the plain-text data corresponding to TRAIN into its local hot queue and immediately begins training, without waiting for other clients in the network. Conversely, 𝑈 𝑗 transfers the plaintext data corresponding to DEDUP into its local cold queue to sus-pend it, preparing for potential subsequent takeover. It is worth noting that 𝑈 𝑗 does not delete the data that needs to be deduplicated; instead, it retains the data on its local disk to provide data support for the failure recovery mechanism that may occur later. 
+
+Completion of a training round. After all clients com-plete local training in a round and upload model updates to AS , AS aggregates the updates to obtain a new global model and prepares the next iteration. At the cross-round transition, AS traverses the bidirectional index and resets the processing state of every tag to EMPTY while retaining its owner set and the previous round’s unique trainer record. This reset is necessary for correct state progression. Retain-ing COMMITTED would prevent AS from distinguishing whether a data item has been processed in the new round. Directly assigning PENDING across rounds would incor-rectly treat a disconnected default trainer as active and de-lay recovery until heartbeat timeout. Resetting to EMPTY 
+
+denotes that a data item is ready but has not yet begun train-ing in the new round. The state changes to PENDING only after the subsequent trainer sends a heartbeat and AS en-capsulates the TRAIN instruction in the heartbeat response. This mechanism ensures that state transitions are explicitly bound to the client’s online interaction and enables AS to accurately track the current training progress. In a stable setting without client disconnections, to avoid repeated duplicate detection and concurrent contention, the training right for each data item in the new round is retained by default for the previous round’s trainer. Specifically, at the beginning of the next iteration, AS directly issues op-eration identifiers in the heartbeat responses sent to each client based on the retained trainer records. For any given data item, AS directly encapsulates the TRAIN operation identifier in the heartbeat response of its previous round’s trainer (e.g., 𝑈 𝑖 ). If the data is a duplicate shared by multi-ple clients, AS encapsulates the DEDUP operation identifier in the heartbeat responses of the other clients holding this data (e.g., 𝑈 𝑗 ). Through this cross-round state reuse mecha-nism, after receiving the new round’s global model, clients can directly train or suspend data in their local queues based on the heartbeat responses. This avoids the overhead of re-peating CAS contention in every round and ensures the ef-ficiency of multi-round federated training. 
+
+Failure recovery. The fault-tolerance mechanism covers client disconnections during both the deduplication and train-ing phases. 1) Disconnection in the deduplication phase . A client (e.g., 
+
+𝑈 𝑖 ) unexpectedly disconnects during the deduplication phase (for example, while interacting with KS to execute OPRF, or before completely submitting its deduplication request to 
+
+AS ). In the existing DbT paradigm, such local client discon-nections typically cause protocol interruption, requiring the system to re-execute the complete deduplication process. In contrast, under the DwT paradigm, the system can ensure that the processing of this duplicate data remains unaffected without re-executing the protocol. Other clients holding the Aggregation server (AS)         
+
+> 𝑆𝐼𝐷 Tags
+> Inverted user table
+> 𝑠𝑖𝑑 1
+> 𝑠𝑖𝑑 𝑛
+> ……
+> 𝑡𝑎𝑔 1, 𝑡𝑎𝑔 𝑘
+> 𝑡𝑎𝑔 1, 𝑡𝑎𝑔 2
+> State table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑡𝑎𝑔 𝑘
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> EMPTY
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> 𝑠𝑖𝑑 1
+> None
+> Client n
+> Disconnect
+> State table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> 𝑠𝑖𝑑 n
+> 𝑡𝑎𝑔 2PENDING 𝑠𝑖𝑑 3𝑠𝑖𝑑 2, 𝑠𝑖𝑑 3
+> Client 1
+> …
+> …
+> GPU
+> Hot queue
+> Cold queue
+> Train
+> Transfer 𝑚 1to train
+> 1.
+> Search
+> 𝑠𝑖𝑑 𝑛
+> 2.
+> Trainer is not 𝑠𝑖𝑑 𝑛
+> 3.
+> Trainer is
+> 𝑠𝑖𝑑 𝑛
+> 3.
+> Change state and trainer 4.
+> Notify Client 1
+> with 𝑡𝑎𝑔 1
+> 4.
+> 5.
+> State table
+> 𝑇𝑎𝑔
+> 𝑡𝑎𝑔 1
+> …
+> 𝑡𝑎𝑔 𝑘
+> 𝑆𝐼𝐷𝑠
+> 𝑠𝑖𝑑 1, 𝑠𝑖𝑑 n
+> 𝑠𝑖𝑑 1
+> …
+> 𝑆𝑡𝑎𝑡𝑒
+> …
+> PENDING
+> PENDING
+> 𝑇𝑟𝑎𝑖𝑛𝑒𝑟
+> …
+> 𝑠𝑖𝑑 1
+> 𝑠𝑖𝑑 1
+> Change state and trainer 5.
+
+Figure 3. Failure recovery in the training phase. same data as 𝑈 𝑖 (e.g., 𝑈 𝑗 ) can still independently submit their tags to AS . Because the data entry state remains EMPTY ,
+
+𝑈 𝑗 can successfully claim the training right through CAS and execute local training, thereby avoiding the problem of re-executing the deduplication procedure found in existing deduplication schemes [1, 50]. 2) Disconnection in the training phase . As shown in Fig. 3, 𝑈 𝑖 has successfully claimed the training right but dis-connects due to network instability during training (or af-ter AS has updated the state but before 𝑈 𝑖 receives the re-sponse message). According to system settings, all clients must send heartbeats at a periodic interval of Δ𝑡 . When the timer on AS detects that 𝑈 𝑖 has not responded beyond the timeout threshold 𝜏 , AS determines that the client has dis-connected. At this time, the processing states of all 𝑓 𝑝 𝑚 (in-cluding duplicate and unique data) assigned to 𝑈 𝑖 for train-ing stall in the PENDING state. AS first retrieves the tags owned by the disconnected client using the inverted user table, and resets a tag’s stata from PENDING to EMPTY 
+
+only if the disconnected client is the current trainer of that tag. Subsequently, AS queries the state table. For 𝑈 𝑖 ’s unique data, since there are no other owners, its state remains 
+
+EMPTY awaiting 𝑈 𝑖 ’s reconnection. For duplicate data, 
+
+AS retrieves other online owners (e.g., 𝑈 𝑗 ) or new clients (e.g., 𝑈 𝑘 ) that dynamically join the network and submit the same data at this exact time. When 𝑈 𝑗 sends its next heart-beat, or when the new client 𝑈 𝑘 initiates a deduplication request, AS encapsulates the 𝑓 𝑝 𝑚 awaiting supplementary training in the response message and sends it back. Upon re-ceiving the response, 𝑈 𝑗 can transfer this plaintext data from its cold queue to its hot queue for supplementary training (if the newly joined 𝑈 𝑘 successfully claims it, it directly adds the data to its hot queue for training). After completing the computation and uploading the model, AS updates the state of the corresponding 𝑓 𝑝 𝑚 to COMMITTED . Furthermore, 
+
+AS caches the records of duplicate data shared between 𝑈 𝑖 
+
+and other users to facilitate 𝑈 𝑖 rejoining deduplication and training after restoring its network connection. 
+
+Client reconnection. If the disconnected client 𝑈 𝑖 subse-quently restores its network connection and rejoins the sys-tem, the system executes corresponding state synchroniza-tion process based on the phase in which 𝑈 𝑖 disconnected. 1. Disconnection during deduplication. If client 𝑈 𝑖 discon-nected in deduplication phase, its subsequent act of restoring its network connection and re-initiating a deduplication request will not affect the normal opera-tion of the system. At this point, AS treats its request as a routine client request. For data already claimed by other online clients and in the PENDING or 
+
+COMMITTED state, 𝑈 𝑖 directly receives the DEDUP 
+
+identifier. For data still in the EMPTY state, 𝑈 𝑖 con-tinues to attempt claiming the training right via CAS operations. 2. Disconnection during training. If 𝑈 𝑖 disconnected af-ter acquiring the training right, when it reconnects and attempts to submit training parameters, AS re-jects this submission. AS encapsulates the previously recorded tags corresponding to the duplicate data shared between 𝑈 𝑖 and other users into the response message, and attaches the DEDUP identifier to them. This instructs 𝑈 𝑖 to move this data that has already been taken over into the cold queue. Simultaneously, the local training progress executed by 𝑈 𝑖 prior to disconnection on this portion of duplicate data is dis-carded. The system requires 𝑈 𝑖 to re-initiate training only on the untaken data (unique data) for which it regains the training right. 
+
+Dynamic client joining. When a new client joins, it gen-erates tags and sends a deduplication request to AS . AS 
+
+only needs to perform an append update to the lock-free bidirectional index. During the allocation of training rights, if a newly submitted tag has already been claimed by an existing online client (i.e., reading a state of PENDING or 
+
+COMMITTED ), AS directly issues the DEDUP identifier to the new client to route the data into its cold queue. Con-versely, if the tag has not been claimed by any other client (i.e., reading a state of EMPTY ), AS grants the data’s train-ing right to the new client via a CAS operation. This pro-cessing mechanism ensures that the joining of new clients does not interrupt the training processes of existing online clients, nor does it require rerunning a global deduplication protocol, effectively achieving the design goal of supporting dynamic client joining. 
+
+Training-right allocation after a disconnection. When all online clients complete their training in the current round and proceed to the next, AS iterates through the bidirec-tional index and resets the processing state of all data to 
+
+EMPTY , while retaining the ownership mapping sets and the previous round’s trainer records. Normally, to ensure system performance and avoid repeated duplicate detection, the training rights for each data item in the new round are retained by default for the previous trainer. However, if 𝑈 𝑖 
+
+experienced a disconnection in the previous round, AS de-termines that 𝑈 𝑖 still poses a disconnection risk and adjusts the allocation strategy in the new round. When processing duplicate data held by 𝑈 𝑖 , AS actively intervenes via periodic heartbeat messages. Because dupli-cate data in real-world networks often exhibits complex over-lapping ownership relationships (e.g., one data item might be jointly held by 𝑈 𝑖 and 𝑈 𝑗 , another by 𝑈 𝑖 and 𝑈 𝑘 , and others simultaneously by three or more clients), the sys-tem needs to re-establish a unique trainer for each duplicate data item. Specifically, AS examines the owner set of the tag in the index and selects one online client (e.g., 𝑈 𝑗 ) from the remaining clients that do not have a recorded discon-nection risk, explicitly excluding 𝑈 𝑖 . AS then encapsulates the TRAIN instruction in 𝑈 𝑗 ’s heartbeat response to prefer-entially allocate the training right. Simultaneously, AS en-capsulates the DEDUP identifier in the heartbeat responses of 𝑈 𝑖 and all other unselected data owners (e.g., 𝑈 𝑘 ). This operation forces 𝑈 𝑖 and the unselected clients to skip train-ing this data item and move it into their cold queues. Conse-quently, this history-based allocation mechanism effectively prevents unstable clients from invalidly occupying dupli-cate data in subsequent rounds, thereby safeguarding the system performance. 
+
+Remark. Our threat model in this paper assumes that clients are honest, and network instability is the sole cause of disconnections. The core objective is to verify the con-currency and fault-tolerance performance of the DwT para-digm. Therefore, for destructive behaviors where malicious clients claim training rights and repeatedly disconnect, or where they falsely claim that they do not possess certain tags, the introduction of defense mechanisms such as rep-utation penalties or proofs of data possession can provide effective defense. However, defenses against these attacks remain outside the scope of this paper. Furthermore, DwT-FL currently utilizes static keys to generate tags. To miti-gate long-term linkability risks and counter the threat of KS compromise over time, the implementation of epoch-based ephemeral tags or threshold/updatable OPRF schemes (e.g., PIVOT [40]) serves as an effective approach. Nevertheless, these long-term key management mechanisms also fall be-yond the scope of this paper, and they remain as directions for future exploration. 
+
+4.3 Analysis Security. DwT-FL preserves the confidentiality of each par-ticipant’s local plaintext data during cross-client duplicate detection, achieving the design goal of data privacy protec-tion. When generating protected tags, a client computes a blinded value and runs the OPRF protocol with KS . Based on the security of the OPRF protocol, this mechanism en-sures that KS cannot infer the client’s input data. Mean-while, AS only receives the finally computed protected data tags. Under the assumption that AS and KS do not col-lude, AS cannot recover the original data from these tags. Furthermore, in line with the standard FL paradigm, raw training data never leaves the local clients, and AS only re-ceives model parameter updates during the training phase. While FL itself may face specific threats (e.g., model inver-sion [17, 41] or data poisoning [46]), mitigating these attacks via existing orthogonal defenses (e.g., homomorphic encryp-tion [14, 15] or secure aggregation [7, 9]) falls outside the scope of this paper. 
+
+Training uniqueness. DwT-FL maintains at most one ac-tive trainer for each duplicate data item at any time, and en-sures that at most one valid training result for that item is committed in each round. For any identical plaintext data, the deterministic OPRF mapping generates identical tags. Therefore, on AS , all concurrent requests for this data will hit the same entry in the bidirectional index. By adopting an optimistic concurrency control strategy combined with atomic CAS operations, the transition process of the state variable from EMPTY to PENDING is mutually exclusive. This means that under scenarios of highly concurrent pre-emption by multiple clients, at most one processing thread can successfully modify the state. The system subsequently issues the TRAIN identifier to this unique client, thereby eliminating the possibility of the same data being repeatedly trained by multiple clients. Furthermore, during failure recovery, AS unilaterally re-vokes the disconnected trainer’s training right, at which point a new client can take over the data. Even if the discon-nected client subsequently restores its network connection and attempts to submit delayed computational tasks caused by the disconnection, AS will directly reject the submission because the data has already been taken over. This rejec-tion effectively eliminates the risk of concurrent duplicate training on the same data by both the original and takeover clients. 
+
+Fault tolerance. When a client holding training rights unexpectedly disconnects due to network instability or de-vice failure, its unfinished data temporarily stalls in the 
+
+PENDING state. Once AS detects the client’s disconnec-tion through the heartbeat timeout mechanism, it directly leverages the inverted user table to rapidly reverse-lookup and locate all unsubmitted tags handled by the disconnected client, safely resetting their states back to EMPTY . At this point, other clients holding the same data have already tem-porarily stored it in their local cold queues according to the initial scheduling. Therefore, AS only needs to issue takeover instructions in these clients’ subsequent heartbeat responses. Upon receiving these instructions, the clients ac-tivate the data in their cold queues and transfer it to the hot queues for supplementary training. This mechanism en-sures that a local client crash does not result in the loss of training data or a global rollback, providing the system with high fault tolerance. 
+
+## 5 Implementation 
+
+We implement a prototype of DwT-FL on Linux in Python and C++. Entity communication, heartbeat mechanisms, and model training are implemented in Python, whereas the performance-critical bidirectional index and concur-rent state-claim mechanism are implemented in C++. This design circumvents the synchronization overhead of the Python Global Interpreter Lock and guarantees the atomic semantics of state updates. For protected-tag generation, DwT-FL employs a blind OPRF over the Ristretto255 group 2.To eliminate the system overhead introduced by dynamic memory allocation under high-concurrency scenarios, the bidirectional index of AS (comprising the state table and the inverted user table) is implemented using a C++ pre-allocated memory pool. The state table employs an open-addressing hash structure. Specifically, the system first com-putes the FNV-1a hash of the tag to initially locate the state table entry, and performs a full comparison over the 512 hexadecimal characters of the tag during probing to han-dle hash collisions, ensuring the accuracy of duplicate de-tection. The local training module is built on the PyTorch framework, uses EleutherAI/pythia-14m as a lightweight causal language model for training, and enables TF32 and BF16/FP16 automatic mixed precision and the fused AdamW optimizer. To address potential network instability in real-world FL environments, global model parameters are persisted in the Safetensors format and transmitted between clients and AS using a chunking mechanism with SHA-256 integrity digests. This chunking mechanism supports file-offset-based resumable transmission and performs hash ver-ification after data reception completes, thereby preventing incomplete or corrupted model parameter files caused by network failures from being loaded into subsequent aggre-gation operations. When a client uploads its model update, AS queries the state table to verify the training rights and updates the cor-responding data states from PENDING to COMMITTED .Subsequently, AS executes the aggregation operation only when no data in the PENDING state exists in the state table. Crucially, unlike standard FL that uses a static total count of local records, AS performs the weighted FedAvg based on the actual number of trained samples. Through the state table, AS directly counts the number of COMMITTED 
+
+records for each client to establish aggregation weights. For the participant set S𝑡 in round 𝑡 , let 𝑚 𝑖 and 𝑤 (𝑡 ) 
+
+> 𝑖
+
+denote the number of actually trained samples (i.e., the data items in 
+
+> 2https://ristretto.group/
+
+the COMMITTED state) and the local parameters of the 
+
+𝑖 -th client, respectively. The global model is computed as: 
+
+𝑤 (𝑡 +1) =        
+
+> ∑𝑖 ∈S𝑡 𝑚 𝑖 𝑤 (𝑡 )
+> 𝑖 ∑𝑖 ∈S𝑡 𝑚 𝑖
+
+.
+
+## 6 Evaluation 
+
+In this section, we evaluate DwT-FL by comparing it with the state-of-the-art scheme proposed by Abadi et al. [1] (here-inafter abbreviated as NDSS’25). 
+
+6.1 Experimental Setup 
+
+We conduct our experiments on a single desktop worksta-tion equipped with an Intel ® Core ™ i9-14900K CPU (3.20 GHz, 24 cores, 32 threads), 96 GB of DDR5 memory (95.8 GB available), a 930 GB KIOXIA-EXCERIA PRO SSD, and dual NVIDIA RTX 3090 Ti GPUs. 
+
+Workloads. We use the Haiku dataset 3 as the corpus for FL model training. The dataset contains 15,281 cleaned and pro-cessed short text records, with an average length of approx-imately 68 characters per record. During the preprocessing phase, the system employs deterministic hash partitioning based on the stable record identifier 𝑖𝑑 and a random seed of 17 to allocate 14,532 records to the training set and 749 records to the held-out validation set (5%). Federated train-ing uses the training set. To evaluate the impact of the number of duplicate records across different clients on DwT-FL, we set a cross-client du-plicate ratio 𝑟 . For example, given 𝑟 = 0.3 and an allocation of 𝑛 = 1024 local records per client, the system allocates 
+
+1024 ×0.3 ≈ 307 cross-client duplicate records to each client. The system employs a pairwise duplicate allocation strategy to achieve this construction. Specifically, records selected as duplicates are allocated to exactly two clients, while non-duplicate records are allocated to a single client. 
+
+Baselines. We compare DwT-FL against the representa-tive baseline system NDSS’25. To ensure a fair compari-son, rather than evaluating the original open-source imple-mentation of NDSS’25, we re-implement their scheme using the same architecture and technology stack as our proto-type. Note that existing schemes [1, 50] have demonstrated through evaluations that deduplication can effectively miti-gate model memorization risks. Therefore, we do not addi-tionally evaluate metrics such as model perplexity. 
+
+6.2 Performance 
+
+For all subsequent experiments, we employ the lightweight causal language model EleutherAI/pythia-14m as the FL model. By default, we set the maximum number of backend request processing threads for AS to 4. Furthermore, we in-troduce a random online delay of 0 to 20 seconds for each client to simulate asynchronous client participation.             
+
+> 3https://drive.google.com/drive/folders/1SYycnXYaLr4iPeMGxGhtxX1Zs8P _UKLI DwT-FL NDSS'25 246810 Number of clients 30 40 50 End-to-end time (s) (a) End-to-end time 246810 Number of clients 0123Deduplication time (s) (b) Deduplication time
+
+Figure 4. (Exp#1) Performance of DwT-FL and NDSS’25 as the number of clients increases. 
+
+Exp#1 (Impact of the number of clients). To evaluate the scalability of DwT-FL, we set the number of clients to 2, 4, 6, 8, and 10. We allocate 1,024 local records to each client and set the cross-client duplicate ratio to 𝑟 = 0.3. Under this configuration, each client contains approximately 307 duplicate records shared pairwise with another client. We define the end-to-end time starts when the first client initiates a data deduplication request, and ends upon the completion of global model distribution. As shown in Fig. 4a, as the number of clients increases from 2 to 10, the total number of records held by the clients increases from 2,048 to 10,240, and the end-to-end completion times of both DwT-FL and NDSS’25 exhibit an approximately linear growth trend. Note that the total number of records here refers to the total number of records allocated to the clients, which in-cludes cross-client duplicate records, and is not equivalent to the number of globally unique records. The end-to-end time of DwT-FL is lower than that of NDSS’25, and this ad-vantage becomes more pronounced as the number of clients increases. This is because DwT-FL executes deduplication and training in parallel, and this parallel execution reduces the impact of asynchronous client participation. Furthermore, the tested deduplication phase encom-passes the interactive workflow from tag generation and 
+
+AS index updates to CAS-based concurrent training right preemption and local queue construction. The deduplica-tion time of NDSS’25 is measured from the moment all clients come online until all clients complete duplicate de-tection. It should be noted that to ensure a fair compari-son of deduplication time, we exclude the client wait time in NDSS’25. As shown in Fig. 4b, the deduplication time of DwT-FL is slightly higher than that of NDSS’25. This is be-cause DwT-FL needs to additionally execute index updates, concurrent training-right claiming, and the construction of local client queues, and these additional operations lead to a higher duplicate detection time. However, because the dedu-plication time accounts for an extremely low proportion of the end-to-end time, this overhead is acceptable. For exam-ple, under the 10-client configuration, the end-to-end time is 41.80 s, whereas the deduplication time is 2.95 s. 0.0 0.1 0.3 0.5 0.7 0.9 Duplicate ratio ( r)35 40 45 50 End-to-end time (s)  DwT-FL NDSS'25 
+
+Figure 5. (Exp#2) Impact of duplicate ratio 256 512 1024 1536 Local records per client 20 30 40 50 Time (s)  
+
+> DwT-FL NDSS'25
+
+Figure 6. (Exp#3) Impact of data scale 
+
+Exp#2 (Impact of duplicate ratio). To evaluate the impact of the cross-client duplicate ratio on DwT-FL, we set the du-plicate ratio 𝑟 to 0.0, 0.1, 0.3, 0.5, 0.7, and 0.9. Under a system scale of 10 clients, we allocate a fixed 1,024 local records to each client, resulting in a total of 10,240 records across all clients. As shown in Fig. 5, when the duplicate ratio 𝑟 
+
+increases from 0.0 to 0.9, the end-to-end time of DwT-FL fluctuates between 41.21 s and 42.34 s. Because DwT-FL exe-cutes deduplication and training in parallel, the end-to-end time is lower than NDSS’25. The end-to-end time of the sys-tem is primarily limited by the total number of input records. Because this total number of input records remains fixed at 10,240 under different values of 𝑟 in our setup, the time metrics do not change significantly as the duplicate ratio in-creases. It should be noted that the metadata overhead of DwT-FL does not change with the duplicate ratio, but only increases as the data number grows. 
+
+Exp#3 (Impact of data scale). To evaluate the impact of data scale on the performance of DwT-FL, we fix the sys-tem to include 10 clients, set the cross-client duplicate ratio to 𝑟 = 0.3, and set the number of local records allocated to each client to 256, 512, 1,024, and 1,536. Correspondingly, the total number of input records across all clients is 2,560, 5,120, 10,240, and 15,360, respectively. As shown in Fig. 6, as the data scale per client increases from 256 to 1,536 records, the end-to-end time of DwT-FL grows from 27.44 s to 35.35 s, and the end-to-end time of NDSS’25 grows from 32.39 s to 43.05 s. The end-to-end time of DwT-FL remains consis-tently lower than that of NDSS’25. This is because DwT-FL can execute local training in parallel during the wait time for other clients to come online. This approach overlaps the deduplication time and the training time, and consequently it reduces the overall end-to-end time. 
+
+Exp#4 (Performance of failure recovery). To evaluate the efficiency of the failure recovery in DwT-FL, we fix the system configuration at 10 clients, set the cross-client du-plicate ratio to 𝑟 = 0.3, and set the failure rates to 0.2, 0.4, 0.6, and 0.8. The failure rate represents the ratio of the num-ber of disconnected clients to the total number of clients. We randomly force clients to disconnect to simulate unexpected client disconnects in real-world FL. We evaluate the failure recovery time of DwT-FL and NDSS’25. The failure recov-ery time starts when the first client disconnects, and ends DwT-FL NDSS'25 0.2 0.4 0.6 0.8 Failure rate 0.0 2.5 5.0 7.5 Recovery time (s) (a) Deduplication phase 0.2 0.4 0.6 0.8 Failure rate 0.0 2.5 5.0 7.5 Recovery time (s) (b) Training phase 
+
+Figure 7. (Exp#4) Failure recovery. DwT-FL NDSS'25 1 3 5 7Number of new clients 0510 15 Deduplication stabilization time (s)       
+
+> (a) Deduplication phase 1357Number of new clients 0510 15 Training stabilization time (s) (b) Training phase
+
+Figure 8. (Exp#5) Dynamic client joining. when other clients complete the takeover of the duplicate data from the disconnected clients. It should be noted that we do not use the end-to-end time as the evaluation metric. This is because the end-to-end time includes the time for lo-cal model training, model update uploads, and global model aggregation. The time consumed by these processes affects the actual performance differences in failure recovery be-tween different schemes, and therefore it cannot accurately reflect the efficiency of the failure recovery mechanism in DwT-FL. As shown in Fig. 7a, the failure recovery time of DwT-FL in the deduplication phase is consistently 0. This is because client disconnects during the deduplication phase do not af-fect the execution of DwT-FL. In contrast, NDSS’25 incurs a higher failure recovery time. As shown in Fig. 7b, during the training phase, the failure recovery time of DwT-FL is sig-nificantly lower than that of NDSS’25, reducing the failure recovery time by up to 93 .04% . This is because DwT-FL can execute failure recovery in parallel during training, and does not need to re-execute the duplicate detection protocol. Fur-thermore, when the failure rate is 0.8, the failure recovery time decreases for both DwT-FL and NDSS’25. This occurs because only 2 clients remain online, which significantly reduces the amount of recoverable data. Consequently, the number of data requiring training right reallocation drops substantially, leading to a shorter failure recovery time. 
+
+Exp#5 (Performance of dynamic client joining). To evaluate the efficiency of DwT-FL under dynamic client join-ing, we fix the initial system configuration at 10 clients, set 1 2 4 8 16 Number of threads 0250 500 750 1000 Throughput (Mops/s)  CAS Global Mutex 
+
+Figure 9. (Exp#6) Ablation study. the cross-client duplicate ratio to 𝑟 = 0.3, and set the num-ber of newly joining clients to 1, 3, 5, and 7. We allow clients to join randomly to simulate client joining scenarios in real-world FL. Specifically, we generate a random wait time for each new client, and the client joins the FL process after waiting for this duration. We separately evaluate client join-ing during the deduplication phase and the training phase. For client joining in the deduplication phase, we evaluate the deduplication stabilization time. The deduplication sta-bilization time starts when the first client joins, and ends when all clients complete duplicate detection. For client join-ing in the training phase, we evaluate the training stabiliza-tion time. The training stabilization time starts when the first client joins, and ends when all clients begin training. For NDSS’25, we adopt a straightforward method to support client joining. Specifically, when a new client joins, it sepa-rately executes duplicate detection with the existing clients, and then it proceeds to the training phase. As shown in Fig. 8a, under the scenario of client joining in the deduplication phase, the deduplication stabilization time of DwT-FL is significantly lower than that of NDSS’25, and it reduces the deduplication stabilization time by up to 94 .18% . This is because newly joined clients in DwT-FL only need to perform incremental comparisons with the tags stored on the AS to quickly complete deduplication, whereas NDSS’25 needs to re-execute the global deduplica-tion protocol or perform complex global state synchroniza-tion. Similarly, as shown in Fig. 8b, the training stabilization time of DwT-FL is significantly better than that of NDSS’25, and it achieves a maximum time reduction of 78 .87% . This is because new clients in DwT-FL can directly execute du-plicate detection with the tags stored in the AS , and they do not affect the training of existing clients. Furthermore, it can be observed that as the number of newly joined clients increases, the time consumption for both schemes increases. However, the time growth curve of DwT-FL is flatter, and its time reduction ratio compared to NDSS’25 consistently re-mains above 54%. This demonstrates the efficiency of DwT-FL under dynamic client joining. 
+
+Exp#6 (Ablation study on DwT-FL). To evaluate the ef-fectiveness of the proposed components, namely CAS-based training-right claiming and failure recovery based on bidi-rectional index, we design ablation studies. Specifically, we Metadata communication overhead Model communication overhead Metadata storage overhead 2 4 6 8 10 Number of clients 020 40 60 Metadata overhead (MB) 
+
+> 0200 400 600 800 Communication overhead (MB)
+
+(a) Number of clients 0.0 0.1 0.3 0.5 0.7 0.9 Duplicate ratio ( r)050 100 150 Metadata overhead (MB)  
+
+> 0200 400 600 800 Communication overhead (MB)
+
+(b) Duplicate ratio 
+
+Figure 10. (Exp#7) Metadata overhead. replace CAS with a global Mutex in the training-right claim-ing, replace the bidirectional index with a full table scan in the failure recovery, and disable the history-based allocation mechanism. For CAS-based training-right claiming, we configure 10 concurrent threads to compete simultaneously for the train-ing rights of 1,024 data records, and ultimately only one thread successfully obtains the training right for each record. When the system adopts CAS, the average time to complete this process is 0.121 ms, and the throughput is 85.27 Mops/s (million operations per second). When the sys-tem adopts a global Mutex, the average time is 0.408 ms, and the throughput is 25.09 Mops/s. Consequently, CAS reduces the processing time by 70.58% and increases the throughput by 3.40 times. Furthermore, to evaluate the scalability under different thread counts, we set the number of concurrent threads to 1, 2, 4, 8, and 16. In this setup, each thread exe-cutes 50,000 state transitions from EMPTY to PENDING 
+
+on the data. As shown in Fig. 9,the throughput of CAS rises from 214.36 Mops/s to 769.91 Mops/s, whereas the through-put of the global Mutex decreases from 98.62 Mops/s to 23.75 Mops/s. Under the 16-thread configuration, the throughput of CAS reaches 32.41 times that of the Mutex. These results demonstrate that CAS effectively improves the system per-formance. To evaluate the failure recovery based on bidirectional in-dex, we conduct the experiment under a configuration of 10 clients, 1,024 records per client, and a duplicate ratio of 
+
+𝑟 = 0.3. We force one client to disconnect and release its 307 duplicate data. When the system adopts the bidirectional in-dex, the time to locate and release the relevant data training rights is 1.992 ms, whereas a full table scan requires 12.964 ms. We also evaluate the failure recovery time. This metric spans from the moment the system detects the disconnected client to the moment other clients complete the takeover of all duplicate data from that client. Within this process, AS 
+
+needs to locate the tags corresponding to the data trained by the disconnected client and set their states to EMPTY .The failure recovery times for the bidirectional index and the full table scan are 75.092 ms and 85.951 ms, respectively. 
+
+Exp#7 (Metadata overhead). Regarding communication and storage overhead, cross-client deduplication introduces certain metadata overhead. This overhead includes two cat-egories: 1) communication metadata generated during net-work transmission (e.g., duplicate detection tags and heart-beat control packets); 2) storage metadata required for state maintenance (e.g., the bidirectional index on AS and the lo-cally persisted mapping tables on clients). We separately evaluate how the metadata overhead varies with the number of clients (which also reflects its variation with the data scale) and the duplicate ratio. As shown in Fig. 10a, when the number of clients increases from 2 to 10, the metadata communication overhead of DwT-FL rises from 5.818 MB to 38.593 MB. Correspondingly, the model param-eter transmission volume in a single FL round scales from 143.192 MB to 715.971 MB. Consequently, the ratio of the metadata communication overhead to the model transmis-sion load remains extremely low, and it only experiences a marginal increase from 4.06% to 5.39%. This proportion will further decrease as the model size increases. This demon-strates that the duplicate detection step of DwT-FL will not become a communication bottleneck for FL. In terms of stor-age, when the system scales to 10 clients, the metadata stor-age overhead reaches 17.989 MB, and the raw model param-eter payload for a single round is 562.878 MB. The metadata storage overhead accounts for only 3.20% of this raw model payload. Furthermore, the metadata storage overhead ex-hibits a linear growth trend with the increase in the number of clients. When the system expands from 2 to 10 clients, the metadata storage overhead increases from 3.604 MB to 17.989 MB. These results prove that DwT-FL imposes no sig-nificant communication or storage overhead on AS and the clients, thereby exhibiting favorable scalability. As shown in Fig. 10b, the metadata overhead does not change with the duplicate ratio. This is because regardless of whether the data is duplicated, clients need to execute du-plicate detection for every local record. Consequently, the metadata communication overhead depends on the total in-put number (10,240 records) rather than the deduplicated data number. Meanwhile, the metadata storage overhead is related to the local mappings on clients and the size of the 
+
+AS index. Since clients do not delete duplicate data, the number of local mappings on clients is not affected by the duplicate ratio. Additionally, the size of the AS index is af-fected by the pre-allocated storage capacity of the index (a strategy we designed in our implementation), and the data scale affects this pre-allocated storage capacity. The dupli-cate ratio does not affect the data scale. Therefore, the size of the AS index remains unchanged. 7 Conclusion 
+
+This paper proposes a novel DwT paradigm to address the high fault-tolerance costs and the lack of support for dy-namic client joining in prior privacy-preserving deduplica-tion schemes in FL. DwT transforms cross-client dedupli-cation in FL from a one-time, globally synchronous prepro-cessing operation into a continuous online service with state management, concurrent claiming, and failure recovery. To support this paradigm, we design the DwT-FL scheme. DwT-FL enables the parallel execution of privacy-preserving cross-client data deduplication and client-local training through a CAS-based concurrent state claim mechanism and a hot-cold dual-queue scheduling strategy. Experimental evalua-tions demonstrate that DwT-FL significantly reduces the over-head of failure recovery and dynamic client joining. 
+
+## References 
+
+[1] Aydin Abadi, Vishnu Asutosh Dasu, and Sumanta Sarkar. 2025. Privacy-Preserving Data Deduplication for Enhancing Federated Learning of Language Models. In 32nd Annual Network and Dis-tributed System Security Symposium, NDSS 2025, San Diego, California, USA, February 24-28, 2025 . The Internet Society. [2] Aydin Abadi, Changyu Dong, Steven J. Murdoch, and Sotirios Terzis. 2022. Multi-party Updatable Delegated Private Set Intersection. In 
+
+Financial Cryptography and Data Security - 26th International Confer-ence, FC 2022, Grenada, May 2-6, 2022, Revised Selected Papers (Lec-ture Notes in Computer Science) , Ittay Eyal and Juan A. Garay (Eds.), Vol. 13411. Springer, 100–119. [3] Aydin Abadi and Steven J. Murdoch. 2023. Earn While You Reveal: Pri-vate Set Intersection that Rewards Participants. CoRR abs/2301.03889 (2023). [4] Amro Abbas, Kushal Tirumala, Daniel Simig, Surya Ganguli, and Ari S. Morcos. 2023. SemDeDup: Data-efficient learning at web-scale through semantic deduplication. CoRR abs/2303.09540 (2023). [5] Rodolfo Stoffel Antunes, Cristiano André da Costa, Arne Küderle, Im-rana Abdullahi Yari, and Björn M. Eskofier. 2022. Federated Learning for Healthcare: Systematic Review and Architecture Proposal. ACM Trans. Intell. Syst. Technol. 13, 4 (2022), 54:1–54:23. [6] Mislav Balunovic, Dimitar I. Dimitrov, Nikola Jovanovic, and Martin T. Vechev. 2022. LAMP: Extracting Text from Gradients with Language Model Priors. In Advances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 .[7] James Henry Bell, Kallista A. Bonawitz, Adrià Gascón, Tancrède Lep-oint, and Mariana Raykova. 2020. Secure Single-Server Aggregation with (Poly)Logarithmic Overhead. In CCS ’20: 2020 ACM SIGSAC Con-ference on Computer and Communications Security, Virtual Event, USA, November 9-13, 2020 . ACM, 1253–1269. [8] Emily M. Bender, Timnit Gebru, Angelina McMillan-Major, and Shmargaret Shmitchell. 2021. On the Dangers of Stochastic Parrots: Can Language Models Be Too Big?. In FAccT ’21: 2021 ACM Conference on Fairness, Accountability, and Transparency, Virtual Event / Toronto, Canada, March 3-10, 2021 . ACM, 610–623. [9] Kallista A. Bonawitz, Vladimir Ivanov, Ben Kreuter, Antonio Marce-done, H. Brendan McMahan, Sarvar Patel, Daniel Ramage, Aaron Se-gal, and Karn Seth. 2017. Practical Secure Aggregation for Privacy-Preserving Machine Learning. In Proceedings of the 2017 ACM SIGSAC Conference on Computer and Communications Security, CCS 2017, Dal-las, TX, USA, October 30 - November 03, 2017 . ACM, 1175–1191. [10] Jonathan Burns, Daniel Moore, Katrina Ray, Ryan Speers, and Brian Vohaska. 2017. EC-OPRF: Oblivious Pseudorandom Functions using Elliptic Curves. IACR Cryptol. ePrint Arch. 2017 (2017), 111. [11] Nicholas Carlini, Daphne Ippolito, Matthew Jagielski, Katherine Lee, Florian Tramèr, and Chiyuan Zhang. 2023. Quantifying Memorization Across Neural Language Models. In The Eleventh International Confer-ence on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net. [12] Nicholas Carlini, Florian Tramèr, Eric Wallace, Matthew Jagielski, Ariel Herbert-Voss, Katherine Lee, Adam Roberts, Tom B. Brown, Dawn Song, Úlfar Erlingsson, Alina Oprea, and Colin Raffel. 2021. Extracting Training Data from Large Language Models. In 30th USENIX Security Symposium, USENIX Security 2021, August 11-13, 2021 .USENIX Association, 2633–2650. [13] Zheyi Chen, Longxiang Xue, Luying Zhong, and Geyong Min. 2025. FedGPA: Federated Learning with Global-Personalized Collaboration for Edge Anomaly Detection. In IEEE INFOCOM 2025 - IEEE Confer-ence on Computer Communications, London, United Kingdom, May 19-22, 2025 . IEEE, 1–10. [14] Kewei Cheng, Tao Fan, Yilun Jin, Yang Liu, Tianjian Chen, Dimitrios Papadopoulos, and Qiang Yang. 2021. SecureBoost: A Lossless Feder-ated Learning Framework. IEEE Intell. Syst. 36, 6 (2021), 87–98. [15] Vishnu Asutosh Dasu, Sumanta Sarkar, and Kalikinkar Mandal. 2022. PROV-FL: Privacy-preserving Round Optimal Verifiable Federated Learning. In Proceedings of the 15th ACM Workshop on Artificial In-telligence and Security, AISec 2022, Los Angeles, CA, USA, 11 November 2022 . ACM, 33–44. [16] DeepSeek-AI. 2024. DeepSeek-V3 Technical Report. CoRR 
+
+abs/2412.19437 (2024). https://doi.org/10.48550/ARXIV.2412.19437 
+
+[17] Guilin Deng, Silong Chen, Yuchuan Luo, Yi Liu, Songlei Wang, Zhip-ing Cai, Lin Liu, Xiaohua Jia, and Shaojing Fu. 2026. Toward Effi-cient Membership Inference Attacks Against Federated Large Lan-guage Models: A Projection Residual Approach. In IEEE Symposium on Security and Privacy, SP 2026, San Francisco, CA, USA, May 18-21, 2026 . IEEE, 2366–2384. [18] Liam H. Fowl, Jonas Geiping, Steven Reich, Yuxin Wen, Wojciech Czaja, Micah Goldblum, and Tom Goldstein. 2023. Decepticons: Cor-rupted Transformers Breach Privacy in Federated Learning for Lan-guage Models. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenRe-view.net. [19] Michael J. Freedman, Kobbi Nissim, and Benny Pinkas. 2004. Effi-cient Private Matching and Set Intersection. In Advances in Cryptol-ogy - EUROCRYPT 2004, International Conference on the Theory and Applications of Cryptographic Techniques, Interlaken, Switzerland, May 2-6, 2004, Proceedings (Lecture Notes in Computer Science) , Christian Cachin and Jan Camenisch (Eds.), Vol. 3027. Springer, 1–19. [20] Maolin Gan, Lanpeng Li, Samiul Alam, Li Liu, Luyang Liu, Mi Zhang, and Zhichao Cao. 2025. GeoFL: A Framework for Efficient Geo-Distributed Cross-Device Federated Learning. In IEEE INFOCOM 2025 - IEEE Conference on Computer Communications, London, United King-dom, May 19-22, 2025 . IEEE, 1–10. [21] Guanxiong Ha, Xiaowei Ge, Chunfu Jia, Zhen Su, and Rongxi Wang. 2026. PopDedup: Defending Against Malicious Cloud Behavior in Popularity-Based Encrypted Deduplication. IEEE Trans. Comput. 
+
+(2026), 1–14. https://doi.org/10.1109/TC.2026.3733078 
+
+[22] Guanxiong Ha, Chunfu Jia, Yixuan Huang, Hang Chen, Ruiqi Li, and Qiaowen Jia. 2024. Scalable and Popularity-Based Secure Deduplica-tion Schemes With Fully Random Tags. IEEE Trans. Dependable Secur. Comput. 21, 3 (2024), 1484–1500. [23] Michael Hanna, Ollie Liu, and Alexandre Variengien. 2023. How does GPT-2 compute greater-than?: Interpreting mathematical abilities in a pre-trained language model. In Advances in Neural Information Pro-cessing Systems 36: Annual Conference on Neural Information Process-ing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 -16, 2023 .[24] Andrew Hard, Kanishka Rao, Rajiv Mathews, Françoise Beaufays, Sean Augenstein, Hubert Eichner, Chloé Kiddon, and Daniel Ram-age. 2018. Federated Learning for Mobile Keyboard Prediction. CoRR 
+
+abs/1811.03604 (2018). [25] JiChu Jiang, Burak Kantarci, Sema F. Oktug, and Tolga Soyata. 2020. Federated Learning in Smart City Sensing: Challenges and Opportu-nities. Sensors 20, 21 (2020), 6230. [26] Tao Jiang, Xu Yuan, Yuan Chen, Ke Cheng, Liangmin Wang, Xiaofeng Chen, and Jianfeng Ma. 2023. FuzzyDedup: Secure Fuzzy Deduplica-tion for Cloud Storage. IEEE Trans. Dependable Secur. Comput. 20, 3 (2023), 2466–2483. [27] Sriram Keelveedhi, Mihir Bellare, and Thomas Ristenpart. 2013. Dup-LESS: Server-Aided Encryption for Deduplicated Storage. In Proceed-ings of the 22th USENIX Security Symposium, Washington, DC, USA, August 14-16, 2013 , Samuel T. King (Ed.). USENIX Association, 179– 194. [28] H. T. Kung and John T. Robinson. 1981. On Optimistic Methods for Concurrency Control. ACM Trans. Database Syst. 6, 2 (1981), 213–226. [29] Russell W. F. Lai, Christoph Egger, Manuel Reinert, Sherman S. M. Chow, Matteo Maffei, and Dominique Schröder. 2018. Simple Password-Hardened Encryption Services. In 27th USENIX Security Symposium, USENIX Security 2018, Baltimore, MD, USA, August 15-17, 2018 . USENIX Association, 1405–1421. [30] Russell W. F. Lai, Christoph Egger, Dominique Schröder, and Sherman S. M. Chow. 2017. Phoenix: Rebirth of a Cryptographic Password-Hardening Service. In 26th USENIX Security Symposium, USENIX Se-curity 2017, Vancouver, BC, Canada, August 16-18, 2017 . USENIX Asso-ciation, 899–916. [31] Katherine Lee, Daphne Ippolito, Andrew Nystrom, Chiyuan Zhang, Douglas Eck, Chris Callison-Burch, and Nicholas Carlini. 2022. Dedu-plicating Training Data Makes Language Models Better. In Proceed-ings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2022, Dublin, Ireland, May 22-27, 2022 . Association for Computational Linguistics, 8424–8445. [32] Justus Mattern, Fatemehsadat Mireshghallah, Zhijing Jin, Bernhard Schölkopf, Mrinmaya Sachan, and Taylor Berg-Kirkpatrick. 2023. Membership Inference Attacks against Language Models via Neigh-bourhood Comparison. In Findings of the Association for Computa-tional Linguistics: ACL 2023, Toronto, Canada, July 9-14, 2023 (Findings of ACL) , Vol. ACL 2023. Association for Computational Linguistics, 11330–11343. [33] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Agüera y Arcas. 2017. Communication-Efficient Learning of Deep Networks from Decentralized Data. In Proceedings of the 20th International Conference on Artificial Intelligence and Statistics, AIS-TATS 2017, 20-22 April 2017, Fort Lauderdale, FL, USA (Proceedings of Machine Learning Research) , Vol. 54. PMLR, 1273–1282. [34] H. Brendan McMahan, Eider Moore, Daniel Ramage, and Blaise Agüera y Arcas. 2016. Federated Learning of Deep Net-works using Model Averaging. CoRR abs/1602.05629 (2016). [35] Milad Nasr, Javier Rando, Nicholas Carlini, Jonathan Hayase, Matthew Jagielski, A. Feder Cooper, Daphne Ippolito, Christopher A. Choquette-Choo, Florian Tramèr, and Katherine Lee. 2025. Scalable Extraction of Training Data from Aligned, Production Language Mod-els. In The Thirteenth International Conference on Learning Represen-tations, ICLR 2025, Singapore, April 24-28, 2025 . OpenReview.net. [36] OpenAI. 2023. GPT-4 Technical Report. CoRR abs/2303.08774 (2023). 
+
+https://doi.org/10.48550/ARXIV.2303.08774 
+
+[37] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll L. Wain-wright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, John Schulman, Jacob Hilton, Fraser Kelton, Luke Miller, Maddie Simens, Amanda Askell, Peter Welinder, Paul F. Chris-tiano, Jan Leike, and Ryan Lowe. 2022. Training language models to follow instructions with human feedback. In Advances in Neural Information Processing Systems 35: Annual Conference on Neural Infor-mation Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 .[38] David A. Patterson, Joseph Gonzalez, Quoc V. Le, Chen Liang, Lluis-Miquel Munguia, Daniel Rothchild, David R. So, Maud Texier, and Jeff Dean. 2021. Carbon Emissions and Large Neural Network Training. 
+
+CoRR abs/2104.10350 (2021). [39] Md. Rafi Ur Rashid, Vishnu Asutosh Dasu, Kang Gu, Najrin Sultana, and Shagufta Mehnaz. 2023. FLTrojan: Privacy Leakage Attacks against Federated Language Models Through Selective Weight Tam-pering. CoRR abs/2310.16152 (2023). [40] Abhinav Sharma and Vikas Srivastava. 2026. Pivot: Proactive and Ver-ifiable Threshold Oblivious Pseudorandom Functions From Isogeny Group Actions. CoRR abs/2608.01390 (2026). [41] Shanghao Shi, Ning Wang, Yang Xiao, Chaoyu Zhang, Yi Shi, Y. Thomas Hou, and Wenjing Lou. 2025. Scale-MIA: A Scalable Model Inversion Attack against Secure Federated Learning via Latent Space Reconstruction. In 32nd Annual Network and Distributed System Se-curity Symposium, NDSS 2025, San Diego, California, USA, February 24-28, 2025 . The Internet Society. [42] Mingyang Song, Zhongyun Hua, Yifeng Zheng, Tao Xiang, and Xiao-hua Jia. 2024. SimLESS: A Secure Deduplication System Over Similar Data in Cloud Media Sharing. IEEE Trans. Inf. Forensics Secur. 19 (2024), 4700–4715. [43] Emma Strubell, Ananya Ganesh, and Andrew McCallum. 2019. En-ergy and Policy Considerations for Deep Learning in NLP. In Proceed-ings of the 57th Conference of the Association for Computational Lin-guistics, ACL 2019, Florence, Italy, July 28- August 2, 2019, Volume 1: Long Papers . Association for Computational Linguistics, 3645–3650. [44] Anshuman Suri, Pallika Kanani, Virendra J. Marathe, and Daniel W. Peterson. 2022. Subject Membership Inference Attacks in Federated Learning. CoRR abs/2206.03317 (2022). [45] Kushal Tirumala, Daniel Simig, Armen Aghajanyan, and Ari Morcos. 2023. D4: Improving LLM Pretraining via Document De-Duplication and Diversification. In Advances in Neural Information Processing Sys-tems 36: Annual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .[46] Vale Tolpegin, Stacey Truex, Mehmet Emre Gursoy, and Ling Liu. 2020. Data Poisoning Attacks Against Federated Learning Systems. In Computer Security - ESORICS 2020 - 25th European Symposium on Research in Computer Security, ESORICS 2020, Guildford, UK, Septem-ber 14-18, 2020, Proceedings, Part I (Lecture Notes in Computer Science) ,Vol. 12308. Springer, 480–501. [47] Hugo Touvron, Louis Martin, Kevin Stone, and et al. 2023. Llama 2: Open Foundation and Fine-Tuned Chat Models. CoRR abs/2307.09288 (2023). [48] Juncheng Wang, Yituo Liu, Ben Liang, and Min Dong. 2025. Con-strained Over-the-Air Model Updating for Wireless Online Federated Learning with Delayed Information. In IEEE INFOCOM 2025 - IEEE Conference on Computer Communications, London, United Kingdom, May 19-22, 2025 . IEEE, 1–10. [49] Qi Xia, Winson Ye, Zeyi Tao, Jindi Wu, and Qun Li. 2021. A survey of federated learning for edge computing: Research problems and solu-tions. High Confid. Comput. 1, 1 (2021), 100008. [50] Pukang Ye, Junwei Luo, Jiachen Shen, Saipan Zhou, Shangmin Dou, Zhenfu Cao, Hanzhe Yao, Xiaolei Dong, and Yunbo Yang. 2025. Fe-dRW: Efficient Privacy-Preserving Data Reweighting for Enhancing Federated Learning of Language Models. In Advances in Neural Infor-mation Processing Systems 38: Annual Conference on Neural Informa-tion Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, Decem-ber 2-7, 2025 / Mexico City, Mexico, November 30 - December 5, 2025 .
