@@ -1,0 +1,647 @@
+Title: Finite-Sample Probabilistic Safety Certification for AI-Based Grid-Edge Coordination
+
+URL Source: https://arxiv.org/pdf/2609.28182v1
+
+Published Time: Thu, 24 Sep 2026 01:18:21 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 1
+
+# Finite-Sample Probabilistic Safety Certification for AI-Based Grid-Edge Coordination 
+
+Yihong Zhou, Member, IEEE , Hanbin Yang, and Thomas Morstyn, Senior Member, IEEE 
+
+Abstract —Coordinating large population of flexible grid-edge devices can alleviate the need for time-consuming and capital-intensive network upgrades, and AI-based control methods such as multi-agent reinforcement learning or imitation learning are promising in their real-time decision scalability. However, system operators still need an independent and rigorous way to decide whether a given AI system is safe enough for deployment. This paper develops a finite-sample probabilistic safety certification framework for black-box AI decision models in closed-loop grid operation. The central idea is to reduce the complete input–AI– grid evaluator workflow to a binary unsafe outcome under an operator-defined safety specification, and then use exact binomial inference to certify the corresponding unsafe operation probability. Given a set of held-out calibration scenarios, the framework returns the tightest one-sided upper certificate and an accept/reject deployment criterion that controls the probability of false safety certification. Because the certification is for the calibration distribution that may deviate from the future operation, we further combine the nominal certificate with physically interpretable sample-space adversarial attacks, a concept widely used in AI to investigate the fragility of AI models. Case studies on grid-edge flexibility coordination with 1,000-agent AI models (independent parameters) verify the finite-sample safety guarantee and the value of integrating adversarial attacks into a rolling-window training-certification-deployment flow. 
+
+Index Terms —AI safety, grid-edge flexibility, Clopper–Pearson interval, finite-sample certification, adversarial attacks. 
+
+I. I NTRODUCTION 
+
+# POWER grids are facing increasing stress from variable renewable generation and millions of electrified grid-edge devices such as electric vehicles, heat pumps, and distributed batteries. Smart coordination strategies that exploit this flexibility can defer capital-intensive network upgrades, with a global value estimated at USD $270 billion by 2040 [1]. Such coordination problems motivate AI-based solutions because of their high complexity and scale. Existing studies have demonstrated the performance of AI-based control such as multi-agent reinforcement learning and imitation learning [2], [3]. Recent work has also pushed the scale to 1,000 independent AI agents coupled through non-convex AC distribution network constraints [4]. These works show a promising picture that millions of flexible devices could be coordinated by AI-based control systems, helping to unlock substantial value in terms of lower operating cost, increased reliability and lower pollution. The main challenge is that the black-box nature and limited explainability of AI systems can prevent system operators from deploying such models with confidence [5], [6]. Existing studies that address this issue can be broadly categorised into safe learning and formal verification. Safe learning investigates 
+
+Department of Engineering Science, University of Oxford, U.K. Corresponding author: Yihong Zhou (e-mail: yihong.zhou@eng.ox.ac.uk). 
+
+approaches to improve safety of an AI system by modifying the learning or decision process, where a popular sub-category is safe reinforcement learning (RL) [6]. This includes primal-dual learning that continuously increases the violation penalty [7], embedding risk-averse metrics as learning signals [7], integrating Lyapunov functions into the model structure [8], or safety layer [9] and shielding [10] that fixes or prevent unsafe actions. Although safe learning can improve AI behavior during training and action selection, an operator facing a deployment request still needs an independent way to verify whether the AI-enabled power grid operation system is safe. This verification step is often the final check before deployment, and is the core difference between formal verification (our main focus) and safe learning. Broadly speaking, verification aims to check the correctness of a system against a system specification expressed in mathematical logic, and AI verification is a subset of this broader area [11]. The strictest methods in this category aim to verify the system as a whole by exhaustively checking all possible system behaviors, and automated verification tools have been developed, such as model checking [12] or automatic theorem proving [13]. Recent work has also developed a toolbox [14] to formally verify neural networks in Lean [15], a programming language and proof assistant based on type theory. These methods are theoretically sound and rigorous but the computational complexity limits their applications on large-scale problems. In power systems, rigorous verification approaches verify the safe input region or the output range of a neural network, such as through mixed-integer optimisation formulations, which have been applied to verify neural-network classifiers for N − 1 security, small-signal stability, and OPF surrogate [16], [17]. Scalability continues to improve through bound propagation with approximations and GPU-accelerated tools, including alpha-beta-CROWN and power system-specific verification methods [18]–[20]. State-of-the-art GPU-accelerated methods can scale to neural networks with millions of parameters; in power system applications, the state-of-the-art alpha-beta-CROWN has been demonstrated up to ML4ACOPF benchmarks with roughly 680k parameters and 402-dimensional inputs [21], and on grid-scale studies up to 300-bus DC-OPF and 500-bus transient-stability cases [19], [22]. However, considering millions of flexible grid-edge devices, each with its own AI model and complex power system coupling, scalability remains a challenge. For power systems to benefit from AI-based coordination 
+
+safely , one computationally scalable approach for the near to medium term may be statistical verification , which is a “relaxed” formal verification technique that allows checking a fraction of system behaviours [11]. It samples executions, arXiv:2609.28182v1 [cs.AI] 23 Sep 2026 SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 2
+
+evaluates whether each execution satisfies a prescribed property, and uses confidence intervals or hypothesis tests to make finite-sample statements about the satisfaction probability [23]. This process implies that the computational complexity can remain roughly the same order as model inference. Such a finite-sample guarantee provides evidence even when the available data are scarce, thereby making a stronger statement than a simple but commonly used evaluation on a held-out validation set, for which a guarantee can only be achieved asymptotically as the amount of data approaches infinity. Therefore, this paper focuses on a statistical verification-based approach. Note that this concept is also related to scenario-based chance-constrained optimisation with probabilistic satisfaction guarantees [24], but the objective here is chance-constraint evaluation rather than optimisation. Statistical verification in power system applications is limited. In [25], statistical verification is applied to power system optimisation methods but not AI approaches. Another work, [26], applies a statistical model checking method to evaluate an RL-based power system controller, but the tightness of the probabilistic guarantee was not discussed and the case study remains preliminary. Conformal prediction is a popular statistical verification method [11], and has been applied to power system optimisation [27] and power system AI [28], but it aims to verify the output range given an (random) input, which is useful as an extra robust or trustworthiness layer of an AI model [29]. In contrast, our focus is on verifying the safety probability of the AI system itself, which could be a more direct certification. It should be noted that the first stage of AI verification for power system applications will generally be performed on simulators, because it is unlikely that an unverified AI system can be tested on the real grid. In this sense, even the strongest formal AI verification does not provide a 100% rigorous safety guarantee against simulator mismatch. In addition to the lack of systematic approach of statistical verification of power system AI, the other major gap is around the standard statistical verification itself. In standard statistical verification, the finite-sample guarantee is established w.r.t. the distribution of a held-out calibration dataset used to perform the verification, which can differ from the actual grid conditions due to various sources of distribution shifts including the change of operating conditions, the inaccuracy of the grid simulator, or the impact of the implemented decision itself. Existing work has investigated distributionally robust certification that holds for a set of plausible distributions [30], but the distributional distance that controls the range of plausible distributions is often difficult to physically interpret. This paper addresses the two major gaps in power system AI safety with the following contributions:  
+
+> •
+
+We propose a systematic finite-sample probabilistic safety certification framework for power grid AI. With a held-out calibration dataset of any size, the method generates the 
+
+tightest upper confidence bound on the unsafe operation probability for any safety specification at a user-specified confidence level. Its dominant computational cost is of the same order as ordinary closed-loop inference on the calibration set.  
+
+> •
+
+To address distribution shifts while remaining physically interpretable, We develop a worst-case probability certifica-tion approach motivated by the adversarial attack concepts in AI [31]. Under a perturbation budget at the sample space (e.g., demand or generation scenarios) instead of the distribution space, the proposed approach approximates the worst-case unsafe operation probability.  
+
+> •
+
+We demonstrate the framework on an IEEE 123-bus grid-edge flexibility case study with 1,000-agent AI decision models, each with different parameters, and include a realistic rolling-window safety certification study that verifies the effectiveness of the proposed framework. The remainder of this paper is organized as follows. Sec-tion II defines the closed-loop certification problem. Section III gives the finite-sample certificate and deployment criterion. Section IV integrates the adversarial attack into the certification to enhance safety with an additional robustness layer. Section V presents the case studies. Section VI discusses interpretation and limitations, and Section VII concludes the paper. II. S AFETY CERTIFICATION PROBLEM 
+
+Most AI systems used in grid operation can be abstracted as an input–AI–output process. When a grid operator assesses system safety, a natural question is: given a set of input scenarios that the grid may encounter, what outputs will the AI system generate, and are these outputs safe for the grid? The operator may already have scenarios that are considered representative of actual operating conditions, as scenario-based testing is common in grid operation. However, the key challenge is how such a dataset can be used to derive a rigorous statistical guarantee, which is not fully addressed by current grid-operator testing. The above process is intentionally general. There is no restriction on how the AI system uses the inputs: it may use them in a one-shot generation style, a sequential recursive manner, or another workflow. The input scenario can also be general. It may be a single operating point, a system initial state, or a tuple containing the system initial state and multivariate time series, such as locational demand, renewable generation, temperature, device availability, and contingency events. The length of each input scenario depends on the operator’s certification objective. The AI system can also be arbitrary, e.g., different neural network structures or decision rules trained by RL, imitation learning, self-supervised learning, or other AI methods. 
+
+A. Mathematical Formulation 
+
+The above process can be modelled mathematically. Let W
+
+denote a random operating input scenario sampled from the unknown operating distribution P0 of interest. Let π denote the AI system, which maps the observed system condition in 
+
+W to outputs, such as a control sequence. We assume that the system operator has a simulator to determine whether the AI outputs are safe for a pre-set safety threshold ν, through 
+
+Lν (π, W ) := 1(M (π, W ) ≥ ν), (1) SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 3
+
+with Lν (π, W ) ∈ { 0, 1} the binary safe/unsafe outcome (1 represents unsafe and 0 otherwise), and M (π, W ) ∈ R a real-valued safety score with an operator-defined threshold ν. This is a practical assumption, as the power industry already uses a suite of analysis tools for power system safety across different time scales, from electromagnetic transients to quasi-steady-state power flow and from normal conditions to contingencies and faults. The safety score M (π, W ) can be the line current, nodal voltage, frequency nadir, short-circuit current magnitude, etc., and can be the maximum of multiple metrics if desired. The calculation of M (π, W ) and thus Lν (π, W ) should be performed on simulators, as testing an unverified AI system on the real grid is unlikely to be acceptable. Simulators inevitably introduce an unknown sim-to-real gap, which can be viewed as epistemic uncertainty and investigated through the proposed adversarial attack in Section IV. With this in mind, let H denote the simulator that evaluates grid safety, so the workflow can be expressed as: 
+
+W π
+
+−−→ π(W ) H
+
+−−→ M (π, W ) ν
+
+−→ Lν (π, W ) ∈ { 0, 1}, (2) Consider an illustrative example in which a multi-agent AI system is deployed to manage grid-edge devices, reduce device owners’ energy bills, and respect distribution network constraints. As this is an energy management application, network safety can be checked primarily by running quasi-steady-state power flow given the AI outputs to obtain every nodal phase voltage Vi,ϕ,t (π, W ) for node i, phase ϕ, and time step t. Because distribution networks are often limited by voltage constraints, one can define a threshold-based safety outcome indicating whether the maximum voltage magnitude deviation over the certification horizon exceeds a prescribed limit: 
+
+Lν (π, W ) = 1
+
+
+
+max  
+
+> t,i,ϕ
+
+|| Vi,ϕ,t (π, W )| − 1| ≥ ν
+
+
+
+. (3) The threshold can be ν = 0 .03 or ν = 0 .05 p.u., depending on the safety specification of the distribution network operator. 
+
+B. Calibration Setup and Objective 
+
+A core step in statistical verification is to obtain a dataset for the property to be verified; here, this refers to the binary safety outcome Lν (π, W ). The dataset used to evaluate 
+
+Lν (π, W ) should ideally have the same distribution as future grid operating conditions. Based on Eq. (2), the dataset for 
+
+Lν (π, W ) can be constructed from input scenario data. Let 
+
+W 1, . . . , W n denote independent random samples drawn from the distribution of the input W , namely P0. We collect these samples into the calibration dataset 
+
+Dn := ( W 1, . . . , W n) ∼ P n 
+
+> 0
+
+. (4) The calibration dataset is, therefore, itself a random object. We also need the following core sampling assumptions. 
+
+Assumption 1. The calibration scenarios W 1, . . . , W n are independent and identically distributed (i.i.d.) samples from P0,which is the distribution of future operating scenarios against which the AI system is to be verified. 
+
+Note that assumption 1 imposes independence only across calibration scenarios. The components within each scenario 
+
+W i may exhibit spatial and temporal dependence. The statistical verification target is the unsafe operation probability: 
+
+pπ = PW ∼P0 (Lν (π, W ) = 1) . (5) The corresponding safe operation probability is 1 − pπ . This probability answers the question posed at the beginning of the section: given a set of input scenarios that the grid may encounter, specified by P0, what is the probability that the AI system is unsafe for the grid? 
+
+III. F INITE -S AMPLE PROBABILISTIC SAFETY 
+
+CERTIFICATES 
+
+A. Bernoulli Reduction and Binomial Conversion 
+
+By the definition of pπ in (5), the certification target is the probability that the binary safety outcome equals one. This is the key step that reduces the problem’s complexity: although the operating-scenario distribution P0 over W may be complex and difficult to characterize directly, the safety-certification problem only depends on the induced distribution of Lν (π, W ),which is Bernoulli by definition. Evaluating Lν (π, W j ) over the calibration dataset then provides repeated draws from this Bernoulli distribution. The unsafe-outcome count is 
+
+Kn(Dn) = 
+
+> n
+
+X
+
+> j=1
+
+Lν (π, W j ). (6) Under Assumption 1, 
+
+Kn(Dn) ∼ Binomial( n, p π ). (7) Now the certification becomes a finite-sample inference for a random variable with a binomial distribution. 
+
+B. One-Sided Exact Upper Certificate 
+
+For a realized calibration dataset, the count Kn(Dn) = k
+
+is a single observation from the binomial distribution in (7). Clopper–Pearson (CP) confidence intervals provide exact finite-sample confidence bounds for the Bernoulli probability. From the safety certification perspective, the relevant quantity is an upper bound on the unsafe operation probability, so we use the one-sided CP upper confidence bound [32], [33] 
+
+U (k; n, α ) = 
+
+(
+
+1, k = n, 
+
+B−1(1 − α; k + 1 , n − k), k < n, (8) where B−1(q; a, b ) denotes the q-quantile of the Beta distribu-tion with shape parameters (a, b ).
+
+Theorem 1. For any fixed AI system π, calibration size n, and confidence parameter α ∈ (0 , 1) ,
+
+PDn∼P n 
+
+> 0
+
+(pπ ≤ U (Kn(Dn); n, α )) ≥ 1 − α. (9) 
+
+Proof. For fixed π, Kn(Dn) follows the binomial model in (7). Eq. (9) is the coverage property of the one-sided Clopper– Pearson interval [32], [33]. The interpretation of the probability in (9) is as follows: if this certification procedure is repeated K times, with a fresh calibration dataset Dn drawn in each experiment, then the inequality pπ ≤ U (Kn(Dn); n, α ) holds in at least a fraction 
+
+1 − α of the repetitions in the long run. This is roughly SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 4
+
+equivalent to saying that at least 1 − α proportion (in the long run) of the certifications made by a system operator will be correct. Moreover, our proposed certificate through the one-sided CP upper confidence bound is the tightest possible: 
+
+Theorem 2. The certificate U (k; n, α ) is the smallest among all non-decreasing upper confidence bounds (i.e., more observed unsafe events lead to a higher or unchanged bound) with finite-sample coverage of at least 1 − α [34, Theorem 2]. 
+
+It is also interesting to note that the two-sided CP bound can be very conservative, but our safety certificate only requires the one-sided CP upper bound on the unsafe operation probability, which, in contrast, turns out to be the tightest (Remark 1 of [34]). Operators often need an accept/reject decision relative to a prescribed risk tolerance ε. The desired assertion is 
+
+pπ ≤ ε, (10) This assertion can be made with the following statistical guarantee. 
+
+Assertion process 1. Given a realized calibration dataset 
+
+Dn, if U (Kn(Dn); n, α ) ≤ ε, one can assert that pπ ≤ ε at confidence level 1 − α.
+
+The confidence level has the following formal interpretation. 
+
+Corollary 1. For any fixed π, if pπ > ε , then 
+
+PDn∼P n 
+
+> 0
+
+(U (Kn(Dn); n, α ) ≤ ε) ≤ α. (11) 
+
+Proof. Since pπ > ε ,
+
+{U (Kn(Dn); n, α ) ≤ ε} ⊆ { U (Kn(Dn); n, α ) < p π } .
+
+Then by Theorem 1, PDn∼P n 
+
+> 0
+
+(U (Kn(Dn); n, α ) ≤ ε) ≤ α. 
+
+Note that neither pπ nor ε is random. The confidence level refers to the data-driven procedure that decides whether to issue the assertion. The risk tolerance should also be specified before inspecting the calibration outcomes or safety certification map to avoid post-hoc selection ( p-hacking). Finally, the proposed verification upper bound can converge to the true probability: 
+
+Theorem 3. For a fixed AI system π and a confidence parameter α ∈ (0 , 1) , under Assumption 1, we have 
+
+U (Kn(Dn); n, α ) a.s.
+
+−−−−→ 
+
+> n→∞
+
+pπ . (12) 
+
+Proof. Let bpn := Kn(Dn) 
+
+> n
+
+be the empirical unsafe operation frequency. We first show that the CP upper bound is asymptot-ically close to bpn.For a realized count k < n , let 
+
+Bn,k ∼ Beta( k + 1 , n − k).
+
+By the definition of the one-sided CP upper bound in (8), 
+
+U (k; n, α ) = Q1−α(Bn,k ),
+
+where Q1−α(Bn,k ) denotes the (1 − α)-quantile of Bn,k . The mean and variance of Bn,k are 
+
+mn,k := E[Bn,k ] = k + 1 
+
+n + 1 ,σ2 
+
+> n,k
+
+:= Var( Bn,k ) = (k + 1)( n − k)(n + 1) 2(n + 2) ≤ 14( n + 2) .
+
+By Chebyshev’s inequality, 
+
+Q1−α(Bn,k ) ≤ mn,k + σn,k 
+
+√α ,
+
+and similarly, 
+
+Q1−α(Bn,k ) ≥ mn,k − σn,k 
+
+√1 − α .
+
+Therefore, 
+
+|U (k; n, α ) − mn,k | ≤ cα
+
+2√n + 2 , (13) where cα := max α−1/2, (1 − α)−1/2 . Moreover, 
+
+mn,k − kn = n − kn(n + 1) ≤ 1
+
+n + 1 . (14) Combining (13) and (14), we obtain, for all k < n ,
+
+U (k; n, α ) − kn ≤ 1
+
+n + 1 + cα
+
+2√n + 2 . (15) If k = n, then U (n; n, α ) = 1 = k/n , so (15) also holds. Hence, we can conclude that 
+
+|U (Kn(Dn); n, α ) − bpn| ≤ 1
+
+n + 1 + cα
+
+2√n + 2 −−−−→ 
+
+> n→∞
+
+0.
+
+(16) Under Assumption 1, the variables Lν (π, W j ) are i.i.d. Bernoulli random variables with mean pπ . By the strong law of large numbers, 
+
+bpn = 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+Lν (π, W j ) a.s.
+
+−−−−→ 
+
+> n→∞
+
+pπ . (17) The triangle inequality, together with (16) and (17), gives 
+
+U (Kn(Dn); n, α ) a.s.
+
+−−−−→ 
+
+> n→∞
+
+pπ .
+
+IV. S AMPLE -S PACE ROBUST CERTIFICATION 
+
+The nominal certificate characterizes the unsafe operation probability with a finite-sample guarantee, but the operator may find such a guarantee insufficient for several reasons: 1) temporal distribution shifts, such as evolving weather patterns, may make future operation deviate from the calibration distribution; 2) the simulator-based evaluation tool (H in Eq. (2)) introduces bias, because the physical parameters used to model the power grid may deviate from the real system (and all models are wrong); 3) if the calibration data are collected in the real world, inherent temporal dependence may break the i.i.d. as-sumption; 4) due to the lack of interpretability of AI, the operator may want stronger stress tests on the model. To handle these issues, it is useful to enhance the safety guarantee with an additional robustness layer. Although one may argue that system operators may already have prepared a set of “worst-case” scenarios for testing, the actual worst case for an AI system can be highly model-specific because SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 5
+
+of the nonlinearity of neural networks, especially when the system is large. Existing work has investigated distributionally robust certification, where the certificate is required to hold for a set of plausible distributions [30]. However, such methods can have reduced interpretability, because the distributional distance that controls the range of plausible distributions is often difficult to physically interpret. These methods may also involve complex sampling approaches. To tackle this issue, we borrow the idea of adversarial attacks in AI. More specifically, given a perturbation budget ρ, for each realization W j in the calibration set, we want to find a neighborhood scenario that leads to the most unsafe outcome, namely 
+
+fW jρ ∈ arg max 
+
+> ω∈W
+
+M (π, ω ) s.t. ∥ω − W j ∥ ≤ ρ. (18) Here ∥ · ∥ is a general norm or distance function. It can be selected so that the perturbation has a clear physical interpretation: for example, solar generation may deviate by at most 10%, or the network may experience at most one or k contingencies. This gives the perturbation budget an engineering meaning that system operators can understand. The optimization problem (18) has the form of an adversarial attack. It is hard to solve because of the complex AI system and grid physics involved. However, a large body of work on adversarial-attack methods provides several approximation options that work well empirically [35]. 1) Gradient-based optimisation can be used if the whole chain in Eq. (2) is differentiable. One effective and computationally tractable method is projected gradient descent (PGD), which finds the neighbourhood by itera-tively performing 
+
+ωjt+1 = Π ρ,j 
+
+h
+
+ωjt + η sign 
+
+
+
+∇ω Lν (π, ω jt )
+
+i 
+
+, (19) where ωj 
+
+> 0
+
+= W j , η is the step size, Πρ,j denotes projection onto {ω ∈ W : ∥ω − W j ∥ ≤ ρ}, and the final iterate is used as the adversarial candidate fW jρ , i.e., the approximate solution to (18). 2) Heuristic methods or RL, such as policy-gradient search, can be used if the whole chain in Eq. (2) is non-differentiable. Random perturbation is also a simple special case. The core difference between our problem in (18) and a standard AI adversarial attack is the additional step that translates the AI system output into a power grid safety score, typically through a simulator, as in Eq. (2). If the simulator uses AC power flow, the gradient can still be calculated through implicit differentiation [4]. For the general case in which this step is non-differentiable, one can use a sample-based method to estimate gradients, such as the policy-gradient method in RL. In addition, regardless of the method used, one must check whether the calculated neighbourhood scenario is less safe than the original realization W j ; otherwise, the original scenario should be retained. Thus, for an exact or approximate adversarial candidate fW jρ , we define the retained scenario as 
+
+cW jρ =
+
+(fW jρ , Lν (π, fW jρ ) ≥ Lν (π, W j ),W j , otherwise . (20)          
+
+> Fig. 1. IEEE 123-bus feeder topology used in the two case studies, together with the connection locations of the 1,000 agents. Gray nodes denote feeder buses, coloured branches indicate occupied phase connections, and marker types distinguish the 334 battery, 333 heat-pump, and 333 generator agents distributed across the network.
+
+After this process, we create an adversarial calibration set 
+
+bDn,ρ := ( cW 1 
+
+> ρ
+
+, . . . , cW nρ ), (21) after which the same process in Section III can be applied to obtain the corresponding upper bound on the unsafe operation probability. Theorem 4 shows that this upper bound is no smaller than the nominal CP upper bound. 
+
+Theorem 4. For any realized calibration dataset Dn, pertur-bation budget ρ ≥ 0, and retained adversarial set bDn,ρ defined by (20) –(21) , we have that 
+
+U ( bKn,ρ ( bDn,ρ ); n, α ) ≥ U (Kn(Dn); n, α ). (22) 
+
+Proof. By (20), each retained adversarial scenario satisfies 
+
+Lν (π, cW jρ ) ≥ Lν (π, W j ). (23) The summation of (23) over j = 1 , . . . , n gives bKn,ρ ( bDn,ρ ) ≥
+
+Kn(Dn). Since the one-sided CP upper bound U (k; n, α ) is non-decreasing in the observed unsafe-outcome count k, we can conclude the inequality (22). V. C ASE STUDIES 
+
+We present case studies based on the IEEE 123-bus medium-voltage feeder [36] with 1,000 agents. Each agent manages a single energy device, such as a battery, heat pump, or generator. The device models follow [4]. The training objective of the multi-agent AI system is to minimise each home’s energy bill under a time-varying tariff while minimising distribution network voltage violations. The control time step is 15 minutes. At this time scale, safety is primarily determined by the distribution network voltage magnitude calculated by solving the three-phase unbalanced AC load flow, as defined in Eq. (3). All decentralised policies use the same 8-dimensional local observation at the current time step, defined as 
+
+oi,t = [¯ t, ¯xi,t , ¯dnet  
+
+> i,t
+
+, ¯pimp  
+
+> t
+
+, ¯pexp  
+
+> t
+
+, ¯θout  
+
+> t
+
+, ¯ui,t , ¯vloc  
+
+> i,t
+
+]⊤, (24) where the entries are the normalised time ¯t := t/T , device state ¯xi,t (energy level for batteries, temperature for heat pumps, and power at the previous time step for generators), net uncontrollable demand ¯dnet  
+
+> i,t
+
+(uncontrollable load minus solar generation), import and export prices ¯pimp  
+
+> t
+
+and ¯pexp  
+
+> t
+
+, outdoor SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 6
+
+temperature ¯θout  
+
+> t
+
+, terminal-state urgency ¯ui,t , and local voltage 
+
+¯vloc  
+
+> i,t
+
+. All features are normalised to the interval [0 , 1] using either the device parameters or the training data statistics. The terminal-state urgency feature ¯ui,t was found to be helpful for satisfying terminal-state constraints. It is calculated as the remaining difference required to satisfy a terminal-state constraint, such as the end-of-horizon SoC, divided by the remaining number of time steps. Fig. 1 presents the IEEE 123-bus network together with the connection points of the 1,000 agents used in the main study. For training and testing, three-phase unbalanced AC power flow is solved using the Z-Bus method [37]. Different AI and non-AI algorithms are evaluated for safety, including the recent scalable gradient-based AI learning method GradMAP, which outperforms standard multi-agent RL algorithms [4], the multi-agent extension of the self-supervised learning approach GradMA [4], [38], the standard multi-agent RL algorithm independent proximal policy optimisation (IPPO), and a simple non-AI rule-based algorithm (SuperNaive). Under the SuperNaive algorithm the batteries remain idle, the heat pumps always maintain the indoor temperature at the reference level, and the generators always operate at 100% power. We test IPPO instead of the better-performing MAPPO because MAPPO’s memory consumption exceeds our hardware limit. We also note that the focus of this paper is to verify the safety of AI methods, so performance is a less important dimension. For the AI methods, each agent is a neural network with a single hidden layer of 16 neurons (two layers in total) and tanh activation, which performs better empirically than deeper or wider fully connected networks. Although each network is small, there are 1,000 independent agents in total with no parameter sharing, and we consider the exact nonlinear, non-convex, three-phase unbalanced network constraints that couple these agents. To better evaluate the proposed safety verification method, we carried out two case studies. The first is a case in which Assumption 1 is satisfied. This verifies the stated behaviours of the proposed method when the required conditions are met. To achieve these conditions, we use the HEDGE tool [39], a generative machine learning model trained on real-world residential data, to generate residential demand and solar data for training the AI agents, AI verification, and out-of-sample safety testing. Fig. 2 visualises the generated demand and solar profiles. We also create a synthetic temperature profile for heat pumps. We use HEDGE to generate mutually independent daily demand and solar trajectories. The training split contains 365 daily trajectories, the calibration split contains 10,000 daily trajectories, and the testing split contains 10,000 daily trajectories. Fig. 4 shows that the multi-agent AI system learns reasonable behaviour that responds to the price signal while maintaining the voltage limit for one day. For this case study, the safety outcome is the per-day maximum voltage deviation over all 96 15-minute control steps. Thus, W here refers to one complete daily trajectory, including the daily demand, renewables, temperature and price signals, together with the relevant closed-loop network and device-state information. The second case study represents a more realistic setup for testing the empirical performance of the proposed method and highlights the importance of the proposed adversarial attack method for improving its practical usefulness. This is a rolling-window test in which, for each window, we use the most recent six months of data. The first five months are used for training, the sixth month is used for AI verification, and the verification result is evaluated against out-of-sample testing outcomes in the next month. The verification and testing sets use the raw daily trajectories from the corresponding months, so the sample sizes are the numbers of days in those months. No replacement resampling is used. In this setting, the temporal correlation of the time-series data remains, so Assumption 1 does not hold. However, this is a setting in which a practitioner might directly apply our statistical verification technique. This case study uses only real-world time-series data. The household load data come from [40], the solar-generation and air-temperature traces come from [41], and the import/export prices come from the UK Octopus Energy Agile tariff, which varies at every time step and on every day [42], as illustrated in Fig. 3. The implementation is written in JAX 0.4.38 and Python 3.10.19, and all experiments were run on a single NVIDIA RTX PRO 5000 Blackwell 48-GB GPU. 
+
+A. Case Study I: Nominal Certification 
+
+Fig. 5 shows the certification results using n = 100 randomly selected daily calibration scenarios under different safety thresholds ν. Another widely used approach to validating model performance is to calculate the empirical unsafe probability on a held-out validation set (the calibration set here), which we also calculate for comparison and denote as the calibration empirical probability. As can be seen, the calibration empirical probability is lower than the out-of-sample unsafe probability for most cases across GradMA, IPPO, and SuperNaive, highlighting that using only the validation-set empirical metric as the performance estimate is less reliable. In contrast, the nominal CP certificate provides a statistically valid upper confidence bound on the unsafe probability under the stated calibration distribution, which highlights the importance of rigorous statistical safety verification rather than simple evaluation on a held-out validation set. However, as the voltage threshold increases, the verification probability cannot decrease below around 0.03 due to the limited amount of calibration data. 
+
+B. Case Study I: Sample-Size Effect 
+
+This section investigates whether increasing the amount of calibration data can lead to a tighter verification probability, as stated in Theorem 3. Fig. 6 shows that, as n increases, despite some variation, the proposed verification probabilities tighten toward the out-of-sample empirical probabilities. This figure also highlights that the standard validation-set empirical metric can be unreliable even with more than 1,000 samples. 
+
+C. Case Study I: Confidence Level and Statistical Assertion 
+
+We also evaluate whether the stated confidence level 1 − α
+
+is achieved. To do so, we repeat the certification 1,000 times to obtain 1,000 data-dependent U (Kn(Dn); n, α ) for the selected GradMAP AI system, each time using a different HEDGE-generated calibration set. For each of the 1,000 calibration SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 70.25 0.50 
+
+> Price (GBP/kWh)
+
+Import Export 01   
+
+> Demand (kW)  Agent 499 Agent 599 Agent 749 Agent 999
+
+02
+
+> Solar (kW)
+
+0 6 12 18 24 
+
+Time of day (h) 
+
+567
+
+> Temp. (degC)
+
+Fig. 2. Synthetic time-series data generated by HEDGE [39] for Case Study I. 0.5 1.0 
+
+> Price (GBP/kWh)
+
+Import Export 05
+
+> Load (kW)  Agent 0 Agent 249 Agent 499 Agent 749
+
+05
+
+> Solar (kW)
+
+Day 18 Day 19 Day 20 Day 21 Day 22 05
+
+> Temp. (degC)
+
+Fig. 3. Real-world time-series data for Case Study II. 
+
+sets, we estimate the out-of-sample unsafe probability using a separate independent 10,000-day HEDGE-generated test set. Fig. 7 shows the distributions of the 1,000 U values for representative voltage thresholds. For each threshold, the proportion of U values that are not less than the out-of-sample unsafe probability matches or exceeds the specified confidence level 1 − α. Also note that as specified by Theorem 3 and illustrated in Fig. 6, the variance of the distribution of U should diminish as the size of calibration data increases. 
+
+D. Case Study I: Robust Certificate 
+
+This section visualises robust certificates under different perturbation budgets ρ defined in Eq. (18). We use the ℓ∞
+
+norm, so for budget ρ the adversarial-attack search space is: 
+
+eda,t ∈ [(1 − ρ)da,t , (1 + ρ)da,t ],
+
+era,t ∈ [(1 − ρ)ra,t , (1 + ρ)ra,t ].
+
+The PGD attack was used to approximate the solution to (18). Fig. 8(a) shows the certificate results under the nominal and robust cases. It is expected that the certified unsafe probability 0.2 0.4 0.6 
+
+> GBP/kWh
+
+(a) Price 
+
+> Import Export
+> 0123
+> MW
+
+(b) Aggregate 
+
+> Demand Solar DER Sub.
+> 0.95 1.00 1.05
+> p.u.
+
+(c) Voltage   
+
+> ABC
+> −10 010
+> kW
+
+(d) Battery   
+
+> 10--90% Median
+> 010 20
+
+Time of day (h) 
+
+> 0.0 2.5 5.0 7.5
+> kW
+
+(e) Heat pump   
+
+> 010 20
+
+Time of day (h) 
+
+> 0510
+> kW
+
+(f) Generator 
+
+Fig. 4. Aggregated dispatch results of the trained GradMAP multi-agent AI system on a typical held-out day for Case Study I. Dashed red voltage lines mark the 0.95 and 1.05 p.u. limits. 0.060 0.063 0.066 0.069 0.072 0.0 0.2 0.4 0.6 0.8 1.0           
+
+> Unsafe probability
+> SuperNaive IPPO 0.048 0.051 0.054 0.057 0.060
+> Daily maximum voltage-deviation threshold ν(p.u.)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Unsafe probability
+> GradMA GradMAP Nominal CP calibration emp OOS prob
+
+Fig. 5. Per-day maximum voltage safety certification curves for Case Study I with n = 100 calibration scenarios and α = 0 .05 . The upper panel compares SuperNaive and IPPO, while the lower panel compares GradMA and GradMAP. Nominal CP refers to the proposed method in Section III, calibration emp refers to the frequency of unsafe scenarios evaluated on the calibration set (the commonly used held-out method), and OOS prob refers to the true unsafe probability, which is estimated by evaluating on 10,000 out-of-sample scenarios. 
+
+increases as the perturbation budget increases. By Assertion process 1, the heatmap in Fig. 8(a) can be converted into a more operator-facing binary pass/fail statistical assertion at different unsafe thresholds, as shown in Fig. 8(b)–(d). Such visualisation can provide operators with a comprehensive understanding of AI-system safety under different safety thresholds, confidence levels, and robustness budgets. One additional observation is SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 80.6 0.7 0.8 0.9 1.0 
+
+> Violation probability
+
+IPPO and SuperNaive, ν = 0.064 p.u.       
+
+> IPPO SuperNaive
+> Nominal CP calibration emp OOS prob
+> 10 10 210 310 4
+
+Calibration samples n (daily trajectories) 
+
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> Violation probability
+
+GradMAP and GradMA, ν = 0.055 p.u.     
+
+> GradMAP GradMA
+> Fig. 6. Effect of calibration sample size with α= 0 .01 . Nominal CP refers to the proposed method in Section III, calibration emp refers to the frequency of unsafe scenarios evaluated on the calibration set (the commonly used held-out method), and OOS prob refers to the true unsafe probability, which is estimated by evaluating on 10,000 out-of-sample scenarios.
+
+that increasing the confidence level 1 − α has the greatest impact when certifying a very low unsafe probability. 
+
+E. Case Study II 
+
+Fig. 9 shows the more realistic rolling-window certification results. The upper panel uses the daily-trajectory safety outcome based on the per-day maximum voltage deviation at ν = 0 .060 
+
+p.u. The lower panel uses per-time-step voltage deviations at 
+
+ν = 0 .060 p.u., sampled every four 15-min control steps to reduce temporal correlation. It can be seen that the nominal CP upper bounds are usually useful, but they are not always sufficient: some rolling windows show that next-month unsafe operation probabilities can exceed the nominal certificate. This is because Assumption 1 no longer holds in the rolling-window cases. The adversarial CP upper bounds, computed with a 
+
+1.5% PGD perturbation budget, enhances the robustness of the certificate in these windows and successfully covers the next-month unsafe probability. VI. D ISCUSSION 
+
+The validity of the proposed verification method relies on the key assumption that the calibration dataset is composed of independent samples drawn from the same distribution as the real-world data. A key challenge is that most real-world grid data, including demand and renewable generation data, are time series. This can make the collected data non-independent or cause the data distribution to shift, both of which are shown in our rolling-window case study. However, as discussed, 0.95 0.96 0.97 0.98 0.99 1.00 0.0 0.2 0.4                     
+
+> Probability mass  ν= 0.050̂
+> ptest = 0.9649 Pr( U≥̂ ptest ) = 0.990
+> 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.0 0.2 0.4
+> Probability mass  ν= 0.051̂
+> ptest = 0.5948 Pr( U≥̂ ptest ) = 0.989
+> 0.15 0.20 0.25 0.30 0.35 0.40 0.45
+
+CP upper certificate U                   
+
+> 0.0 0.2 0.4
+> Probability mass  ν= 0.052̂
+> ptest = 0.1636 Pr( U≥̂ ptest ) = 0.993
+> Fig. 7. Monte Carlo distributions of the nominal CP upper certificate Uover 1,000 calibration repetitions for selected voltage thresholds νunder α= 0 .01 .
+> ˆptest is the estimated true unsafe probability by evaluating on 10,000 out-of-sample scenarios. Pr(U ≥ˆptest )represents the proportion of the 1,000 calibration scenarios where U≥ˆptest .
+
+certification in power grids is likely to be performed on a simulator because it is unlikely that an unverified AI system can be deployed in a real system. In this case, it may be possible to recover independence under Assumption 1 by using a simulated data generator such as HEDGE. There are also other approaches to reduce temporal dependence. One solution, as suggested in [11], is to verify trajectory-level properties and collect independent trajectory samples whenever possible, which is the setting of our Case I. Another solution is to sample only a subset of the data to reduce temporal dependence, as in our Case II. Regarding distribution shift, one solution is to use the most recent data for calibration or to handle it through our proposed adversarial attack, as demonstrated in our Case II. Another issue associated with using simulators for verification is the sim-to-real gap. One can model this gap as a probability distribution, with each sampling process adding another layer of sampling to represent the simulator gap. Also note that calibration data are not used to train, tune, select, or early-stop π, which ensures that the derived dataset of Lν (π, W ) has the same distribution as that under the future actual grid operating conditions. Therefore, if one wants to use the method as a learning metric for safe AI, they need to have another held-out dataset. We can analyse the sample requirements for extreme certification. If no unsafe outcomes are observed, we have 
+
+U (0; n, α ) = 1 − α1/n . Therefore, certifying pπ ≤ ε with zero observed unsafe outcomes requires 
+
+n ≥
+
+ log α
+
+log(1 − ε)
+
+
+
+=
+
+ log(1 /α )
+
+− log(1 − ε)
+
+ ε→0
+
+≈
+
+ log(1 /α )
+
+ε
+
+
+
+.
+
+(25) Thus, the number of calibration samples required to certify an extremely low unsafe probability grows at a rate of SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 90.0 0.2 0.4 0.6 0.8 1.0 
+
+> Budget  ρ
+
+α = 0.05 
+
+(95.0%) 
+
+(a) V-prob (b) ε = 0.001 (c) ε = 0.01 (d) ε = 0.05    
+
+> 0.05 0.07
+> Safety threshold ν(p.u.)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Budget  ρ
+
+α = 0.001 
+
+(99.9%)               
+
+> 0.05
+> Safety threshold ν(p.u.)
+> 0.05
+> Safety threshold ν(p.u.)
+> 0.05 0.07
+> Safety threshold ν(p.u.)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> U
+> Pass: U≤εFail: U>ε
+
+Fig. 8. Safety certification map for Case Study I. Plot (a) shows the CP upper certificate U in the nominal or adversarial robust cases. Plots (b)–(d) apply Assertion process 1 with ε = 0 .001 , 0.01, and 0.05; green cells pass U ≤ ε and red cells fail. The horizontal axis is the per-day maximum voltage-deviation threshold ν from 0.05 to 0.075 p.u.; the vertical axis is the fractional load/PV perturbation budget ρ.
+
+approximately 1/ε . For α = 0 .05 , this gives approximately 299, 2,995, and 29,956 samples for ε = 10 −2, 10 −3, and 10 −4,respectively. We can also quantify the number of calibration samples required for extremely high-confidence certification. For fixed 
+
+ε, Eq. (25) shows that this number grows only logarithmically with 1/α . For example, when ε = 10 −3, increasing the con-fidence level from 95% (α = 0 .05 ) to 99 .9999% (α = 10 −6)increases the required sample size from 2, 995 to 13 , 809 . There-fore, achieving higher confidence is comparatively easier than certifying an extremely low unsafe probability. This property is particularly advantageous in power system applications, where grid operators may prefer a highly reliable certificate over a more stringent safety-probability claim with a greater risk of false certification. VII. C ONCLUSION 
+
+This paper develops a finite-sample probabilistic safety certification framework for black-box multi-agent AI systems for power grid operation. The computational complexity remains of the same order as that of commonly used held-out evaluation, making the method scalable to large systems in the near term while providing a finite-sample validity guarantee absent from standard held-out evaluation. The result relies on the assumption that the calibration dataset is i.i.d. with the distribution to be verified, which can be violated by distribution shift or simulator mismatch. We therefore combine the nominal certificate with physically interpretable sample-space adversarial attacks, a concept widely used in the AI field to investigate model fragility. Case studies on three-phase grid-edge flexibility coordination with 1,000-agent AI models with independent parameters verify the finite-sample safety guarantee and demonstrate the value of integrating adversarial attacks into a rolling-window training-certification-deployment flow. REFERENCES [1] The International Energy Agency (IEA), “Digitalisation and Energy,” www.iea.org/reports/digitalisation-and-energy, The International Energy Agency (IEA), Technical Report, 2017, Accessed: 2025-05-22. [2] D. Qiu, Y. Wang, W. Hua, and G. Strbac, “Reinforcement learning for electric vehicle applications in power systems: A critical review,” 
+
+Renewable and Sustainable Energy Reviews , vol. 173, p. 113052, 2023. [3] F. Charbonnier et al. , “Centralised rehearsal of decentralised cooperation: Multi-agent reinforcement learning for the scalable coordination of residential energy flexibility,” Applied Energy , vol. 377, p. 124406, 2025. [4] Y. Zhou, H. Zeng, and T. Morstyn, “Gradmap: Gradient-based multi-agent proximal learning for grid-edge flexibility,” arXiv preprint arXiv:2604.24549 , 2026. [5] Horizon Europe France, “AI Testing and Experimentation Facility (TEF) for the Energy Sector – Bringing Technology to the Market,” https: //www.horizon-europe.gouv.fr/ai-testing-and-experimentation-facility-t ef-energy-sector-bringing-technology-market-33052, 2024, accessed 23 June 2026. [6] T. Su, T. Wu, J. Zhao, A. Scaglione, and L. Xie, “A review of safe reinforcement learning methods for modern power systems,” Proceedings of the IEEE , vol. 113, no. 3, pp. 213–255, 2025. [7] Y. Chow, M. Ghavamzadeh, L. Janson, and M. Pavone, “Risk-constrained reinforcement learning with percentile risk criteria,” Journal of Machine Learning Research , vol. 18, no. 167, pp. 1–51, 2018. [8] T. J. Perkins and A. G. Barto, “Lyapunov design for safe reinforcement learning,” Journal of Machine Learning Research , vol. 3, no. Dec, pp. 803–832, 2002. [9] Z. Yi et al. , “Real-time sequential security-constrained optimal power flow: A hybrid knowledge-data-driven reinforcement learning approach,” 
+
+IEEE Transactions on Power Systems , vol. 39, 2023. [10] P. Chen, S. Liu, X. Wang, and I. Kamwa, “Physics-shielded multi-agent deep reinforcement learning for safe active voltage control with photovoltaic/battery energy storage systems,” IEEE Transactions on Smart Grid , vol. 14, no. 4, pp. 2656–2667, 2022. SUBMITTED TO IEEE TRANSACTIONS ON SMART GRID 10 0.0 0.2 0.4 0.6 0.8     
+
+> Violation probability  (a) per-day max, ν= 0.060 ,α= 0.01
+
+0 2 4 6 8
+
+Rolling window 
+
+0.00 0.01 0.02 0.03 0.04 0.05     
+
+> Violation probability  (b) per-time-step stride 4, ν= 0.060 ,α= 0.01
+> GradMAP GradMA Nominal CP OOS prob adversarial CP
+
+Fig. 9. Rolling-window certification results at α = 0 .01 for GradMAP and GradMA in Case Study II. The upper panel uses the per-day maximum voltage-deviation outcome at ν = 0 .060 p.u. The lower panel uses per-time-step voltage deviations sampled every four 15-min control steps (to reduce temporal correlation) at ν = 0 .060 p.u. Nominal CP refers to the proposed method in Section III, while adversarial CP is the one with extra robustness with ρ = 1 .5% in Section IV. Calibration emp refers to the frequency of unsafe scenarios evaluated on the calibration set (the commonly used held-out method), and OOS prob refers to the true unsafe probability, which is estimated by evaluating on 10,000 out-of-sample scenarios. [11] L. Lindemann, Y. Zhao, X. Yu, G. J. Pappas, and J. V. Deshmukh, “Formal verification and control with conformal prediction: Practical safety guarantees for autonomous systems,” IEEE Control Systems ,vol. 45, no. 6, pp. 72–122, 2025. [12] C. Baier, B. Haverkort, H. Hermanns, and J.-P. Katoen, “Model checking continuous-time markov chains by transient analysis,” in International conference on computer aided verification . Springer, 2000, pp. 358–372. [13] Y. Shoukry et al. , “Smc: Satisfiability modulo convex optimization,” in 
+
+Proceedings of the 20th international conference on hybrid systems: Computation and control , 2017, pp. 19–28. [14] R. J. George et al. , “Torchlean: Formalizing neural networks in lean,” 
+
+arXiv preprint arXiv:2602.22631 , 2026. [15] J. Avigad, L. De Moura, S. Kong, and S. Ullrich, “Theorem proving in lean,” Release , vol. 3, no. 0, pp. 1–4, 2015. [16] A. Venzke and S. Chatzivasileiadis, “Verification of neural network behaviour: Formal guarantees for power system applications,” IEEE Transactions on Smart Grid , vol. 12, no. 1, pp. 383–397, 2021. [17] A. Venzke, G. Qu, S. Low, and S. Chatzivasileiadis, “Learning optimal power flow: Worst-case guarantees for neural networks,” in 2020 IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm) . IEEE, 2020, pp. 1–7. [18] S. Wang et al. , “Beta-CROWN: Efficient bound propagation with per-neuron split constraints for neural network robustness verification,” in 
+
+Advances in Neural Information Processing Systems , vol. 34, 2021, pp. 29 909–29 921. [19] S. Chevalier, I. Murzakhanov, and S. Chatzivasileiadis, “GPU-accelerated verification of machine learning models for power systems,” in Proceed-ings of the 57th Hawaii International Conference on System Sciences ,2024. [20] R. Nellikkath, M. Tanneau, P. Van Hentenryck, and S. Chatzivasileiadis, “Scalable exact verification of optimization proxies for large-scale optimal power flow,” arXiv preprint arXiv:2405.06109 , 2024. [21] K. Kaulen et al. , “The 6th international verification of neural networks competition (vnn-comp 2025): Summary and results,” arXiv preprint arXiv:2512.19007 , 2025. [22] T. Su and J. Zhao, “Neural network certification informed power system transient stability preventive control with renewable energy,” IEEE Transactions on Power Systems , 2025. [23] M. Zarei, Y. Wang, and M. Pajic, “Statistical verification of learning-based cyber-physical systems,” in Proceedings of the 23rd International Conference on Hybrid Systems: Computation and Control , 2020, pp. 1–7. [24] X. Geng and L. Xie, “Data-driven decision making in power systems with probabilistic guarantees: Theory and applications of chance-constrained optimization,” Annual Reviews in Control , vol. 47, pp. 341–363, 2019. [25] C. Ling and C. Wu, “Dynamic reserve sizing with statistically feasible guarantees: An uncertainty-adaptive robust optimization framework,” 
+
+IEEE Transactions on Power Systems , 2026, early access. [26] C.-H. Cheng et al. , “Safeguarding learning-based control for smart energy systems with sampling specifications,” in 2023 IEEE 28th Pacific Rim International Symposium on Dependable Computing (PRDC) . IEEE, 2023, pp. 239–241. [27] A. Stratigakos, H. Wen, E. Spyrou, and P. Pinson, “Decision-calibrated prediction sets for robust power system operations,” arXiv preprint arXiv:2606.02081 , 2026. [28] P. Ellinas, I. Chaudhuri, J. Vorwerk, and S. Chatzivasileiadis, “Verification and validation of physics-informed surrogate component models for dynamic power-system simulation,” arXiv preprint arXiv:2603.17836 ,2026. [29] A. Alc´ antara and S. Chatzivasileiadis, “Trustworthiness layer for founda-tion models in power systems: Application to nk contingency screening,” 
+
+arXiv preprint arXiv:2602.07995 , 2026. [30] Y. Zhao et al. , “Distributionally robust predictive runtime verification under spatio-temporal logic specifications,” ACM Transactions on Cyber-Physical Systems , vol. 9, no. 4, pp. 1–26, 2025. [31] I. J. Goodfellow, J. Shlens, and C. Szegedy, “Explaining and harnessing adversarial examples,” arXiv preprint arXiv:1412.6572 , 2014. [32] C. J. Clopper and E. S. Pearson, “The use of confidence or fiducial limits illustrated in the case of the binomial,” Biometrika , vol. 26, no. 4, pp. 404–413, 1934. [33] T. T. Cai, “One-sided confidence intervals in discrete distributions,” 
+
+Journal of Statistical Planning and Inference , vol. 131, no. 1, pp. 63–88, 2005. [34] W. Wang, “Smallest confidence intervals for one binomial proportion,” 
+
+Journal of Statistical Planning and Inference , vol. 136, no. 12, pp. 4293– 4306, 2006. [35] K. Ren, T. Zheng, Z. Qin, and X. Liu, “Adversarial attacks and defenses in deep learning,” Engineering , vol. 6, no. 3, pp. 346–360, 2020. [36] K. P. Schneider et al. , “Analytic considerations and design basis for the ieee distribution test feeders,” IEEE Trans on power systems , 2017. [37] M. Bazrafshan and N. Gatsis, “Comprehensive modeling of three-phase distribution systems via the bus admittance matrix,” IEEE Transactions on Power Systems , vol. 33, no. 2, pp. 2015–2029, 2018. [38] S. Park and P. Van Hentenryck, “Self-supervised learning for large-scale preventive security constrained dc optimal power flow,” IEEE Transactions on Power Systems , vol. 40, no. 3, pp. 2205–2216, 2024. [39] F. Charbonnier, T. Morstyn, and M. McCulloch, “Home electricity data generator (hedge): An open-access tool for the generation of electric vehicle, residential demand, and pv generation profiles,” MethodsX ,vol. 12, p. 102618, 2024. [40] R. Wardle et al. , “Dataset (TC1a): basic profiling of domestic smart meter customers,” Accessed: Sep , vol. 27, 2020. [41] S. Pfenninger and I. Staffell, “Renewables.ninja.” [Online]. Available: https://www.renewables.ninja/ [42] Octopus Energy, “Agile historical data portal,” https://agile.octopushome. net/historical-data, 2026, accessed: 2026-03-26.

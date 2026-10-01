@@ -1,0 +1,613 @@
+Title: GateDrain: Availability Attacks and Admission-Side Defense for Confidence-Gated Edge-Cloud Inference
+
+URL Source: https://arxiv.org/pdf/2609.33992v1
+
+Published Time: Tue, 29 Sep 2026 02:27:56 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> 1
+
+# GateDrain: Availability Attacks and Admission-Side Defense for Confidence-Gated Edge–Cloud Inference 
+
+Zonghua Gu, Julian Singh-Smith, Junlin Liao, and Di Liu 
+
+Abstract —Confidence-gated edge–cloud inference accepts con-fident local predictions and offloads uncertain inputs to a stronger cloud model. We show that this routing decision creates an avail-ability attack surface. We call this attack GateDrain : bounded input perturbations lower calibrated confidence and redirect requests that would otherwise be answered locally into a shared cloud queue, without increasing the application request rate. Because escalated requests share a cloud service, an increase in per-request cloud demand can move a near-capacity deployment across a queueing knee, causing disproportionate tail-latency degradation for benign users. We evaluate white-box, transfer, decision-only, universal, and multi-gate attacks on the public EdgeBoost artifact. A fixed-application-volume comparison iso-lates the effect of confidence manipulation from added client traffic, while perturbation-budget and arrival-process sweeps show that the queueing transition persists across several workload models but its amplification depends on the operating point. Adaptive attacks also defeat the evaluated training-free pre-processing defenses. To contain the resulting cloud demand, we evaluate Bounded Escalation, which combines per-source admis-sion budgets, protected capacity, and non-preemptive trusted-class priority; an optional global bucket adds an identity-independent bound on untrusted admissions. The evaluation makes the resulting policy trade-off explicit: authenticated clients receive latency isolation, whereas tighter aggregate containment can reject legitimate unauthenticated offloads and reduce overall expected accuracy through edge fallback. 
+
+Index Terms —edge–cloud inference, selective offloading, model cascades, adversarial availability, edge AI security 
+
+I. I NTRODUCTION 
+
+Resource-constrained Internet of Things (IoT) devices in-creasingly rely on edge–cloud offloading to balance execution latency, communication cost, energy consumption, reliability, and quality of service (QoS). Recent works use workload and resource-state prediction to coordinate cloud and edge resources in industrial IoT [1], whereas TORE-NET combines task replication and offloading to satisfy reliability and energy constraints [2]. These studies treat offloading as a performance and resource-management decision. Confidence-gated edge–cloud inference makes the offload-ing decision from an input-derived model-confidence signal. It accepts confident local predictions and escalates uncertain inputs to a stronger cloud model. EdgeBoost [3] calibrates a small edge model (e.g., MobileNetV3-Small) [4] with tem-perature scaling and pairs it with a large cloud model (e.g., 
+
+Z. Gu, J. Singh-Smith, and J. Liao are with Hofstra University, Hempstead, NY, USA. E-mail: zonghua.gu@hofstra.edu. D. Liu is with the Norwegian University of Science and Technology, Norway. 
+
+EfficientNetV2-L) [5]. The calibrated confidence signal is therefore a differentiable routing control point: manipulating it changes where inference is performed even when cloud inference can recover a useful prediction. When an offloading decision depends on such a confidence signal, it also becomes a security-sensitive control surface. We call this confidence-gate escalation attack GateDrain : it redirects otherwise local inference to a shared backend and increases cloud contention without increasing the application request rate. White-box, transfer, decision-only, and univer-sal settings (§IV) instantiate GateDrain under progressively weaker adversary knowledge; its primary setting pushes the calibrated top-1/top-2 margin below the offload threshold. In the primary experiment, offload rises from 46 .3% to 99 .9% 
+
+(2.16 × cloud-demand amplification). In a separate evaluation using an independently trained cloud checkpoint, the attack reaches 99 .9% offload and reduces cloud accuracy on the same 999 -image population from 905 /999 (90 .6% ) on clean versions to 823 /999 (82 .4% ) on perturbed versions (§VII-A). Near cloud capacity, the resulting demand increase causes disproportionate queueing delay for benign requests sharing the service. The observed 10.46 × admitted-benign p99 am-plification is specific to the Poisson-arrival baseline of our 
+
+50 req/s, serial batch-one, K=64 case study, not a universal multiplier. A confidence gate controls both a prediction-routing deci-sion and admission to a shared resource. Improving prediction robustness and containing admitted resource demand therefore address different questions. We propose Bounded Escalation ,an admission-side containment policy that limits cloud work after routing without requiring the perturbation to be detected. It combines per-source token budgets, protected capacity, and non-preemptive trusted-class priority. An optional global bucket adds an identity-independent bound on aggregate un-trusted admissions. This separation is important under Sybil traffic: per-source budgets bound each identity but do not bound the aggregate work of many identities. The optional global bucket provides aggregate containment at a substantial utility cost to legitimate unauthenticated clients. Although EdgeBoost [3] provides our concrete case study, 
+
+the threat model and defense address a broader architectural pattern : any edge–cloud system in which an input-dependent confidence signal controls admission to a more expensive shared backend. Figure 1 summarizes the escalation attack and admission defense. Our contributions are: arXiv:2609.33992v1 [cs.CR] 27 Sep 2026 Confidence-Gated Edge–Cloud Inference Bounded Escalation Defense        
+
+> 1. Input image 2. Edge inference 3. Confidence gate ?Edge result
+> local
+> Attack: bounded input perturbation δ
+> offload request
+> yes no
+> Protected-capacity admission
+> Trusted queue
+> 5. Trusted-priority scheduler
+> Per-source token bucket
+> Optional global token bucket
+> Untrusted-occupancy check
+> Untrusted queue
+> reject at any admission check
+> →edge fallback
+> 6. Cloud inference 4. Request authenticated?
+> reject at admission check
+> →edge fallback dashed: fallback red: untrusted green: trusted/local blue: request flow
+
+Fig. 1: Top: A bounded perturbation δ modifies the input image and manipulates the confidence gate, generating unnecessary offload requests. Bottom: Every offload request is intercepted by Bounded Escalation before reaching the cloud. Authenticated requests use total-capacity admission and the trusted queue, while unauthenticated requests must pass admission checks before entering the untrusted queue. A request rejected at any admission stage returns the edge prediction already computed before the offload decision. 
+
+1) We formulate calibration-aware confidence-gate attacks un-der white-box, transfer, routing-decision-only, and univer-sal settings, and evaluate three confidence-gate signals. 2) We connect attack-induced offloading to shared-cloud queueing using measured A100 service-time samples. A fixed-application-volume comparison isolates the effect of confidence manipulation from added client traffic, while perturbation-budget, service-model, arrival-process, and operating-point sensitivity analyses characterize the conditions under which tail amplification occurs. 3) We evaluate twelve training-free input-preprocessing base-lines under oblivious and adaptive attacks on the complete artifact split, including BPDA and EOT attack adaptations. 4) We evaluate Bounded Escalation under concentrated, Sybil, rate-shaped, and duty-cycled floods, reporting authenticated isolation, aggregate containment, legitimate unauthenti-cated rejection, and edge-fallback accuracy costs. The remainder of this paper is organized as follows. Sec-tion II reviews related latency and offloading attacks. Sec-tion III defines the confidence gate, queueing model, and attacker capabilities. Section IV presents the escalation attacks, and Section V analyzes attack-induced queue amplification. Section VI presents Bounded Escalation. Section VII evalu-ates attacks, defenses, arrival processes, operating points, and admission trade-offs. Finally, Section VIII concludes. II. B ACKGROUND AND RELATED WORK 
+
+A. Dynamic-Inference Slowdown Attacks 
+
+Latency attacks target availability by increasing inference-time computation, energy, or response time without necessar-ily changing the predicted label [6]; a cross-domain survey organizes them by exploited bottleneck [7]. Representative ex-amples suppress early exits [8], reactivate skipped blocks [9], extend slowdown attacks to black-box settings [10], reduce activation sparsity [11], or inflate tracker non-maximum-suppression work [12], with demonstrated downstream safety consequences for real-time perception [13]. These attacks amplify computation within one inference path; ours instead targets the edge–cloud resource-allocation boundary and am-plifies cloud admissions and shared-queue latency. Existing defenses attempt to keep adversarial inputs off ex-pensive execution paths: hardware-adaptive adversarial train-ing restores detector throughput under latency attacks [14], and DefQ applies defensive quantization before a multi-exit model [15], conjecturing that gradient-obfuscation counter-measures survive adaptive attacks; our Section VII-E results bear on that conjecture in the confidence-gate setting. We evaluate such non-differentiable defenses adaptively using expectation over transformation (EOT, averaging the attack loss over transformation samples) and the backward-pass differentiable approximation (BPDA, a differentiable surrogate gradient in the backward pass). Our defense is complementary: it neither detects nor removes the perturbation, but bounds the cloud work admitted after the confidence gate. 
+
+B. Confidence-Guided Adaptive Inference 
+
+Input-dependent resource allocation predates modern edge– cloud inference: the Viola–Jones cascade spends computation only on image regions that survive cheap early tests [16], but its decisions concern regions within one detector rather than calibrated confidence routing between an edge device and a shared cloud service. Several lines of work make computation input-dependent without instantiating the attack surface studied here. Adaptive policies select among or terminate pretrained networks using confidence features, including edge–cloud deployments, but do not consider adversarial manipulation of the selection policy or queue contention [17]. A recent line of confidence-based model cascades for large language models formalizes the same try-cheap-then-escalate pattern to optimize cost and accuracy within a single serving stack [18]; our setting instead spans a trust boundary between an edge device and a shared cloud service, and our concern is adversarial manipulation of the escalation decision rather than its cost-optimality. Selective classification abstains on low-confidence inputs [19], which allocates no additional computation unless a deployment at-taches costly downstream processing to abstention. Early-exit networks [20], [21] place the adaptive decision inside one model, so their principal cost is local execution rather than cloud admission. Neurosurgeon partitions a DNN by layer profiles and network conditions rather than per-prediction confidence [22]. Collectively, these studies show that an input-dependent decision can control whether additional computation is per-formed, but the security consequence depends on what lies beyond the decision. Additional local layers increase per-request computation; abstention may allocate no additional resource; and cloud escalation adds communication, admis-sion, and shared queueing. Our work does not claim that every adaptive-inference system above is directly vulnerable. It focuses on the specific case in which bounded image per-turbations can manipulate a calibrated model-confidence gate, 2convert ordinary application requests into cloud work, and amplify latency through a shared queue. Bounded Escalation consequently limits admissions per identity and across the untrusted tier, rather than modifying the underlying adaptive model architecture. 
+
+C. Offloading Attacks and the Gate Distinction 
+
+Offloading attacks manipulate either the routing policy or the infrastructure capacity behind it. The Stealthy Interference Attack [23] uses low-power wireless interference to alter the SINR states observed by a DRL offloading policy, redirecting tasks to an attacker-selected server; it targets server selection and data confidentiality rather than server overload. Capacity-removal attacks [24] selectively disable edge servers so that a reactive operator must redistribute load to the cloud; convexity analysis shows worst-case attacks concentrate budget on critical sites, changing offloading indirectly through capacity loss. Prior work manipulates intra-model execution, observed wireless state, or available server capacity; our attack instead manipulates the calibrated image-confidence gate that controls cloud admission, leaving the infrastructure and application request rate unchanged, so the resulting increase in cloud admissions amplifies shared-queue latency rather than per-input local computation. III. S YSTEM AND THREAT MODEL 
+
+A. Gate Model 
+
+Temperature scaling [25] is a standard post-hoc calibration method: it rescales the model’s logits z by a single scalar, 
+
+p(x) = softmax( z/T ), which reduces overconfidence without altering the argmax prediction or accuracy. We do not train or fit this calibration ourselves; EdgeBoost ships a model already calibrated with an undisclosed T , and we recover T ≈2.13 by solving for the value that reproduces the shipped calibrated probabilities from the shipped uncalibrated logits. Section VII confirms the calibration is effective: ECE drops from 14.757% to 2.296% with top-1 labels unchanged. Let p(x) denote these calibrated probabilities, and let p(1) (x) and p(2) (x) be the largest two entries. The margin and offload decision are 
+
+mT (x) = p(1) (x) − p(2) (x), (1) 
+
+o(x) = ⊮[ mT (x) ≤ τ ] , (2) where o(x) = 1 denotes escalation , i.e., offloading from device to cloud. The attack differentiates through this deployed gate. We also evaluate max-softmax and entropy gates. 
+
+B. Queue Model 
+
+Benign and adversarial requests arrive at rates λb and λa
+
+with offload probabilities qb = E[o(xb)] and qa = E[o(xa+δ)] .Offered cloud load is 
+
+λc = λbqb + λaqa. (3) For service rate μ, utilization is ρ = λc/μ . We use standard Kendall notation A/B/c/K , where A and B denote the arrival and service-time distributions ( M : memoryless/exponential, 
+
+D: deterministic, G: general/empirical), c the server count, and K the system capacity. An infinite-buffer M/M/1 reference gives Wq = ρ/ [μ(1 − ρ)] for ρ < 1, illustrating the sharp increase near capacity. Our results instead use a finite-capacity measured-service queue: excess load causes rejection, not unbounded queue growth. Offered load and admitted load therefore differ under saturation and admission control. 
+
+C. Attacker Capabilities and Security Goals 
+
+The attacker perturbs image inputs within a bounded per-turbation , an ℓ∞ budget in pixel space and controls one or more unauthenticated identities. White-box attackers know the edge model and calibrator; transfer attackers use a surro-gate; decision-only attackers observe the routing bit. We also evaluate an offline universal perturbation. The objective is to increase cloud demand and benign tail latency, not necessarily to change final labels. The attacker cannot modify the models, queue, authenti-cation service, or hardware. Authentication determines pro-tection eligibility, not maliciousness: benign unauthenticated clients share the untrusted tier with attackers. Compromised credentials and arbitrary authenticated floods are outside the model. Bounded Escalation protects authenticated headroom and service order; its optional global bucket bounds aggre-gate untrusted admissions, but neither identifies attackers nor guarantees service to unauthenticated clients. Bounded perturbations model an adversary constrained to modifying a prescribed digital input while limiting visible de-viation. Arbitrary input selection represents a more permissive threat model and can induce offloading without perturbation; we evaluate it separately in §VII-B. Neither experiment estab-lishes physical robustness through camera capture, compres-sion, or resizing. IV. E SCALATION ATTACKS 
+
+The primary attack minimizes a hinge loss against the calibrated margin: 
+
+Lesc (x′) = max  mT (x′) − τ + κ, 0. (4) The slack κ > 0 encourages crossing below τ ; the loss vanishes at mT (x′) ≤ τ − κ. Projected gradient descent (PGD) [26] differentiates through temperature scaling and deployment preprocessing, projecting into the pixel-space ℓ∞
+
+ball. Per-input white-box PGD is a strong reference attack, not a real-time edge-side implementation; its optimization cost is excluded from online latency. For max-softmax we minimize 
+
+max j pj (x′) below its threshold; for entropy we maximize 
+
+H(p(x′)) = − P 
+
+> j
+
+pj log pj (raw nats) above its threshold. A universal attacker learns one input-independent δ offline on a disjoint training split over a range of thresholds, option-ally penalizing label change with a KL term, then replays it without online optimization [8]. A transfer attacker optimizes on a surrogate MobileNet without victim gradients. The routing-decision-only attacker first queries the clean routing bit and stops if the input already offloads. Otherwise it tests up to 30 candidates clip [0 ,1] (x + r) with independent 3uniform sign vectors r ∈ {− ϵ, +ϵ}d, stopping at the first offload. This costs at most 31 oracle observations per image and uses no scores, gradients, or model access. The paper’s no-volume-increase claim concerns attack execution after the perturbation is constructed: the decision-only search consumes up to 31 routing observations per image, a separate query cost excluded from the queue workload. Reliable routing obser-vations are assumed, as in §II. This assumption is plausible in deployment: an offloaded request returns after at least one cloud service time, whereas a local answer returns after edge inference alone, and the measured gap (mean 27 .4 ms cloud versus 1.30 ms edge) spans more than an order of magnitude. The measured compute-time gap motivates treating routing as an observable oracle; robustness to real network jitter remains untested, and we do not build or measure this side channel. Unless stated otherwise, PGD uses ϵ = 8 /255 , 40 steps, step size 1/255 , one random start, κ = 0 .02 , and seed 42 .
+
+Intuition: escalate, then concentrate. 
+
+Attack mechanism. The edge model (MobileNetV3-Small, 
+
+1.30 ms) answers locally when it is confident and ships the input to the cloud (EfficientNetV2-L, 27 .4 ms) when it is not. “Confident” means the calibrated margin between the top guess and the runner-up, mT (x) = p(1) − p(2) (1), stays above τ ; the gate offloads when mT ≤ τ (2). The routing objective does not explicitly require a label change; it only requires narrowing the top-two margin. In practice, however, the resulting perturbation changes many edge predictions, as quantified in §VII-A. The attack of (4) minimizes the hinge 
+
+Lesc = max( mT − τ + κ, 0) , which reaches zero once 
+
+mT ≤ τ − κ. We call this attack calibration-aware because it differentiates through the deployed temperature-scaling step that produces p(x) rather than treating the edge model’s raw, uncalibrated logits as the attack surface: the perturbation is optimized directly against the margin mT (x) of Eq. (1) that the gate actually thresholds, not a proxy computed before calibration is applied. The perturbations are bounded in pixel space to limit visible distortion. No extra requests are sent: the attacker submits the same application volume but increases the expected cloud work per request, raising qa = E[o(xa + δ)] 
+
+toward one while the benign rate stays at qb (§V). V. C ROSS -L AYER QUEUE AMPLIFICATION 
+
+Writing φ = λa/Λ for the adversarial fraction of the offered application load, where Λ = λa + λb, Eq. (3) becomes 
+
+λc(φ) = Λ (1 − φ)qb + φq a
+
+. (5) When qa > q b, the offered cloud load increases with the adver-sarial fraction. The corresponding service-capacity boundary is 
+
+φ∗ = μ/ Λ − qb
+
+qa − qb
+
+, (6) provided φ∗ ∈ [0 , 1] . Below this boundary, an increase in of-floading raises utilization and waiting time; near the boundary, a modest increase in cloud demand can cause disproportionate tail latency. Under the full-artifact clean baseline qb = 0 .4599 ,saturating qa multiplies the per-request expected cloud work by at most 1/q b ≈ 2.174 ×. In the finite-capacity system evaluated here, overload produces both delay and rejection rather than unbounded queue growth. The direct-inference experiment measures qa = 0.999 ,whereas the queue sweeps use the saturated approximation 
+
+qa = 1 . At the primary operating point this approximation changes offered cloud load by only 0.025 req/s; we state it explicitly because the system is evaluated near the service-capacity boundary. With Λ = 50 req/s, qb = 0 .4599 , qa = 1 ,and μ ≈ 36 .5 req/s, Eq. (6) gives φ∗ ≈ 0.50 . Section VII evaluates this cross-layer effect using measured cloud service times and fixed application request volume. VI. B OUNDED ESCALATION DEFENSE 
+
+Bounded Escalation composes admission and scheduling mechanisms at the offload boundary (Fig. 1). It does not require perturbation detection. Each offload attempt passes a per-source token bucket [27]; authenticated requests may then use total capacity K, while untrusted requests are admitted only if total occupancy is below K − Kp. This prevents untrusted arrivals from consuming the protected headroom, but does not keep those positions empty under authenticated load. The implementation applies per-source budgeting to authenticated sources too, so authentication does not imply zero rejection. Admitted requests enter trusted and untrusted queues. Non-preemptive strict priority selects a trusted request whenever one is waiting, with per-source round-robin within each class. An untrusted job already in service is not interrupted, and its residual service time still contributes to authenticated latency. Rejection at any admission stage triggers an edge fallback : the system returns the edge prediction that was already computed before the confidence gate requested cloud offloading. This avoids additional cloud work and queueing delay, but may sacrifice the accuracy improvement that the cloud model would otherwise provide. The optional global untrusted bucket charges each untrusted admission, independently of identity. Its depth is bgtb = 20 
+
+and nominal refill rate rgtb = 1.3(25)(0 .46) = 14 .95 /s at the matched-flood operating point. Bounded Escalation contains offload-induced resource amplification without at-tempting to classify requests as benign or malicious: admission depends only on identity-scoped token budgets, tier member-ship, and queue position, never on an estimate of whether traffic is anomalous. No anomaly-detection or per-source rate-monitoring component is used. For an observation window W and full initial buckets, a per-source token bucket bounds any single identity’s admitted offloads, 
+
+N adm  
+
+> u
+
+(W) ≤ Bu + RuW, (7) but a Sybil attacker can spread its volume across nid identities, and summing Eq. (7) over them gives only 
+
+> nid
+
+X
+
+> u=1
+
+N adm  
+
+> u
+
+(W) ≤ nid Bu + nid RuW, (8) a bound that grows with the identity count. The optional global untrusted bucket instead enforces the identity-independent bound 
+
+N adm untr (W) ≤ bgtb + rgtb W, (9) 4which applies only with the global bucket enabled. For the defense analysis, we model all-benign accuracy from clean route-conditional correctness: local answers use the clean edge prediction, admitted offloads use the clean cloud prediction, and rejected offloads return the clean edge fallback. These values estimate the accuracy cost of admission rejection and are not end-to-end measurements. The global bound can reject legitimate unauthenticated offloads and force edge fallback; Section VII quantifies this containment–utility trade-off. These bounds concern admitted request counts , not a reserved GPU-time fraction, latency guarantee, or minimum untrusted service share. Strict priority can starve untrusted clients under trusted overload, which is outside the evaluated threat model. Accounting after the confidence gate charges actual cloud-demand events. A pre-gate API limiter counts all requests, including local answers, so its quota does not map one-to-one to cloud admissions when q changes. This does not make post-gate limiting a new primitive: a conventional aggregate limiter placed at the same boundary can enforce the same count cap. Our contribution is the composition, threat model, and measured-service evaluation of the resulting isolation– rejection tradeoff. The defense simulator uses two logical classes, finite capac-ity K counting waiting plus in-service requests, and bootstrap-sampled A100 service times. The fixed case-study parameters are per-source depth Bu = 5, refill Ru = 0.69 /s, and 
+
+Kp = K/ 2 = 32 .The two token bucket burst depths govern how many offload tokens can be accumulated, and therefore how much short-term traffic can be admitted [27]. The per-source depth Bu=5 
+
+lets one identity submit a burst of up to five offloads when its bucket is full; the global depth bgtb =20 instead provides a single bucket shared by all unauthenticated clients, allowing the untrusted tier an aggregate initial burst of twenty. Summing the per-identity bound of Eq. (7) over identities yields a quantity that grows with the Sybil identity count, whereas the shared bucket’s bound is identity-independent: Bu limits bursts from an individual source, bgtb the combined burst of the entire untrusted tier. 
+
+Parameter provenance. Three of these values are fixed analytically from the workload definition rather than searched: 
+
+Ru = 1 .5qb = 0 .69 /s and rgtb = 1 .3(25)(0 .46) = 14 .95 /s each give fixed headroom above the honest per-identity and aggregate untrusted rates, and Kp = K/ 2 is a symmetric capacity split; both refills are slack under honest load by construction and bind only under a flood. The two burst depths ( Bu = 5, bgtb = 20 ) were instead checked on a disjoint clean-traffic validation trace to keep authenticated false rejection low while leaving headroom for flood onset (App. A gives the full criterion and trace). No attacked trace, and no result in §VII-D–§VII-F, was used to select any of these values, and we did not search the joint parameter space for a best operating point; §VII-F instead reports the full global-bucket rate sweep, including rates that dominate the nominal 14 .95 /s setting on unauthenticated rejection. The 
+
+concentrated and Sybil flood construction used throughout the defense evaluation is described in §VII-A. 
+
+Intuition: bound each identity, then bound the tier. 
+
+The question the defense asks. Section V showed that an attacker who drives qa → 1 buys ≈2.174 × cloud work per request and rides it through the knee at φ∗ ≈ 0.50 . Bounded Escalation does not try to detect δ. It asks a different question of every offload request— who is asking, and how much have they already been given? —and answers it before the request reaches the cloud. 
+
+Step 1. Bound each identity. A per-source token bucket [27] caps how many offloads any single identity may have admitted, so it contains concentrated attack traffic. Splitting a fixed aggregate attack rate across sufficiently many identities can place each identity below the per-source refill rate while leaving the aggregate offered load unchanged. The per-identity bound of Eq. (7) then holds for each identity, but their sum 
+
+grows with the identity count (Eq. (8)): rate limiting alone contains the flood it was designed for but collapses against the one that matters. 
+
+Step 2. Bound the tier, and the order of service. Two mechanisms recover authenticated service without reference to identity count. Protected capacity admits untrusted requests only while occupancy is below K − Kp, so untrusted floods cannot fill the buffer; non-preemptive strict priority serves a waiting trusted request whenever the server frees, though it does not interrupt a job already running. The optional global untrusted bucket adds the identity-independent bound of Eq. (9), capping aggregate untrusted admissions no matter how many identities share the load. VII. E VALUATION 
+
+A. Setup and Metrics 
+
+The public EdgeBoost artifact provides offline models and precomputed routing outputs, but no request-arrival, cloud-serving, or queueing implementation [3], [28]. We extend it with attack generation and a finite-capacity discrete-event queue simulator driven by measured A100 service-time sam-ples; network, serialization, and host-to-device delays are excluded. The artifact uses CIFAR-100, a 100 -class image-classification benchmark [29]. We use its shipped test records and model outputs rather than retraining either the edge or cloud model. We distinguish hardware measurements of inference latency and energy, measured-service simulations of queueing and admission, and model-derived estimates of transport energy and fallback accuracy. The clean gate uses 8000 shipped probability records. Pri-mary per-input margin attacks use 2000 calibration/validation records and a fixed 1000 -image direct-inference test subset, so named because attacks execute the shipped edge model on images rather than replaying stored probabilities; the queue itself is simulated throughout. Universal training uses a disjoint 
+
+7000 /1000 /2000 train/validation/test partition of the raw test set (seed 42 ), and is evaluated only on its held-out 2000 -image test partition. Application requests arrive as independent Poisson processes: each principal offers one request per second with exponential inter-arrival times drawn from the run seed, attacker and benign principals share the same temporal model and differ only in offload probability, and no burst correlation or arrival synchronization is modeled. 5Table IV replays the same mean-rate and service-capacity setting under three non-Poisson processes: phase-synchronized and random-phase periodic arrivals, and batched arrivals ( B=4 
+
+requests every 4 s per principal, same long-run rate). At the saturated knee (φ=0 .5, ρ ≈ 1.00 ), attacked benign p99 stays in 1643 –1737 ms under all four processes, so the high attacked tail is not a Poisson artifact; the clean baseline instead varies strongly with temporal structure ( 133 –757 ms), so the amplification ratio ranges from 2.26 × to 12 .8× and the 10.46 × headline depends on the arrival model as well as the operating point (the sub-knee, φ=0 .4, shows the same pattern: 266 –1062 ms). Under BE +G the flood stays contained under all four processes, though synchronized arrivals degrade aggregate benign p99 to 388 ms against 100 ms under Poisson, since per-source buckets admit bursts token-by-token; this BE +G column uses the fixed-application-volume construction of this section, so it is not directly comparable to Table V’s separate cloud-work-matched Sybil stress test. The multi-gate test, budget sweep, and preprocessing evaluation each use different splits, seed counts, and clean offload/accuracy baselines (detailed in App. D) and should not be compared as repeated measurements of one population. 
+
+a) Limit of plug-in system accuracy.: The exact accuracy of a confidence-gated system can be written as 
+
+Asys = (1 − q)Aedge |o=0 + qA cloud |o=1 ,
+
+where both accuracies are conditional on the routing outcome. The commonly used plug-in approximation replaces the sec-ond term with the cloud model’s aggregate clean accuracy, 
+
+bAplugin = (1 − q)Aedge |o=0 + qA cloud .
+
+That substitution is generally invalid here. The event o = 1 
+
+is determined by the input-dependent confidence gate, so offloaded examples are not a random sample of the dataset and may have a different difficulty distribution. Moreover, under attack, the perturbation can transfer from the edge gate to the cloud classifier, making the cloud’s accuracy on perturbed offloads different from both its aggregate clean accuracy and its accuracy on clean offloads. Thus, the plug-in expression is not a measured end-to-end accuracy; it is an estimate that assumes away routing selection and attack transfer. We therefore run the cloud model on the clean and perturbed versions of the same gate-selected inputs and report their paired, same-population accuracies. 
+
+Measured attacked-cloud accuracy on an independent checkpoint. The EfficientNetV2-L checkpoint distributed with the EdgeBoost artifact does not reproduce the artifact’s pre-computed 90 .81% cloud accuracy under any of the 27 tested input pipelines (best: 83 .4% ). We therefore use a separately reproducible, independently trained EfficientNetV2-L CIFAR-100 checkpoint 1 and re-execute the white-box escalation attack (τ = 0 .72 , ϵ = 8 /255 , 40 steps, seed 42 ), evaluating both the clean and perturbed versions of every attacked-offload input on the A100. This protocol produces a 46 .3% clean offload  
+
+> 1Checkpoint and implementation: hankyul2/EfficientNetV2-pytorch, https: //github.com/hankyul2/EfficientNetV2-pytorch; the repository reports 91 .9%
+> accuracy. File name, SHA-256, and preprocessing are recorded in the released evaluation harness.
+
+rate, close to the full-artifact clean rate of 45 .99% at the same threshold, and the attack reaches 99 .9% offload. The attack sends 999 of 1000 inputs to the cloud. Among the 999 inputs offloaded under attack, the independent cloud model correctly classifies 905 /999 (90 .6% ) of their clean versions and 823 /999 (82 .4% ) of their perturbed versions. Holding the image population fixed, the perturbation therefore reduces cloud accuracy by 8.2 percentage points. The attack is designed to amplify cloud demand, and it also causes measurable cross-model prediction damage. 
+
+Populations and uncertainty. At the matched φ = 0 .5
+
+operating point the 25 benign principals comprise 12 authen-ticated and 13 unauthenticated; all adversarial principals are untrusted. Latency statistics concern admitted cloud requests arriving after warm-up and include the sampled service time; local answers and rejected offloads are excluded, with rejec-tion reported per offload attempt and malicious share over all service starts. Aggregate benign is the sample-weighted union of the two benign classes; the “all benign” population additionally includes reconstructed local answers and rejected-offload fallbacks (§VII-E), whose accuracy is model-derived rather than measured end-to-end. Table V and Fig. 2 use the same simulator and the same seed range, 0–11 , and therefore should not be interpreted as independent experimental evidence. Table V reports means of per-seed p99 values with 95% t-intervals, whereas Fig. 2 pools latency samples to estimate deadline probabilities; con-sequently, their uncertainty summaries need not coincide. For example, the aggregate-benign p99 intervals are 1600 ± 15 ms for BE and 5262 ± 131 ms for strict priority, while the authenticated-p99 half-widths are at most 4 ms. A different uncertainty calculation applies to the budget and preprocessing experiments. Treating each tested image as an independent trial with the same success probability, we use two-sided exact 95% Clopper–Pearson binomial confidence intervals [30], which are more conservative than the normal (Wald) approximation and therefore more reliable when suc-cess rates lie near the 100% boundary, as several do here (App. B gives the intuition and a worked example). Under the iid Bernoulli interpretation, the least favorable two-sided exact intervals are [99 .44% , 100 .00%] for 999 /1000 budget-sweep successes and [99 .28% , 99 .98%] for 998 /1000 prepro-cessing successes. Intervals are computed per 1000 -image run; outcomes across attack seeds are not pooled as independent trials and do not quantify variability across attack seeds, model pairs, datasets, or deployment conditions. 
+
+On-device measurement protocol. The edge tier is a Jetson Orin Nano Super running MobileNetV3-Small; the cloud is an NVIDIA A100-SXM4-80GB running EfficientNetV2-L. Both use FP16 in a latency-oriented batch-one configuration with no batching or concurrent kernels. After 50 warm-up iterations, 
+
+1000 batch-one inferences yield mean latencies of 1.30 ms on the edge device and 27 .4 ms on the cloud GPU. Because the queue server models only cloud execution, its effective serial service rate is μ = 1 /E[Scloud ] ≈ 1/0.0274 = 36 .5 requests/s. The edge latency precedes cloud admission and is included in per-request compute latency, but not in the cloud service time. 
+
+Concentrated and Sybil flood construction. The defense 6025 50 75 100               
+
+> P(L > D) (%)
+> Authenticated benign
+> No defense BE BE+G
+> Unauthenticated benign
+> 50 100 200 500
+> deadline D(ms)
+> 025 50 75 100
+> P(L > D) (%)
+> Aggregate benign
+> 50 100 200 500
+> deadline D(ms)
+> modeled accuracy (%) No defense / BE / BE+G 89.7 /89.5 /85.5
+> All benign (incl. local/fallback)
+
+Fig. 2: Deadline-miss probability P (L > D ) at φ = 0 .5 under the Sybil flood (12 pooled seeds, compute-and-queueing latency only). The first three panels concern admitted benign cloud requests; the fourth reconstructs all benign requests, counting local answers and rejected-offload fallbacks at the measured 1.30 ms edge latency. Under BE the unauthenticated tier retains a high miss rate ( 90 .5% at D=100 ms) while the authenticated tier does not ( 0.1% ), showing that unauthenticated clients bear the latency cost of isolation. The modeled accuracies annotated in the fourth panel are conditional model estimates, not hardware measurements: BE +G’s near-zero miss rate is obtained partly by returning fallback predictions, at a cost of 4.2(89 .7 − 85 .5) percentage points in modeled all-benign fallback accuracy. 
+
+evaluation of §VI–§VII-F (Tables V, VII and Fig. 6) reuses the following attack-traffic construction (full arithmetic in App. C). We distinguish a principal (a real attacker entity or account, used for authentication and per-source rate limiting) from an identity (a source presented to the admission system, which may not correspond 1:1 to a principal). Of the 50 total principals ( 25 benign and 25 adversarial), a concentrated flood presents the 25 adversarial principals as 25 identities. Each identity sends one application request per second and offloads with probability 1.0, producing 
+
+25 × 1 × 1.0 = 25 adversarial offloads/s. A Sybil flood 
+
+splits each adversarial principal into 10 identities, producing 
+
+250 adversarial identities. Each still sends one application request per second but offloads with probability 0.1, so the aggregate rate remains 250 × 1 × 0.1 = 25 adversarial offloads/s. The adversarial share of visible identities therefore increases from 25 /50 = 50% to 250 /275 = 90 .9% , while each Sybil identity individually appears as a low-rate source. Both constructions thus impose the same aggregate adversarial cloud input while distributing it differently across identities— the dimension tested against the per-source token bucket (§VI). This differs from the primary escalation experiments of §V, which hold total application-level request volume fixed at 
+
+Λ = 50 req/s and let cloud demand vary with qa. In the Sybil construction, pre-gate application traffic instead rises to 275 req/s even though adversarial cloud-offload volume is matched to the concentrated case. Table I summarizes the remaining experimental configuration. 
+
+Expected calibration error. ECE measures whether pre-dicted confidence agrees with empirical accuracy, not accuracy itself: 
+
+ECE = 
+
+> M
+
+X
+
+> m=1
+
+|Bm|
+
+N |acc( Bm) − conf( Bm)| ,
+
+where acc( Bm) is the fraction of correct top-1 predictions in bin Bm and conf( Bm) their mean predicted confidence [25]. TABLE I: Experimental configuration. Concentrated and Sybil floods offer approximately 25 adversarial offloads/s. 
+
+Category Configuration 
+
+Models/data CIFAR-100; MobileNetV3-S edge; EfficientNetV2-L cloud Gate Temperature T ≈ 2.13 ; margin threshold τ = 0 .72 
+
+Hardware Jetson Orin Nano Super; NVIDIA A100 Service Edge 1.30 ms; cloud 27 .4 ms; μ ≈ 36 .5/s Network delay Excluded; compute-and-queueing latency only Queue Two-class M/G/1/ K-style simulator, K = 64 ; mea-sured service Traffic 50 pre-splitting principals; 25 adversarial; Sybil ex-pands identities at matched cloud input Benign clients 12 authenticated / 13 unauthenticated at φ = 0 .5
+
+Traces 12 seeds; defense and deadline traces use 100 s warm-up, queue-amplification and arrival traces use none; main/defense 3000 s, deadlines 2000 sPer-source bucket Depth 5; refill 0.69 /s Protected capac-ity 
+
+Kp = 32 of K = 64 positions Global bucket Depth 20 ; nominal refill 14 .95 /s 
+
+We compute ECE over all N = 1000 edge predictions using 
+
+M = 15 equal-width confidence bins. “Edge ECE” refers only to predictions produced by the edge model before the routing and cloud-inference stages; it is not a calibration measure for the combined edge–cloud system. A low ECE does not imply high accuracy: a model can become less accurate while remaining calibrated if its confidence decreases by a similar amount. 
+
+Clean gate characterization. On shipped predictions, edge accuracy is 74.25% and cloud accuracy 90.81%. Temperature scaling reduces ECE from 14.757% to 2.296% without chang-ing top-1 labels. At τ = 0 .72 , offload is 45.99% and artifact-derived clean combined accuracy is 89.83%, compared with 90.81% for cloud-only inference; the cloud corrects 37.29% of offloaded edge errors. The primary direct-inference subset has 46 .3% clean offload at the deployed threshold, close to the full-artifact operating 7point of 45 .99% ; the budget sweep and the preprocessing eval-uation use the same 1000 -image split. These subset-specific operating points are not interchangeable with the full-artifact operating point. 
+
+B. Attack Effectiveness 
+
+We first determine whether confidence-gate manipulation remains effective beyond the strongest white-box setting. The experiments vary the attacker’s access to the victim model, whether the perturbation is optimized separately for each input or reused across inputs, and the confidence signal used by the gate; experiments with different data splits or gate thresholds are separate evaluations rather than a direct ranking. 
+
+Purpose and organization of Table II. Table II asks whether escalation remains effective when the attacker has less knowledge or requires a reusable perturbation. All rows target the deployed calibrated margin router. White-box margin is the strongest reference setting: a separate perturbation is optimized for each input using full access to the victim edge model, calibrator, and gate. Transfer optimizes the perturbation on a MobileNetV2 surrogate and then applies it to the victim without access to victim gradients. Decision-only observes only the binary local/offload outcome and tests at most 30 
+
+perturbed candidates after the clean query, without using confidence scores or gradients. Universal learns one input-independent perturbation on a disjoint training split and reuses it on all held-out inputs. Gate generality across max-softmax and entropy routers is evaluated separately in Table III. The “Clean offl.” and “Att. offl.” columns report the fractions routed to the cloud before and after attack, while “Cloud amp.” is their ratio qa/q b.Under the reproducible deployed-margin protocol, calibration-aware PGD raises offload from 46 .3% to 99 .9% 
+
+(2.16 × cloud-demand amplification), transfer raises it to 
+
+69 .4% (1.50 ×), and routing-decision-only search to 88 .5% 
+
+(1.91 ×). The white-box attack also substantially disrupts the edge model’s predictive behavior: edge accuracy decreases from 73 .1% to 28 .8% , edge ECE increases from 3.142% to 
+
+14 .566% , and only 33 .9% of edge predictions are preserved. Although the optimization objective targets the routing margin, the resulting perturbations also alter class decisions and degrade calibration. Edge ECE is computed over all edge-model outputs before routing and cloud substitution; it characterizes the attacked edge predictor, not the calibration of the final predictions served by the combined edge–cloud system, which under attack are dominated by cloud answers. In the independent-cloud evaluation of §VII-A, the same-population cloud accuracy decreases from 90 .6% on clean inputs to 82 .4% on their perturbed versions. Thus, the attack both shifts nearly all requests to the shared cloud service and causes measurable cross-model prediction damage. Routing-decision-only search reaches 88 .5% offload with at most 31 observations per image and succeeds on 78 .58% 
+
+of initially local inputs; transfer without victim gradients reaches 69 .4% with 49 .91% initially-local success. A single reusable universal perturbation, trained offline on a disjoint split, raises offload from 45 .85% to 78 .75% on its held-out evaluation partition ( 1.72 ×, 67 .2% initially-local success). TABLE II: Escalation attacks against the calibrated margin router. White-box, transfer, and decision-only use the same 
+
+N = 1000 direct-inference subset; universal uses a separate held-out N = 2000 partition. Local success is measured only over inputs initially processed locally.                           
+
+> Attack Clean offl. Attacked offl. Cloud amp. Local succ.
+> WB margin 46.3% 99.9% 2.16 ×99.81% Transfer 46.3% 69.4% 1.50 ×49.91% Decision-only 46.3% 88.5% 1.91 ×78.58% Universal 45.85% 78.75% 1.72 ×67.22%
+> WB: white-box. Cloud amp. is the attacked-to-clean offload ratio. Decision-only uses one clean observation and up to 30 candidate queries ( ≤31 total). These search queries are excluded from the online queue workload. The reproducible protocol uses evaluation mode, τ= 0 .72 ,T= 2 .1272 , records 2000:3000 , resize/crop to 224 , and ImageNet normalization. Gate generality is reported separately in Table III.
+
+Thus lower-knowledge and reusable attacks also substantially increase cloud demand, though less than white-box per-input optimization. 
+
+Confidence gates. A confidence gate converts the edge model’s calibrated probability vector p(x) into a binary lo-cal/offload decision. We evaluate three common gate signals. The margin gate measures the difference between the largest and second-largest probabilities, mT (x) = p(1) (x) − p(2) (x),and offloads when mT (x) ≤ τm; a small top-two gap means the model has difficulty choosing between its two leading classes. The max-softmax gate uses only the largest predicted probability, s(x) = max j pj (x), and offloads when s(x) ≤ τs;even if one class ranks first, a low maximum probability indicates weak confidence in that choice. The entropy gate 
+
+uses 
+
+H(p(x)) = − X
+
+> j
+
+pj (x) log pj (x)
+
+and offloads when H(p(x)) ≥ τH ; high entropy means probability mass is spread across several classes rather than concentrated on one prediction. Accordingly, PGD seeks to decrease the margin for the first gate, decrease the maximum probability for the second, and increase entropy for the third. A single distribution shift can move all three signals: changing 
+
+p(x) = [0 .60 , 0.30 , 0.10] to p(x′) = [0 .40 , 0.35 , 0.25] shrinks the margin, lowers the maximum probability, and raises en-tropy without changing the top class. The three thresholds are calibrated separately on a disjoint validation set to produce approximately the same clean offload rate, so their numerical values are not directly comparable. 
+
+Multi-gate generality. Separate image-space PGD attacks against the three gates reach 99 .9–100% offload from ap-proximately 45% clean offload (Table III). At least 99 .8% 
+
+of initially-local inputs cross the gate, attacked/clean offload is at least 2.20 ×, and edge accuracy falls to 27 –28% . This experiment tests whether the escalation attack extends beyond one confidence definition; it does not establish robustness or vulnerability for every possible routing rule. The margin row uses its own frozen validation-calibrated threshold and therefore differs slightly from the deployed-τ test in Table II: 
+
+45 .40% versus 46 .3% clean offload, and 2.20 × versus 2.16 ×
+
+amplification. 
+
+Natural-input baseline. This baseline asks whether high offload can be achieved without perturbing any pixel, by 8TABLE III: Multi-gate PGD evaluation with ϵ = 8 /255 , T ≈ 2.13 , and N = 1000 test images. The top-two-margin and maximum-softmax gates offload when their confidence signals fall below their respective thresholds, whereas the entropy gate offloads when predictive entropy exceeds its threshold. Gate-specific thresholds are selected on a disjoint validation split to target approximately 46% clean offload and then frozen for test evaluation; they are not the deployed margin threshold τ = 0 .72 .“Success” denotes an initially-local input that crosses the corresponding gate, and cloud amplification is the attacked-to-clean offload ratio.                         
+
+> Confidence gate τClean off. Att. off. Success (init. local) Cloud amp. Edge acc (att.)
+> Top-two margin 0.702 454/1000 ( 45 .40% )1000/1000 ( 100 .00% )546/546 ( 100 .00% )2.20 ×28.0% Maximum softmax 0.794 447/1000 ( 44 .70% )999/1000 ( 99 .90% )552/553 ( 99 .82% )2.23 ×27.3% Predictive entropy 0.810 447/1000 ( 44 .70% )1000/1000 ( 100 .00% )553/553 ( 100 .00% )2.24 ×28.1%
+
+selecting naturally occurring images. Among 8000 stored records, 45 .99% already offload at τ = 0.72 ; an attacker with offline routing information can simply select such records and obtain 100% offload. A weaker attacker without this information who draws k independent candidates and submits whichever offloads achieves probability 1−(1 −qb)k; for k=8 ,simulation gives 99 .23% across eight seeds. These are offline selection queries over a fixed legitimate pool, not extra online requests or perturbations of a prescribed image; this baseline requires freedom to select the submitted image and therefore does not replace the prescribed-input perturbation threat model of Section IV. 
+
+C. Queue Amplification 
+
+A high attack success rate at the confidence gate does not by itself establish a serious availability impact. This subsection connects the attack-induced offload probability to offered cloud load and separates two effects: the direct additional computation caused by executing the cloud model, and the tail-latency amplification caused by queueing near the service-capacity boundary. Fixed-volume, service-model, and arrival-process comparisons identify which part of the observed amplification is specific to the evaluated operating conditions. 
+
+Attack impact at fixed request volume. The controlled comparison holds the number of principals, their arrival pro-cesses, and the aggregate application rate Λ = 50 req/s fixed, and changes only whether the attacker-controlled fraction φ
+
+submits clean or perturbed inputs. The attack-induced increase in offered cloud load is then ∆λc = Λ φ(qa − qb), attributable to offload manipulation rather than request volume. Across 12 seeds, the no-attack p99 stays at 165 ms ( ρ = 0 .63 ) for every φ; under attack, benign p99 rises from 165 ms at φ = 0 
+
+to 834 ms at φ = 0 .4 (ρ = 0 .93 ) and 1738 ms at φ = 0 .5
+
+(ρ = 1 .00 ), where P (L> 100 ms) reaches 95 .4% . Above the knee the system is saturated: at φ ∈ { 0.6, 0.8}, p99 plateaus near 1755 –1758 ms and rejection, not further delay, absorbs the excess load (Fig. 4). 
+
+Perturbation budget. Sweeping ϵ ∈{0, 0.05 , 0.1, 0.2, 0.3, 0.5, 1, 2, 4, 8, 16 }/255 on N = 1000 test images (three attack seeds, 40 steps, α = min(1 /255 , ϵ/ 4) ,
+
+τ = 0 .72 ), PGD leaves the clean rate qb = 0 .463 immediately and reaches near-complete offload ( qa = 0.999 –1.000 ) by 
+
+0.5/255 , while the random ±ϵ sign-noise control stays near the clean rate across that entire range and only reaches 
+
+0.909 at 16 /255 —a budget roughly 32 × larger (Fig. 3a). The separation between the two curves distinguishes a gate collapsed by optimization from one collapsed by an oversized perturbation ball; saved-tensor checks confirm every budget stays within its pixel-space bound. Replaying each measured 
+
+qa(ϵ) at φ = 0.5 through the measured-service queue (Fig. 3b), admitted aggregate-benign p99 and the 100 ms miss probability rise together through 0.05 –0.3/255 (352 –1732 ms) and flatten near 1737 ms once qa saturates. That plateau is an artifact of the replay input, not a robustness property: every budget at or above 0.5/255 supplies qa = 0 .999 –1.000 to the simulator, coinciding with the analytic boundary of Eq. (6). A convergence check at ϵ ∈ { 2, 4}/255 confirms the saturation is not an artifact of insufficient PGD steps: one step already reaches qa = 0 .828 and 0.850 , and five steps reach 0.998. 
+
+Service-model sensitivity. Across exponential (M/M/1/ K), deterministic (M/D/1/ K), and measured (M/G/1/ K) service-time distributions with the Poisson arrival process and K = 64 
+
+fixed, the queueing knee remains between φ = 0.40 and 
+
+0.50 (one ∆φ = 0 .1 sweep interval), while the maximum benign p99 ranges from approximately 1.75 to 2.13 s: the qualitative transition persists across service models, while its tail magnitude remains configuration-dependent. At the full-artifact queue operating point, forcing qa from 
+
+qb = 0 .4599 toward one increases cloud demand per attacker request by at most 1/q b ≈2.174 ×. The compute-only mean latency ratio is 2.062 ×. With 50 requests/s, serial batch-one service, and K = 64 , undefended aggregate-benign p99 rises from 166 ms to 1737 ms (10.46 ×) near φ∗ ≈ 0.50 .This disproportionate tail increase depends on starting near capacity; the fixed-volume comparison above isolates it from increased request volume. 
+
+Direct per-request cost amplification. Before queueing amplification, changing the routing decision has a direct per-request cost. Let q denote the offloaded fraction of offered requests. Every request executes the edge model, and an offloaded request additionally executes the cloud model, so the mean compute-only inference time per offered request is 
+
+¯L(q) = Ledge + qL cloud ,
+
+with measured means Ledge = 1 .30 ms and Lcloud = 27 .4 ms. Substituting qb = 0 .4599 and qa = 0 .999 gives 13.91 ms and 28.69 ms, a 2.062 × increase. This analytical average replaces the cloud service time by its measured mean, Lcloud =
+
+E[Scloud ]. The queue simulator instead samples an individual 900.05 0.1 0.2 0.3 0.5 124816      
+
+> ε(/255), 40-step PGD
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> attacked offload  qa
+> (a) gate response to budget
+> qa(ε), PGD
+> qrand
+> a(ε), control
+> 00.05 0.1 0.2 0.3 0.5 124816
+> ε(/255), replayed at φ= 0.5
+> 250 500 750 1000 1250 1500 1750
+> benign p99 (ms)
+> (b) queue consequence
+> 20 40 60 80 100
+> P(L > 100 ms) (%)
+
+Fig. 3: Budget sweep: (a) attacked offload under PGD and the random-sign control; (b) admitted aggregate-benign p99 and 100 ms miss probability under φ = 0 .5 replay. Near-complete offload at 0.5/255 puts the replay at the capacity boundary, ρ ≈ 1.00 .
+
+service time Scloud ,i from the complete empirical distribution for each admitted offload i and computes 
+
+Lcloud  
+
+> i
+
+= Wi + Scloud ,i ,
+
+where Wi is that request’s simulated queueing delay. Thus, the p99 and deadline results in Table V and Fig. 2 preserve the measured request-to-request service-time variation. The gap between the approximately twofold direct compute increase and the 10 .46 × p99 increase quantifies the additional amplifi-cation caused by queueing near the cloud-capacity boundary. Neither calculation includes network transmission, serializa-tion, or protocol overhead. Adding a fixed network delay dnet 
+
+to each offload would increase its end-to-end latency and could increase the deadline-miss probability. Because arrivals are externally fixed and do not depend on response time, however, this additive delay would not change the offered cloud arrival rate λc, service capacity μ, or the queue-stability boundary 
+
+λc = μ.
+
+D. Defense Effectiveness 
+
+We next evaluate whether Bounded Escalation protects benign traffic after an attacker has manipulated the confidence gate. A useful defense must be judged along three separate dimensions: latency isolation for authenticated clients, contain-ment of aggregate untrusted cloud work, and collateral cost to legitimate unauthenticated clients. We compare the component mechanisms and their composition under concentrated and Sybil attacks, then measure their overhead under clean load. Table V compares six configurations at matched attack vol-ume. Per-source limiting lowers authenticated p99 to 252 ms under the concentrated flood but leaves 1730 ms under Sybil. Protected capacity alone eliminates authenticated rejection yet leaves approximately 886 ms p99: admission headroom does not control service order. Strict priority alone already satisfies the evaluated authen-ticated criteria: 77 ms p99 under both floods and less than 
+
+1% rejection. BE gives comparable 75 /76 ms p99. However, strict priority shifts delay onto unauthenticated traffic: Sybil aggregate-benign p99 is 5262 ±131 ms, worse than no defense at 1738 ± 1 ms. BE reduces this tail to 1600 ± 15 ms; BE +Greduces it to 85 ± 1 ms. All intervals are 95% CIs for mean per-seed p99. The global bucket adds an aggregate admission bound, reducing malicious cloud share from 69% with BE to 59% with BE +G. Authenticated rejection remains at most 1.29%, but legitimate unauthenticated offload rejection rises from 2.8% to 52.1%. Under clean routing-conditional correctness assumptions, modeled all-benign fallback accuracy falls from 89.7% without defense to 85.5% with BE +G, a 4.2-point decrease; this is not measured accuracy on defended hardware or an unauthenticated-only estimate. These results show that per-source admission and priority alone do not bound aggregate untrusted work under Sybil scaling; an identity-independent aggregate admission mech-anism is required for that objective. Authenticated isolation, aggregate-work containment, and unauthenticated utility are distinct objectives. BE +G is suitable only if best-effort unau-thenticated service is acceptable. Strict priority provides much of the authenticated benefit without the global cap, while leaving a severe untrusted queue. Because an ordinary limiter at the same admission boundary can also enforce an aggregate count bound, Section VII-F separately compares BE +G with a global-bucket-only FIFO baseline; Table V evaluates this composition rather than establishing novelty over all admission policies. 
+
+Clean-load overhead. Under clean mixed traffic, BE ac-celerates authenticated p99 from 166 to 91 ms through strict-priority service order, but this is a class-redistribution ef-fect rather than a system-wide improvement: unauthenticated-benign p99 rises to 260 ms and aggregate-benign p99 increases from 166 to 217 ms, so deployments with meaningful anony-mous traffic bear the displacement. The full stack also rejects 1.25% of authenticated and 1.23% of unauthenticated offloads even under clean load. BE and BE +G report identical clean outcomes, indicating the global bucket is slack in this work-load, not that it is cost-free for arbitrary legitimate demand. 10 TABLE IV: Arrival-process sensitivity under the fixed-application-volume concentrated attack at φ=0 .5: means of per-seed benign p99 over 12 seeds with pointwise 95% t-intervals, measured service times, K=64 , 3000 s horizon, no warm-up (matching the primary queue-amplification traces; the 100 s warm-up of Table I applies to the defense and deadline traces). Clean and attack columns use no defense; the BE +G column applies Bounded Escalation +G to the same fixed-volume workload and is not the cloud-work-matched Sybil stress of Table V. “C.” stands for Clean, and “A.” stands for Attack. “Ampl.” is the ratio of the displayed integer mean p99 values, matching the headline’s display convention. The last column is the no-defense attack p99 at φ=0 .4 (ρ ≈ 0.93 ). Batched arrivals use random per-principal phase.                        
+
+> Arrival process C. p99(ms) A. p99(ms) Ampl. BE +G p99 (ms) A. p99(ms)
+> Poisson (this paper) 166 ±31737 ±210.46 ×100 ±1809 ±58 Periodic, synchronized 757 ±61712 ±72.26 ×388 ±41062 ±3Periodic, random phase 133 ±10 1702 ±10 12.8 ×154 ±28 266 ±20 Batched ( B=4 )302 ±31 1643 ±40 5.44 ×224 ±38 632 ±90
+
+TABLE V: Matched concentrated and Sybil floods (construc-tion defined in §VII): measured-service queue, K = 64 ,
+
+12 seeds. Rejection denominators are class-specific offload attempts; malicious share uses cloud service starts. Aggregate p99 includes admitted benign requests only. Its 95% CI is shown; authenticated-p99 half-widths are ≤ 4 ms. PSB: per-source bucket; PC: protected capacity; SP: strict priority; BE: Bounded Escalation; G: global untrusted bucket.                                       
+
+> Auth. protection System-wide (Sybil)
+> p99 (ms) rej. Agg.-benign p99 Mal. Unauth.
+> Def. Con. Syb. Con. Syb. (ms, 95% CI) share rej. None 1736 1738 0.81% 0.84% 1738 ±168% 0.8% PSB 252 1730 1.27% 1.78% 1729 ±469% 1.8% PC 886 886 0.00% 0.00% 878 ±168% 1.9% SP 77 77 0.81% 0.84% 5262 ±131 68% 0.8% BE 75 77 1.28% 1.25% 1600 ±15 69% 2.8% BE +G72 72 1.29% 1.28% 85 ±159% 52.1%
+
+E. Adaptive and Sensitivity Tests 
+
+Admission control bounds the cloud work a successful esca-lation attack can create, but it does not address the confidence gate’s own vulnerability: the gate can still be fooled into escalating an input it would otherwise have answered locally. We separately evaluate input preprocessing, a prediction-side defense that instead attempts to remove or weaken the per-turbation before edge inference, restoring the routing decision the gate would have made on the unperturbed input. Unlike admission control, whose effectiveness does not depend on detecting or reversing the perturbation, preprocessing targets the perturbation directly. The evaluation distinguishes apparent protection against an oblivious attacker from protection against an adaptive attacker, and also reports the transformations’ ef-fects on clean accuracy and offload. Preprocessing transforms an input before it reaches the edge model and confidence gate, 
+
+x + δ preprocessing g
+
+−−−−−−−−→ g(x + δ) edge model 
+
+−−−−−−→ confidence gate ,
+
+so that the malicious offload rate 
+
+qdef  
+
+> a
+
+= Pr o g(x + δ) = 1 0.0 0.1 0.2 0.3 0.4 0.5 attacker fraction φ      
+
+> 250 500 750 1000 1250 1500 1750 benign p99 latency (ms)  φ*≈ 0.50
+> Attack-fraction sweep at fi xed load and capacity (τ= 0.72, qa= 1.0)
+> No-attack: aggregate benign Attack: aggregate benign Attack + BE: aggregate benign
+
+Fig. 4: Admitted aggregate-benign p99 versus attacker fraction at fixed application volume and capacity ( Λ = 50 req/s, μ ≈ 36 .5/s, 
+
+K=64 , 12 seeds, measured A100 service; network and serialization delay excluded). All three curves report the same population: the no-attack baseline and the escalation attack use no defense, and the defense curve applies Bounded Escalation to the attack case. The dashed line marks the analytic offered-load critical point φ∗≈0.50 
+
+(Eq. (6)), computed for the undefended system. Rejected offloads are excluded from every curve. 
+
+falls. We test whether such preprocessing reduces attacked offload under an oblivious attacker, whether the apparent benefit survives adaptive EOT or BPDA optimization, and what cost the transformation imposes on clean edge accuracy and clean offload. These baselines do not bound admitted cloud work by construction; they test whether prediction-side input transformation can prevent the gate manipulation that creates that work. We evaluate 12 training-free preprocessing settings: JPEG (q ∈ { 90 , 75 , 50 }), bit-depth reduction ( 7, 6, 5 bits/channel), Gaussian noise ( σ ∈ { 0.5, 1, 2}/255 ), a 3 × 3 median fil-ter, randomized resize/pad, and bit-depth-plus-median feature squeezing. Each is applied before the edge gate on the com-plete N = 1000 -image artifact split, with one primary attack seed ( 42 ; seeds 43 and 44 replicate the adaptive results within 
+
+0.2 percentage points), ϵ = 8 /255 , and 40 PGD steps. The oblivious attack is optimized without preprocessing. Adaptive attacks include the transform, using EOT ( 8 sam-ples/step) for Gaussian noise and resize/pad, and an identity BPDA gradient for JPEG, bit-depth, and median filtering (both techniques are defined in Section II-B). The initially-local success denominator is defined by the unprocessed clean gate on this subset. Across the twelve settings, the oblivious attack’s apparent effectiveness ranges from JPEG Q = 50 (offload lowered to 
+
+85 .6% , the strongest oblivious result, with 77% initially-local success) to feature squeezing and randomized resize/pad (of-fload only lowered to 91 –93% , at 88% initially-local success); Fig. 5(a) plots oblivious and adaptive offload for all twelve settings. Every tested adaptive attack raises offload back to at least 99 .8% , and all but the weakest bit-depth and Gaussian settings reach 100% (Fig. 5). Adaptive optimization defeats all tested preprocessing defenses on the full split. Physical camera-pipeline robustness remains outside this evaluation. These adaptive results challenge DefQ’s conjecture that gradient-obfuscation countermeasures would survive adaptive attacks [15] (Section II-B): under BPDA and EOT, all 12 tested 11 85 90 95 100           
+
+> attacked o ffl oad rate (%)
+> None (no preproc.) JPEG Q=90 JPEG Q=75 JPEG Q=50 Bit-depth 7 Bit-depth 6 Bit-depth 5 Gaussian σ=0.5/255 Gaussian σ=1/255 Gaussian σ=2/255 Median 3×3 Random resize/pad Squeeze (bd7 + median)
+> (a) Attack e ff ectiveness
+> oblivious adaptive (EOT/BPDA) −6 −3 036
+> change vs. no preprocessing (points)
+> (b) Clean-input e ff ects
+> Δ clean edge accuracy Δ clean offload
+
+Fig. 5: Preprocessing evaluation on the complete N =1000 -image artifact split ( ϵ = 8 /255 , 40-step PGD, one primary preprocessing seed). (a) Oblivious attacks omit the transform; adaptive attacks incorporate it through EOT (Gaussian noise, resize/pad) or a straight-through backward-pass differentiable approximation (BPDA) gradient (JPEG, bit-depth, median). Every evaluated preprocessing setting returns to at least 99 .8% attacked offload under adaptive optimization (six of twelve reach exactly 100% ), so the apparent robustness to the oblivious attack does not survive adaptive evaluation and is consistent with gradient obfuscation rather than a robust reduction of the escalation surface. Panel (b) evaluates the cost of preprocessing on clean, unattacked inputs. Each marker reports the change in edge accuracy or clean offload rate relative to no preprocessing, whose baseline values are 73 .1% and 46 .3% , respectively. Negative accuracy changes indicate that preprocessing causes more edge prediction errors, while positive offload changes indicate that it sends more benign requests to the cloud. Panel (a) reports attacked offload over all 1000 test inputs because this quantity directly determines offered cloud load. Initially-local success, reported in the text, instead conditions on inputs that were answered locally by the unprocessed clean gate and measures how often the attack changes their routing decision. 
+
+preprocessing settings raise offload back to at least 99 .8% .Preprocessing affects not only attacker traffic but also clean unattacked images: the strongest preprocessing settings reduce clean edge accuracy by up to 6.1 points and raise clean offload by up to 7.5 points (Fig. 5), because degrading the image also makes the edge model less confident about entirely benign inputs, pushing more of them to the cloud. No setting improves clean edge accuracy on the full test split—the tested preprocessing defenses carry a real cost on normal traffic with no accuracy benefit in return. We also omit clean combined-accuracy comparisons here, since such an estimate would need to assume that the cloud model remains correct on preprocessed images, an assumption we have not verified; we report no number rather than one built on an untested assumption. Given that preprocessing defenses do not work, admission-side controls takes a different approach: rather than attempting to restore the original routing decision, they limit the cloud work admitted after an offload request reaches the admission boundary. Per-source budgets limit individual identities, while the optional global bucket bounds aggregate untrusted admis-sions independently of identity count. 
+
+Defense-aware traffic attacks. 
+
+The preceding experiments use a fixed traffic construction, whereas an attacker who knows the admission policy may re-organize its requests to exploit the policy’s operating assump-tions. This section asks whether such an attacker can weaken containment by adapting the organization of its traffic rather than the image perturbation itself: unlike the adaptive attacks of Section VII-E, which incorporate input preprocessing into the optimization, the strategies considered here are defense-aware traffic attacks that leave the underlying image attack unchanged and vary how its offload volume is distributed across identities and time. An identity that offloads at 1/s against a per-source refill of Ru = 0 .69 /s is limited by the bucket; spreading the same volume over ten identities at 0.1/s each keeps every identity below Ru while preserving the aggregate 10 (0 .1) = 1 /s. Rate shaping instead holds each identity near 0.99 Ru, and duty cycling concentrates requests into alternating active and inactive intervals to exploit accu-mulated burst tokens. We evaluate whether these strategies can increase malicious cloud share or benign tail latency beyond the levels maintained by BE +G, and report the rejection cost imposed on legitimate unauthenticated traffic. We test parameter-aware traffic shaping against BE +G(12 seeds; Fig. 6 and Table VI). Sybil scaling uses 1–2500 
+
+identities in the sense of §VII-A (the 25 adversarial principals of the matched-flood comparison redistribute their aggregate offload volume across nid identities, so nid = 100 means 
+
+100 identities total, not 25 × 100 ), offering approximately 25 
+
+offloads/s once nid ≥ 25 ; the 1- and 5-identity configurations are lower-volume references. Rate-shaping configurations set per-identity rates to 0.80 –1.20 Ru. Duty cycling alternates perturbed and clean traffic with a 5 s period (duty d means the attack is active for 5d s of each period), probing whether burst timing can extract more admitted cloud work than steady sending within the same token budgets. These constructions are separate from the matched-flood comparison; equal nom-inal identity counts do not establish identical workloads. Across the tested configurations, authenticated p99 remains below 90 ms and malicious cloud share at most 59%. Unau-thenticated legitimate rejection reaches approximately 52%. These empirical outcomes do not follow from the token count bound alone, and do not cover joint optimization over images, 12 1 10 100 1000      
+
+> Sybil identity count nid
+> 050 100 150 200 250
+> p99 latency (ms)
+> below matched volume matched-volume threshold
+> (a) Latency stabilizes at matched volume
+> aggregate-benign p99 authenticated p99 110 100 1000
+> Sybil identity count nid
+> 010 20 30 40 50 60
+> percent (%)
+> (b) Aggregate containment under Sybil scaling
+> malicious cloud share unauth. benign rejection
+
+Fig. 6: Sybil identity-count sweep against Bounded Escalation +G, using the concentrated/Sybil flood construction of §VII (12 seeds, measured-service queue, K = 64 ). The shaded region left of the dashed matched-volume threshold contains configurations with nid < 25 ,which cannot reach the matched ≈ 25 offloads/s and are shown as low-volume references. (a) Once matched volume is reached, authenticated p99 remains nearly constant, while aggregate-benign p99 stabilizes by nid = 50 . Neither metric grows with additional identities because protected capacity and priority do not reference identity count. (b) The global bucket holds malicious cloud share at ≤ 59% across more than three orders of magnitude in identity count. The containment follows from protected capacity, priority scheduling, and the identity-independent global bucket, without anomaly detection. Rate-shaped and duty-cycled attackers are reported separately in Table VI. 
+
+identities, and arrival times. Fig. 6 and Table VI probe one question along two attacker dimensions: Fig. 6 varies how many identities the attacker registers, while Table VI varies each identity’s sending rate and temporal pattern. All tested configurations satisfy the im-plemented admission bounds, and authenticated p99 remains within 72 –73 ms under every defense-aware strategy. Once the matched-volume threshold is crossed, neither malicious cloud share nor aggregate-benign p99 grows with identity count or with the chosen pattern, because the per-source buckets, protected capacity, priority scheduling, and the global bucket bound admitted untrusted work independently of whether traffic is malicious and of how that work is distributed across identities or time. The points in the shaded region of Fig. 6(a) have not reached matched volume: their per-source buckets bind earlier, and their higher aggregate-benign p99 reflects a different admission and rejection mix, so they serve as lower-volume references. Containment is also costly: unauthenti-cated benign rejection remains between 20% and 52% across these configurations, so together the figure and table establish bounded isolation, not immunity for every benign client. At the nominal operating point this cost makes BE +G unsuitable as-is for services with substantial anonymous or unauthenticated demand; it fits deployments in which unauthenticated traffic can be capped or clients can be authenticated. 
+
+Deadline and operating-point sensitivity. A single p99 value at one workload and one deadline does not fully characterize availability. This subsection first reports deadline-miss probabilities across several latency requirements and then varies offered request rate and queue capacity to show how the attack depends on the system’s starting operating point. The qualitative queueing effect persists across these sweeps, while the headline amplification factor remains a property of its operating point. 
+
+Deadline sensitivity. We report P (L > D) for D ∈{50 , 100 , 200 , 500 } ms rather than treating 100 ms as a val-idated application requirement. Fig. 2 uses a Sybil flood at TABLE VI: Defense-aware traffic attacks on BE +G: 12 seeds, measured-service queue, K = 64 . The Sybil identity-count sweep is reported in Fig. 6. Rate shaping is relative to Ru;duty period is 5 s. Duty d means the attack is active for 5d sof each period. Intermediate rate-shaping and duty settings fall between these extremes and are omitted since all tested configurations satisfy the same admission bounds.                          
+
+> Attacker configuration Auth. p99 Agg. p99 Unauth. rej. Mal. share (ms) (ms)
+> 0.80 Ru(nid =50 )72 113 25.1% 51%
+> 1.20 Ru(nid =25 )72 101 34.6% 54% duty 0.10 73 122 20.0% 50% duty 1.00 73 100 36.3% 55%
+
+φ = 0 .5 and pools samples over 12 seeds. Its first three panels concern admitted cloud requests, as defined in §VII. Without defense, admitted aggregate-benign requests miss 
+
+100 ms 94.9% of the time (7.8% without attack), and 500 ms 70.8% of the time. BE lowers these to 46.8% and 25.0%; BE +G gives 0.5% and 0.0%. These improvements must be read alongside the rejected offloads in Table V. The “all benign” panel reconstructs all benign requests, in-cluding local and rejected-offload fallback answers at the mea-sured 1.30 ms edge latency. For a deadline D above that edge latency and benign offload rejection fraction d, its miss prob-ability is Pall benign (L > D ) = qb(1 − d)Padmitted benign (L > D). This uses benign qb, not the mixture of benign and adversarial offload probabilities. Expected benign accuracy is likewise reconstructed from the route fractions: local answers use clean accepted-edge correctness, admitted offloads use clean cloud correctness conditional on offloading, and rejected offloads use clean edge correctness conditional on offloading. The resulting estimates are 89.7% without defense, 89.5% with BE, and 85.5% with BE +G. These are model-derived expectations under fixed conditional-correctness assumptions, not hardware-measured accuracies; lower latency from fallback does not imply pre-served prediction quality. 13 TABLE VII: Additional policy sweep (representative rows only; the complete seven-rate sweep is visualized in Figs. 7 and 8), using the same cloud-work-matched Sybil construction as Table V (§VII): eight seeds, 800 s, K = 64 . T/U/A are authenticated, unauthenticated, and aggregate benign. p99 excludes rejected offloads; rejection uses each class’s offload attempts; malicious share uses cloud service starts. The ac-curacy column is the modeled all-benign fallback accuracy of §VI (not an end-to-end measurement). G applies only to untrusted clients. The three reference baselines have no global bucket; the remaining rows show the nominal ( 14 .95 /s) and the two extreme tested refill rates for “G only” vs. “BE +G”.                                                         
+
+> Policy Rg/s p99 (ms) Rej.(%) Mal.(%) Mod. acc.(%) TUATUNone (FIFO) – 1735.7 1736.5 1736.4 0.87 0.88 68.54 89.69 Strict priority –76.9 6165.7 5279.1 0.87 0.88 68.53 89.69 BE –76.6 1735.6 1543.5 1.19 2.75 68.68 89.51 G (FIFO) 877.2 63.0 75.4 0.00 74.23 47.82 83.81 G (FIFO) 14.95 96.7 86.4 94.3 0.00 51.86 59.12 85.63 G (FIFO) 32 1623.2 1611.8 1618.6 0.17 1.30 68.39 89.71 BE +G868.8 75.9 70.2 1.35 74.41 48.09 83.70 BE +G14.95 72.3 110.0 87.3 1.25 51.74 59.13 85.54 BE +G32 76.2 1755.2 1548.7 1.16 3.07 68.45 89.49
+
+Operating-point sensitivity. We vary offered application rate over 30 , 40 , 50 , and 60 req/s and capacity over K ∈{32 , 64 , 128 }, each with 8 paired clean/attack seeds, 800 s with 100 s warm-up, the same measured service distribution, no defense, and concentrated traffic at φ ∈ { 0, 0.5} with the saturated qa = 1 ; these are additional runs alongside the main 
+
+3000 s experiment, reported as mean paired per-seed p99 ratios with pointwise 95% t intervals. At 30 and 40 req/s the ratios are 1.60 and 2.66 . At 50 req/s, varying K changes the ratio from 5.16 to 20 .30 . At 60 req/s, approximately 16 .4–16 .6% of benign offloads are rejected, so the admitted-request tail alone understates service loss. The 10.46 × headline is therefore an operating-point-specific illustration. These sweeps still use one serial worker; they do not validate batching or autoscaling. 
+
+F. Trade-Offs and Limitations 
+
+The global untrusted bucket is the principal mechanism that converts per-identity limits into an identity-independent bound, but its refill rate also determines how much legitimate unauthenticated traffic is rejected. We sweep this rate and compare a global-bucket-only FIFO policy with the complete BE +G composition to separate aggregate containment from the additional value of protected capacity and trusted prior-ity; the resulting configurations map the empirical latency– rejection–accuracy trade-off across evaluated policy choices. The sweep uses refill rates 8, 12 , 14 .95 , 18 , 22 , 26 , and 
+
+32 /s and burst depth 20 . Trusted clients bypass this global bucket in both policies. The bucket-only baseline has no per-source budget, protected capacity, or priority. We retain no-defense, strict-priority, and BE references and all tested rates (Table VII). Table VII reports, for each of the 9 representative rows (three baselines without a global bucket, plus the nominal rate and two extremes crossed with G-only versus BE +G), separate p99 values for authenticated (T), unauthenticated (U), and aggregate (A) benign traffic alongside rejection and modeled accuracy. Fig. 8 visualizes only the aggregate (A) column against rejection and accuracy; it does not show the T column separately. We flag this because the T column reveals a finding the aggregate view cannot: authenticated p99 stays within 68 –
+
+77 ms across every tested global-bucket rate under BE +G, essentially decoupled from the rejection–latency trade-off that governs the aggregate curve. The runs use the same eight-seed, 800 s protocol, K = 64 , and cloud-work-matched Sybil construction described in §VI. (Note that it is different from the primary twelve-seed, 3000 s protocol, so baseline rows are not bit-identical to Table V’s Sybil column.) Fig. 7(a) shows why authenticated isolation appears only when priority scheduling and protected capacity are present. G-only FIFO has no priority mechanism, so authenticated latency tracks the same saturation curve as unauthenticated traffic, rising from 77 .2 to 1623 .2 ms as the rate relaxes from 
+
+8 to 32 /s; BE +G instead keeps authenticated p99 within 68 .8–
+
+76 .2 ms across the same range. This isolation is therefore a property of the priority scheduling and protected capacity layered on top of the global bucket, not of the global bucket itself. Fig. 7(b) shows this isolation is nearly free: unauthenticated rejection is almost identical between the two policies across the swept range (e.g., 51 .86% versus 51 .74% at 14 .95 /s, 
+
+15 .83% versus 16 .86% at 26 /s), diverging only at the loosest tested rate ( 32 /s: 1.30% versus 3.07% ). The complete policy is therefore not uniformly superior, though the gap is small. Fig. 7(c) traces how each mechanism contributes. Adding priority alone (None →Strict priority) drives authenticated p99 down from 1735 .7 to 76 .9 ms, but pushes unauthenticated p99 to 6165 .7 ms—worse than no defense, since all queueing delay is redirected onto lower-priority traffic. Adding per-source budgets and protected capacity without a global bucket (Strict priority →BE) leaves authenticated p99 essentially un-changed ( 76 .6 ms) but does not repair unauthenticated p99 (1735 .6 ms), since these mechanisms alone do not bound a Sybil flood spread across many identities. Only the global bucket (BE →BE +G at 14 .95 /s) improves both classes to-gether: authenticated p99 remains low ( 72 .3 ms) while unau-thenticated p99 falls to 110 .0 ms. Fig. 8 makes this trade-off explicit. In panel (a), each curve sweeps the global-bucket refill rate from 8 to 32 /s: tightening the rate lowers admitted latency but rejects more legitimate unauthenticated offloads, while relaxing it does the reverse. At the nominal 14 .95 /s rate, BE +G rejects 51 .74% of legitimate unauthenticated offloads for 87 .3 ms aggregate-benign p99; at 
+
+32 /s, rejection falls to 3.07% but p99 rises to 1548 .7 ms. Panel (b) presents the same policy settings against modeled all-benign fallback accuracy. For benign class c ∈ { T, U}, let 
+
+qc be its clean offload probability, rc its rejection probability conditional on an offload attempt, and let alocal  
+
+> c
+
+, acloud  
+
+> c
+
+,and afallback  
+
+> c
+
+denote measured clean correctness for locally answered, cloud-offloaded, and rejected-offload fallback pre-dictions (i.e., conditional correctness of the precomputed edge prediction returned after a rejected offload). The plotted accu-racy is 14 8 12 14.95 18 22 26 32        
+
+> Global bucket rate (req/s)
+> 10 2
+> 10 3
+> Authenticated p99 (ms, log scale)
+> (a) Where isolation comes from
+> G only (FIFO) BE+G 812 14.95 18 22 26 32
+> Global bucket rate (req/s)
+> 010 20 30 40 50 60 70
+> Unauth. offload rejection (%)
+> (b) Cost is nearly identical
+> G only (FIFO) BE+G
+> None (FIFO) Strict priority BE BE+G (14.95/s)
+> 10 2
+> 10 3
+> 10 4
+> p99 (ms, log scale)
+> (c) Mechanism progression
+> Authenticated (T) Unauthenticated (U) Aggregate (A)
+
+Fig. 7: Global-bucket rate sweep (eight seeds, 800 s, K = 64 , cloud-work-matched Sybil construction; data from Table VII). (a) Authenticated p99 for G-only FIFO versus BE +G. (b) Unauthenticated offload rejection under the same sweep. (c) p99 by benign class across the three no-global-bucket baselines and the nominal BE +G configuration ( 14 .95 /s). 0 20 40 60 Unauth. benign o ffl oad rejection (%) 50 100 500 1000 5000 Admitted-benign p99 (ms, log scale)  (a) Latency and rejection       
+
+> 84 85 86 87 88 89 90 Expected all-benign accuracy (%)
+
+(b) Latency and modeled accuracy 
+
+> No defense Strict priority BE Untrusted global bucket + FIFO BE+G
+
+Fig. 8: Admission trade-offs for all tested global-bucket rates; error bars are pointwise 95% t intervals across eight seeds. Lower admitted latency is accompanied by more rejected benign offloads and lower modeled all-benign fallback accuracy. 
+
+Abenign = X 
+
+> c∈{ T,U }
+
+wc
+
+(1 −qc)alocal  
+
+> c
+
++qc(1 −rc)acloud  
+
+> c
+
++qcrcafallback 
+
+> c
+
+.
+
+For each benign class c ∈ { T, U }, the expression partitions incoming requests into three mutually exclusive routing out-comes: local answers, admitted cloud offloads, and rejected offloads that return the previously computed edge prediction. At the matched φ = 0.5 operating point, the workload contains 25 benign principals, comprising 12 authenticated and 13 unauthenticated principals. Because every principal offers the same application-request rate, their fixed offered-benign population weights are wT = 12 /25 and wU =13 /25 . These weights are held constant across policies rather than recomputed from admitted requests, preventing a policy from appearing more accurate merely because it rejects more unauthenticated offloads. The nominal BE +G setting reduces modeled all-benign fallback accuracy from 89 .69% to 85 .54% 
+
+while cutting aggregate-benign p99 from 1736 .4 to 87 .3 ms. The reference points isolate which mechanism drives this trade-off: BE alone stays close to no defense, since per-source limits do not bound a Sybil attack; strict priority gives the worst aggregate p99 by shifting delay onto unauthenticated traffic; and the global-only and BE +G curves nearly coincide, showing the global cap supplies most of the aggregate-tail reduction. BE +G’s remaining advantage—authenticated iso-lation as the cap is relaxed—is visible only in Table VII, not on this figure’s aggregate-latency axis. VIII. C ONCLUSION 
+
+Bounded perturbations increase offloading without increas-ing request volume, producing 10.46 × admitted-benign p99 amplification under the Poisson-arrival baseline of our 50 req/s, serial batch-one, K = 64 case study. Natural-input selection and a simple global limiter provide strong attack and defense baselines, respectively. BE +G preserves authenticated isola-tion as the global cap is relaxed, but at the nominal operating point it rejects 52 .1% of legitimate unauthenticated offloads and reduces modeled all-benign fallback accuracy from 89.7% to 85.5%. Its contribution is therefore a selectable isolation– rejection trade-off, rather than a universally superior defense. 15 Although our experiments focus on EdgeBoost and one model pair, the underlying security concern is broader: in any edge–cloud system where an input-dependent confidence gate admits work to a scarce shared backend, that gate also forms an admission-control boundary and should be protected by per-identity and tier-wide limits. REFERENCES [1] Z. Sun, H. Yang, C. Li, Q. Yao, D. Wang, J. Zhang, and A. V. Vasilakos, “Cloud-edge collaboration in industrial internet of things: A joint offloading scheme based on resource prediction,” IEEE Internet of Things Journal , vol. 9, no. 18, pp. 17 014–17 025, 2021. [2] A. M. Rasouli, M. Esnaashari, A. S. Maryan, M. Ansari, S. Safari, and M. Shafique, “Tore-net: A task replication and offloading strategy in reliable and energy-efficient mobile edge computing networks,” IEEE Internet of Things Journal , 2026. [3] N. Said and O. Landsiedel, “EdgeBoost: Confidence boosting for resource constrained inference via selective offloading,” Computer Net-works , vol. 269, p. 111437, 2025, publication record: https://tore.tuhh.de/ entities/publication/2eec5130-eab0-4ad7-a5f3-5096b503bb37. [Online]. Available: https://doi.org/10.1016/j.comnet.2025.111437 [4] A. Howard, M. Sandler, G. Chu, L.-C. Chen, B. Chen, M. Tan, W. Wang, Y. Zhu, R. Pang, V. Vasudevan, Q. V. Le, and H. Adam, “Searching for MobileNetV3,” in IEEE/CVF International Conference on Computer Vision (ICCV) , 2019, arXiv:1905.02244. [Online]. Available: https://arxiv.org/abs/1905.02244 [5] M. Tan and Q. V. Le, “EfficientNetV2: Smaller models and faster training,” in International Conference on Machine Learning (ICML) ,2021, arXiv:2104.00298. [Online]. Available: https://arxiv.org/abs/2104. 00298 [6] H. F. Brachemi Meftah, W. Hamidouche, S. A. Fezza, and O. De-forges, “Energy-latency attacks: A new adversarial threat to deep learn-ing,” ACM Computing Surveys , vol. 58, no. 8, pp. 1–34, 2026, doi: 10.1145/3785666. [7] Z. Gu, Z. Gao, A. Saremi, and S. Chakraborty, “Deep learning latency attacks and defenses: A cross-domain survey of availability threats,” ResearchGate preprint, Jul. 2026. [Online]. Available: https://www.researchgate.net/publication/410777481 [8] S. Hong, Y. Kaya, I.-V. Modoranu, and T. Dumitras, “A panda? no, it’s a sloth: Slowdown attacks on adaptive multi-exit neural network inference,” in International Conference on Learning Representations (ICLR) , 2021, arXiv:2010.02432. [Online]. Available: https://arxiv.org/ abs/2010.02432 [9] M. Haque, A. Chauhan, C. Liu, and W. Yang, “ILFO: Adversarial attack on adaptive neural networks,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2020. [Online]. Available: https://doi.org/10.1109/CVPR42600.2020.01428 [10] Y. Li et al. , “SPLAT: Revisiting latency attacks on dynamic neural networks,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems (TCAD) , 2026. [Online]. Available: https://doi.org/10.1109/TCAD.2025.3576320 [11] I. Shumailov, Y. Zhao, D. Bates, N. Papernot, R. Mullins, and R. Anderson, “Sponge examples: Energy-latency attacks on neural networks,” in IEEE European Symposium on Security and Privacy (EuroS&P) , 2021. [Online]. Available: https://doi.org/10.1109/ EuroSP51992.2021.00024 [12] E.-C. Chen, P.-Y. Chen, I.-H. Chung, and C.-R. Lee, “Overload: Latency attacks on object detection for edge devices,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024, arXiv:2304.05370. [Online]. Available: https://arxiv.org/abs/2304.05370 [13] C. Ma, N. Wang, Q. A. Chen, and C. Shen, “SlowTrack: Increasing the latency of camera-based perception in autonomous driving using adversarial examples,” in AAAI Conference on Artificial Intelligence , 2024, arXiv:2312.09520. [Online]. Available: https: //arxiv.org/abs/2312.09520 [14] T. Wang, Z. Wang, C. Wang, Z. Shu, R. Deng, P. Cheng, and J. Chen, “Can’t slow me down: Learning robust and hardware-adaptive object detectors against latency attacks for edge devices,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , Jun. 2025, pp. 19 230–19 240. [15] H. Qiu, T. Zhang, T. Zhang, H. Li, and M. Qiu, “DefQ: Defensive quantization against inference slow-down attack for edge computing,” 
+
+IEEE Internet of Things Journal , vol. 10, no. 4, pp. 3243–3251, Feb. 2023, doi: 10.1109/JIOT.2021.3138935. [16] P. Viola and M. Jones, “Rapid object detection using a boosted cascade of simple features,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2001. [17] T. Bolukbasi, J. Wang, O. Dekel, and V. Saligrama, “Adaptive neural net-works for efficient inference,” in Proceedings of the 34th International Conference on Machine Learning (ICML) , 2017. [18] L. Chen, M. Zaharia, and J. Zou, “FrugalGPT: How to use large language models while reducing cost and improving performance,” Transactions on Machine Learning Research , 2024. [19] Y. Geifman and R. El-Yaniv, “Selective classification for deep neural networks,” in Advances in Neural Information Processing Systems (NeurIPS) , 2017. [20] S. Teerapittayanon, B. McDanel, and H. T. Kung, “BranchyNet: Fast inference via early exiting from deep neural networks,” in Proceedings of the 23rd International Conference on Pattern Recognition (ICPR) ,2016. [21] G. Huang, D. Chen, T. Li, F. Wu, L. van der Maaten, and K. Q. Weinberger, “Multi-scale dense networks for resource efficient image classification,” in International Conference on Learning Representations (ICLR) , 2018. [22] Y. Kang, J. Hauswald, C. Gao, A. Rovinski, T. Mudge, J. Mars, and L. Tang, “Neurosurgeon: Collaborative intelligence between the cloud and mobile edge,” in Proceedings of the 22nd International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS) , 2017. [23] L. Zhang and J. Xu, “Fooling edge computation offloading via stealthy interference attack,” in 2020 IEEE/ACM Symposium on Edge Computing (SEC) . IEEE, 2020, pp. 415–419. [24] J. Tavori, M. K. Turkcan, Z. Kostic, J. Ghaderi, and G. Zussman, “Worst-case attacks in reactive edge-cloud systems: Expected latency and SLA violation,” in IEEE INFOCOM 2026 – IEEE Conference on Computer Communications . IEEE, 2026, pp. 1–10. [Online]. Available: https://doi.org/10.1109/INFOCOM59046.2026.11571607 [25] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On calibration of modern neural networks,” in International Conference on Machine Learning (ICML) , 2017, arXiv:1706.04599. [Online]. Available: https://arxiv.org/abs/1706.04599 [26] A. Madry, A. Makelov, L. Schmidt, D. Tsipras, and A. Vladu, “Towards deep learning models resistant to adversarial attacks,” in 
+
+International Conference on Learning Representations (ICLR) , 2018, arXiv:1706.06083. [Online]. Available: https://arxiv.org/abs/1706.06083 [27] A. S. Tanenbaum and D. J. Wetherall, Computer Networks , 5th ed. Boston, MA, USA: Pearson, 2011, traffic shaping and token buckets, Sec. 5.4. [28] N. Said, “EdgeBoost: Source code repository,” GitHub repository ds-kiel/EdgeBoost, 2024. [Online]. Available: https://github.com/ds-kiel/ EdgeBoost [29] A. Krizhevsky, “Learning multiple layers of features from tiny images,” University of Toronto, Tech. Rep., 2009. [Online]. Available: https://www.cs.toronto.edu/ ∼kriz/learning-features-2009-TR.pdf [30] C. J. Clopper and E. S. Pearson, “The use of confidence or fiducial limits illustrated in the case of the binomial,” Biometrika , vol. 26, no. 4, pp. 404–413, Dec. 1934. 
+
+APPENDIX 
+
+A. Bounded Escalation Burst-Depth Provenance 
+
+The per-source and global burst depths ( Bu = 5 , bgtb = 20 )were checked on a disjoint clean-traffic validation trace ( φ =0, seeds 100 –111 , outside the reporting range), separately from the two analytically-fixed refill rates. Bu = 5 is the smallest per-source depth keeping authenticated false rejection below 1.5% (depth 4 gives 2.8% ), and the reported clean-load rejection of 1.25% is the outcome of that criterion. The global depth has no such trade-off: any bgtb ≥ 5 already leaves clean-traffic rejection at the per-source bucket’s residual ≈1.2% , so 
+
+bgtb = 20 is a conservative burst allowance for flood onset rather than a value tuned against any attacked trace. 
+
+B. Clopper–Pearson Rationale 
+
+Unlike the common normal (Wald) approximation, the Clopper–Pearson interval inverts the binomial cumulative dis-16 tribution directly rather than approximating it, guaranteeing at least 95% coverage of the true success probability at the cost of being more conservative; this matters here because several reported success rates lie near the 100% boundary, where normal approximations are known to be unreliable. 
+
+C. Concentrated and Sybil Flood Arithmetic 
+
+Of the 50 total principals ( 25 benign, 25 adversarial), a concentrated flood has each of the 25 adversarial principals present itself as a single identity offloading at rate 1.0/s, so adversarial identities are 25 of 50 visible identities ( 50% ) and jointly offer 25 ×1.0=25 adversarial offloads/s. A Sybil flood instead has each of the same 25 adversarial principals split into 
+
+10 separate identities (matching the nid = 250 case used in §VII-E), each offloading at only 0.1/s; adversarial identities are now 250 of 275 visible identities ( 90 .9% ), while the aggregate adversarial offload rate is unchanged at 250 ×0.1=25 /s. 
+
+D. Protocol Differences Across Repeated-Looking Results 
+
+Several results that appear to repeat one another are in fact produced by distinct protocols and should not be treated as independent replications of a single population. The 10.46 × headline is reported by three separately con-figured runs whose tail ratios differ: the primary 3000 s, 12 -seed run gives 166 ms →1737 ms (10.46 ×); the fixed-volume comparison, configured with its own attacker-designation con-struction, gives 165 →1738 ms ( 10 .53 ×); and the shorter 800 s, 8-seed sensitivity run at Λ = 50 , K = 64 gives a paired per-seed ratio of 10 .28 [9 .88 , 10 .68] (operating-point sensitivity, §VII-D). These runs share the simulator and service distribu-tion and differ in horizon, seed count, traffic construction, and whether ratios are formed per seed or from pooled summaries. The multi-gate test (Table III) uses 1000 images with separately frozen thresholds; the budget sweep (Fig. 3) and the preprocessing evaluation (Fig. 5) use the full 1000 test images with three attack seeds and one primary plus two robustness seeds, respectively. These protocols yield different operating points and should not be compared as repeated measurements of one population. 17

@@ -1,0 +1,2185 @@
+Title: ZeroGAR: Benchmarking the Adversarial Robustness of Zero-Shot Graph Models
+
+URL Source: https://arxiv.org/pdf/2609.33314v1
+
+Published Time: Tue, 29 Sep 2026 01:52:49 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# ZeroGAR: Benchmarking the Adversarial Robustness of Zero-Shot Graph Models 
+
+## Zhongjian Zhang 1, Xiao Wang 3, Busheng Zhang 1, Bo Yan 4,Xingtong Yu 5, Yue Gao 4, Jia Li 2∗, Chuan Shi 1∗
+
+> 1
+
+Beijing University of Posts and Telecommunications, 2The Hong Kong University of Science and Technology (Guangzhou) 
+
+> 3
+
+Beihang University, 4Tsinghua University, 5The Chinese University of Hong Kong zhangzj@bupt.edu.cn, xiao_wang@buaa.edu.cn, 2023213779@bupt.cn, bobobe@mail.tsinghua.edu.cn, xtyu@se.cuhk.edu.hk, gaoyue@tsinghua.edu.cn, jialee@hkust-gz.edu.cn, shichuan@bupt.edu.cn 
+
+Abstract 
+
+Zero-shot graph models (ZGMs), which learn transferable knowledge from source graphs and directly apply to unseen target graphs without any adaptation, have achieved promis-ing performance and attracted considerable attention. Despite their proliferation, existing ZGMs are predominantly evalu-ated on clean graphs, while existing graph robustness bench-marks mainly focus on supervised settings, leaving a funda-mental question largely unexplored: How robust are ZGMs when their unseen target graphs are exposed to adversar-ial manipulation? In this paper, we answer this question by proposing ZeroGAR , the first systematic benchmark for eval-uating the adversarial robustness of ZGMs. ZeroGAR evalu-ates 13 representative ZGMs from 3 different paradigms on 8 graph datasets across 4 domains, covering both in-domain and cross-domain transfer under structural, textual, and node injection attacks with multiple perturbation budgets. It further investigates whether existing graph defenses remain effective in the zero-shot setting. Extensive experiments reveal that strong clean zero-shot performance does not guarantee adver-sarial robustness, with three key findings: (1) Vulnerability patterns are related to model prediction mechanisms: GNN-based methods are particularly vulnerable to structural and node injection attacks, whereas LLM-based methods are more vulnerable to textual attacks; (2) Stronger LLM backbones introduce a structure–text robustness trade-off; (3) Existing graph defense methods do not consistently improve zero-shot robustness and may compromise clean performance. We hope that ZeroGAR will facilitate rapid, equitable evaluation and inspire further innovative research in ZGM security. 
+
+## Introduction 
+
+Graphs are ubiquitous in the real world, including social net-works (Huang et al. 2024), finance networks (Wang et al. 2022), and product networks (Zhang et al. 2025c). Recently, the graph models represented by Graph Neural Networks (GNNs) have become the mainstream approach for model-ing graph data (Wu et al. 2020). However, traditional graph models typically require training or adaptation for each target graph, which becomes impractical as new graphs continually emerge in real-world applications. Therefore, recent studies have developed zero-shot graph models (ZGMs) that learn transferable knowledge from source graphs and directly make predictions on unseen target graphs, attracting considerable attention (Li et al. 2024a; Zhu et al. 2025; Wang et al. 2026a). Typically, ZGMs focus on text-attributed graphs (TAGs), where each node is associated with a text attribute. Such 
+
+> ∗
+
+Corresponding author. (a) GNNPred  
+
+> TAG Encoder
+> Contrastive / Concatenate
+> Agents, which refer to autonomous entities that …
+> Language Models
+> Class Description
+> (b) GTextLLM
+> Large Language Models
+> Which category does this paper belong to?
+> Title: <title> Abstract: <abstract> It has neighbors …
+> 1-hop: 2-hop:
+> Neighbor List
+> (c) GTokenLLM
+> Large Language Models
+> TAG Encoder
+> Given the graph tokens: < >…
+> Projector
+> Which category does this paper belong to?
+
+Figure 1: Overview of 3 paradigms of ZGMs. text information allows these models to leverage the rich se-mantic knowledge or strong reasoning capabilities of large language models (LLMs), to enable zero-shot generaliza-tion across different graphs (Liu et al. 2025). Existing ef-forts mainly fall into three categories: GNN-based Predictors (GNNPreds), Graph-Textualizing LLMs (GTextLLMs), and Graph-Tokenizing LLMs (GTokenLLMs). As shown in Fig-ure 1, GNNPreds use a TAG encoder and a language encoder to generate representations of nodes and candidate classes, respectively, and then make predictions either by computing their contrastive similarities or concatenating them to train classifiers (Zhu et al. 2025; Liu et al. 2024). In contrast, GTextLLMs and GTokenLLMs mainly align graph data with the natural language space to enable LLM-based reasoning. GTextLLMs convert node text and graph structure into natu-ral language contexts (Guo et al. 2025a; Wang et al. 2026b), whereas GTokenLLMs encode graph information into graph tokens that can be fed into LLMs (Wang et al. 2024a, 2026a). The above methods have demonstrated promising zero-shot node classification performance in both in-domain and cross-domain settings (Li et al. 2024b; Wu et al. 2025). However, their performance is predominantly evaluated on clean target graphs, implicitly assuming that the graph structure and node text remain reliable. In open deployment environments, an adversary may manipulate a target graph by adding or deleting edges, modifying node text, or in-jecting malicious nodes, posing significant challenges to the deployment of ZGMs in real-world applications, e.g., finance and healthcare (Sun et al. 2022; Zhang et al. 2026c, 2024). This problem is further complicated in the zero-shot setting, where the model must handle an unseen target graph without labeled data or any adaptation. Meanwhile, existing graph robustness benchmarks mainly consider supervised settings where models are trained and evaluated on the same graph or task (Table 1). Consequently, they provide limited evi-dence on whether adversarial robustness transfers together arXiv:2609.33314v1 [cs.LG] 27 Sep 2026 Table 1: Comparison of existing graph robustness benchmarks. 
+
+Benchmark Data domains Attack type Victim model Zero-shot setting Structure Textual Node injection GNNPred GTextLLM GTokenLLM 
+
+Zheng et al. 2021 2 ✓ ✗ ✓ ✗ ✗ ✗ ✗
+
+Gosch et al. 2023 4 ✓ ✗ ✗ ✗ ✗ ✗ ✗
+
+Guo et al. 2024 3 ✓ ✓ ✗ ✗ ✓ ✗ ✗
+
+Zhang et al. 2025a 2 ✓ ✓ ✗ ✗ ✗ ✓ ✗
+
+Olatunji et al. 2025 1 ✓ ✓ ✗ ✗ ✗ ✓ ✗
+
+Ma et al. 2026 2 ✓ ✓ ✗ ✗ ✗ ✗ ✗
+
+Lei et al. 2026 4 ✓ ✓ ✓ ✗ ✓ ✓ ✗
+
+ZeroGAR (Ours) 4 ✓ ✓ ✓ ✓ ✓ ✓ ✓
+
+with predictive capability to unseen graphs. These limita-tions raise a fundamental question: How robust are ZGMs when their unseen target graphs are exposed to adversarial manipulation? Answering this question not only advances our understanding of adversarial robustness of ZGMs, but also provides the foundation for developing secure graph foundation models (Liu et al. 2025). To this end, we propose ZeroGAR , a systematic bench-mark for evaluating the adversarial robustness of ZGMs. Specifically, ZeroGAR includes 8 TAG datasets from 4 do-mains, covering both in-domain and cross-domain zero-shot transfer. It evaluates 13 representative ZGMs spanning GN-NPreds, GTextLLMs, and GTokenLLMs against 3 major at-tack surfaces: graph structure, raw node text, and node in-jection, and evaluates each attack under low, medium, and high perturbation budgets. Beyond clean and adversarial per-formance, ZeroGAR investigates whether existing graph de-fenses can improve robustness in the zero-shot setting. Extensive experiments show that strong zero-shot perfor-mance on clean target graphs does not guarantee robustness under adversarial perturbations, with three key insights: (1) GNNPreds are particularly vulnerable to structural perturba-tions, with an average relative accuracy drop of 18.37%, com-pared with 3.10% for GTextLLMs and 2.45% for GToken-LLMs. In contrast, textual attacks cause significant drops of 21.19% and 20.27% for GTextLLMs and GTokenLLMs, re-spectively, compared with 8.28% for GNNPreds. (2) Stronger LLM backbones improve resistance to corrupted graph con-text, but can simultaneously increase sensitivity to mislead-ing textual semantics. (3) Existing graph defenses do not consistently improve zero-shot robustness and may even re-duce clean or adversarial performance. These observations raise alarms for the secure deployment of ZGMs in real-world applications. Our contributions are summarized as follows: 
+
+• We introduce ZeroGAR, the first systematic benchmark for evaluating the adversarial robustness of ZGMs, enabling a fair comparison among different methods by unifying the ex-perimental settings across a collection of real-world datasets. 
+
+• We conduct extensive experiments that reveal how the ad-versarial robustness of ZGMs is shaped by model prediction mechanisms, LLM backbone strength, and defense strategies, providing key insights for developing more robust ZGMs. 
+
+• Our benchmark repository will be made publicly available after the review process to facilitate future research on the adversarial robustness of zero-shot graph models. 
+
+## Preliminaries 
+
+Text-Attributed Graphs 
+
+A text-attributed graph (TAG) is denoted as G =( V, E, S),where V = {vi}Ni=1 is the set of N nodes, E is the set of edges, and S = {si}Ni=1 is the set of node texts. The graph structure is represented by an adjacency matrix A ∈ { 0, 1}N ×N , where 
+
+Aij = 1 indicates that an edge exists between vi and vj .Following prior studies on graph adversarial learning, we focus on node classification. Specifically, given a label space 
+
+Y = {0, . . . , C − 1}, each node vi has a label yi ∈ Y . The objective is to predict the labels yt of a set of target nodes based on their textual attributes and graph structure. 
+
+Zero-shot Graph Learning 
+
+In the zero-shot setting, a parameterized graph model fθ
+
+is trained on a collection of source graphs and then directly applied to an unseen target graph, without using labeled target nodes or performing task-specific parameter updates. Let 
+
+Gs ={G sk}Kk=1 denote a collection of K source TAGs. The parameters are learned by minimizing the training loss: 
+
+θ∗ = arg min  
+
+> θ
+
+Ltrain (fθ ; Gs) . (1) The training process may be supervised or unsupervised. Subsequently, given an unseen target TAG Gt=( Vt, Et, St)
+
+with a label space Yt, where Vsk ∩ V t = ∅ and Ysk ∩ Y t = ∅
+
+for all k ∈ { 1, . . . , K }, the well-trained fθ∗ is then directly applied to predict the label of each target node: 
+
+ˆyti = arg max  
+
+> c∈Y t
+
+Pfθ∗
+
+ yti = c | G t, Yt , vti ∈ V t, (2) where ˆyti is the predicted label and c is a candidate class. 
+
+Graph Adversarial Attacks and Defenses 
+
+Given a well-trained graph model fθ∗ , an attacker aims to degrade its predictive performance on a set of target nodes 
+
+Vt by manipulating the input graph Gt. The formal definition of adversarial attacks is as follows: 
+
+max  
+
+> δ∈∆
+
+Ltest (fθ∗ (Gt + δ), yt), (3) where yt is the labels of the target nodes. δ denotes a pertur-bation applied to the graph G, which may involve modifying the graph structure or raw textual attributes, or injecting ma-licious nodes. ∆ denotes the set of all permitted and effective Table 2: Statistics of the source and target graph datasets.                                                                                       
+
+> Dataset #Nodes #Edges Avg. # Deg Avg. # Tok #C Train/Val/Test (%) Node Text Domain Usage
+> OGBN-Arxiv 169,343 1,157,799 13.77 232.61 40 53.7/17.6/28.7 Paper content Academic Gs
+> OGBN-Products 2,449,029 61,859,012 50.52 153.41 47 8.0/1.6/90.4 Product description E-commerce Gs
+> Cora 2,708 5,278 3.90 189.54 760.0/20.0/20.0 Paper content Academic Gt
+> Citeseer 3,186 4,225 2.65 193.11 660.0/20.0/20.0 Paper content Academic Gt
+> History 41,551 251,590 12.11 298.97 12 60.0/20.0/20.0 Product reviews E-commerce Gt
+> Child 76,875 1,162,522 30.24 283.00 24 60.0/20.0/20.0 Product reviews E-commerce Gt
+> Instagram 11,339 72,005 12.70 31.71 260.0/20.0/20.0 User’s profile Social Gt
+> WikiCS 11,701 215,603 36.85 522.31 10 5.0/15.1/50.0 Entity description Wikipedia GtWeb Link
+> Social
+> E-Commerce Academic
+> Graph Domain Zero-shot Graph Model GNNPred G2P2, ZeroG GraphCLIP, OFA
+> GTextLLM G1, Llama3.1-8B Vicuna-7B, Qwen3-8B
+> GTokenLLM
+> TEA-GLM UniGTE, LLaGA GOFA, GraphGPT
+> Robustness Evaluation
+> Acc ( ↑)Metric RDA ( ↓)
+> In-domain
+> Cross-domain
+> Attack Type Structure Textual Node Inject
+> This paper focus on CV and … This paper focus on NLP and …
+> I’m a bad paper, focus on nothing.
+> Defense Robust GNN
+> Graph Purify
+> ASR ( ↓)
+
+Figure 2: Overview of the ZeroGAR evaluation pipeline. perturbations. In contrast, graph defenses aim to maximize the model’s predictive performance on the target nodes. This is typically achieved by training a more robust graph model or purifying the attacked graph (Guo et al. 2025b). 
+
+## ZeroGAR Benchmark 
+
+In this section, we present the datasets, attacks, victim mod-els, evaluation settings and metrics in ZeroGAR (Figure 2). 
+
+Raw Data Collection 
+
+For a broad and controlled evaluation, the dataset selection in ZeroGAR considers 3 key factors: (1) Text-attributed graphs. Each dataset provides both graph structure and node-level text, enabling the evaluation of structural, tex-tual, and node injection attacks. (2) Domain diversity. The datasets span common graph domains, including academic, e-commerce, social, and web. (3) Diverse scale and density. 
+
+The datasets vary in graph size, connectivity, textual content, and label space. As shown in Table 2, ZeroGAR comprises 8 datasets spanning 4 domains: academic (OGBN-Arxiv, Cora, and Citeseer), e-commerce (OGBN-Products, History, and Child), social (Instagram), and web (WikiCS). 
+
+Attack Types 
+
+We characterize the developed graph adversarial attacks from four aspects: (1) Adversary’s capability. We primarily con-sider evasion attacks, where the adversary manipulates the input graph at inference time to induce incorrect predic-tions. The victim model remains fixed, and the attacker can-not modify its parameters or architecture. (2) Adversary’s knowledge. The attacks are conducted under a grey-box set-ting, where the adversary has only limited knowledge of the victim model. This setting more closely reflects real-world deployment scenarios and is more practical for ZGMs, given the substantial time and computational costs of accessing these large and complex models. (3) Adversary’s strategy. 
+
+The adversary conducts perturbations through 3 primary at-tack surfaces: adding or deleting edges, modifying raw node text, and injecting malicious nodes. (4) Adversary’s budget. 
+
+According to the available perturbation budget, the adversary can perform attacks at low, medium, or high intensity. 
+
+Structural attacks modify the graph structure while keeping the node set and node texts unchanged. Specifically, given the clean adjacency matrix A and the perturbed matrix A′, the structural perturbation is constrained by 12 ∥A′ − A∥0 ≤ ∆.The factor 1/2 avoids counting both symmetric entries of an edge in an undirected graph. Given the large scale of the target graphs, we adopt Simplified Gradient-based Attack (SGA) (Li et al. 2021). For each target node, SGA extracts a local subgraph and computes the effect of candidate edge modifications using the gradients of the surrogate model. It then iteratively adds or removes the edge that most in-creases the attack loss until reaching the perturbation budget. Since graph connectivity typically affects attack effective-ness, we set the low, medium, and high budgets to {1, 3, 5}
+
+for Cora and Citeseer, {3, 5, 10 } for History and Instagram, and {10 , 20 , 30 } for Child and WikiCS. 
+
+Textual attacks modify the raw texts while keeping the graph structure unchanged. Let si and s′ 
+
+> i
+
+denote the clean and per-turbed texts of node vi, respectively. Following prior bench-marks (Lei et al. 2026; Guo et al. 2024), we constrain the number of modified nodes by PNi=1 1{s′
+
+> i
+
+̸ = si} ≤ ∆. To generate fluent and context-aware perturbations, we adopt an LLM-based attack (Lei et al. 2026). Specifically, we use neighborhood-aware prompts to query an LLM to rewrite each selected node’s text, aiming to shift its predicted la-bel away from both its current predicted class and the dominant predicted classes in its immediate neighborhood, while maintaining a similar length and fluency. We use Qwen3.6-27B as the query LLM and replace the raw texts of 
+
+{10% , 20% , 40% } of the test nodes under the low, medium, and high attack budgets, respectively. See Appendix for detailed prompt templates. We also include TextFooler, a gradient-based word-level text attack, in Appendix, which exhibits poor transferability across different models. 
+
+Node injection attacks add adversarial textual nodes and their connections to the target graph, while preserving the original nodes and their attributes. The attacked graph is represented as fGt=( Vt ∪V inj , Et ∪E inj , St ∪S inj ), where Vinj 
+
+denotes the injected nodes, Einj contains their connections to the graph, and Sinj contains their textual attributes. We adopt the Word-frequency-based Text-level Graph Injection Attack (WTGIA) (Lei et al. 2024) and constrain the num-ber of injected nodes by |V inj | ≤ ∆. WTGIA first opti-mizes the word-frequency representations and connections of the injected nodes against the surrogate model. It then converts each optimized word-frequency representation into raw text using an LLM, which generates text containing the selected words while avoiding conflicting ones. The gener-ated texts and optimized connections are jointly added to the target graph. Following the original WTGIA pipeline with dataset-specific adaptations, we use Llama3.1-8B as the text generator. For the low, medium, and high attack budgets, the numbers of injected nodes are set to {30 , 60 , 120 } for Cora, {45 , 90 , 180 } for Citeseer, {450 , 900 , 1800 } for His-tory, {750 , 1500 , 3000 } for Child, {115 , 230 , 460 } for Insta-gram, and {350 , 700 , 1400 } for WikiCS, respectively. 
+
+Victim Models 
+
+We evaluate three paradigms of ZGMs as victim models. (1) GNNPreds use a TAG encoder and a text encoder to obtain representations of target nodes and candidate class descriptions, respectively, and then predict node labels ei-ther through contrastive similarity or with a set of learned binary classifiers. The former includes G2P2 (Wen and Fang 2023), ZeroG (Li et al. 2024a), and GraphCLIP (Zhu et al. 2025), while the latter is primarily represented by OFA (Liu et al. 2024). (2) GTextLLMs convert node text and graph structure into textual descriptions and prompt an LLM to pre-dict node labels. We evaluate Llama3.1-8B (Grattafiori et al. 2024), Qwen3-8B (Yang et al. 2025), Vicuna-7B (Chiang et al. 2023), and G1 (Guo et al. 2025a). (3) GTokenLLMs en-code node text and graph structure into graph tokens, project them into the input space of an LLM, and predict node labels using the projected tokens together with task instructions. We evaluate 5 representative models: GraphGPT (Tang et al. 2024), LLaGA (Chen et al. 2024a), TEA-GLM (Wang et al. 2024a), GOFA (Kong et al. 2025), and UniGTE (Wang et al. 2026a). See Appendix for detailed model descriptions. 
+
+Evaluation Settings and Metrics 
+
+We consider two zero-shot transfer settings: in-domain and cross-domain transfer. In the in-domain setting, the source and target graphs belong to the same domain but come from different datasets with distinct label spaces. Specifically, models trained on OGBN-Arxiv are evaluated on Cora and Citeseer, while models trained on OGBN-Products are eval-uated on History and Child. In the cross-domain setting, the source and target graphs belong to different domains. Mod-els are jointly trained on OGBN-Arxiv and OGBN-Products and evaluated on Instagram and WikiCS. Following prior Table 3: Clean performance and overall rank comparison across target datasets. Lower ranks are better.                                                                                            
+
+> Method Cora Citeseer History Child Instagram WikiCS Rank
+> GNNPred
+> OFA 26.01 45.30 5.99 0.27 48.67 9.99 10.67 G2P2 45.76 53.76 13.08 11.70 45.48 41.29 9.00 ZeroG 52.03 52.66 37.58 12.89 56.50 37.63 6.83 GraphCLIP 63.10 67.55 56.85 21.11 64.82 69.45 2.67
+> GTextLLM
+> Llama3.1-8B 65.68 62.38 39.84 31.25 45.13 73.46 3.50 Qwen3-8B 68.08 58.93 24.70 30.45 46.06 77.15 3.67 Vicuna-7B 57.20 46.08 21.41 17.24 30.85 42.53 8.50 G1 68.45 53.45 26.52 25.96 50.59 74.93 3.50
+> GTokenLLM
+> GraphGPT 20.30 32.60 22.46 6.18 34.23 51.80 10.17 LLaGA 14.76 17.55 23.10 15.71 21.33 41.51 10.83 TEA-GLM 48.71 52.98 29.05 19.51 61.39 32.38 6.33 GOFA 67.53 44.51 28.35 20.38 39.58 66.05 6.33 UniGTE 36.72 32.13 13.18 16.57 46.45 49.75 9.00
+
+work (Lei et al. 2026; Guo et al. 2024), we use a GCN with SBERT embeddings as the surrogate model to generate ad-versarial inputs for each target graph, and apply the attacked results to all victim models for evaluation. For a fair com-parison, all victim models are evaluated using the same test nodes, candidate class descriptions, and perturbation bud-gets. We use the official implementations and, unless other-wise stated, adopt their default hyperparameters and LLM backbones. Given limited space, see Appendix for more de-tailed attack and hyperparameter configurations. We use 3 common robustness metrics: accuracy (ACC), relative drop in accuracy (RDA), and attack success rate (ASR). We primarily report ACC and RDA in the main text, while the ASR results are provided in Appendix: 
+
+ACC = 1
+
+|V test |
+
+X
+
+> vi∈V test
+
+I(ˆ yi = yi), (4) 
+
+RDA = ACC clean −ACC adv 
+
+ACC clean 
+
+. (5) ACC measures classification performance on clean and ad-versarial graphs, denoted by ACCclean and ACCadv , while RDA measures the relative accuracy change under attack. 
+
+## Experiments 
+
+In this section, ZeroGAR aims to answer the following re-search questions: RQ1: How do ZGMs perform on clean graphs? RQ2: How robust are ZGMs against structural, tex-tual, and node injection attacks? RQ3: How effective are ex-isting graph defenses for improving the robustness of ZGMs? 
+
+Performance on Clean Graphs 
+
+① Within GNNPreds, parameter-free similarity predic-tion shows stronger zero-shot transferability than train-ing a set of binary classifiers. As reported in Table 3, G2P2, ZeroG, and GraphCLIP achieve average accuracies of 35.18%, 41.55%, and 57.15%, respectively, all outperform-ing OFA, with GraphCLIP ranking first overall. One possible reason is that similarity-based methods use a consistent ob-jective during training and inference, whereas a parametric classifier may overfit the classification patterns of the source Table 4: Performance comparison under structural attacks across different perturbation sizes. Each cell reports the ACC (top) and RDA (%, bottom). Best scores are bolded and runner-up scores are underlined.                         
+
+> Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High
+
+GNNPred     
+
+> OFA 25.46
+> ↓2.11 24.72
+> ↓4.96 24.17
+> ↓7.07 42.01
+> ↓7.26 40.44
+> ↓10.73 39.50
+> ↓12.80 6.63
+> ↑10.68 7.26
+> ↑21.20 6.82
+> ↑13.86 0.23
+> ↓14.81 0.18
+> ↓33.33 0.20
+> ↓25.93 48.61
+> ↓0.12 47.60
+> ↓2.20 45.61
+> ↓6.29 10.35
+> ↑3.60 10.19
+> ↑2.00 10.12
+> ↑1.30 21.67
+> ↓2.00 G2P2 45.57
+> ↓0.42 39.67
+> ↓13.31 38.19
+> ↓16.54 47.34
+> ↓11.94 40.44
+> ↓24.78 38.71
+> ↓27.99 11.80
+> ↓9.79 11.32
+> ↓13.46 11.42
+> ↓12.69 10.81
+> ↓7.61 10.29
+> ↓12.05 10.10
+> ↓13.68 45.47
+> ↓0.02 45.31
+> ↓0.37 42.62
+> ↓6.29 40.50
+> ↓1.91 39.82
+> ↓3.56 39.20
+> ↓5.06 31.59
+> ↓10.38 ZeroG 45.20
+> ↓13.13 33.39
+> ↓35.83 23.62
+> ↓54.60 47.18
+> ↓10.41 41.69
+> ↓20.83 36.99
+> ↓29.76 20.62
+> ↓45.13 17.11
+> ↓54.47 11.83
+> ↓68.52 8.18
+> ↓36.54 6.69
+> ↓48.10 5.71
+> ↓55.70 37.59
+> ↓33.47 31.51
+> ↓44.23 20.10
+> ↓64.42 34.03
+> ↓9.57 28.82
+> ↓23.41 25.57
+> ↓32.05 26.44
+> ↓40.16 GraphCLIP 53.51
+> ↓15.20 46.31
+> ↓26.61 44.10
+> ↓30.11
+> 62.07
+> ↓8.11
+> 61.76
+> ↓8.57
+> 58.93
+> ↓12.76 36.42
+> ↓35.94 34.30
+> ↓39.67 29.00
+> ↓48.99 18.32
+> ↓13.22 17.91
+> ↓15.16 17.71
+> ↓16.11
+> 64.30
+> ↓0.80
+> 64.57
+> ↓0.39
+> 64.43
+> ↓0.60 59.89
+> ↓13.77 55.46
+> ↓20.14 52.85
+> ↓23.90 46.77
+> ↓20.93
+
+GTextLLM     
+
+> Llama3.1-8B 64.76
+> ↓1.40 60.15
+> ↓8.42
+> 62.55
+> ↓4.77 58.62
+> ↓6.03 57.52
+> ↓7.79 56.27
+> ↓9.79
+> 44.88
+> ↑12.65
+> 47.47
+> ↑19.15
+> 45.14
+> ↑13.30
+> 31.13
+> ↓0.38
+> 30.26
+> ↓3.17
+> 29.89
+> ↓4.35 46.45
+> ↑2.92 47.91
+> ↑6.16 47.91
+> ↑6.16 70.40
+> ↓4.17 68.19
+> ↓7.17 65.98
+> ↓10.18
+> 51.97
+> ↑1.26 Qwen3-8B 66.61
+> ↓2.16
+> 64.39
+> ↓5.42 61.81
+> ↓9.21 57.68
+> ↓2.12 56.27
+> ↓4.51 53.61
+> ↓9.03 26.51
+> ↑7.33 27.65
+> ↑11.94 27.17
+> ↑10.00 29.94
+> ↓1.67 29.20
+> ↓4.11 28.60
+> ↓6.08 50.68
+> ↑10.03 51.34
+> ↑11.46 53.02
+> ↑15.11
+> 75.58
+> ↓2.03
+> 74.47
+> ↓3.47
+> 73.13
+> ↓5.21 50.43
+> ↑1.64 Vicuna-7B 56.46
+> ↓1.29 48.71
+> ↓14.84 45.57
+> ↓20.33 44.98
+> ↓2.39 41.69
+> ↓9.53 39.18
+> ↓14.97 19.59
+> ↓8.50 18.25
+> ↓14.76 16.97
+> ↓20.74 15.84
+> ↓8.12 15.40
+> ↓10.67 14.85
+> ↓13.86 28.91
+> ↓6.29 29.93
+> ↓2.98 28.51
+> ↓7.59 35.54
+> ↓16.44 31.52
+> ↓25.89 31.28
+> ↓26.45 31.29
+> ↓13.06 G1 67.16
+> ↓1.88 60.52
+> ↓11.59 58.12
+> ↓15.09 52.82
+> ↓1.18 50.63
+> ↓5.28 45.92
+> ↓14.09 26.82
+> ↑1.13 27.90
+> ↑5.20 28.23
+> ↑6.45 25.67
+> ↓1.12 25.53
+> ↓1.66 25.01
+> ↓3.66 51.39
+> ↑1.58 52.23
+> ↑3.24 52.36
+> ↑3.50 71.16
+> ↓5.03 69.39
+> ↓7.39 67.54
+> ↓9.86 47.69
+> ↓2.25
+
+GTokenLLM      
+
+> GraphGPT 20.11
+> ↓0.94 20.11
+> ↓0.94 17.71
+> ↓12.76 29.78
+> ↓8.65 28.68
+> ↓12.02 26.65
+> ↓18.25 18.70
+> ↓16.74 14.93
+> ↓33.53 9.57
+> ↓57.39 4.61
+> ↓25.40 4.37
+> ↓29.29 4.28
+> ↓30.74 34.77
+> ↑1.58 35.80
+> ↑4.59 36.32
+> ↑6.11 54.80
+> ↑5.79 56.13
+> ↑8.36 56.80
+> ↑9.65 26.34
+> ↓15.07 LLaGA 15.31
+> ↑3.73 15.76
+> ↑6.78 16.61
+> ↑12.53 14.73
+> ↓16.07 17.08
+> ↓2.68 18.97
+> ↑8.09 23.03
+> ↓0.30 22.13
+> ↓4.20 19.91
+> ↓13.81 15.60
+> ↓0.70 15.01
+> ↓4.46 14.79
+> ↓5.86 23.62
+> ↑10.74 27.72
+> ↑29.96 34.86
+> ↑63.43 49.20
+> ↑18.53 48.37
+> ↑16.53 47.90
+> ↑15.39 24.48
+> ↑5.98 TEA-GLM 50.18
+> ↑3.02 49.45
+> ↑1.52 48.89
+> ↑0.37 54.55
+> ↑2.96 53.76
+> ↑1.47 51.57
+> ↓2.66 34.00
+> ↑17.04 36.08
+> ↑24.20 36.90
+> ↑27.02 19.08
+> ↓2.20 18.93
+> ↓2.97 18.90
+> ↓3.13 59.23
+> ↓3.52 60.86
+> ↓0.86 60.47
+> ↓1.50 31.35
+> ↓3.18 31.28
+> ↓3.40 31.28
+> ↓3.40 41.49
+> ↑5.10 GOFA 63.47
+> ↓6.01 56.46
+> ↓16.39 55.54
+> ↓17.76 39.34
+> ↓11.62 37.15
+> ↓16.54 35.42
+> ↓20.42 23.55
+> ↓16.93 22.51
+> ↓20.60 20.25
+> ↓28.57 18.75
+> ↓8.00 18.35
+> ↓9.96 18.13
+> ↓11.04 37.86
+> ↓4.35 38.03
+> ↓3.92 36.98
+> ↓6.57 60.61
+> ↓8.24 58.73
+> ↓11.08 58.37
+> ↓11.63 38.86
+> ↓13.94 UniGTE 37.82
+> ↑3.00 37.45
+> ↑1.99 38.01
+> ↑3.51 32.92
+> ↑2.46 32.29
+> ↑0.50 32.29
+> ↑0.50 15.15
+> ↑14.95 16.33
+> ↑23.90 17.63
+> ↑33.76 17.89
+> ↑7.97 17.74
+> ↑7.06 17.68
+> ↑6.70 42.44
+> ↓8.63 41.43
+> ↓10.81 39.31
+> ↓15.37 49.12
+> ↓1.27 48.47
+> ↓2.57 47.51
+> ↓4.50 32.30
+> ↑6.04
+
+graphs. GraphCLIP further benefits from the semantic infor-mation provided by LLM-generated graph summaries. 
+
+② GTextLLMs generally achieve stronger clean zero-shot performance than GTokenLLMs. Llama3.1-8B, Qwen3-8B, and G1 achieve average ranks of 3.50, 3.67, and 3.50, respectively, whereas the evaluated GTokenLLMs rank be-tween 6.33 and 10.83 (Table 3). This is because existing GTokenLLMs use the relatively weaker Vicuna-7B as LLM backbone. It suggests that graph tokens provide useful infor-mation, but their benefits are generally insufficient to close the gap with GTextLLMs built on stronger LLM backbones. 
+
+Robustness against Structural Attacks 
+
+③ Structural attacks are more effective against GN-NPreds than GTextLLMs and GTokenLLMs. In Table 4, GNNPreds suffer an average RDA of 18.37%, compared with only 3.10% and 2.45% for GTextLLMs and GTokenLLMs. Moreover, as the attack strength increases, the accuracy of GTextLLMs and GTokenLLMs even improves in some cases. On the one hand, GNNPreds rely mainly on GNNs to aggre-gate neighborhood information over the perturbed graph and thus directly inherit their vulnerability to structure changes. On the other hand, GTextLLMs and GTokenLLMs use LLMs for prediction and typically input the clean text of the cen-tral node. When neighborhood information is corrupted, they may rely more on clean text from the central node, reducing the effect of structural perturbations. 
+
+④ GTextLLMs equipped with stronger LLM back-bones exhibit greater robustness to structural attacks. 
+
+Llama3.1-8B, Qwen3-8B, and G1 show almost no average performance degradation under structural attacks, whereas Vicuna-7B suffers an average drop of 13.06% (Table 4). This suggests that, when neighborhood information is perturbed, stronger LLMs can better leverage the clean textual seman-tics of the central node and candidate labels, thereby reducing their dependence on the corrupted graph context. 
+
+Robustness against Textual Attacks 
+
+⑤ Textual attacks are more effective against GTextLLMs and GTokenLLMs than GNNPreds. As reported in Ta-ble 5, GTextLLMs and GTokenLLMs suffer average relative accuracy drops of 21.19% and 20.27%, respectively, com-pared with 8.28% for GNNPreds. This is because LLM-based models mainly rely on node text for prediction, whereas GN-NPreds can use the unperturbed neighborhood and graph structure to mitigate the effect of corrupted node text. 
+
+⑥ GTextLLMs equipped with stronger LLM backbones are more vulnerable to textual attacks. Llama3.1-8B, Qwen3-8B, and G1 all suffer average relative accuracy drops of over 22%, compared with 16.09% for Vicuna-7B (Ta-ble 5). One possible reason is that LLMs with stronger text understanding rely more on textual semantics, which also makes them more sensitive to semantically misleading text. 
+
+⑦ GTokenLLMs are more vulnerable to textual attacks Table 5: Performance comparison under textual attacks across different perturbation sizes. Each cell reports the ACC (top) and RDA (%, bottom). Best scores are bolded and runner-up scores are underlined. 
+
+Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High 
+
+GNNPred 
+
+OFA 24.91 
+
+↓4.23 23.06 
+
+↓11.34 23.99 
+
+↓7.77 42.32 
+
+↓6.58 37.46 
+
+↓17.31 28.21 
+
+↓37.73 5.86 
+
+↓2.17 5.96 
+
+↓0.50 5.85 
+
+↓2.34 0.26 
+
+↓3.70 0.25 
+
+↓7.41 0.24 
+
+↓11.11 45.70 
+
+↓6.10 44.69 
+
+↓8.18 41.96 
+
+↓13.79 9.65 
+
+↓3.40 9.41 
+
+↓5.81 9.32 
+
+↓6.71 19.95 
+
+↓7.95 G2P2 45.53 
+
+↓0.50 45.02 
+
+↓1.62 44.10 
+
+↓3.63 51.10 
+
+↓4.95 48.75 
+
+↓9.32 47.34 
+
+↓11.94 12.84 
+
+↓1.83 12.57 
+
+↓3.90 12.30 
+
+↓5.96 11.33 
+
+↓3.16 11.23 
+
+↓4.02 10.77 
+
+↓7.95 44.34 
+
+↓2.51 43.68 
+
+↓3.96 42.44 
+
+↓6.68 41.19 
+
+↓0.24 41.05 
+
+↓0.58 39.03 
+
+↓5.47 33.59 
+
+↓4.40 ZeroG 52.01 
+
+↓0.04 51.85 
+
+↓0.35 
+
+51.73 
+
+↓0.58 52.04 
+
+↓1.18 49.84 
+
+↓5.36 
+
+49.22 
+
+↓6.53 34.87 
+
+↓7.21 32.62 
+
+↓13.20 28.02 
+
+↓25.44 12.74 
+
+↓1.16 12.55 
+
+↓2.64 12.48 
+
+↓3.18 55.44 
+
+↓1.88 53.02 
+
+↓6.16 51.34 
+
+↓9.13 35.54 
+
+↓5.55 32.63 
+
+↓13.29 27.76 
+
+↓26.23 38.65 
+
+↓8.39 GraphCLIP 59.78 
+
+↓5.26 55.54 
+
+↓11.98 48.52 
+
+↓23.11 
+
+63.79 
+
+↓5.57 
+
+57.52 
+
+↓14.85 44.51 
+
+↓34.11 
+
+55.69 
+
+↓2.04 
+
+54.55 
+
+↓4.05 
+
+50.86 
+
+↓10.54 19.49 
+
+↓7.67 18.06 
+
+↓14.45 14.30 
+
+↓32.26 
+
+63.46 
+
+↓2.10 
+
+63.42 
+
+↓2.16 
+
+62.01 
+
+↓4.34 64.73 
+
+↓6.80 58.77 
+
+↓15.38 44.24 
+
+↓36.30 
+
+49.96 
+
+↓12.38 
+
+GTextLLM 
+
+Llama3.1-8B 60.15 
+
+↓8.42 53.32 
+
+↓18.82 40.22 
+
+↓38.76 52.98 
+
+↓15.07 46.55 
+
+↓25.38 34.64 
+
+↓44.47 36.83 
+
+↓7.56 33.52 
+
+↓15.86 26.81 
+
+↓32.71 
+
+27.39 
+
+↓12.35 
+
+23.67 
+
+↓24.26 
+
+17.10 
+
+↓45.28 41.34 
+
+↓8.40 36.27 
+
+↓19.63 30.85 
+
+↓31.64 65.59 
+
+↓10.71 58.34 
+
+↓20.58 42.19 
+
+↓42.57 40.43 
+
+↓23.55 Qwen3-8B 61.81 
+
+↓9.21 
+
+56.46 
+
+↓17.07 41.51 
+
+↓39.03 52.51 
+
+↓10.89 44.67 
+
+↓24.20 31.19 
+
+↓47.07 22.84 
+
+↓7.53 21.18 
+
+↓14.25 17.01 
+
+↓31.13 26.78 
+
+↓12.05 23.40 
+
+↓23.15 16.87 
+
+↓44.60 43.76 
+
+↓4.99 36.80 
+
+↓20.10 30.41 
+
+↓33.98 
+
+68.91 
+
+↓10.68 60.65 
+
+↓21.39 44.71 
+
+↓42.05 38.97 
+
+↓22.94 Vicuna-7B 51.48 
+
+↓10.00 47.42 
+
+↓17.10 35.24 
+
+↓38.39 40.44 
+
+↓12.24 39.50 
+
+↓14.28 29.94 
+
+↓35.03 21.22 
+
+↓0.89 20.01 
+
+↓6.54 19.25 
+
+↓10.09 16.26 
+
+↓5.68 14.61 
+
+↓15.26 12.57 
+
+↓27.09 29.44 
+
+↓4.57 28.03 
+
+↓9.14 25.12 
+
+↓18.57 38.09 
+
+↓10.44 32.85 
+
+↓22.76 22.49 
+
+↓47.12 29.11 
+
+↓16.09 G1 58.67 
+
+↓14.29 54.61 
+
+↓20.22 40.22 
+
+↓41.24 46.71 
+
+↓12.61 41.85 
+
+↓21.70 28.21 
+
+↓47.22 24.81 
+
+↓6.45 23.52 
+
+↓11.31 19.49 
+
+↓26.51 23.02 
+
+↓11.33 21.13 
+
+↓18.61 16.38 
+
+↓36.90 45.04 
+
+↓10.97 39.53 
+
+↓21.86 30.67 
+
+↓39.38 68.09 
+
+↓9.13 
+
+61.67 
+
+↓17.70 
+
+46.11 
+
+↓38.46 38.32 
+
+↓22.19 
+
+GTokenLLM 
+
+GraphGPT 16.24 
+
+↓20.00 15.50 
+
+↓23.65 10.70 
+
+↓47.29 29.31 
+
+↓10.09 25.39 
+
+↓22.12 17.71 
+
+↓45.67 18.93 
+
+↓15.72 15.93 
+
+↓29.07 10.66 
+
+↓52.54 4.99 
+
+↓19.26 4.21 
+
+↓31.88 3.53 
+
+↓42.88 33.22 
+
+↓2.95 31.93 
+
+↓6.72 31.16 
+
+↓8.97 46.14 
+
+↓10.93 42.04 
+
+↓18.84 31.52 
+
+↓39.15 21.62 
+
+↓26.47 LLaGA 12.18 
+
+↓17.48 11.07 
+
+↓25.00 8.30 
+
+↓43.77 16.46 
+
+↓6.21 14.89 
+
+↓15.16 9.25 
+
+↓47.29 21.49 
+
+↓6.97 19.61 
+
+↓15.11 15.35 
+
+↓33.55 14.43 
+
+↓8.15 13.35 
+
+↓15.02 10.82 
+
+↓31.13 20.67 
+
+↓3.09 19.83 
+
+↓7.03 19.66 
+
+↓7.83 37.95 
+
+↓8.58 35.33 
+
+↓14.89 27.06 
+
+↓34.81 18.21 
+
+↓19.49 TEA-GLM 43.54 
+
+↓10.61 39.67 
+
+↓18.56 29.15 
+
+↓40.16 48.43 
+
+↓8.59 41.38 
+
+↓21.90 27.59 
+
+↓47.92 26.58 
+
+↓8.50 24.57 
+
+↓15.42 19.06 
+
+↓34.39 17.67 
+
+↓9.43 16.09 
+
+↓17.53 13.50 
+
+↓30.80 60.29 
+
+↓1.79 56.63 
+
+↓7.75 51.87 
+
+↓15.51 28.60 
+
+↓11.67 25.21 
+
+↓22.14 18.06 
+
+↓44.22 32.66 
+
+↓20.84 GOFA 62.36 
+
+↓7.66 54.24 
+
+↓19.68 44.46 
+
+↓34.16 39.50 
+
+↓11.26 34.48 
+
+↓22.53 23.98 
+
+↓46.12 26.41 
+
+↓6.84 24.76 
+
+↓12.66 20.74 
+
+↓26.84 18.84 
+
+↓7.56 17.84 
+
+↓12.46 15.56 
+
+↓23.65 36.10 
+
+↓8.79 32.66 
+
+↓17.48 29.00 
+
+↓26.73 59.16 
+
+↓10.43 52.61 
+
+↓20.35 38.21 
+
+↓42.15 35.05 
+
+↓19.84 UniGTE 33.03 
+
+↓10.05 28.23 
+
+↓23.12 22.14 
+
+↓39.71 28.53 
+
+↓11.20 25.08 
+
+↓21.94 17.40 
+
+↓45.85 12.93 
+
+↓1.90 12.80 
+
+↓2.88 12.00 
+
+↓8.95 15.69 
+
+↓5.31 14.61 
+
+↓11.83 11.79 
+
+↓28.85 46.01 
+
+↓0.95 45.48 
+
+↓2.09 45.34 
+
+↓2.39 45.66 
+
+↓8.22 40.74 
+
+↓18.11 30.15 
+
+↓39.40 27.09 
+
+↓14.73 OFA ZeroG G2P2 GraphCLIP 
+
+Cora    
+
+> 010 20 30 40 50 60 70
+> Accuracy (%)
+> 26.0 52.0 45.8 63.1 25.0 38.8 40.6 45.9 18.1 16.8 46.3 63.8 16.1 16.4 35.8 46.7
+> OFA ZeroG G2P2 GraphCLIP
+
+Citeseer    
+
+> 45.3 52.7 53.8 67.5 40.6 31.5 44.4 60.8 26.8 14.9 57.0 67.7 21.9 10.5 37.9 55.5
+> Vanilla (Clean) Vanilla (SGA-High) GNNGuard (Clean) GNNGuard (SGA-High)
+
+Figure 3: Effectiveness of model-centric defenses that replace the Vanilla GNN with GNNGuard under structural attacks. 
+
+than structural attacks. Their average relative performance drop increases from 2.45% under structural attacks to 20.27% under textual attacks (Table 5). One possible explanation is that the inputs to GTokenLLMs typically include the central-node text. Therefore, textual perturbations not only corrupt the textual information directly provided to the LLM, but also affect the graph tokens generated from the perturbed node text. In contrast, structural perturbations mainly affect the graph-token representations while preserving the clean central-node text, which remains available for prediction. 
+
+Robustness against Node Injection Attacks 
+
+⑧ Node injection attacks show a similar vulnerability pattern to structural attacks. As shown in Table 6, GN-NPreds, GTextLLMs, and GTokenLLMs exhibit average rel-ZeroG GraphCLIP Qwen3-8B G1 TEA-GLM GOFA 
+
+Cora 
+
+> 010 20 30 40 50 60 70 80
+> Accuracy (%)
+> 38.8 45.9 61.8 60.9 49.1 65.3 31.2 25.8 62.4 62.7 48.9 62.5
+> ZeroG GraphCLIP Qwen3-8B G1 TEA-GLM GOFA
+
+Citeseer  
+
+> 31.5 60.8 53.6 50.9 53.6 41.7 28.7 50.8 52.8 47.5 52.5 43.4
+> Vanilla Jaccard
+
+Figure 4: Effectiveness of data-centric defenses that purify graph structures perturbed by SGA-High. ative accuracy drops of 19.22%, 0.69%, and 7.01% under node injection attacks, respectively, which are closer to those under structural attacks (18.37%, 3.10%, and 2.45%) than to those under textual attacks (8.28%, 21.19%, and 20.27%). A possible explanation is that node injection perturbs neigh-borhood information while preserving the central-node text. It therefore strongly affects GNNPreds, has little effect on GTextLLMs, and moderately affects GTokenLLMs that use graph tokens as auxiliary context. 
+
+Effectiveness of Existing Graph Defenses 
+
+To evaluate existing defenses in zero-shot settings, we con-sider model-centric and data-centric structural defenses on Cora and Citeseer under SGA-High. The former replaces the original GNN backbone with robust GNNGuard (Zhang and Zitnik 2020), while the latter applies Jaccard (Wu et al. 2019) Table 6: Performance comparison under node injection attacks across different perturbation sizes. Each cell reports the ACC (top) and RDA (%, bottom). Best scores are bolded and runner-up scores are underlined.                         
+
+> Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High
+
+GNNPred     
+
+> OFA 25.83
+> ↓0.69 25.38
+> ↓2.42 25.01
+> ↓3.84 43.73
+> ↓3.47 43.10
+> ↓4.86 40.60
+> ↓10.38 5.95
+> ↓0.67 5.72
+> ↓4.51 5.05
+> ↓15.69 0.12
+> ↓55.56 0.12
+> ↓55.56 0.12
+> ↓55.56 50.42
+> ↑3.60 51.74
+> ↑6.31 53.55
+> ↑10.03 8.64
+> ↓13.51 8.36
+> ↓16.32 7.82
+> ↓21.72 22.29
+> ↓13.25 G2P2 44.28
+> ↓3.23 42.80
+> ↓6.47 40.59
+> ↓11.30 48.28
+> ↓10.19 47.34
+> ↓11.94 44.36
+> ↓17.49 11.14
+> ↓14.83 11.88
+> ↓9.17 12.57
+> ↓3.90 9.95
+> ↓14.96 9.33
+> ↓20.26 7.78
+> ↓33.50 45.29
+> ↓0.42 45.21
+> ↓0.59 45.16
+> ↓0.70 40.74
+> ↓1.33 40.36
+> ↓2.25 38.96
+> ↓5.64 32.56
+> ↓9.06 ZeroG 50.00
+> ↓3.90 48.89
+> ↓6.03 38.75
+> ↓25.52 47.96
+> ↓8.93 40.75
+> ↓22.62 31.50
+> ↓40.18 12.75
+> ↓66.07 6.88
+> ↓81.69 4.43
+> ↓88.21 7.69
+> ↓40.34 4.70
+> ↓63.54 3.02
+> ↓76.57 41.82
+> ↓25.98 36.23
+> ↓35.88 35.43
+> ↓37.29 33.83
+> ↓10.10 36.00
+> ↓4.33 28.37
+> ↓24.61 28.28
+> ↓41.59 GraphCLIP 60.33
+> ↓4.39 57.38
+> ↓9.06 45.94
+> ↓27.19
+> 65.52
+> ↓3.01
+> 62.23
+> ↓7.88 60.82
+> ↓9.96 46.65
+> ↓17.94 41.41
+> ↓27.16 36.16
+> ↓36.39 20.24
+> ↓4.12 20.46
+> ↓3.08 20.22
+> ↓4.22
+> 62.85
+> ↓3.04
+> 62.98
+> ↓2.84
+> 62.14
+> ↓4.13 63.95
+> ↓7.92 62.48
+> ↓10.04 60.03
+> ↓13.56 50.66
+> ↓12.97
+
+GTextLLM     
+
+> Llama3.1-8B 67.53
+> ↑2.82 66.05
+> ↑0.56 64.94
+> ↓1.13 60.82
+> ↓2.50 59.72
+> ↓4.26
+> 62.07
+> ↓0.50
+> 46.94
+> ↑17.82
+> 47.60
+> ↑19.48
+> 44.82
+> ↑12.50
+> 30.73
+> ↓1.66
+> 30.87
+> ↓1.22
+> 30.51
+> ↓2.37 46.94
+> ↑4.01 46.41
+> ↑2.84 46.36
+> ↑2.73 72.62
+> ↓1.14 72.04
+> ↓1.93 71.16
+> ↓3.13
+> 53.79
+> ↑3.74 Qwen3-8B 68.63
+> ↑0.81
+> 66.79
+> ↓1.89
+> 66.42
+> ↓2.44 56.74
+> ↓3.72 57.68
+> ↓2.12 58.46
+> ↓0.80 25.56
+> ↑3.48 25.89
+> ↑4.82 26.19
+> ↑6.03 28.96
+> ↓4.89 28.53
+> ↓6.31 28.44
+> ↓6.60 47.20
+> ↑2.48 45.39
+> ↓1.45 47.47
+> ↑3.06
+> 76.26
+> ↓1.15
+> 75.41
+> ↓2.26
+> 73.75
+> ↓4.41 50.21
+> ↓0.33 Vicuna-7B 57.01
+> ↓0.33 52.40
+> ↓8.39 45.57
+> ↓20.33 42.01
+> ↓8.83 42.79
+> ↓7.14 35.27
+> ↓23.46 21.12
+> ↓1.35 22.15
+> ↑3.46 21.10
+> ↓1.45 14.84
+> ↓13.92 14.98
+> ↓13.11 14.80
+> ↓14.15 31.12
+> ↑0.88 30.81
+> ↓0.13 29.18
+> ↓5.41 38.55
+> ↓9.36 36.02
+> ↓15.31 34.02
+> ↓20.01 32.43
+> ↓7.82 G1 65.87
+> ↓3.77 64.21
+> ↓6.19 60.89
+> ↓11.04 50.94
+> ↓4.70 50.63
+> ↓5.28 50.94
+> ↓4.70 31.31
+> ↑18.06 32.09
+> ↑21.00 29.78
+> ↑12.29 25.82
+> ↓0.54 25.74
+> ↓0.85 25.63
+> ↓1.27 51.74
+> ↑2.27 48.83
+> ↓3.48 48.74
+> ↓3.66 74.84
+> ↓0.12 72.77
+> ↓2.88 71.15
+> ↓5.04 49.00
+> ↑1.67
+
+GTokenLLM      
+
+> GraphGPT 14.21
+> ↓30.00 9.41
+> ↓53.65 4.24
+> ↓79.11 27.43
+> ↓15.86 22.57
+> ↓30.77 17.71
+> ↓45.67 12.62
+> ↓43.81 9.17
+> ↓59.17 9.23
+> ↓58.90 2.96
+> ↓52.10 3.97
+> ↓35.76 4.60
+> ↓25.57 35.30
+> ↑3.13 35.17
+> ↑2.75 35.21
+> ↑2.86 49.10
+> ↓5.21 47.27
+> ↓8.75 46.01
+> ↓11.18 21.45
+> ↓33.24 LLaGA 12.55
+> ↓14.97 14.58
+> ↓1.22 18.82
+> ↑27.51 14.73
+> ↓16.07 14.11
+> ↓19.60 12.54
+> ↓28.55 20.62
+> ↓10.74 19.06
+> ↓17.49 16.80
+> ↓27.27 16.08
+> ↑2.36 15.64
+> ↓0.45 15.31
+> ↓2.55 21.90
+> ↑2.67 29.22
+> ↑36.99 27.32
+> ↑28.08 44.98
+> ↑8.36 51.03
+> ↑22.93 51.96
+> ↑25.17 23.18
+> ↓1.48 TEA-GLM 48.71 0.00 50.37
+> ↑3.41 49.08
+> ↑0.76 53.13
+> ↑0.28 54.23
+> ↑2.36 53.61
+> ↑1.19 28.64
+> ↓1.41 27.70
+> ↓4.65 27.72
+> ↓4.58 19.11
+> ↓2.05 19.03
+> ↓2.46 18.95
+> ↓2.87 57.87
+> ↓5.73 56.46
+> ↓8.03 55.88
+> ↓8.98 33.44
+> ↑3.27 34.14
+> ↑5.44 34.56
+> ↑6.73 40.15
+> ↓1.33 GOFA 66.61
+> ↓1.36 63.84
+> ↓5.46 65.31
+> ↓3.29 42.48
+> ↓4.56 42.63
+> ↓4.22 41.69
+> ↓6.34 25.54
+> ↓9.91 24.05
+> ↓15.17 21.99
+> ↓22.43 19.62
+> ↓3.73 19.32
+> ↓5.20 19.11
+> ↓6.23 38.34
+> ↓3.13 37.15
+> ↓6.14 37.42
+> ↓5.46 65.02
+> ↓1.56 64.67
+> ↓2.09 64.12
+> ↓2.92 42.16
+> ↓7.34 UniGTE 37.45
+> ↑1.99 36.35
+> ↓1.01 34.13
+> ↓7.05 31.66
+> ↓1.46 31.35
+> ↓2.43 30.56
+> ↓4.89 16.27
+> ↑23.44 17.45
+> ↑32.40 17.58
+> ↑33.38 18.98
+> ↑14.54 19.07
+> ↑15.09 19.02
+> ↑14.79 42.84
+> ↓7.77 42.09
+> ↓9.39 40.15
+> ↓13.56 51.12
+> ↑2.75 51.65
+> ↑3.82 52.71
+> ↑5.95 32.80
+> ↑8.32
+
+to purify the attacked structure with a threshold of 0.5. 
+
+⑨ Existing graph defenses do not consistently improve zero-shot adversarial robustness and may even degrade model performance. Replacing the original GNNs with GN-NGuard generally fails to improve robustness and substan-tially reduces the clean performance of GNNPreds (Figure 3). Similarly, Jaccard provides no consistent improvement and even degrades model performance (Figure 4). One possible explanation is that both defenses identify suspicious edges using fixed feature-similarity rules, which may not transfer across unseen target graphs with distinct similarity patterns. 
+
+Summary and Future Work 
+
+Based on the above experimental observations, we summa-rize 3 key conclusions: (1) Despite promising performance on clean graphs, all ZGMs suffer substantial degradation un-der adversarial attacks. GNNPreds are more vulnerable to structural and node injection attacks due to their reliance on neighborhood aggregation, whereas GTextLLMs and GTo-kenLLMs are more vulnerable to textual attacks because their predictions depend more heavily on node text. (2) Stronger LLM backbones improve robustness to corrupted structural context but increase sensitivity to misleading textual seman-tics, revealing a structure–text robustness trade-off. (3) Ex-isting graph defenses do not consistently improve robustness and may even compromise clean zero-shot performance. These observations raise alarms about the secure deploy-ment of ZGMs in real-world applications and point to several future directions: For GNNPreds, robustness should be im-proved at the neighborhood aggregation stage by reducing the influence of adversarial edges and injected nodes. For LLM-based models, future methods should verify textual evidence against graph context to reduce their sensitivity to mislead-ing semantics. Moreover, the observed structure–text trade-off calls for methods that dynamically balance structural and textual evidence. Finally, since existing supervised defenses may remove information essential for zero-shot transfer, new defenses should identify adversarial perturbations without target labels while preserving clean zero-shot performance. 
+
+## Conclusion 
+
+In this work, we introduced ZeroGAR, the first systematic benchmark for evaluating the adversarial robustness of zero-shot graph models on unseen target graphs. ZeroGAR pro-vides a unified evaluation across 13 representative models, diverse text-attributed graphs, in-domain and cross-domain transfer settings, and structural, textual, and node injection at-tacks, while also examining existing graph defenses. Our ex-periments show that strong clean zero-shot performance does not guarantee adversarial robustness. GNN-based methods are more vulnerable to structural and node injection attacks, whereas LLM-based methods are more vulnerable to textual attacks; stronger LLMs introduce a structure–text robustness trade-off; and existing graph defenses do not consistently improve zero-shot robustness and may compromise clean performance. We hope ZeroGAR will provide a standard-ized testbed for developing robustness methods specifically designed for zero-shot deployment on unseen graphs. 
+
+## References 
+
+Chen, R.; Zhao, T.; JAISWAL, A. K.; et al. 2024a. LLaGA: Large Language and Graph Assistant. In Forty-first Interna-tional Conference on Machine Learning .Chen, Z.; Mao, H.; Li, H.; et al. 2024b. Exploring the poten-tial of large language models (llms) in learning on graphs. 
+
+ACM SIGKDD Explorations Newsletter , 25(2): 42–61. Chiang, W.-L.; Li, Z.; Lin, Z.; et al. 2023. Vicuna: An open-source chatbot impressing gpt-4 with 90%* chatgpt quality. 
+
+See https://vicuna. lmsys. org (accessed 14 April 2023) , 2(3): 6. Gosch, L.; Geisler, S.; Sturm, D.; et al. 2023. Adversarial training for graph neural networks: Pitfalls, solutions, and new directions. Advances in neural information processing systems , 36: 58088–58112. Grattafiori, A.; Dubey, A.; Jauhri, A.; et al. 2024. The Llama 3 herd of models. In Neural Information Processing Systems .Curran Associates. Guo, K.; Liu, Z.; Chen, Z.; et al. 2024. Learning on graphs with large language models (LLMs): A deep dive into model robustness. arXiv preprint arXiv:2407.12068 .Guo, X.; Li, A.; Wang, Y.; et al. 2025a. G1: Teaching LLMs to Reason on Graphs with Reinforcement Learning. In Advances in Neural Information Processing Systems , vol-ume 38. Guo, Y.; Bo, D.; Yang, C.; Lu, Z.; Zhang, Z.; Liu, J.; Peng, Y.; and Shi, C. 2025b. Data-Centric Graph Learning: A Survey. 
+
+IEEE Trans. Big Data , 11(1): 1–20. Hu, W.; Fey, M.; Zitnik, M.; et al. 2020. Open graph bench-mark: Datasets for machine learning on graphs. Advances in neural information processing systems , 33: 22118–22133. Huang, X.; Han, K.; Yang, Y.; et al. 2024. Can gnn be good adapter for llms? In Proceedings of the ACM web conference 2024 , 893–904. Kong, L.; Feng, J.; Liu, H.; et al. 2025. GOFA: A Generative One-For-All Model for Joint Graph Language Modeling. In 
+
+The Thirteenth International Conference on Learning Rep-resentations .Lei, R.; Hu, Y.; Ren, Y.; et al. 2024. Intruding with Words: Towards Understanding Graph Injection Attacks at the Text Level. In Advances in Neural Information Processing Sys-tems , volume 37, 49214–49251. Lei, R.; Yi, L.; He, M.; et al. 2026. Robustness in Text-Attributed Graph Learning: Insights, Trade-offs, and New Defenses. In The Fourteenth International Conference on Learning Representations .Li, J.; Xie, T.; Chen, L.; et al. 2021. Adversarial attack on large scale graph. IEEE Transactions on Knowledge and Data Engineering , 35(1): 82–95. Li, Y.; Wang, P.; Li, Z.; et al. 2024a. Zerog: Investigating cross-dataset zero-shot transferability in graphs. In Proceed-ings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 1725–1735. Li, Y.; Wang, P.; Zhu, X.; et al. 2024b. Glbench: A com-prehensive benchmark for graph with large language mod-els. Advances in Neural Information Processing Systems , 37: 42349–42368. Liu, H.; Feng, J.; Kong, L.; et al. 2024. One for all: Towards training one graph model for all classification tasks. In In-ternational conference on learning representations , volume 2024, 20188–20210. Liu, J.; Yang, C.; Lu, Z.; et al. 2025. Graph foundation mod-els: Concepts, opportunities and challenges. IEEE Transac-tions on Pattern Analysis and Machine Intelligence .Ma, Y.; Wang, J.; and Yan, Z. 2026. Are LLM-Enhanced Graph Neural Networks Robust against Poisoning Attacks? In 2026 IEEE Symposium on Security and Privacy (SP) ,398–416. IEEE. Olatunji, I. E.; Boenisch, F.; Xu, J.; et al. 2025. Adversar-ial Attacks and Defenses on Graph-aware Large Language Models (LLMs). arXiv preprint arXiv:2508.04894 .Sun, L.; Dou, Y.; Yang, C.; et al. 2022. Adversarial attack and defense on graph data: A survey. IEEE Transactions on Knowledge and Data Engineering , 35(8): 7693–7711. Tan, J.; Zhang, Z.; Guo, Y.; Liu, J.; Xing, Y.; Zhang, M.; Yang, C.; and Shi, C. 2026. GABench: A Comprehensive Benchmark for Evaluating LLM Agents on Graph Analysis Tasks. arXiv preprint arXiv:2608.01684 .Tan, Y.; Zhou, Z.; Lv, H.; et al. 2024. Walklm: A uniform language model fine-tuning framework for attributed graph embedding. Advances in Neural Information Processing Sys-tems , 36. Tang, J.; Yang, Y.; Wei, W.; et al. 2024. Graphgpt: Graph in-struction tuning for large language models. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval , 491–500. Wang, D.; Zuo, Y.; Li, F.; et al. 2024a. Llms as zero-shot graph learners: Alignment of gnn representations with llm token embeddings. Advances in neural information process-ing systems , 37: 5950–5973. Wang, D.; Zuo, Y.; Lu, G.; et al. 2026a. Unigte: Uni-fied graph–text encoding for zero-shot generalization across graph tasks and domains. Advances in Neural Information Processing Systems , 38: 92095–92120. Wang, J.; Wu, J.; Hou, Y.; et al. 2024b. InstructGraph: Boosting Large Language Models via Graph-centric In-struction Tuning and Preference Alignment. arXiv preprint arXiv:2402.08785 .Wang, J.; Zhang, S.; Xiao, Y.; et al. 2022. A Review on Graph Neural Network Methods in Financial Applications. 
+
+Journal of Data Science , 20(2): 111–134. Wang, Y.; Dai, X.; Fan, W.; et al. 2026b. Exploring Graph Learning Tasks with Pure LLMs: A Comprehensive Bench-mark and Investigation. In Findings of the Association for Computational Linguistics: ACL 2026 , 7909–7942. Associ-ation for Computational Linguistics. Wen, Z.; and Fang, Y. 2023. Augmenting low-resource text classification with graph-grounded pre-training and prompt-ing. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , 506–516. Wu, H.; Wang, C.; Tyshetskiy, Y.; et al. 2019. Adversarial Examples for Graph Data: Deep Insights into Attack and Defense. In Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence , 4816–4823. In-ternational Joint Conferences on Artificial Intelligence Or-ganization. Wu, X.; Shen, Y.; Ge, F.; et al. 2025. When Do LLMs Help With Node Classification? A Comprehensive Analysis. In International Conference on Machine Learning , 67623– 67649. PMLR. Wu, Z.; Pan, S.; Chen, F.; et al. 2020. A comprehensive survey on graph neural networks. IEEE transactions on neural networks and learning systems , 32(1): 4–24. Yan, B.; Zhang, Z.; Sun, H.; Zhang, M.; Cao, Y.; and Shi, C. 2025. Data-centric federated graph learning with large language models. arXiv preprint arXiv:2503.19455 .Yan, H.; Li, C.; Long, R.; et al. 2023. A comprehensive study on text-attributed graphs: Benchmarking and rethink-ing. Advances in Neural Information Processing Systems ,36: 17238–17264. Yang, A.; Li, A.; Yang, B.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yu, S.; Wang, Y.; Li, R.; et al. 2026. Graph2text or graph2token: A perspective of large language models for graph learning. ACM Transactions on Information Systems ,44(3): 1–49. Zhang, Q.; Sheng, X.; Sun, Y.; et al. 2025a. Trustglm: Eval-uating the robustness of graphllms against prompt, text, and structure attacks. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 ,5912–5923. Zhang, X.; and Zitnik, M. 2020. Gnnguard: Defending graph neural networks against adversarial attacks. Advances in neural information processing systems , 33: 9263–9275. Zhang, Z.; Wang, X.; Zhang, M.; et al. 2026a. Toward Graph-Tokenizing Large Language Models with Reconstruc-tive Graph Instruction Tuning. In Proceedings of the ACM Web Conference 2026 , 430–441. Zhang, Z.; Wang, X.; Zhou, H.; Yu, Y.; Zhang, M.; Yang, C.; and Shi, C. 2025b. Can Large Language Models Improve the Adversarial Robustness of Graph Neural Networks? In Pro-ceedings of the 31st ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining, V.1, KDD 2025, Toronto, ON, Canada, August 3-7, 2025 , 2008–2019. ACM. Zhang, Z.; Yu, Y.; Zhang, M.; Du, J.; Wang, X.; and Shi, C. 2026b. Revisiting Graph-Tokenizing Large Language Mod-els: A Systematic Evaluation of Graph Token Understanding. 
+
+arXiv preprint arXiv:2605.03514 .Zhang, Z.; Zhang, M.; Wang, X.; Lyu, L.; Yan, B.; Du, J.; and Shi, C. 2025c. Rethinking Byzantine Robustness in Feder-ated Recommendation from Sparse Aggregation Perspective. In Thirty-Ninth AAAI Conference on Artificial Intelligence, AAAI 2025, Philadelphia, PA, USA, February 25 - March 4, 2025 , 13331–13338. AAAI Press. Zhang, Z.; Zhang, M.; Xu, D.; Shi, R.; Liu, J.; Meng, F.; Xu, H.; Wang, X.; Wang, R.; Chen, J.; Tang, M.; and Shi, C. 2026c. FRiskGPT: A Generative Foundation Model for Financial Risk Detection. In Hacid, H.; Maarek, Y.; Bonchi, F.; Guy, I.; and Yilmaz, E., eds., Proceedings of the ACM Web Conference 2026, WWW 2026, Dubai, United Arab Emirates, originally scheduled for April 13-17, 2026, rescheduled for June 29 - July 3, 2026 , 7733–7744. ACM. Zhang, Z.; Zhang, M.; Yu, Y.; Yang, C.; Liu, J.; and Shi, C. 2024. Endowing Pre-trained Graph Models with Provable Fairness. In Proceedings of the ACM on Web Conference 2024, WWW 2024, Singapore, May 13-17, 2024 , 1045–1056. ACM. Zhao, J.; Zhuo, L.; Shen, Y.; et al. 2023. Graphtext: Graph reasoning in text space. arXiv preprint arXiv:2310.01089 .Zheng, Q.; Zou, X.; Dong, Y.; et al. 2021. Graph Robust-ness Benchmark: Benchmarking the Adversarial Robustness of Graph Machine Learning. In Thirty-fifth Conference on Neural Information Processing Systems Datasets and Bench-marks Track (Round 2) .Zhu, Y.; Shi, H.; Wang, X.; et al. 2025. Graphclip: Enhancing transferability in graph foundation models for text-attributed graphs. In Proceedings of the ACM on Web Conference 2025 ,2183–2197. Related Work 
+
+Zero-Shot Graph Models 
+
+Based on their prediction mechanism, existing zero-shot graph models can be broadly divided into 3 categories: GN-NPreds, GTextLLMs, and GTokenLLMs. GNNPreds train a TAG encoder on source graphs, to encode the textual and structural information of target nodes, while an off-the-shelf text encoder encodes target class descriptions. For zero-shot inference, G2P2 (Wen and Fang 2023), ZeroG (Li et al. 2024a), and GraphCLIP (Zhu et al. 2025) compute con-trastive similarities between the representation of each node and those of the candidate classes, whereas OFA (Liu et al. 2024) concatenates their representations and trains a set of binary classifiers to determine whether the node belongs to each candidate class. Unlike GNNPreds, GTextLLMs and GTokenLLMs use GPT-style LLMs as predictors, but dif-fer in how they provide graph information to the LLM (Yu et al. 2026; Zhang et al. 2026b). GTextLLMs convert node attributes and graph structure into textual descriptions and prompt an LLM to predict node labels (Chen et al. 2024b; Tan et al. 2026; Yan et al. 2025). To better model graph struc-ture, existing methods use structured representations such as syntax trees (Zhao et al. 2023), random walks (Tan et al. 2024), and code-like formats (Wang et al. 2024b). Some studies further fine-tune open-source LLMs to improve their performance on graph tasks (Wang et al. 2026b). In con-trast, GTokenLLMs encode node text and graph structure into graph tokens, project them into the input space of an LLM, and combine them with textual task instructions for prediction (Zhang et al. 2026a). This design provides a more compact way to pass graph information to LLMs. Represen-tative methods include LLaGA (Chen et al. 2024a), TEA-GLM (Wang et al. 2024a), and GOFA (Kong et al. 2025). Although these models achieve promising zero-shot perfor-mance on clean graphs, their robustness against structure, text, and node injection attacks remains unexplored. 
+
+Graph Robustness Benchmark 
+
+Existing studies have evaluated graph robustness across an increasingly broad range of models and attacks. For example, GRB (Zheng et al. 2021) provides a unified benchmark for evaluating GNNs and robust GNNs under graph injection at-tacks. Guo et al. (Guo et al. 2024) and LLM4RGNN (Zhang et al. 2025b) extend the evaluation to LLM-enhanced graph learning, considering both LLMs as feature enhancers and predictors under structural and textual perturbations. Guo et al. (Ma, Wang, and Yan 2026) further investigate the poi-soning robustness of LLM-enhanced GNNs, evaluating dif-ferent language model encoders and GNN backbones under structural and textual attacks. TrustGLM (Zhang et al. 2025a) evaluates GraphLLMs against prompt, textual, and structural attacks, while Olatunji et al. (Olatunji et al. 2025) further examine graph-aware LLMs under poisoning and evasion attacks. More recently, Lei et al. (Lei et al. 2026) compare GNNs, robust GNNs, and GraphLLMs under textual and structural attacks. However, existing evaluations mainly fo-cus on supervised settings, where models are trained and evaluated on the same graph or task. They therefore pro-vide limited insight into whether ZGMs remain robust when transferred to unseen target graphs without target-domain supervision. 
+
+## Additional Details on ZeroGAR 
+
+Datasets 
+
+All datasets used in ZeroGAR are publicly available and cover multiple domains. For each dataset, we store the graph data in PyTorch .pt format, including sentence bert embed-dings commonly used in existing methods, original node texts, edge indices, node labels, label names, and train, validation, and test masks. Unless otherwise specified, all datasets are released under the MIT license. Detailed de-scriptions of these datasets are provided below. 
+
+• Cora. The Cora dataset is a citation network in the com-puter science domain, where nodes represent research papers and edges denote citation relationships between papers. The raw text attributes are collected from the GitHub repository provided in Chen et al. (Chen et al. 2024b). Each node con-tains the paper title and abstract as its text feature, and the node label corresponds to the paper category. 
+
+• Citeseer. The Citeseer dataset is a citation network in the computer science domain. Each node represents a research paper, and each edge indicates a citation relationship be-tween two papers. The TAG version contains text attributes for 3,186 nodes, where the raw texts are collected from the GitHub repository provided in Chen et al. (Chen et al. 2024b). 
+
+• OGBN-Products. OGBN-Products (Hu et al. 2020) con-tains over 2 million nodes and 61 million edges. Each node represents an Amazon product, and each edge indicates a co-purchase relationship between two products. The task is to classify each product into one of 47 top-level categories. 
+
+• Ogbn-Arxiv. The Ogbn-Arxiv dataset is a citation network collected from the arXiv platform, where nodes represent papers and edges denote citation relationships. The raw text attributes are collected from the GitHub repository provided in OFA (Liu et al. 2024). 
+
+• Child. The Child dataset (Yan et al. 2023) is an Amazon co-purchase and co-view graph of children’s books. Each node represents a book, and each edge connects two books that are frequently purchased or viewed together. Each node is associated with textual attributes, including the book title and descriptive metadata. 
+
+• History. The History dataset (Yan et al. 2023) is a subset of Amazon-Books containing books in the “History” cate-gory. Each node represents a book, and each edge connects two books that are frequently purchased or viewed together. The title and description of each book serve as its textual attributes. Each node is assigned one of 12 labels derived from the three-level book classification system. 
+
+• WikiCS. The WikiCS dataset is an internet link network, where nodes represent Wikipedia pages and edges denote reference links between pages. The raw text attributes are collected from OFA (Liu et al. 2024), including the page name and content of each Wikipedia entry. Each node is labeled according to the category of the corresponding entry. 
+
+• Instagram. The Instagram is a social network, where nodes represent users and edges indicate following re-lationships. The raw text attributes are collected from GraphAdapter (Huang et al. 2024), consisting of user per-sonal introductions. Each node is labeled as either commer-cial or normal. 
+
+Details of Victim Models 
+
+In ZeroGAR, we benchmark 13 representative ZGMs, com-prising four GNN-based Predictors, four Graph-Textualizing LLMs, and five Graph-Tokenizing LLMs. Detailed descrip-tions of these benchmarked methods are provided below. 
+
+• GNN-based Predictors 
+
+– G2P2 (Wen and Fang 2023) jointly pre-trains graph and text encoders using graph-grounded contrastive objec-tives over node texts, node representations, and neigh-borhood summaries. During inference, it compares node representations with prompted class descriptions to per-form zero-shot node classification. – ZeroG (Li et al. 2024a) uses a language model to encode node attributes and class descriptions into a shared seman-tic space. It combines prompt-based subgraph sampling with lightweight fine-tuning and predicts unseen classes by measuring the similarity between node and class rep-resentations. – GraphCLIP (Zhu et al. 2025) constructs graph-summary pairs with an LLM and contrastively aligns graph repre-sentations with summary embeddings. It further intro-duces invariant learning to improve cross-domain trans-fer and performs zero-shot prediction by matching target subgraphs with textual class descriptions. – OFA (Liu et al. 2024) represents nodes, edges, and task descriptions as natural-language text and encodes them into a unified feature space. It introduces nodes of interest and graph prompting substructures to support node-, link-, and graph-level classification across domains. 
+
+• Graph-Textualizing LLMs 
+
+– Llama3.1-8B (Grattafiori et al. 2024) directly processes the target node and its local neighborhood after they are converted into a natural-language prompt. Without graph-specific training, it predicts the node label from candi-date classes using its pretrained semantic knowledge and instruction-following ability. – Qwen3-8B (Yang et al. 2025) follows the same graph-textualization setting, where node attributes and neigh-borhood information are represented in natural language. It directly reasons over the resulting prompt and selects the predicted label from the candidate classes without target-graph adaptation. – Vicuna-7B (Chiang et al. 2023) receives textual descrip-tions of the target node and its neighborhood under the same prompt template. It serves as an instruction-tuned LLM baseline that directly produces node predictions without explicitly encoding the graph into specialized representations. – G1 (Guo et al. 2025a) improves the graph reasoning abil-ity of an LLM through reinforcement learning on syn-thetic graph-theoretic tasks with verifiable rewards. It di-rectly reasons over textualized graph inputs and transfers the learned reasoning ability to unseen real-world node classification tasks. 
+
+• Graph-Tokenizing LLMs 
+
+– GraphGPT (Tang et al. 2024) first aligns a graph encoder with language semantics through text-graph grounding and then maps graph representations into the LLM token space using a projector. Its two-stage graph instruction tuning enables natural-language prediction across graph datasets and tasks. – LLaGA (Chen et al. 2024a) reorganizes local graph struc-tures into structure-aware node sequences using node-level templates and maps these sequences into the LLM token space through a versatile projector. This design en-ables the LLM to generalize across previously unseen graph datasets and tasks. – TEA-GLM (Wang et al. 2024a) pre-trains a GNN and aligns its representations with the LLM token embedding space. A lightweight linear projector converts each graph representation into a fixed number of graph tokens, which a frozen LLM processes under unified instructions for zero-shot prediction. – GOFA (Kong et al. 2025) interleaves trainable GNN lay-ers with a frozen pre-trained LLM to jointly model graph structure and textual semantics. It is pre-trained with graph-level language modeling, question-answering, and structural tasks, enabling generative zero-shot inference across different graph tasks. – UniGTE (Wang et al. 2026a) adopts an instruction-tuned encoder–decoder architecture that jointly processes graph tokens and natural-language task prompts. Learn-able alignment tokens produce compact task-aware graph representations, while a frozen LLM decoder predicts task answers and reconstructs graph prompts to preserve structural and semantic information. 
+
+## Additional Details on Implementations 
+
+Hyperparameter Settings 
+
+All implementations strictly follow the settings in the original papers and official repositories. We use a unified random seed of 42 for all experiments. The implementation details are provided below: 
+
+• Structure attack We use SGA as the structural attack. The attack is a direct targeted evasion attack with structure perturbation enabled and feature perturbation disabled. The SGA surrogate is an SGC model with K = 3 and learning rate 0.01 ; the auxiliary GCN used for evasion evaluation has hidden size 64, dropout 0.5, and early-stopping patience 30. 
+
+• Textual attack. We evaluate an LLM-based textual rewrit-ing attack using Qwen3.6-27B; API generation uses temper-ature 0.7 and max tokens 1000. 
+
+• Node injection attack We use WTGIA with the ATDGIA injection strategy. Injected node features are initialized as ze-ros and optimized with FGSM-style binary feature flipping. We use sparsity level 0.15, sequential injection step 0.2, ep-silon 0.01, seed 42, and BoW features. The feature-flipping batch size is 1 for Cora/Citeseer and 50 for the other datasets. • G2P2 : We use SBERT-384 node features and train for 2 epochs with batch size 64 and learning rate 2 × 10 −5.The graph encoder has input dimension 384, hidden dimen-sion 128, and output dimension 128. The text encoder uses context length 128, transformer width 512, 12 layers, and 8 attention heads. For OGBN-Arxiv, the edge coefficient is 0.1 and full-graph training is used. For OGBN-Products and the Arxiv+Products setting, the edge coefficient is 10 and 2-hop neighbor sampling with fanout [25 , 10] is used. 
+
+• ZeroG : We train ZeroG for 50 epochs using Sentence-BERT textual features, learning rate 10 −4, weight decay 0.1, gradient accumulation steps 4, and gradient clipping 1.0. The feature propagation round is R = 10 , normalization is enabled, and the maximum sampled subgraph size is 100 nodes. Checkpoints are saved after each epoch. 
+
+• GraphCLIP : We use BERT-384 graph inputs, a GPS graph encoder with hidden/output dimension 1024 and 12 layers, and a frozen MiniLM text encoder. Training uses AdamW with learning rate 10 −5, weight decay 10 −5, batch size 1024, and 30 epochs. Graph augmentation drops 30% of feature dimensions and 20% of edges. The adversarial augmentation step size is 10 −2 with 3 update steps. The contrastive logit scale is initialized as 1/0.07 .
+
+• OFA : We use SBERT-384 node features projected to hid-den dimension 768. The OFA model uses 7 GNN layers, dropout 0.15, JK set to “none”, MiniLM textual embeddings, batch size 512, learning rate 10 −3, validation interval 50, and 50 training epochs. The same settings are used for Arxiv, Products, and Arxiv+Products source configurations. 
+
+• Llama3.1-8B : Evaluated with vLLM using the 2-hop without-label prompt format. The prompt includes full target-node text, at most 20 hop-1 neighbors, and at most 5 hop-2 neighbors. Generation uses temperature 0.6, top-p 0.95, top-
+
+k 30, max new tokens 4096, and seed 42. 
+
+• Qwen3-8B : Uses the same vLLM inference settings as Llama3.1-8B. Thinking is disabled by default. 
+
+• Vicuna-7B : Uses the same sampling settings. Since Vi-cuna has no built-in chat template in the current code, the evaluation falls back to the Vicuna single-turn chat format. The effective context length is treated as 16K. 
+
+• G1 : We evaluate G1-7B with the same 2-hop without-label prompts and the same vLLM sampling settings: temperature 0.6, top-p 0.95, top-k 30, max new tokens 4096, and seed 42. 
+
+• GraphGPT : We use Vicuna-7B-v1.5-16K as the base LLM. The per-GPU batch size is set to 2, and the learn-ing rate is 2 × 10 −3. We use a warmup ratio of 3 × 10 −2 and set the maximum LLM input length to 2048. The model is trained for 3 epochs. 
+
+• LLaGA : We use Vicuna-7B-v1.5-16K as the frozen lan-guage backbone and SBERT graph embeddings. The model uses the ND template, 2-hop graph context, neighbor sam-ple size 10, and a linear graph projector by default. Only the multimodal projector is tuned. Training uses bf16/tf32, model max length 4096, 1 epoch, per-device batch size 4, gradient accumulation 1, learning rate 2 × 10 −3, weight de-cay 0, cosine scheduler, warmup ratio 0.03. Inference uses temperature 0.2, and max new tokens 1024. 
+
+• TEA-GLM : TEA-GLM uses a two-stage training pipeline. Stage 1 pretrains the GNN for 60 epochs with learning rate 0.02, batch size 512, hidden size 2048, output size 4096, 2 layers, fanout [25 , 10] , edge-drop rates 0.3/0.4, feature-drop rates 0.0/0.1, and temperature τ = 0 .4. Stage 2 freezes the Vicuna-7B-v1.5-16K backbone and aligns the graph encoder for 1 epoch with batch size 2, gradient steps 1, learning rate 
+
+10 −3, weight decay 0, max text length 700, 5 graph tokens, attention dimension 2048, and GNN output dimension 4096. Inference uses batch size 4 and max text length 700. 
+
+• GOFA : We use Mistral-7B-Instruct-v0.2 with decoder LoRA enabled. Fine-tuning runs for 1 epoch with batch size 1, gradient accumulation 64, learning rate 10 −4, weight de-cay 0.1, gradient clipping 0.5, LLM max length 256, and 6 GNN layers. The graph context uses 3 hops with at most 5 nodes per hop. Node-classification training uses 10-way sampled choices, and link prediction uses binary choices. 
+
+• UniGTE : We use Vicuna-7B-v1.5-16K as both graph-text encoder and LLM backbone, with 64 memory tokens and node dimension 768. PEFT/LoRA is enabled with rank 128, LoRA alpha 32, dropout 0.05, and target modules q_proj 
+
+and v_proj . Training uses bf16, 1 epoch, per-device batch size 2, gradient accumulation 2, base/projector learning rate 
+
+2 × 10 −4, graph learning rate 2 × 10 −3, cosine scheduler, warmup ratio 0.03, max gradient norm 10. Evaluation uses per-device batch size 1; generation uses temperature 0.7 and max new tokens 80. 
+
+Prompt Template for the Text-based Attack 
+
+In ZeroGAR, we adopt an LLM-based attack (Lei et al. 2026) to generate fluent text perturbations. The detailed prompt template is provided below: 
+
+Text Prompt for GTextLLM 
+
+For all GTextLLMs, we adopt the 2-hop w/o Label prompt template introduced by Wang et al. (Wang et al. 2026b), as shown below: 
+
+Computing Environment and Resources 
+
+The publicly available source code is provided in the supple-mentary material to support future research on the adversarial robustness of zero-shot graph models. ZeroGAR is imple-mented using PyTorch Geometric (PyG). All experiments are conducted in the following computing environment: 
+
+• OS : Ubuntu Linux 5.15.0-102-generic; 
+
+• CPU : Intel(R) Xeon(R) Platinum 8358 CPU @ 2.60GHz; 
+
+• GPU : NVIDIA A800 80GB. 
+
+## Additional Evaluation Results for ZeroGAR 
+
+Results for the ASR Metric 
+
+We also report the attack success rate (ASR), defined as: 
+
+ASR = 
+
+P 
+
+> vi∈V test
+
+I  ˆyclean i = yi ∧ ˆyadv i̸ = yi
+
+P vi ∈ V test I (ˆ yclean i = yi) , (6) where Vtest denotes the set of test nodes, yi is the ground-truth label of node vi, and ˆyclean  
+
+> i
+
+and ˆyadv  
+
+> i
+
+denote its pre-dictions on the clean and adversarial graphs, respectively. 
+
+I(·) is the indicator function. ASR measures the proportion Prompt Template (instantiated per target node) 
+
+Graph node classification task 
+
+Available classes: {classes_str} Target node {node_id}: Original text: “{text}” Original label: “{current_label}” {neighbor_info} (e.g., “Neighbor labels: [...] (counts: {...})” or “No neighbors found”) 
+
+Task. Rewrite the text to be as different as possible from the original while keeping a similar length. 
+
+Requirements: 
+
+• Must not belong to the original class: “{cur-rent_label}”. 
+
+• Should not belong to neighbor classes: {unique_neighbor_labels} or None. 
+
+• {target_instruction} (e.g., prefer a class from the al-lowed set, or the least frequent neighbor class if all are forbidden) .
+
+• Make the content maximally dissimilar from the orig-inal semantics. 
+
+• Keep the word count roughly similar. 
+
+• Produce content that is most unlikely under the node/neighbor context for the target class. Goal: create text that is jointly inconsistent with the original content and its local graph context. Return only the modified text, with no explanations or notes. 
+
+Modified text: 
+
+of initially correctly classified test nodes that are misclassi-fied after the attack. The ASR results for structural, textual, and node injection attacks are reported in Table 7, Table 8, and Table 9, respectively. The results are consistent with the observations reported in the main paper. 
+
+Results against TextFooler Attack 
+
+In ZeroGAR, we primarily use LLM-based text generation to perform textual attacks. However, the generated replacements may not always be sufficiently imperceptible. To address this concern, we additionally evaluate four word-level attack methods implemented in the TextAttack library: TextFooler, BAE, PWWS, and HotFlip. We use TextFooler as the pri-mary method and treat the other three methods as additional baselines. TextFooler replaces selected words while preserv-ing the original semantics, producing subtle lexical changes that are suitable for evaluating attacks with stronger imper-ceptibility requirements. For all target datasets, the perturbed-node ratios are set to 
+
+{0.1, 0.2, 0.4} under low, medium, and high attack budgets, respectively. We fix the text encoder as MiniLM and attack only correctly classified test nodes selected through degree-weighted sampling. For MiniLM-based attacks, the input text is truncated to at most 256 tokens. TextAttack is executed in Prompt Template for 2-hop w/o La-bel (instantiated per target node) 
+
+“Context” : “You are a good graph reasoner. Give you a graph language that describes a graph structure and node information from the {dataset_name} dataset. You need to understand the graph and the task definition and answer the question. ( <Target node> , <Node attributes> ), (<1-hop neighbors> , <Node attributes> ), (<2-hop neighbors> , <Node attributes> ).” 
+
+“Question” : “Please predict the most appropriate category for the Target node. Choose from the following categories: <Categories> . Do not provide your reasoning. Answer:” 
+
+“Answer” : “ <Correct answer> ”
+
+(<Target node>, <Node attributes>) :## Target node: Paper id: {target_node_id} Title: {target_node_text} 
+
+(<1-hop neighbors>, <Node attributes>) :Known neighbor papers at hop 1 (partial, may be incomplete): {one_hop_neighbor_information} 
+
+(<2-hop neighbors>, <Node attributes>) :Known neighbor papers at hop 2 (partial, may be incomplete): {two_hop_neighbor_information} 
+
+<Categories> :{categories} 
+
+<Correct answer> : {correct_answer} batch mode with a batch size of 4. The experimental results are reported in Table 10. These results suggest that text-based adversarial attacks still overfit to the surrogate model and embedding type, resulting in limited attack effectiveness. To ensure consistently strong attacks and evaluate worst-case robustness, we therefore adopt the LLM-based textual attack, which generally degrades the performance of all backbones across different text encoders. Table 7: Attack success rate (ASR, %) under structural attacks across different perturbation sizes. Lower values indicate stronger robustness. Best results are bolded and runner-up results are underlined. 
+
+Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High 
+
+## GNNPred 
+
+OFA 7.80 11.35 12.77 11.66 15.19 17.31 19.68 17.87 22.09 38.10 45.24 45.24 4.00 7.67 13.22 13.49 16.08 18.67 18.75 G2P2 6.45 20.56 27.82 13.39 27.38 30.95 17.94 20.70 23.92 16.45 23.18 27.35 7.54 7.78 12.44 3.15 5.75 8.23 16.72 ZeroG 16.67 41.49 59.22 12.95 23.80 33.13 46.97 57.06 69.64 40.97 52.02 58.68 39.63 52.35 76.13 12.63 27.63 36.57 42.09 GraphCLIP 15.79 27.19 31.09 8.64 8.88 13.08 39.24 42.77 51.17 32.45 35.35 36.30 1.61 1.61 1.53 16.90 22.60 25.98 22.90 
+
+## GTextLLM 
+
+Llama3.1-8B 10.67 14.89 15.21 16.32 19.43 20.98 31.56 30.41 33.01 29.68 33.22 33.83 27.26 26.43 25.12 12.38 14.82 16.98 22.90 Qwen3-8B 8.40 10.30 14.40 12.09 13.74 18.96 28.49 28.69 30.74 22.73 25.66 28.05 17.68 19.20 18.03 5.94 7.63 9.08 17.77 Vicuna-7B 19.35 30.32 31.39 26.76 28.17 32.75 47.33 49.75 54.58 50.87 52.42 53.74 59.40 57.55 61.41 43.88 49.96 50.79 44.47 G1 8.63 14.56 18.92 14.55 14.24 22.73 28.99 28.09 30.85 24.98 25.38 28.36 24.56 25.08 25.39 8.62 10.82 12.70 20.41 
+
+## GTokenLLM 
+
+GraphGPT 26.36 33.64 47.71 16.67 28.79 35.86 39.21 53.51 72.90 57.37 63.37 66.74 8.90 10.21 9.42 3.93 3.79 4.48 32.38 LLaGA 22.50 25.00 25.00 38.46 27.88 25.96 23.80 27.45 33.49 33.17 36.11 37.52 49.85 48.35 43.84 14.74 16.85 17.57 30.42 TEA-GLM 2.27 3.03 3.03 1.52 3.03 5.45 19.51 19.80 20.26 11.67 12.14 13.60 7.48 6.04 6.89 10.11 10.99 11.37 9.34 
+
+GOFA 7.10 16.67 18.36 13.77 17.39 21.74 20.54 24.07 31.49 14.14 15.35 16.85 8.65 9.20 12.23 10.85 13.46 13.99 15.88 UniGTE 3.52 6.53 7.07 4.55 8.08 10.61 3.93 4.75 6.03 7.62 8.95 9.42 16.45 21.00 26.95 6.29 8.01 10.49 9.46 
+
+Table 8: Attack success rate (ASR, %) under textual attacks across different perturbation sizes. Lower values indicate stronger robustness. Best results are bolded and runner-up results are underlined. 
+
+Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High 
+
+## GNNPred 
+
+OFA 5.67 13.48 14.18 7.27 18.34 40.48 7.03 10.84 21.69 11.90 23.81 30.95 5.48 11.80 24.17 10.96 15.58 25.00 16.59 G2P2 2.02 5.65 9.68 5.54 10.50 13.39 3.77 7.82 12.88 6.28 10.12 16.84 5.14 8.33 13.08 4.35 7.79 14.29 8.75 
+
+ZeroG 1.77 4.26 4.96 3.57 8.33 12.20 10.28 18.09 31.32 6.81 10.60 16.35 10.30 24.57 31.20 9.95 22.77 37.00 14.68 GraphCLIP 5.56 12.57 24.27 5.80 15.08 34.57 3.01 5.84 13.42 8.38 15.59 34.18 0.55 0.69 2.83 7.21 16.03 37.28 13.49 
+
+## GTextLLM 
+
+Llama3.1-8B 18.54 26.12 43.54 24.87 34.67 53.77 40.95 47.27 57.35 36.01 45.17 61.20 32.32 41.02 51.56 18.74 28.06 48.08 39.40 Qwen3-8B 15.72 23.04 42.55 20.48 33.78 55.59 34.24 39.45 51.49 30.04 39.07 57.12 25.93 37.32 49.57 14.52 24.78 45.00 35.54 Vicuna-7B 28.06 33.55 50.97 31.97 36.05 51.02 42.95 47.11 52.28 48.04 54.15 60.34 58.71 59.43 62.71 40.45 49.46 65.94 48.51 G1 19.68 25.61 43.94 19.06 29.91 51.32 32.12 35.30 46.91 30.82 37.28 52.04 32.49 40.42 55.66 13.06 21.23 41.18 34.89 
+
+## GTokenLLM 
+
+GraphGPT 32.73 33.64 61.82 17.31 29.81 52.40 25.82 38.89 61.60 30.00 41.16 52.42 10.22 13.04 20.00 12.45 22.94 42.23 33.25 LLaGA 23.75 28.75 46.25 25.00 31.25 57.14 23.44 32.50 47.76 28.86 35.69 48.57 31.20 32.85 37.19 18.54 24.64 42.32 34.21 TEA-GLM 14.02 23.11 42.42 15.09 26.63 52.66 24.28 32.15 50.70 15.41 22.37 35.91 6.17 12.35 21.18 17.54 28.21 49.34 27.20 GOFA 10.11 21.31 36.07 11.62 22.89 46.48 7.26 14.26 29.50 8.17 13.62 25.97 9.35 17.71 28.62 10.54 20.61 42.67 20.93 UniGTE 10.05 24.12 41.21 11.71 24.88 48.78 3.56 7.58 17.63 6.05 13.39 31.17 3.32 6.93 13.66 9.32 19.77 41.87 18.61 Table 9: Attack success rate (ASR, %) under node injection attacks across different perturbation sizes. Lower values indicate stronger robustness. Best results are bolded and runner-up results are underlined. 
+
+Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High 
+
+## GNNPred 
+
+OFA 3.55 5.67 8.51 7.27 12.11 17.30 24.30 30.72 40.16 54.76 57.14 57.14 8.50 14.64 19.26 17.98 22.26 27.74 23.83 G2P2 8.06 14.52 19.76 12.24 16.62 21.28 23.64 27.14 31.46 28.46 37.08 51.36 14.92 16.96 24.03 6.38 11.89 21.04 21.49 ZeroG 9.57 13.83 39.01 12.80 29.46 49.40 68.68 83.89 91.26 45.51 68.21 81.84 46.18 65.52 67.86 18.05 26.77 51.50 48.30 GraphCLIP 5.85 10.82 29.53 5.80 11.37 15.55 24.32 33.06 41.97 26.44 27.83 30.60 4.14 6.08 12.50 13.17 16.55 19.72 18.63 
+
+## GTextLLM 
+
+Llama3.1-8B 8.71 10.96 11.80 15.83 16.83 15.58 29.84 30.05 33.43 29.68 30.16 30.81 28.61 28.42 28.32 10.22 11.85 12.48 21.31 Qwen3-8B 7.32 7.05 10.30 14.36 15.16 13.30 29.13 31.17 30.59 25.51 27.11 27.07 22.78 26.89 25.55 6.01 7.83 10.04 18.73 Vicuna-7B 20.00 22.26 32.58 29.59 30.27 44.22 47.44 47.72 49.63 53.36 53.06 54.34 56.00 55.00 56.57 40.01 44.91 49.34 43.68 G1 9.97 9.97 16.17 14.66 14.66 19.06 24.73 23.82 27.77 23.33 24.05 24.58 26.74 29.97 31.88 5.50 8.70 10.89 19.25 
+
+## GTokenLLM 
+
+GraphGPT 48.18 70.00 91.82 28.85 46.15 60.10 71.02 85.16 85.97 79.47 80.42 80.95 10.00 10.00 10.00 10.00 13.83 16.34 49.90 LLaGA 28.75 23.75 27.50 33.04 33.04 48.21 32.66 37.55 42.81 34.29 37.52 38.88 59.09 51.65 52.89 15.20 13.02 13.10 34.61 TEA-GLM 2.65 2.27 2.27 3.85 2.66 3.55 22.99 27.26 29.16 10.77 12.44 14.50 11.99 18.16 20.67 6.08 5.49 6.44 11.29 GOFA 3.28 7.92 6.56 6.34 8.80 9.15 15.07 20.54 27.89 9.13 10.98 12.09 11.02 13.59 13.70 5.10 6.47 7.07 10.82 
+
+UniGTE 3.52 5.53 12.06 4.39 5.85 9.76 7.03 8.86 9.13 6.20 6.56 7.11 27.32 32.92 38.14 4.92 5.95 6.88 11.23 
+
+Table 10: Performance comparison under TextFooler attacks across different perturbation sizes. Each cell reports the ACC (top) and RDA (%, bottom). Best scores are bolded and runner-up scores are underlined. 
+
+Method Cora Citeseer History Child Instagram WikiCS Avg. Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High Low Mid High 
+
+GNNPred 
+
+OFA 24.72 
+
+↓4.96 23.62 
+
+↓9.19 23.06 
+
+↓11.34 43.89 
+
+↓3.11 42.48 
+
+↓6.23 38.56 
+
+↓14.88 6.12 
+
+↑2.17 6.20 
+
+↑3.51 6.27 
+
+↑4.67 0.27 0.00 0.29 
+
+↑7.41 0.28 
+
+↑3.70 46.76 
+
+↓3.92 46.19 
+
+↓5.10 45.84 
+
+↓5.81 9.65 
+
+↓3.40 9.47 
+
+↓5.21 8.79 
+
+↓12.01 21.25 
+
+↓2.78 G2P2 45.39 
+
+↓0.81 44.65 
+
+↓2.43 43.17 
+
+↓5.66 51.72 
+
+↓3.79 52.51 
+
+↓2.33 50.00 
+
+↓6.99 12.89 
+
+↓1.45 12.83 
+
+↓1.91 12.63 
+
+↓3.44 11.47 
+
+↓1.97 11.29 
+
+↓3.50 10.51 
+
+↓10.17 45.57 
+
+↑0.20 45.48 0.00 44.78 
+
+↓1.54 41.29 0.00 41.06 
+
+↓0.56 39.97 
+
+↓3.20 34.29 
+
+↓2.75 ZeroG 51.29 
+
+↓1.42 51.29 
+
+↓1.42 51.11 
+
+↓1.77 52.35 
+
+↓0.59 53.45 
+
+↑1.50 53.13 
+
+↑0.89 37.25 
+
+↓0.88 36.60 
+
+↓2.61 36.54 
+
+↓2.77 13.03 
+
+↑1.09 13.14 
+
+↑1.94 11.99 
+
+↓6.98 56.54 
+
+↑0.07 55.80 
+
+↓1.24 55.84 
+
+↓1.17 37.64 
+
+↑0.03 37.40 
+
+↓0.61 37.18 
+
+↓1.20 41.20 
+
+↓1.13 GraphCLIP 60.70 
+
+↓3.80 57.01 
+
+↓9.65 53.69 
+
+↓14.91 
+
+65.05 
+
+↓3.70 
+
+64.11 
+
+↓5.09 
+
+61.29 
+
+↓9.27 
+
+54.12 
+
+↓4.80 
+
+51.14 
+
+↓10.04 
+
+44.30 
+
+↓22.08 20.16 
+
+↓4.50 19.00 
+
+↓10.00 16.29 
+
+↓22.83 
+
+63.82 
+
+↓1.54 
+
+63.86 
+
+↓1.48 
+
+63.55 
+
+↓1.96 66.84 
+
+↓3.76 62.70 
+
+↓9.72 53.48 
+
+↓22.99 
+
+52.28 
+
+↓9.71 
+
+GTextLLM 
+
+Llama3.1-8B 64.58 
+
+↓1.67 65.50 
+
+↓0.27 64.39 
+
+↓1.96 59.09 
+
+↓5.27 58.31 
+
+↓6.52 55.64 
+
+↓10.80 40.22 
+
+↑0.95 38.11 
+
+↓4.34 37.73 
+
+↓5.30 
+
+31.04 
+
+↓0.67 
+
+29.87 
+
+↓4.42 
+
+28.74 
+
+↓8.03 45.04 
+
+↓0.20 44.91 
+
+↓0.49 44.60 
+
+↓1.17 73.17 
+
+↓0.39 72.67 
+
+↓1.08 72.81 
+
+↓0.88 51.47 
+
+↓3.11 Qwen3-8B 68.08 
+
+0.00 
+
+67.71 
+
+↓0.54 
+
+65.68 
+
+↓3.53 57.52 
+
+↓2.39 56.11 
+
+↓4.79 57.37 
+
+↓2.65 24.17 
+
+↓2.15 24.14 
+
+↓2.27 23.82 
+
+↓3.56 29.89 
+
+↓1.84 29.64 
+
+↓2.66 27.97 
+
+↓8.14 46.06 0.00 46.14 
+
+↑0.17 46.36 
+
+↑0.65 
+
+76.77 
+
+↓0.49 
+
+76.40 
+
+↓0.97 
+
+75.63 
+
+↓1.97 49.97 
+
+↓2.15 Vicuna-7B 58.49 
+
+↑2.26 59.41 
+
+↑3.86 56.27 
+
+↓1.63 42.63 
+
+↓7.49 41.54 
+
+↓9.85 42.95 
+
+↓6.79 21.62 
+
+↑0.98 21.67 
+
+↑1.21 22.04 
+
+↑2.94 17.28 
+
+↑0.23 16.63 
+
+↓3.54 16.01 
+
+↓7.13 30.01 
+
+↓2.72 31.42 
+
+↑1.85 30.28 
+
+↓1.85 41.32 
+
+↓2.85 40.60 
+
+↓4.54 39.66 
+
+↓6.75 34.99 
+
+↓1.88 G1 65.68 
+
+↓4.05 64.58 
+
+↓5.65 64.02 
+
+↓6.47 51.57 
+
+↓3.52 52.51 
+
+↓1.76 50.63 
+
+↓5.28 26.23 
+
+↓1.09 26.03 
+
+↓1.85 26.77 
+
+↑0.94 25.40 
+
+↓2.16 25.12 
+
+↓3.24 23.85 
+
+↓8.13 49.89 
+
+↓1.38 48.96 
+
+↓3.22 50.02 
+
+↓1.13 74.91 
+
+↓0.03 75.01 
+
+↑0.11 73.95 
+
+↓1.31 48.62 
+
+↓2.51 
+
+GTokenLLM 
+
+GraphGPT 19.93 
+
+↓1.82 20.30 0.00 16.42 
+
+↓19.11 31.19 
+
+↓4.33 28.68 
+
+↓12.02 25.86 
+
+↓20.67 20.80 
+
+↓7.39 19.34 
+
+↓13.89 17.18 
+
+↓23.51 5.84 
+
+↓5.50 5.74 
+
+↓7.12 5.44 
+
+↓11.97 34.21 
+
+↓0.06 34.15 
+
+↓0.23 33.71 
+
+↓1.52 51.00 
+
+↓1.54 49.82 
+
+↓3.82 46.35 
+
+↓10.52 25.89 
+
+↓9.12 LLaGA 13.10 
+
+↓11.25 13.10 
+
+↓11.25 9.78 
+
+↓33.74 17.55 0.00 15.67 
+
+↓10.71 12.70 
+
+↓27.64 22.16 
+
+↓4.07 21.44 
+
+↓7.19 19.72 
+
+↓14.63 15.06 
+
+↓4.14 14.50 
+
+↓7.70 13.16 
+
+↓16.23 21.46 
+
+↑0.61 20.85 
+
+↓2.25 22.61 
+
+↑6.00 40.77 
+
+↓1.78 39.94 
+
+↓3.78 37.69 
+
+↓9.20 20.63 
+
+↓9.04 TEA-GLM 47.79 
+
+↓1.89 45.02 
+
+↓7.58 41.14 
+
+↓15.54 52.35 
+
+↓1.19 50.94 
+
+↓3.85 45.30 
+
+↓14.50 28.61 
+
+↓1.51 26.50 
+
+↓8.78 23.70 
+
+↓18.42 19.08 
+
+↓2.20 18.19 
+
+↓6.77 16.85 
+
+↓13.63 61.70 
+
+↑0.50 62.01 
+
+↑1.01 62.85 
+
+↑2.38 30.79 
+
+↓4.91 29.02 
+
+↓10.38 25.12 
+
+↓22.42 38.16 
+
+↓7.84 GOFA 66.61 
+
+↓1.36 59.23 
+
+↓12.29 58.86 
+
+↓12.84 42.63 
+
+↓4.22 42.48 
+
+↓4.56 39.81 
+
+↓10.56 27.58 
+
+↓2.72 26.80 
+
+↓5.47 25.10 
+
+↓11.46 19.93 
+
+↓2.21 19.49 
+
+↓4.37 18.52 
+
+↓9.13 38.78 
+
+↓2.02 39.36 
+
+↓0.56 38.61 
+
+↓2.45 65.06 
+
+↓1.50 64.14 
+
+↓2.89 61.89 
+
+↓6.30 41.94 
+
+↓5.69 UniGTE 35.79 
+
+↓2.53 34.13 
+
+↓7.05 34.32 
+
+↓6.54 30.72 
+
+↓4.39 30.56 
+
+↓4.89 27.12 
+
+↓15.59 13.05 
+
+↓0.99 12.95 
+
+↓1.75 12.60 
+
+↓4.40 16.20 
+
+↓2.23 15.71 
+
+↓5.19 14.44 
+
+↓12.85 45.97 
+
+↓1.03 46.41 
+
+↓0.09 45.92 
+
+↓1.14 48.76 
+
+↓1.99 47.58 
+
+↓4.36 44.74 
+
+↓10.07 30.94 
+
+↓4.66

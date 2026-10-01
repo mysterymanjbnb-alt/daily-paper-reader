@@ -1,0 +1,2506 @@
+Title: CFLoRA: Federated Fine-tuning of LLMs with Complementary Factors for Error-free Aggregation
+
+URL Source: https://arxiv.org/pdf/2609.33147v1
+
+Published Time: Tue, 29 Sep 2026 01:41:23 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# CFL ORA: F EDERATED FINE -TUNING OF LLM S WITH 
+
+# COMPLEMENTARY FACTORS FOR ERROR -FREE AG-
+
+# GREGATION 
+
+Yanan Ma 
+
+City University of Hong Kong 
+
+yananma8-c@my.cityu.edu.hk 
+
+Qiyuan Chen 
+
+The University of Hong Kong 
+
+qiyuanchen@connect.hku.hk 
+
+Zihan Fang 
+
+City University of Hong Kong 
+
+zihanfang3-c@my.cityu.edu.hk 
+
+Xianhao Chen 
+
+The University of Hong Kong 
+
+xchen@eee.hku.hk 
+
+Yuguang Fang 
+
+City University of Hong Kong 
+
+my.fang@cityu.edu.hk 
+
+## ABSTRACT 
+
+Federated low-rank adaptation (LoRA) enables collaborative fine-tuning of large language models without centralizing private client data. Its factorized update, however, creates a structural mismatch in federated averaging: averaging the two LoRA factors separately does not equal averaging their products. Existing ex-act methods resolve this issue mainly by freezing an entire factor or alternating factors across rounds, but none can update factors simultaneously without ag-gregation errors or expanding communication ranks. To address this fundamen-tal problem, we present CFLoRA , a federated LoRA scheme that partitions la-tent LoRA channels into two complementary sets in every communication round. By ensuring that columns and rows are complementary across factors, we elimi-nate bilinear terms in matrix multiplications, making federated aggregation exact. Crucially, our framework also supports clients with heterogeneous rank budgets. Convergence analysis validates CFLoRA achieves O(1 /√T ) convergence rate of the original LoRA objective in homogeneous-rank cases. Extensive experiments with RoBERTa on the GLUE benchmark and with LLaMA-3.2-3B-Instruct on commonsense reasoning tasks demonstrate that CFLoRA achieves superior perfor-mance and training efficiency compared to state-of-the-art federated LoRA base-lines. 
+
+## 1 INTRODUCTION 
+
+Federated learning (FL) enables clients to learn from private, distributed data without transferring raw data to a central server (McMahan et al., 2017; Kairouz et al., 2021), which is important for privacy-sensitive applications. However, full-parameter fine-tuning imposes substantial memory, computation, and communication costs on participating clients. Low-rank adaptation (LoRA) re-duces these costs by freezing pretrained weights and representing each trainable weight update as the product of two matrices (Hu et al., 2022). Federated LoRA, which integrates FL with LoRA, therefore offers a practical approach to distributed LLM adaptation subject to clients’ resource con-straints (Zhang et al., 2024). Despite these benefits, it is well-known that LoRA’s factorized parameterization introduces a funda-mental mismatch in federated aggregation. For client factors (Bi, Ai) and normalized aggregation 1arXiv:2609.33147v1 [cs.LG] 27 Sep 2026 weights wi, in general, 
+
+X
+
+> i
+
+wiBi
+
+! X
+
+> i
+
+wiAi
+
+!̸
+
+= X
+
+> i
+
+wiBiAi. (1) The resulting aggregation error can impair federated optimization, particularly when heterogeneous data drives client factors apart (Sun et al., 2024). A detailed formulation and analysis is provided in Section 3.2. Existing approaches navigate this mismatch through various trade-offs. Freezing one factor through-out training or alternating entire factors across rounds ensures exact aggregation, but prevents simul-taneous adaptation within a single round (Sun et al., 2024; Chen et al., 2025; Koo et al., 2025). Re-stricting updates in this way limits the model’s expressive capacity and slows convergence, as both matrices are supposed to co-adapt to capture knowledge. Alternatively, stacking client adapters pre-serves exact aggregation but undesirably expands the rank to the sum of all client ranks (Wang et al., 2024). Other methods adopt approximate decompositions (Bai et al., 2024; Bian et al., 2025; Wang et al., 2026), incorporate residual corrections into the pretrained weights (Singhal et al., 2025), or utilize alternative parameterizations with fixed outer bases (Raje et al., 2025). However, these either only approximate or diverge from the original LoRA learning objective. These limitations raise a still unresolved question: Can two-factor federated LoRA achieve exact factor-wise aggregation and distribution while simultaneously updating both factors? 
+
+We answer this question with complementary-channel federated LoRA (CFLoRA ). Our central in-sight is that exact aggregation can be enforced by a simple modification to LoRA: in every round, if a column of B is trainable, its corresponding row in A can be frozen, and vice versa. This mutually exclusive update ensures ∆Bi∆Aj = 0 for every client pair (i, j ), thus leading to exact factor-wise aggregation. CFLoRA can be treated as a generalized version of alternative factor updates, but enables simultaneous factor updating with flexible choices of trainable channels. Compared with standard federated LoRA, our scheme halves trainable parameters and lowers communication costs . More importantly, benefiting from exact aggregation and the co-adaptation of both factors, we show that CFLoRA achieves an O(1 /√T ) convergence rate for the original LoRA objective under homogeneous client ranks and a surrogate objective under heterogeneous ranks. Our main contributions are as follows: • We introduce CFLoRA , a federated LoRA fine-tuning scheme with complementary factors that ensure exact factor-wise aggregation and seamlessly support heterogeneous ranks. • We establish an O(1 /√T ) convergence rate for CFLoRA under both homogeneous and het-erogeneous rank settings, and theoretically reveals the importance of factor co-adaptation. • We demonstrate the performance superiority and resource efficiency of CFLoRA over other federated LoRA baselines by fine-tuning RoBERTa and LLaMA-3.2-3B-Instruct models on GLUE and commonsense reasoning tasks, respectively. 
+
+## 2 RELATED WORK 
+
+Federated LoRA Fine-tuning. Research on Federated LoRA investigated how to preserve the pa-rameter efficiency of low-rank adaptation while aggregating updates learned from decentralized data. FedIT directly combines LoRA with federated averaging and communicates both factors (Zhang et al., 2024); this simple baseline produces an error between the product of factor averages and the desired average of products. FedEx-LoRA computes the aggregation error and absorbs this residual into the nominally frozen backbone (Singhal et al., 2025). However, this residual has a rank pro-portional to the aggregated rank and changes the base model across rounds. LoRA-FAIR optimizes a correction to an averaged factor against the product-space target, whereas iFLoRA reconstructs local products and applies SVD in a pipelined aggregation procedure (Bian et al., 2025; Wang et al., 2026). However, these schemes introduce server-side reconstruction complexity (e.g., SVD of high-dimensional models) without entirely avoiding approximation errors. Beyond error correction, another line of work modifies the factor-updating rule. FFA-LoRA fixes the randomly initialized A and updates only the zero-initialized B (Sun et al., 2024). While the 2aggregation is exact, it introduces a permanently frozen factor that restricts the learned subspace. FedSA-LoRA instead shares only the factor associated with general knowledge and retains the other factor locally for personalization (Guo et al., 2025). RoLoRA alternates the updated factor across communication rounds (Chen et al., 2025). AS-LoRA (Kim et al., 2026) extends the alternating-update idea to the layer level, allowing each layer to select one factor to update at a time. These alternating schemes eliminate aggregation errors, yet still fail to update A and B concurrently. Consequently, none of the aforementioned works can simultaneously update both factors within the same round with exact factor-wise aggregation and distribution. 
+
+Federated LoRA with Heterogeneous Ranks. Rank-heterogeneous federated LoRA assigns client-specific adapter capacity to accommodate differences in memory, computation, communi-cation, and task complexity (Fang et al., 2025). Several approaches address this through padding or sampling mechanisms (Cho et al., 2024; Byun & Lee, 2025). Alternatively, FSLoRA samples submatrices from a server-side LoRA model based on client-specific sketching ratios and provides a convergence analysis (Fang et al., 2026). Another line of work relies on product-space decom-position. FlexLoRA constructs a weighted product-space aggregate and employs SVD to distribute rank-specific adapters to clients (Bai et al., 2024). FedPA-LoRA applies SVD solely on a small core matrix obtained via reduced QR factorization (Jeon et al., 2026). Nevertheless, repeated model decompositions incur significant overhead, and crucially, these schemes fail to preserve exact factor-wise aggregation. To preserve exact aggregation, FLoRA stacks heterogeneous client factors so that their product equals the sum of local products (Wang et al., 2024). GLoRA aggregates factors in consensus coordinates (Chen et al., 2026). However, to eliminate aggregation error, FLoRA requires a broadcast rank of P 
+
+> i
+
+ri, and GLoRA also requires the server rank to cover the union span across clients. Other works achieve exact aggregation, yet with alternative updates or different parame-terizations (e.g., updating only middle matrices) (Raje et al., 2025; Koo et al., 2025; Meng et al., 2026). In a nutshell, none of the existing FedLoRA methods, which update A and B concurrently, can support heterogeneous client ranks with exact factor-wise aggregation and distributions. 
+
+## 3 PRELIMINARIES AND PROBLEM FORMULATION 
+
+3.1 FEDERATED LORA F INE -T UNING 
+
+We consider a federated LoRA fine-tuning system comprising N clients, which can be formulated as follows: 
+
+F (B, A) = X
+
+> i
+
+wifi(B, A), fi(B, A) = Eξ∼D i [ℓ(W0 + BA ; ξ)] , (2) where ℓ, fi, and F denote the sample loss, the local loss for client i, and the global loss, respectively. 
+
+ξ represents a data sample drawn from the local dataset Di on client i, and wi > 0 is the weight assigned to client i with P 
+
+> i
+
+wi = 1 . Furthermore, W0 ∈ Rdo×di denotes the frozen base model, while B ∈ Rdo×R and A ∈ RR×di are the trainable rank-R LoRA modules. 3.2 FAILURES IN FACTOR -W ISE AGGREGATION 
+
+A fundamental challenge in LoRA-based federated fine-tuning is that averaging and distributing A
+
+and B separately following FedAvg (McMahan et al., 2017; Sun et al., 2024; Chen et al., 2025) is not equal to averaging and distributing their products. Formally, suppose B and A denote the global factors at the beginning of the round. Each client i produces local endpoints Bi = B + ∆ Bi,
+
+Ai = A + ∆ Ai. Factor-wise averaging across N clients yields the update: 
+
+B + X
+
+> i
+
+wi∆Bi
+
+!
+
+A + X
+
+> i
+
+wi∆Ai
+
+!
+
+=BA + X
+
+> i
+
+wi∆BiA + B X
+
+> i
+
+wi∆Ai + X
+
+> i
+
+wi∆Bi
+
+! X
+
+> i
+
+wi∆Ai
+
+!| {z }
+
+> cross-client term
+
+, (3) 3... Client 1 Client 2 Client N     
+
+> ①Complementary Channel ②Heterogeneous Rank
+> B1
+> A1
+> Client 1 (r 1 = 2)
+
+... Global LoRA ⑥ Aggregation       
+
+> ... Download Upload Empty Channel Frozen Channel Trainable Channel Rank Selection Matrix
+> ③⑤
+> Local LoRA Update
+> ④Local LoRA Update
+> ④Local LoRA Update
+> ④
+> ③⑤③⑤
+> H1
+> H2
+> HN
+> BA
+
+Server    
+
+> B2
+> A2
+> BN
+> AN
+> Client 2 (r 2 = 4) Client N (r N = 6)
+
+Figure 1: The illustration of the proposed CFLoRA framework. CFLoRA separates two decisions: which factor may change on each latent channel and which channels a client can afford to train. A shared complementary selection mask ensures exact factor aggregation, while client-specific sup-ports accommodate heterogeneous ranks. whereas the ideal aggregation target is: 
+
+X
+
+> i
+
+wiBiAi = BA + X
+
+> i
+
+wi∆BiA + B X
+
+> i
+
+wi∆Ai + X
+
+> i
+
+wi∆Bi∆Ai.
+
+| {z }
+
+> client-wise interaction term
+
+(4) The discrepancy between Equations 3 and 4 lies in the final terms, where the difference defines the 
+
+aggregation error of factor-wise averaging. This aggregation error compounds over successive rounds and degrades convergence. Its magnitude is governed by two key factors. First, it may grow with the number of local update steps : more local steps can cause ∆Bi and ∆Ai to diverge further from their global mean. Second, it grows with the degree of data heterogeneity across clients: when local datasets follow substantially different distributions. Taken together, these two factors motivate the design of new federated LoRA schemes. 
+
+## 4 THE CFL ORA FRAMEWORK 
+
+4.1 COMPLEMENTARY -C HANNEL SELECTION 
+
+The aggregation inconsistency discussed in Section 3.2 arises from the bilinear interaction term 
+
+∆Bi∆Ai. To eliminate this, we propose a complementary channel partitioning strategy. In every round, if a column of B is trainable, its corresponding row in A can be frozen, and vice versa 1.Formally, at round t, the server constructs a diagonal channel-selection mask, defined as 
+
+Zt = diag( zt
+
+> 1
+
+, . . . , z tR), ztj ∈ { 0, 1}, (5) where ztj is sampled independently with Pr( ztj = 1) = p. For each channel j, the update rule is defined as follows. - If zj = 1 : update column B(: , j ) and freeze row A(j, :) ;- If zj = 0 : freeze column B(: , j ) and update row A(j, :) .
+
+> 1
+
+Here, we describe a single LoRA layer for notational simplicity. For multiple layers, CFLoRA applies the same rule to each layer, with its complementary mask shared by participating clients. 
+
+4The server broadcasts the same mask to all participating clients in each round, thereby ensuring a common update structure within each round while allowing the channel partition to vary across rounds. During local training, client i initializes as Bt, 0 
+
+> i
+
+= Bt and At, 0 
+
+> i
+
+= At and updates at local step k
+
+according to Bt,k +1  
+
+> i
+
+= Bt,k i + ∆ Bt,k i Zt and At,k +1  
+
+> i
+
+= At,k i + ( IR − Zt)∆ At,k i , where ∆Bt,k i and 
+
+∆At,k i denote client i’s unmasked local updates at step k. Note that this full-matrix formulation is introduced primarily for clarity; in practice, clients can update only the active parameters determined by Zt. After K local steps, the endpoint of client i is Bt+1  
+
+> i
+
+= Bt + ∆ BtiZt and At+1  
+
+> i
+
+= At +(IR − Zt)∆ Ati, where the accumulated unmasked local updates over the K steps are given by 
+
+∆Bti =
+
+> K−1
+
+X
+
+> k=0
+
+∆Bt,k i , ∆Ati =
+
+> K−1
+
+X
+
+> k=0
+
+∆At,k i . (6) In each round, suppose that the server randomly samples a subset St of m clients from the total N
+
+clients 2. Then, the server performs factor-wise aggregation: 
+
+Bt+1 = Bt + X
+
+> i
+
+wi
+
+q ∆BtiZt, At+1 = At + X
+
+> i
+
+wi
+
+q (IR − Zt)∆ Ati. (7) where q = m/N denotes the client participation ratio. The scaling 1/q compensates for the partial participation, ensuring an unbiased estimator of the full-client update. Since the complementary masks satisfy Zt(IR − Zt) = 0, we can establish Proposition 1 for the aggregation exactness. 
+
+Proposition 1 (Error-Free Aggregation of CFLoRA ). Factor-wise aggregation in equation 7 satisfies 
+
+Bt + X
+
+> i
+
+wi
+
+q ∆BtiZt
+
+!
+
+At + X
+
+> i
+
+wi
+
+q (IR − Zt)∆ Ati
+
+!
+
+= BtAt + X
+
+> i
+
+wi
+
+q
+
+ Bt+1  
+
+> i
+
+At+1  
+
+> i
+
+− BtAt .
+
+(8) Proposition 1 shows that CFLoRA achieves exact federated LoRA aggregation. The detailed proof is provided in Appendix A.1. 4.2 GENERALIZATION TO HETEROGENEOUS CLIENT RANKS 
+
+As shown in Fig. 1, the proposed CFLoRA framework naturally accommodates clients with het-erogeneous computational and memory budgets. Specifically, the server maintains LoRA factors of rank R, while client i activates only ri ≤ R channels subject to its resource budget. Specifically, in round t, the server constructs a selection matrix Eti ∈ { 0, 1}R×ri for each client i, defined as 
+
+Eti = [ esti, 1 , . . . , esti,r i
+
+] ∈ { 0, 1}R×ri , (Eti)⊤Eti = Iri , (9) where ej is the j-th standard basis vector of RR. The corresponding global activation mask for client i is then defined as 
+
+Hti = Eti(Eti)⊤ ∈ { 0, 1}R×R, rank( Hti) = ri. (10) Client i then initializes its LoRA factors by extracting the selected channels from the global factors 
+
+eBt, 0 
+
+> i
+
+= BtEti ∈ Rdout ×ri and eAt, 0 
+
+> i
+
+= ( Eti)⊤At ∈ Rri×din . Their product is therefore eBt, 0 
+
+> i
+
+eAt, 0 
+
+> i
+
+=
+
+BtHtiAt, which is the rank-ri submodel to initialize local training. At local step k, client i updates according to 
+
+eBt,k +1  
+
+> i
+
+= eBt,k i + ∆ eBt,k i (Eti)⊤ZtEti, eAt,k +1  
+
+> i
+
+= eAt,k i + ( Iri − (Eti)⊤ZtEti)∆ eAt,k i , (11) where ∆ eBt,k i and ∆ eAt,k i denote client i’s unmasked local updates at step k. After K local steps, the client uploads the updates, which are given by 
+
+∆ eBti = eBt,K i − eBt, 0 
+
+> i
+
+∆ eAti = eAt,K i − eAt, 0 
+
+> i
+
+. (12) 
+
+> 2
+
+We consider uniform sampling rate q for notational simplicity. Our analysis can be easily extended to consider client-specific sampling probability. 
+
+5Then, the server embeds these updates into the R-rank space and aggregates them by: 
+
+Bt+1 = Bt + X
+
+> i
+
+wi
+
+q ∆ eBti(Eti)⊤, At+1 = At + X
+
+> i
+
+wi
+
+q Eti∆ eAti. (13) We establish the following proposition to show the exactness of aggregation under heterogeneous client ranks. 
+
+Proposition 2 (Error-Free Aggregation of CFLoRA with Heterogeneous Client Ranks) . Suppose all participating clients use the common complementary mask Zt, while their ranks ri and selection matrices Eti may differ. The factor-wise aggregation rule in equation 13 satisfies 
+
+Bt + X
+
+> i
+
+wi
+
+q ∆ eBti(Eti)⊤
+
+!
+
+At + X
+
+> i
+
+wi
+
+q Eti∆ eAti
+
+!
+
+= BtAt + X
+
+> i
+
+wi
+
+q
+
+ eBt,K i eAt,K i − BtHtiAt
+
+.
+
+(14) Proposition 2 shows that CFLoRA still achieves exact federated LoRA aggregation under heteroge-neous client ranks. The proof can be found in Appendix A.2. 4.3 COMPLEMENTARY -CHANNEL SCALING 
+
+To prevent biased updates arising from channel selection, the protocol introduces a unified scaling compensation factor. The numbers of trainable channels assigned to B and A are 
+
+ktB,i = tr( eZti), ktA,i = ri − ktB,i , (15) where eZti = ( Eti)⊤ZtEti, and we have E[ktB,i ] = rip and E[ktA,i ] = ri(1 − p). Then, to compensate for the unequal probabilities of selecting the two factors, we scale the gradients by 1/p and 1/(1 −p),respectively. Specifically, for 0 < p < 1, the factors are updated as 
+
+eBt,k +1  
+
+> i
+
+= eBt,k i − ηp ∇eBℓ
+
+
+
+W0 + eBt,k i eAt,k i ; ξ
+
+ eZti,
+
+eAt,k +1  
+
+> i
+
+= eAt,k i − η
+
+1 − p (Iri − eZti)∇ eAℓ
+
+
+
+W0 + eBt,k i eAt,k i ; ξ
+
+
+
+,
+
+(16) where η is the learning rate. Note that setting ri = R, which implies Eti = IR and eZti = Zt, recovers the homogeneous update rule. The activation matrix Eti and complementary mask eZti remain fixed throughout the round. Since the updates defined in Eq. 6 and Eq. 12 can naturally absorb this scaling, Propositions 1 and 2 continue to guarantee exact aggregation. Considering practical partial participation (selecting m out of N clients per round), the procedure of CFLoRA is summarized in Algorithm B.1 for homogeneous cases and Algorithm B.2 for hetero-geneous cases. 4.4 CONVERGENCE ANALYSIS 
+
+Next, we theoretically analyze the convergence of CFLoRA under partial client participation. Our analysis naturally encompasses full participation as a special case. 
+
+Notations. For each client i, let Hi denote the uniform distribution over diagonal binary masks with ri active channels, satisfying EH∼H i [H] = ri 
+
+> R
+
+IR. The activation mask Hti = Eti(Eti)⊤ ∼ H i
+
+is sampled independently across clients and independently of Zt. Let X = ( B, A), for a given activation mask H, the mask-conditioned and expected local objectives for client i are respectively defined as 
+
+f H 
+
+> i
+
+(X) = Eξ∼D i
+
+ℓ(W0 + BHA ; ξ), ϕi(X) = EH∼H i
+
+f H 
+
+> i
+
+(X), (17) and therefore the global objective is formulated as 
+
+Φ( X) = 
+
+> N
+
+X
+
+> i=1
+
+wiϕi(X). (18) 6Notably, when ri = R for all clients, Hi = IR and Φ( X) reduces to the standard objective F (X).We assume that each client’s local objective is L-smooth and the global objective is bounded (As-sumption A.1), local stochastic gradients are unbiased with bounded variance (Assumption A.2), which are detailed in Appendix A.3. With notations above and Lemma A.1 on unbiased estimators of the scaled aggregated gradients (detailed in Appendix A.4), we establish the following conver-gence analysis. 
+
+Theorem 3 (Convergence of CFLoRA with Heterogeneous Client Ranks) . Suppose that Assump-tions A.1–A.2 hold and ∆0 > 0. With the learning rate 
+
+ηT = 1
+
+K min 
+
+(
+
+14Lκ ,
+
+r ∆0
+
+LVK T ,
+
+ 2∆ 0
+
+DK T
+
+1/3)
+
+, (19) 
+
+CFLoRA satisfies 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E ∥∇ Φ( Xt)∥2 ≤ 4
+
+r L∆0VK
+
+T + 2 
+
+ 4∆ 20DK
+
+T 2
+
+1/3
+
++ 8Lκ ∆0
+
+T , (20) 
+
+where VK = κ
+
+ N τ 2 
+
+> w
+> m
+
++ N −mm(N −1) ζ2
+
+> w
+
+
+
++ κ2σ2 
+
+> w
+> qK
+
+, DK = 4+ χm 
+
+> 8
+
+L2κ3M  1 − 1
+
+> K
+
+2 , χ m = 1 +   
+
+> N−mm(N−1)
+
+ N P 
+
+> i
+
+w2 
+
+> i
+
+− 1 , σ 2 
+
+> w
+
+= PNi=1 w2 
+
+> i
+
+σ2 
+
+> i
+
+, τ 2 
+
+> w
+
+= PNi=1 w2 
+
+> i
+
+τ 2 
+
+> i
+
+, κ = p−1min , pmin = min {p, 1 − p},
+
+∆0 = E[Φ( X0)] − Φ⋆, ζ2 
+
+> w
+
+= sup X∈C 
+
+N P 
+
+> i
+
+w2 
+
+> i
+
+∥∇ ϕi(X)∥2 − ∥∇ Φ( X)∥2 , and X0 denotes the initial iterate. For N = 1 , set N −mm(N −1) = 0 .
+
+The proof is provided in Appendix A.5. Due to the exact aggregation, the convergence bound in Theorem 3 achieves an O(1 /√T ) convergence rate without non-vanishing bilinear aggregation-error terms. Heterogeneous client ranks affect both the objective Φ and the activation-mask variance 
+
+τ 2
+
+> w
+
+, which vanishes when ri = R for every client. Partial participation introduces the client-sampling term N −mm(N −1) ζ2
+
+> w
+
+. More discussions are provided in Appendix A.7. 
+
+Corollary 4 (Convergence of CFLoRA with Homogeneous Client Ranks) . Under the conditions of Theorem 3, suppose ri = R for every client. Then Φ = F and τ 2 
+
+> w
+
+= 0 . Choosing ηT =(4 LκK √T )−1, the server iterates satisfy 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ F (Xt)∥2 ≤ 8Lκ ∆0 + N −mm(N −1) ζ2
+
+> w
+
+/2 + κσ 2
+
+> w
+
+/(2 qK )
+
+√T + (4 + χm)κM 
+
+128 T
+
+
+
+1 − 1
+
+K
+
+2
+
+.
+
+(21) The proof is provided in Appendix A.6. 
+
+Significance of Corollary 4. Under homogeneous ranks, there is no objective discrepancy induced by lower client ranks. As a result, the O(1 /√T ) convergence rate applies directly to the original LoRA objective F in equation 2. This results from the unique advantage of CFLoRA : it co-adapts both factors while entirely avoiding the aggregation errors in standard federated LoRA. 
+
+Determination of channel sampling probability p. The parameter κ = p−1min reveals that low selection probabilities for either factor amplify the upper bound, underscoring the need to update both factors simultaneously. Since the upper bounds in Theorem 3 and Corollary 4 decrease as 
+
+pmin = min {p, 1 − p} increases, they are minimized at p = 0 .5. However, this stems from a worst-case theoretical bound, which may not be optimal empirically. We conduct extensive empirical studies on p (Tables 3-4 and Tables D.5-D.6), yielding two intrigu-ing insights. On the one hand, increasing p from 0.3 to 0.9 generally improves performance. This aligns with prior findings (Hayou et al., 2024) that the two low-rank matrices contribute asymmet-rically to the optimization process, and prioritizing the B matrix update is beneficial. On the other hand, setting p = 1 .0 degrades performance, which is consistent with our theoretical analysis that the co-adaptation of both factors remains crucial 3. Consequently, we adopt p = 0 .9 as the default setting across all experiments.   
+
+> 3Note that for p= 1 .0, the scaling step described in Section 4.3 is omitted.
+
+7Table 1: Test accuracy for fine-tuning the RoBERTa model on the GLUE benchmark under homo-geneous client ranks. 
+
+Method QNLI MRPC CoLA MNLI-M MNLI-MM QQP Avg. 
+
+FedIT 86.61 ± 0.26 72.27 ± 2.32 70.49 ± 0.90 79.10 ± 2.21 79.89 ± 2.28 71.75 ± 1.35 76.69 FFA-LoRA 88.49 ± 0.23 70.58 ± 1.56 73.81 ± 1.74 72.42 ± 3.27 73.39 ± 3.08 73.26 ± 1.38 75.33 RoLoRA 87.60 ± 2.21 73.16 ± 2.11 74.40 ± 0.89 72.01 ± 1.55 72.50 ± 3.56 73.47 ± 0.41 75.52 AS-LoRA 88.26 ± 0.67 72.30 ± 1.06 73.57 ± 2.15 71.41 ± 1.88 72.60 ± 1.51 75.23 ± 2.57 75.56 FLoRA 89.27 ± 0.20 71.46 ± 1.24 76.81 ± 2.74 70.56 ± 0.82 71.52 ± 0.21 76.43 ± 2.74 76.01 
+
+CFLoRA 90.61 ± 0.25 73.53 ± 1.59 78.95 ± 1.48 79.16 ± 1.22 79.85 ± 1.01 76.30 ± 0.36 79.73 
+
+Table 2: Testing accuracy for fine-tuning the RoBERTa model on the GLUE benchmark under 
+
+heterogeneous client ranks. 
+
+Method QNLI MRPC CoLA MNLI-M MNLI-MM QQP Avg. 
+
+FedIT 70.34 ± 2.01 69.60 ± 2.43 73.56 ± 3.67 58.34 ± 1.03 58.22 ± 0.93 73.12 ± 1.41 67.20 FFA-LoRA 86.86 ± 2.15 70.67 ± 2.31 73.09 ± 2.97 63.74 ± 5.02 64.04 ± 4.88 75.91 ± 1.01 72.39 RoLoRA 84.87 ± 3.10 68.46 ± 3.12 73.14 ± 3.40 51.19 ± 3.95 51.60 ± 2.84 74.73 ± 1.29 67.33 AS-LoRA 80.71 ± 2.52 71.12 ± 1.33 73.09 ± 2.97 63.60 ± 4.86 63.95 ± 5.94 70.73 ± 1.94 70.53 FLoRA 87.35 ± 1.84 69.80 ± 1.71 75.75 ± 1.34 72.22 ± 1.26 70.97 ± 1.14 76.61 ± 0.53 75.45 FlexLoRA 86.66 ± 1.55 71.92 ± 1.19 77.60 ± 0.58 71.35 ± 1.49 72.25 ± 1.48 76.40 ± 1.32 76.03 FSLoRA 86.68 ± 2.27 75.95 ± 1.34 74.95 ± 0.52 72.55 ± 1.57 73.49 ± 1.62 79.58 ± 1.29 77.20 
+
+CFLoRA 91.29 ± 0.45 74.86 ± 0.69 77.80 ± 1.26 76.82 ± 0.80 77.32 ± 1.14 79.34 ± 0.87 79.57 
+
+4.5 RESOURCE EFFICIENCY OF CFL ORA 
+
+Compared to standard federated LoRA at the same active rank, complementary updates provide ef-ficiency gains across several key aspects: i) Trainable Parameters : By freezing the rows and/or columns, CFLoRA can reduce the number of trainable parameters by 50% per round 4. ii) Com-munication Cost : By transmitting only the trainable parameters, CFLoRA reduces the adapter up-loading cost by 50% , though downlink of full factors is still needed for clients to perform forward passes. A comprehensive analysis is provided in Appendix C. 
+
+## 5 EXPERIMENTS 
+
+Implementation Details and Baselines. Our evaluation focuses on RoBERTa (125M) (Liu et al., 2019) on the GLUE benchmark (Wang et al., 2018) and LLaMA-3.2-3B-Instruct (Grattafiori et al., 2024) on commonsense reasoning tasks (Hu et al., 2023). Following prior work (Zhang et al., 2024; Fang et al., 2026), we adopt Dirichlet-based partitioning for non-IID dataset splits. In our default evaluation, we consider a pool of 25 clients and randomly select 10 per round for training. We also present an extended analysis by varying the number of clients in Appendix D.4. All results are averaged over 4 independent seeds. Further experimental details are provided in Appendix D.1. We compare CFLoRA against several state-of-the-art federated LoRA baselines, including FedIT (Zhang et al., 2024), the standard factor-wise averaging baseline; FFA-LoRA (Sun et al., 2024), RoLoRA (Chen et al., 2025), FLoRA (Wang et al., 2024), and AS-LoRA (Kim et al., 2026), which are designed to provide error-free aggregation; and FlexLoRA (Bai et al., 2024) and FSLoRA (Fang et al., 2026), which are explicitly designed to accommodate heterogeneous client ranks. 5.1 MAIN RESULTS 
+
+Comparison under Homogeneous Client Ranks. Table 1 summarizes the results for fine-tuning RoBERTa on the GLUE benchmark under homogeneous client ranks. CFLoRA achieves the highest 
+
+> 4
+
+The 50% reduction refers to square attention projection matrices, so each trainable row of A and column of 
+
+B contains the same number of parameters. For rectangular matrices, the reduction depends on their dimensions and the selected channels. 
+
+8Table 3: Ablation study on selection probability p for RoBERTa on GLUE tasks under homogeneous client ranks. 
+
+Schedule QNLI MRPC CoLA MNLI-M MNLI-MM QQP Avg. 
+
+p = 0 .3 87.80 ± 0.02 70.83 ± 1.73 73.33 ± 2.37 71.15 ± 1.07 72.73 ± 1.03 72.45 ± 1.39 74.72 
+
+p = 0 .5 90.64 ± 0.25 72.43 ± 2.50 78.72 ± 1.73 77.82 ± 0.49 78.00 ± 0.12 74.57 ± 0.43 78.70 
+
+p = 0 .7 90.69 ± 0.24 72.55 ± 2.06 79.81 ± 1.52 77.47 ± 0.61 78.02 ± 0.65 74.52 ± 1.43 78.84 
+
+p = 0 .9 90.61 ± 0.25 73.53 ± 1.59 78.95 ± 1.48 79.16 ± 1.22 79.85 ± 1.01 76.30 ± 0.36 79.73 
+
+p = 1 .0 88.61 ± 0.27 70.47 ± 1.54 73.89 ± 1.77 72.36 ± 3.23 73.54 ± 3.13 73.17 ± 1.39 75.34 Table 4: Ablation study on selection probability p for RoBERTa on GLUE tasks under heteroge-neous client ranks. 
+
+Schedule QNLI MRPC CoLA MNLI-M MNLI-MM QQP Avg. 
+
+p = 0 .3 88.31 ± 0.99 68.79 ± 0.35 71.46 ± 1.27 68.78 ± 0.49 69.66 ± 1.29 73.21 ± 1.15 73.37 
+
+p = 0 .5 91.16 ± 0.10 73.98 ± 2.26 76.90 ± 2.38 76.37 ± 1.02 76.85 ± 1.30 77.16 ± 1.28 78.74 
+
+p = 0 .7 91.41 ± 0.87 74.13 ± 1.04 77.32 ± 0.85 76.74 ± 1.37 77.51 ± 0.73 79.61 ± 1.07 79.45 
+
+p = 0 .9 91.29 ± 0.45 74.86 ± 0.69 77.80 ± 1.26 76.82 ± 0.80 77.32 ± 1.14 79.34 ± 0.87 79.57 
+
+p = 1 .0 89.90 ± 1.39 73.00 ± 2.02 74.51 ± 1.42 75.25 ± 1.57 75.81 ± 0.91 73.63 ± 1.95 77.02 average accuracy of 79 .73% , outperforming the strongest baseline, FedIT, by 3.04 percentage points. It obtains the highest scores on QNLI, MRPC, CoLA, and MNLI-M, with improvements of 1.34 
+
+and 2.14 points over the best baseline scores on QNLI and CoLA, respectively. It also remains competitive on MNLI-MM and QQP. These results demonstrate that complementary updates enable effective adaptation despite training fewer adapter parameters per round. 
+
+Comparison under Heterogeneous Client Ranks. Table 2 reports the corresponding results under heterogeneous client ranks. CFLoRA achieves the highest average accuracy of 79 .57% , exceeding FSLoRA, the strongest baseline, by 2.37 percentage points. It achieves the highest scores on QNLI, CoLA, MNLI-M, and MNLI-MM, with gains of 3.94 , 4.27 , and 3.83 points over the best baseline scores on QNLI, MNLI-M, and MNLI-MM, respectively. These results support the effectiveness of complementary updates when clients train compact adapters with different rank budgets. Additional results for LLaMA-3.2-3B-Instruct under homogeneous and heterogeneous ranks are reported in Tables D.3 and D.4, respectively, and discussed in Appendix D.2. 
+
+Parameter and Communication Efficiency. Importantly, these accuracy improvements of 
+
+CFLoRA are accompanied by reduced resource costs. Figure C.1 (in Appendix C) illustrates the trade-off between accuracy and communication cost over 200 rounds. On MNLI, CFLoRA reaches approximately 70% matched accuracy with only about 8 GB of cumulative communication, whereas FSLoRA requires roughly 14 GB to attain comparable performance. On QNLI, CFLoRA exceeds 
+
+90% accuracy at approximately 8 GB, also making it significantly more communication-efficient than the baselines. In comparison, FLoRA is not communication-efficient because its effective rank is the sum of all client ranks. Overall, these results demonstrate that CFLoRA achieves strong accu-racy within smaller communication budget. A detailed cost analysis is provided in Appendix C. 5.2 ABLATION STUDY : I MPACT OF CHANNEL SAMPLING PROBABILITY p
+
+In Table 3-Table 4 and Table D.5 and Table D.6 (in Appendix D.3), we conduct experiments with different p on various models in both homogeneous and heterogeneous settings, which reveal a similar phenomenon. In addition to the theoretical finding discussed in Section 4.4 that low selection probabilities for either factor amplify the convergence bound, we empirically observe that CFLoRA 
+
+remains good for different values of p > 0.5 (excluding the boundary case of p = 1 .0). While 
+
+p = 0 .9 is generally the best, the performance robustness across a wide range of p demonstrates 
+
+CFLoRA ’s general insensitivity to this hyperparameter, making it easy to configure in practice. More discussions are provided in Section D.3. 96 CONCLUSION 
+
+We presented CFLoRA, a federated LoRA framework that can update both factors in each round while preserving exact factor-wise aggregation. Our key idea is to utilize a shared complemen-tary mask to assign each latent channel to either the A or B factor, eliminating the bilinear terms that cause the aggregation mismatch. Furthermore, CFLoRA seamlessly extends to settings with heterogeneous client ranks by applying additional activation masks. Due to the exact factor-wise aggregation, our analysis establishes an O(1 /√T ) stationarity rate for the original LoRA objective with homogeneous ranks and for a surrogate objective with heterogeneous ranks. Experiments with RoBERTa and LLaMA-3.2-3B-Instruct show strong performance while reducing trainable parame-ters and uplink communications. 
+
+Limitations. While our complementary-channel design preserves an O(1 /√T ) convergence rate for the original LoRA objective under homogeneous ranks, the result only applies to a surrogate objective in heterogeneous scenarios. This theoretical gap remains open. Additionally, there is a discrepancy between the worst-case convergence bound, which is minimized at channel selection probability p = 0 .5, and our empirical findings, which favor an asymmetric allocation (e.g., p =0.9). Developing a tighter theoretical framework that fully captures the asymmetric roles of factors remains an area for future exploration. 
+
+## REFERENCES 
+
+Jiamu Bai, Daoyuan Chen, Bingchen Qian, Liuyi Yao, and Yaliang Li. Federated fine-tuning of large language models under heterogeneous tasks and client resources. In Advances in Neural In-formation Processing Systems , volume 37, pp. 14457–14483, 2024. doi: 10.52202/079017-0461. URL https://openreview.net/forum?id=gkOzoHBXUw .Jieming Bian, Lei Wang, Letian Zhang, and Jie Xu. LoRA-FAIR: Federated LoRA fine-tuning with aggregation and initialization refinement. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 3737–3746, 2025. URL https: //openaccess.thecvf.com/content/ICCV2025/html/Bian_LoRA-FAIR_ Federated_LoRA_Fine-Tuning_with_Aggregation_and_Initialization_ Refinement_ICCV_2025_paper.html .Yonatan Bisk, Rowan Zellers, Jianfeng Gao, Yejin Choi, et al. PIQA: reasoning about physical com-monsense in natural language. In Proceedings of the AAAI conference on artificial intelligence ,volume 34, pp. 7432–7439, 2020. L´ eon Bottou, Frank E Curtis, and Jorge Nocedal. Optimization methods for large-scale machine learning. SIAM review , 60(2):223–311, 2018. Yuji Byun and Jaeho Lee. Towards federated low-rank adaptation of language models with rank heterogeneity. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies , pp. 356–362, 2025. doi: 10.18653/v1/2025.naacl-short.30. URL https://aclanthology.org/2025. naacl-short.30/ .Jinqian Chen, Chang Liu, and Jihua Zhu. Beyond factor aggregation: Gauge-aware low-rank server representations for federated LoRA. arXiv preprint arXiv:2605.06733 , 2026. doi: 10.48550/ arXiv.2605.06733. URL https://arxiv.org/abs/2605.06733 .Shuangyi Chen, Yuanxin Guo, Yue Ju, Hardik Dalal, Zhongwen Zhu, and Ashish Khisti. Robust federated finetuning of LLMs via alternating optimization of LoRA. In Advances in Neural Infor-mation Processing Systems , volume 38, pp. 120038–120090, 2025. doi: 10.52202/085713-4009. URL https://proceedings.neurips.cc/paper_files/paper/2025/hash/ adf17e7346b6be4c2f2bb40de572e5bc-Abstract-Conference.html .Yae Jee Cho, Luyang Liu, Zheng Xu, Aldi Fahrezi, and Gauri Joshi. Heterogeneous LoRA for federated fine-tuning of on-device foundation models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pp. 12903–12913, 2024. doi: 10.18653/ v1/2024.emnlp-main.717. URL https://aclanthology.org/2024.emnlp-main. 717/ .10 Christopher Clark, Kenton Lee, Ming-Wei Chang, Tom Kwiatkowski, Michael Collins, and Kristina Toutanova. BoolQ: Exploring the surprising difficulty of natural yes/no questions. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers) , pp. 2924–2936, 2019. Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try ARC, the AI2 reasoning chal-lenge. arXiv preprint arXiv:1803.05457 , 2018. Wenzhi Fang, Dong-Jun Han, Liangqi Yuan, Seyyedali Hosseinalipour, and Christopher G. Brinton. Federated sketching LoRA: A flexible framework for heterogeneous collaborative fine-tuning of LLMs. In Forty-Third International Conference on Machine Learning , 2026. URL https: //openreview.net/forum?id=qFKFSVvff5 .Zihan Fang, Zheng Lin, Zhe Chen, Xianhao Chen, Yue Gao, and Yuguang Fang. Automated feder-ated pipeline for parameter-efficient fine-tuning of large language models. IEEE Transactions on Mobile Computing , 2025. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The Llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. Pengxin Guo, Shuang Zeng, Yanran Wang, Huijie Fan, Feifei Wang, and Liangqiong Qu. Selective aggregation for low-rank adaptation in federated learning. In International Conference on Learn-ing Representations , 2025. URL https://openreview.net/forum?id=iX3uESGdsO .Soufiane Hayou, Nikhil Ghosh, and Bin Yu. LoRA+: Efficient low rank adaptation of large models. 
+
+arXiv preprint arXiv:2402.12354 , 2024. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. In International Con-ference on Learning Representations , 2022. URL https://openreview.net/forum? id=nZeVKeeFYf9 .Zhiqiang Hu, Lei Wang, Yihuai Lan, Wanyu Xu, Ee-Peng Lim, Lidong Bing, Xing Xu, Soujanya Poria, and Roy Lee. LLM-adapters: An adapter family for parameter-efficient fine-tuning of large language models. In Proceedings of the 2023 conference on empirical methods in natural language processing , pp. 5254–5276, 2023. Juseok Jeon, Ramy E. Ali, Doyun Kwon, Myungbeom Her, Jinhwi Kim, and Jinhyun So. FedPA-LoRA: Product-aligned framework for mitigating aggregation and initialization errors in hetero-geneous federated LoRA. arXiv preprint arXiv:2608.15381 , 2026. URL https://arxiv. org/abs/2608.15381 .Peter Kairouz, H. Brendan McMahan, Brendan Avent, et al. Advances and open problems in federated learning. Foundations and Trends in Machine Learning , 14(1–2):1–210, 2021. doi: 10.1561/2200000083. Myoungjun Kim, Sangwoo Park, Yoseob Han, and Jin-Hyun Ahn. Adaptive selection of LoRA components in privacy-preserving federated learning. arXiv preprint arXiv:2605.05769 , 2026. Jabin Koo, Minwoo Jang, and Jungseul Ok. Towards robust and efficient federated low-rank adap-tation with heterogeneous clients. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics , pp. 416–429, 2025. doi: 10.18653/v1/2025.acl-long.19. URL 
+
+https://aclanthology.org/2025.acl-long.19/ .Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. RoBERTa: A robustly optimized BERT pre-training approach. arXiv preprint arXiv:1907.11692 , 2019. 11 H. Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Ag¨ uera y Arcas. Communication-efficient learning of deep networks from decentralized data. In Proceedings of the 20th International Conference on Artificial Intelligence and Statistics , pp. 1273–1282, 2017. URL https://proceedings.mlr.press/v54/mcmahan17a.html .Chuiyang Meng, Ming Tang, and Vincent Wong. Florg: Federated fine-tuning with low-rank gram matrices and procrustes alignment. In International Conference on Learning Representations ,volume 2026, pp. 82804–82824, 2026. Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. Can a suit of armor conduct elec-tricity? a new dataset for open book question answering. In Proceedings of the 2018 conference on empirical methods in natural language processing , pp. 2381–2391, 2018. Arian Raje, Baris Askin, Divyansh Jhunjhunwala, and Gauri Joshi. Ravan: Multi-head low-rank adaptation for federated fine-tuning. In Advances in Neural Information Process-ing Systems , volume 38, pp. 48564–48592, 2025. doi: 10.52202/085713-1622. URL 
+
+https://proceedings.neurips.cc/paper_files/paper/2025/hash/ 456a6eed524d1d647c3366f1ef96d0ea-Abstract-Conference.html .Maarten Sap, Hannah Rashkin, Derek Chen, Ronan Le Bras, and Yejin Choi. SocialIQA: Common-sense reasoning about social interactions. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pp. 4463–4473, 2019. Raghav Singhal, Kaustubh Ponkshe, and Praneeth Vepakomma. FedEx-LoRA: Exact aggregation for federated and efficient fine-tuning of large language models. In Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 1316–1336, 2025. doi: 10.18653/v1/2025.acl-long.67. URL https://aclanthology. org/2025.acl-long.67/ .Youbang Sun, Zitao Li, Yaliang Li, and Bolin Ding. Improving LoRA in privacy-preserving fed-erated learning. In International Conference on Learning Representations , pp. 17978–17994, 2024. URL https://proceedings.iclr.cc/paper_files/paper/2024/hash/ 4e243e95c913b367775d71d7182b99d9-Abstract-Conference.html .Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and Samuel R. Bowman. GLUE: A multi-task benchmark and analysis platform for natural language understanding. In 
+
+Proceedings of the 2018 EMNLP Workshop BlackboxNLP , pp. 353–355, 2018. doi: 10.18653/v1/ W18-5446. Haoran Wang, Xiong Wang, Yuqing Li, Jing Chen, Junyi Zhang, Nan Yan, Kun He, and Wei Wang. Federated LoRA fine-tuning with pipelined error-mitigated aggregation and matrix-wise freezing. In Findings of the Association for Computational Linguistics: ACL 2026 , pp. 5749– 5762, 2026. doi: 10.18653/v1/2026.findings-acl.284. URL https://aclanthology.org/ 2026.findings-acl.284/ .Ziyao Wang, Zheyu Shen, Yexiao He, Guoheng Sun, Hongyi Wang, Lingjuan Lyu, and Ang Li. FLoRA: Federated fine-tuning large language models with heteroge-neous low-rank adaptations. In Advances in Neural Information Processing Sys-tems , volume 37, pp. 22513–22533, 2024. doi: 10.52202/079017-0708. URL 
+
+https://proceedings.neurips.cc/paper_files/paper/2024/hash/ 28312c9491d60ed0c77f7fff4ad86dd1-Abstract-Conference.html .Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. Hellaswag: Can a ma-chine really finish your sentence? In Proceedings of the 57th annual meeting of the association for computational linguistics , pp. 4791–4800, 2019. Jianyi Zhang, Saeed Vahidian, Martin Kuo, Chunyuan Li, Ruiyi Zhang, Tong Yu, Guoyin Wang, and Yiran Chen. Towards building the FederatedGPT: Federated instruction tuning. In IEEE International Conference on Acoustics, Speech and Signal Processing , pp. 6915–6919, 2024. doi: 10.1109/ICASSP48485.2024.10446656. 12 APPENDIX 
+
+A Proof of the Theoretical Results 14 
+
+A.1 Proof of Proposition 1 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.2 Proof of Proposition 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.3 Assumptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.4 Lemma A.1 and Its Proof . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 A.5 Proof of Theorem 3 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 A.6 Proof of Corollary 4 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 A.7 Insights from Theorem 3. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 
+
+B Algorithm of CFLoRA 19 C Implementation and Complexity Analysis 21 D Experiments 22 
+
+D.1 Implementation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 D.2 Experiments of LLaMA-3.2-3B-Instruct . . . . . . . . . . . . . . . . . . . . . . . 22 D.3 Further Experiments on Ablation Study on p . . . . . . . . . . . . . . . . . . . . . 23 D.4 Experiments with Varying Client Participation . . . . . . . . . . . . . . . . . . . . 24 13 A PROOF OF THE THEORETICAL RESULTS 
+
+A.1 PROOF OF PROPOSITION 1Expanding the product of the aggregated factors yields 
+
+Bt + X
+
+> i
+
+wi
+
+q ∆BtiZt
+
+!
+
+At + X
+
+> i
+
+wi
+
+q (IR − Zt)∆ Ati
+
+!
+
+=BtAt + X
+
+> i
+
+wi
+
+q ∆BtiZtAt + X
+
+> i
+
+wi
+
+q Bt(IR − Zt)∆ Ati + X
+
+> i,k
+
+wiwk
+
+q2 ∆BtiZt(IR − Zt)∆ Atk
+
+=BtAt + X
+
+> i
+
+wi
+
+q ∆BtiZtAt + X
+
+> i
+
+wi
+
+q Bt(IR − Zt)∆ Ati.
+
+(22) Each client endpoint satisfies 
+
+Bt+1  
+
+> i
+
+At+1  
+
+> i
+
+= ( Bt +∆ BtiZt)( At +( I−Zt)∆ Ati) = BtAt +∆ BtiZtAt +Bt(IR −Zt)∆ Ati, (23) Subtracting BtAt from each client endpoint product and summing over i ∈ S t with weights wi/q 
+
+yields exactly the two linear terms in the expansion of the aggregated factors. This completes the proof. A.2 PROOF OF PROPOSITION 2Expanding the product of the aggregated factors therefore yields 
+
+Bt + X
+
+> i
+
+wi
+
+q ∆ eBti(Eti)⊤
+
+!
+
+At + X
+
+> i
+
+wi
+
+q Eti∆ eAti
+
+!
+
+=BtAt + X
+
+> i
+
+wi
+
+q ∆ eBti(Eti)⊤At + X
+
+> i
+
+wi
+
+q BtEti∆ eAti + X
+
+> i,k
+
+wiwk
+
+q2 ∆ eBti(Eti)⊤Zt(IR − Zt)Etk∆ eAtk
+
+=BtAt + X
+
+> i
+
+wi
+
+q ∆ eBti(Eti)⊤At + X
+
+> i
+
+wi
+
+q BtEti∆ eAti.
+
+(24) For the local models, each client’s compact endpoint satisfies 
+
+eBt,K i eAt,K i = ( BtEti + ∆ eBti)(( Eti)⊤At + ∆ eAti)= BtHtiAt + ∆ eBti(Eti)⊤At + BtEti∆ eAti + ∆ eBti(Eti)⊤Zt(IR − Zt)Eti∆ eAti
+
+= BtHtiAt + ∆ eBti(Eti)⊤At + BtEti∆ eAti.
+
+(25) Subtracting BtHtiAt and taking the weighted summation over all clients yields exactly the two linear terms in equation 24. Substituting this weighted sum back into equation 24 reconstructs the right-hand side of equation 14, which concludes the proof. A.3 ASSUMPTIONS 
+
+We adopt standard assumptions widely used in the analysis of non-convex federated optimization. 
+
+Assumption A.1. For each client i and activation mask H ∈ supp( Hi), the local objective f H 
+
+> i
+
+(X)
+
+is differentiable and L-smooth over a region C containing the iterates; that is, there exists a constant 
+
+L > 0 such that for all X, X′ ∈ C ,
+
+∥∇ f H 
+
+> i
+
+(X) − ∇ f H 
+
+> i
+
+(X′)∥ ≤ L∥X − X′∥, ∀i. (26) 
+
+Consequently, the global objective Φ( X) is also L-smooth on C. Moreover, there exists a finite lower bound Φ⋆ such that Φ( X) ≥ Φ⋆ for all X ∈ C .
+
+Assumption A.2. For each client i and any activation mask H ∈ supp( Hi), the stochastic gradient is unbiased, i.e., 
+
+Eξ∼D i [∇Xℓ(W0 + BHA ; ξ)] = ∇f H 
+
+> i
+
+(X). (27) 14 Furthermore, there exist constants σ2 
+
+> i
+
+, τ 2 
+
+> i
+
+≥ 0 bounding the variances of minibatch sampling and mask sampling, respectively, and a uniformly bounded second moment M > 0:
+
+sup  
+
+> X∈C ,H∈supp( Hi)
+
+Eξ∼D i
+
+h
+
+∇Xℓ(W0 + BHA ; ξ) − ∇ f H 
+
+> i
+
+(X) 2i
+
+≤ σ2 
+
+> i
+
+, (28) 
+
+sup 
+
+> X∈C
+
+EH∼H i
+
+h
+
+∇f H 
+
+> i
+
+(X) − ∇ ϕi(X) 2i
+
+≤ τ 2 
+
+> i
+
+, (29) 
+
+sup  
+
+> X∈C ,H∈supp( Hi)
+
+Eξ∼D i
+
+h
+
+∥∇ Xℓ(W0 + BHA ; ξ)∥2i
+
+≤ M. (30) Assumption A.1 is standard in optimization literature (Bottou et al., 2018; Fang et al., 2026). As-sumption A.2 is commonly adopted in FL to bound sampling randomness and stochastic-gradient moments (Fang et al., 2026). A.4 LEMMA A.1 AND ITS PROOF 
+
+Lemma A.1. Under Assumption A.2, we have 
+
+E[GtB ] = ∇BΦ( Xt), E[GtA] = ∇AΦ( Xt), (31) 
+
+where GtB = 1 
+
+> p
+
+StB Zt and GtA = 11−p (IR − Zt)StA denote the scaled aggregated gradients, and 
+
+StY = P 
+
+> i∈S t
+> wi
+> q
+
+∇Y ℓ(W0 + BH tiA; ξt, 0 
+
+> i
+
+) X=Xt are the pre-selection aggregated gradients at the common round-start iterate Xt for Y ∈ { B, A }, with local minibatch sample ξt, 0 
+
+> i
+
+∼ D i.Proof. Let Iti = 1{i ∈ S t}, q = m/N , and αti = wiIti /q . Uniform client sampling gives E[Iti ] = q.By the independence of client sampling and activation masks, we have 
+
+E[StB ] = X
+
+> i
+
+wi
+
+q E[Iti ]EH∼H i
+
+∇Bf H 
+
+> i
+
+(Xt) = ∇BΦ( Xt). (32) Similarly, E[StA] = ∇AΦ( Xt) holds. Since Zt is conditionally independent of StB , StA and E[Zt] = 
+
+pIR, iterated expectations yield 
+
+E[GtB ] = 1
+
+p EStB E[Zt | StB ] = ∇BΦ( Xt),
+
+E[GtA] = 11 − p EE[IR − Zt | StA]StA
+
+ = ∇AΦ( Xt).
+
+(33) This leads to equation 31, which concludes the proof. A.5 PROOF OF THEOREM 3
+
+Proof. Let pmin = min {p, 1 − p}, κ = p−1min , γ = ηK, α ti = wi 
+
+> q
+
+1{i ∈ S t}, I ti = 1{i ∈ S t}, where 
+
+p ∈ (0 , 1) is fixed and q = m/N .
+
+Step 1: Selection and client-sampling identities. To formalize the complementary channel selec-tion mechanism in CFLoRA , let u = ( uB , uA) denote an arbitrary partitioned variable in the param-eter or gradient space. We define the random scaling operator Rt as: Rt(u) = 
+
+ uB Zt 
+
+> p
+
+, (IR−Zt)uA
+
+> 1−p
+
+
+
+.By the definition of κ = p−1min , for any u, the operator’s norm is bounded: 
+
+∥R t(u)∥ ≤ κ∥u∥. (34) Furthermore, for any Ft-measurable u, taking the expectation over the random mask yields unbi-asedness and a bounded second moment: 
+
+E[Rt(u)] = u, E∥R t(u)∥2 = ∥uB ∥2
+
+> F
+
+p + ∥uA∥2
+
+> F
+
+1 − p ≤ κ∥u∥2. (35) 15 Uniform client sampling gives E[Iti ] = q and E[Iti Itj ] = m(m−1)    
+
+> N(N−1)
+
+, and hence for vectors yi, we have 
+
+E
+
+"X
+
+> i
+
+αti yi
+
+#
+
+= X
+
+> i
+
+wiyi,
+
+E X
+
+> i
+
+αti yi
+
+> 2
+
+= ∥ X
+
+> i
+
+wiyi∥2 + N − mm(N − 1) N X
+
+> i
+
+w2 
+
+> i
+
+∥yi∥2 − ∥ X
+
+> i
+
+wiyi∥2
+
+!
+
+.
+
+(36) In particular, define ωt = P 
+
+> i
+
+αti , we have 
+
+E[ωt] = 1 , E[ω2 
+
+> t
+
+] = 1 + N − mm(N − 1) N X
+
+> i
+
+w2 
+
+> i
+
+− 1
+
+!
+
+= χm. (37) 
+
+Step 2: Endpoint decomposition and sampling noise. The lifted local updates satisfy Xt, 0 
+
+> i
+
+= Xt
+
+and Xt,k +1  
+
+> i
+
+= Xt,k i − ηRt(gt,k i ), where gt,k i is the stochastic gradient of f Hi 
+
+> i
+
+at Xt,k i . The server update becomes Xt+1 = Xt − γvt, with vt defined as 
+
+vt = Rt
+
+X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+!
+
++ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)) ,
+
++ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i ))) .
+
+(38) Independent activation masks and equation 36 yield 
+
+E X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+> 2
+
+= E X
+
+> i
+
+αti ∇ϕi(Xt)
+
+> 2
+
++ 1
+
+q
+
+X
+
+> i
+
+w2 
+
+> i
+
+E∥∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+) − ∇ ϕi(Xt)∥2
+
+≤ ∥∇ Φ( Xt)∥2 + N − mm(N − 1) ζ2 
+
+> w
+
++ τ 2
+
+> w
+
+q .
+
+(39) where ζ2 
+
+> w
+
+= sup X∈C 
+
+N P 
+
+> i
+
+w2 
+
+> i
+
+∥∇ ϕi(X)∥2 − ∥∇ Φ( X)∥2 and τ 2 
+
+> w
+
+= PNi=1 w2 
+
+> i
+
+τ 2 
+
+> i
+
+. Since the round-start gradients are independent of Zt,
+
+E
+
+"
+
+Rt
+
+X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+!# 
+
+= ∇Φ( Xt),
+
+E Rt
+
+X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+! 2
+
+≤ κ
+
+
+
+∥∇ Φ( Xt)∥2 + N − mm(N − 1) ζ2 
+
+> w
+
++ τ 2
+
+> w
+
+q
+
+
+
+.
+
+(40) Let Ft,k be the filtration extending Ft with all randomness up to local step k. Fresh minibatches give E[( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i )) | F t,k ] = 0 and E[∥(gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i )) ∥2 | F t,k ] ≤ σ2 
+
+> i
+
+.
+
+Noise cross terms vanish across steps by conditional centering and across clients by conditional independence. Since E[( αti )2] = w2 
+
+> i
+
+/q ,
+
+E[ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i )))] = 0 ,
+
+E∥ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i ))) ∥2 ≤ κ2σ2
+
+> w
+
+qK ,
+
+E
+
+*
+
+Rt
+
+X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+!
+
+, 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i ))) 
+
++
+
+= 0 .
+
+(41) The last identity uses that Rt
+
+P 
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+
+
+is fixed given the selected set and round masks. 16 Step 3: Local drift. Write Et,S [·] = E[· | F t, St]. Assumption A.2 and equation 34 imply 
+
+
+
+Et,S ∥Xt,k i − Xt∥21/2
+
+≤ η
+
+> k−1
+
+X
+
+> s=0
+
+ Et,S ∥R t(gt,s i )∥21/2
+
+≤ ηkκ √M . 
+
+(42) Smoothness and the conditional L2 triangle inequality give 
+
+Et,S ∥ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)) ∥2
+
+!1/2
+
+≤ κL K
+
+X
+
+> k,i
+
+αti
+
+
+
+Et,S ∥Xt,k i − Xt∥21/2
+
+≤ ωt
+
+2 Lηκ 2√M (K − 1) .
+
+(43) For any Ft-measurable unit vector z, self-adjointness and Cauchy–Schwarz yield 
+
+⟨z, Et,S [ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+))] ⟩
+
+≤ 1
+
+K
+
+X
+
+> k,i
+
+αti
+
+ Et,S ∥R t(z)∥21/2 
+
+Et,S ∥∇ f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)∥21/2
+
+≤ ωt
+
+2 Lηκ 3/2√M (K − 1) .
+
+(44) Define d = 14 L2η2κ3M (K − 1) 2 = 14 L2γ2κ3M  1 − 1
+
+> K
+
+2, averaging over St and using equa-tion 37, then taking the supremum over unit z, gives 
+
+∥E[ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+))] ∥2 ≤ d, 
+
+E∥ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)) ∥2 ≤ χmκd. 
+
+(45) 
+
+Step 4: Descent and telescoping. By equation 40, equation 41, and equation 45, 
+
+E∥vt∥2 ≤2E∥R t
+
+X
+
+> i
+
+αti ∇f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)
+
+!
+
++ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(( gt,k i − ∇ f H 
+
+> i
+
+(Xt,k i ))) ∥2
+
++ 2 E∥ 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+X
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i ) − ∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+)) ∥2
+
+≤2κ∥∇ Φ( Xt)∥2 + 2 VK + 2 χmκd. 
+
+(46) Moreover, E[vt] = ∇Φ( Xt)+ E[ 1
+
+> K
+
+PK−1
+
+> k=0
+
+P 
+
+> i
+
+αti Rt(∇f H 
+
+> i
+
+(Xt,k i )−∇ f H 
+
+> i
+
+(Xt, 0 
+
+> i
+
+))] and ab ≤ a2/4+ 
+
+b2 imply 
+
+−⟨∇ Φ( Xt), E[vt]⟩ ≤ − 34 ∥∇ Φ( Xt)∥2 + d. (47) By L-smoothness and γ ≤ (4 Lκ )−1,
+
+E[Φ( Xt+1 )] ≤ Φ( Xt) − γ⟨∇ Φ( Xt), E[vt]⟩ + Lγ 2
+
+2 E∥vt∥2
+
+≤ Φ( Xt) − γ
+
+ 34 − Lγκ 
+
+
+
+∥∇ Φ( Xt)∥2 + Lγ 2VK + γ(1 + Lγκχ m)d
+
+≤ Φ( Xt) − γ
+
+2 ∥∇ Φ( Xt)∥2 + Lγ 2VK + γ
+
+
+
+1 + χm
+
+4
+
+
+
+d. 
+
+17 Taking total expectations, summing over t, and using Φ ≥ Φ⋆ yields 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ Φ( Xt)∥2 ≤ 2∆ 0
+
+γT + 2 Lγ VK +
+
+
+
+2 + χm
+
+2
+
+
+
+d
+
+= 2∆ 0
+
+γT + 2 Lγ VK + DK γ2,
+
+(48) where 
+
+VK = κ
+
+ τ 2
+
+> w
+
+q + N − mm(N − 1) ζ2
+
+> w
+
+
+
++ κ2σ2
+
+> w
+
+qK , DK = 4 + χm
+
+8 L2κ3M
+
+
+
+1 − 1
+
+K
+
+2
+
+.
+
+Step 5: Learning-rate choice. For γT = Kη T in equation 19, omitting candidates with zero denominators, 
+
+2∆ 0
+
+γT T = max 
+
+(
+
+8Lκ ∆0
+
+T , 2
+
+r L∆0VK
+
+T ,
+
+ 4∆ 20DK
+
+T 2
+
+1/3)
+
+,
+
+and 
+
+2Lγ T VK ≤ 2
+
+r L∆0VK
+
+T , DK γ2 
+
+> T
+
+≤
+
+ 4∆ 20DK
+
+T 2
+
+1/3
+
+.
+
+Substituting into equation 48 and bounding the maximum by the sum establishes equation 20, which completes the proof. A.6 PROOF OF COROLLARY 4
+
+Proof. When ri = R for every client, Φ = F and τ 2 
+
+> w
+
+= 0 . Substituting γ = (4 Lκ √T )−1 into equa-tion 48 gives 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇ F (Xt)∥2 ≤ 8Lκ ∆0 + N −mm(N −1) ζ2
+
+> w
+
+/2 + κσ 2
+
+> w
+
+/(2 qK )
+
+√T
+
++ (4 + χm)κM 
+
+128 T
+
+
+
+1 − 1
+
+K
+
+2
+
+,
+
+which is equation 21. A.7 INSIGHTS FROM THEOREM 3. 
+
+Asymptotic Convergence and Exact Aggregation. Theorem 3 establishes that, under an ap-propriately tuned learning rate, CFLoRA achieves a sublinear convergence rate of O(T −1/2) to a stationary point of the surrogate objective. Crucially, this bound isolates the effects of the learn-ing rate and statistical noise without suffering from any non-vanishing error floor. By employing complementary-channel selection, CFLoRA achieves exact aggregation, thereby completely elimi-nating this bilinear aggregation error from the asymptotic rate. The parameter κ = 1 / min {p, 1 − p}
+
+explicitly captures the variance expansion cost of alternating between the factor matrices A and B.
+
+Components in Variance ( VK ). The term VK encapsulates three distinct sources of statistical variance in the federated system, each scaled by the protocol’s alternating selection factor κ:• Activation-mask variability ( τ 2
+
+> w
+
+): This variance arises from the heterogeneity of client rank budgets. Because clients randomly sample sub-matrices corresponding to their local capacity, their updates fluctuate around the true gradient of Φ. If all clients possess the capacity to use the full server rank (i.e., ri = R and Hti = IR), this term vanishes. • Client-sampling variance ( ζ2
+
+> w
+
+): This term accounts for the data heterogeneity across dif-ferent clients under partial participation ( m < N ). The coefficient N −mm(N −1) reflects stan-dard sampling without replacement; thus, if the server aggregates from all clients in every round ( m = N ), this inter-client variance vanishes. • Minibatch noise ( σ2
+
+> w
+
+): The standard stochastic gradient noise from local data sampling is effectively suppressed by the number of local gradient steps executed across participating clients ( K). 18 Tradeoffs of Local Training Steps ( K). Theorem 3 reveals a fundamental theoretical tradeoff governed by the number of local steps K, explicitly controlled by the balance between VK and the local drift term DK . Executing more local steps reduces the impact of minibatch noise (via the  
+
+> κ2σ2
+> w
+> qK
+
+term in VK ). However, this variance reduction comes at the cost of increased local drift across clients ( DK ), which scales with (1 − 1/K )2. Because this structural drift vanishes entirely when 
+
+K = 1 , the choice of K should balance statistical minibatch variance and client local drifts. Note that the activation-mask variability ( τ 2
+
+> w
+
+) remains unaffected by K, as the masks are drawn only once per communication round. 
+
+Heterogeneous Ranks and the Surrogate Objective ( Φ). Since clients with low rank budgets evaluate gradients using masked sub-matrices, their updates are structurally biased with respect to the full-adapter objective F . Consequently, the theoretical guarantee concerns the surrogate ob-jective Φ, which incorporates these heterogeneous client ranks through the activation distributions 
+
+{H i}Ni=1 . When every client uses the full server rank ( Hti = IR), Φ reduces to F .
+
+## B ALGORITHM OF CFL ORA 
+
+Algorithm B.1: CFLoRA with Homogeneous Client Ranks 
+
+Input: W0, (Binit , Ainit ), R, {wi}Ni=1 , m, T , K, η, p ∈ (0 , 1) 
+
+Output: (BT , AT ) 
+
+> 1
+
+B0 ← Binit , A0 ← Ainit ; 
+
+> 2
+
+q ← m/N , ηB ← η/p , ηA ← η/ (1 − p); 
+
+> 3
+
+for t ← 0 to T − 1 do  
+
+> 4
+
+Sample m clients from {1, . . . , N } to form St; 
+
+> 5
+
+Draw ztj ∼ Bernoulli( p) independently for j = 1 , . . . , R ; 
+
+> 6
+
+Zt ← diag( zt
+
+> 1
+
+, . . . , z tR); 
+
+> 7
+
+Broadcast (Bt, At, Zt) to clients in St; 
+
+> 8
+
+for i ∈ S t in parallel do  
+
+> 9
+
+Bt, 0 
+
+> i
+
+← Bt, At, 0 
+
+> i
+
+← At; 
+
+> 10
+
+for k ← 0 to K − 1 do  
+
+> 11
+
+Compute gradients (gt,k B,i , gt,k A,i ) of ℓ
+
+
+
+W0 + Bt,k i At,k i ; ξt,k i
+
+
+
+with respect to the local factors;  
+
+> 12
+
+Bt,k +1  
+
+> i
+
+← Bt,k i − ηB gt,k B,i Zt; 
+
+> 13
+
+At,k +1  
+
+> i
+
+← At,k i − ηA(IR − Zt)gt,k A,i ; 
+
+> 14
+
+end  
+
+> 15
+
+∆Bti ← Bt,K i − Bt, 0 
+
+> i
+
+; 
+
+> 16
+
+∆Ati ← At,K i − At, 0 
+
+> i
+
+; 
+
+> 17
+
+Upload the active entries of ∆Bti and ∆Ati; 
+
+> 18
+
+end 
+
+// Factor-wise aggregation  
+
+> 19
+
+Bt+1 ← Bt + P 
+
+> i∈S t
+> wi
+> q
+
+∆Bti; 
+
+> 20
+
+At+1 ← At + P 
+
+> i∈S t
+> wi
+> q
+
+∆Ati; 
+
+> 21
+
+end  
+
+> 22
+
+return (BT , AT );19 Algorithm B.2: CFLoRA with Heterogeneous Client Ranks 
+
+Input: W0, (Binit , Ainit ), R, {ri}Ni=1 , {wi}Ni=1 , m, T , K, η, p ∈ (0 , 1) 
+
+Output: (BT , AT ) 
+
+> 1
+
+B0 ← Binit , A0 ← Ainit ; 
+
+> 2
+
+q ← m/N , ηB ← η/p , ηA ← η/ (1 − p); 
+
+> 3
+
+for t ← 0 to T − 1 do  
+
+> 4
+
+Sample m clients from {1, . . . , N } to form St;
+
+// Shared complementary mask  
+
+> 5
+
+Draw ztj ∼ Bernoulli( p) independently for j = 1 , . . . , R ; 
+
+> 6
+
+Zt ← diag( zt
+
+> 1
+
+, . . . , z tR);
+
+// Client-specific rank selections  
+
+> 7
+
+for i ∈ S t do  
+
+> 8
+
+Uniformly sample ri distinct indices from {1, . . . , R }; 
+
+> 9
+
+Construct Eti from the standard basis vectors corresponding to the sampled indices;  
+
+> 10
+
+end  
+
+> 11
+
+for i ∈ S t in parallel do  
+
+> 12
+
+eBt, 0 
+
+> i
+
+← BtEti, eAt, 0 
+
+> i
+
+← (Eti)⊤At; 
+
+> 13
+
+eZti ← (Eti)⊤ZtEti; 
+
+> 14
+
+for k ← 0 to K − 1 do  
+
+> 15
+
+Compute gradients (gt,k B,i , gt,k A,i ) of ℓ
+
+
+
+W0 + eBt,k i eAt,k i ; ξt,k i
+
+
+
+with respect to the compact factors;  
+
+> 16
+
+eBt,k +1  
+
+> i
+
+← eBt,k i − ηB gt,k B,i eZti; 
+
+> 17
+
+eAt,k +1  
+
+> i
+
+← eAt,k i − ηA(Iri − eZti)gt,k A,i ; 
+
+> 18
+
+end  
+
+> 19
+
+∆ eBti ← eBt,K i − eBt, 0 
+
+> i
+
+; 
+
+> 20
+
+∆ eAti ← eAt,K i − eAt, 0 
+
+> i
+
+; 
+
+> 21
+
+Upload the active entries of ∆ eBti and ∆ eAti; 
+
+> 22
+
+end 
+
+// Factor-wise aggregation  
+
+> 23
+
+Bt+1 ← Bt + P 
+
+> i∈S t
+> wi
+> q
+
+∆ eBti(Eti)⊤; 
+
+> 24
+
+At+1 ← At + P 
+
+> i∈S t
+> wi
+> q
+
+Eti∆ eAti; 
+
+> 25
+
+end  
+
+> 26
+
+return (BT , AT );20 C IMPLEMENTATION AND COMPLEXITY ANALYSIS 
+
+Efficient Implementation. CFLoRA introduces negligible additional communication overhead beyond exchanging compact LoRA factors and updates. The additional control information only involves R-bit complementary mask and O(ri log R) bits specifying client i’s selected channel in-dices. Even more, this information can alternatively be reproduced from shared random seeds. The main additional operation is channel indexing: each participating client receives the ri channels specified by Eti, and the server maps the returned increments back to their corresponding global po-sitions. These operations are implemented directly through indexing, without explicitly construct-ing the selection matrices. Local training uses two complementary branches to compute only the selected factor gradients, while the server aggregates the compact increments with weights wi/q .Thus, the additional computation is limited to channel indexing and masking, which are negligible. Table C.1: Normalized cost comparison at the same local rank for square projections between stan-dard federated LoRA and our CFLoRA . MAC counts assume that input gradients are required and only selected factor gradients are computed. Communication assumes compact transmission at equal precision. Control information is negligible, which is excluded. 
+
+Quantity Standard federated LoRA CFLoRA 
+
+Active adapter parameters 1 1
+
+Trainable adapter parameters 1 1/2
+
+Forward MACs 1 1
+
+Input-gradient MACs 1 1
+
+Factor-gradient MACs 1 1/2
+
+Total adapter MACs per step 1 5/6
+
+Download payload per round 1 1
+
+Upload payload per round 1 1/2
+
+Combined communication per round 1 3/40 5 10 15 20 25 30 35 40 
+
+> Communication Costs (GB)
+> 30 40 50 60 70 80
+> Test Accuracy
+> Ours FedIT FFA-LoRA RoLoRA AS-LoRA FLoRA FlexLoRA FSLoRA
+
+(a) Test accuracy (matched) versus communication costs on the MNLI dataset. 0 5 10 15 20 25 30 35 40 
+
+> Communication Costs (GB)
+> 40 50 60 70 80 90 100
+> Test Accuracy
+> Ours FedIT FFA-LoRA RoLoRA AS-LoRA FLoRA FlexLoRA FSLoRA
+
+(b) Test accuracy versus communication costs on the QNLI dataset. 
+
+Figure C.1: Test accuracy versus communication costs of CFLoRA (Ours) and federated LoRA baselines on the MNLI and QNLI datasets. 
+
+Trainable Parameters. At the same local rank ri, CFLoRA retains the same number of adapter parameters as standard LoRA but updates only one factor per rank channel: either a column of 
+
+eBi or the corresponding row of eAi. For square projections (i.e., din = dout ), these two vectors have equal size, so CFLoRA trains exactly half of the adapter parameters, regardless of the realized complementary mask. The computational saving comes from omitting parameter-gradient calculations for the frozen factor entries. Both compact factors remain necessary for the forward pass. 
+
+Communication Costs. Each participating client downloads both compact adapter factors and uploads only the updated columns of eBi and rows of eAi in each round. At the same local rank, the adapter download is unchanged compared with standard federated LoRA, because both trainable 21 and frozen entries are required for the local forward pass. For square projections, only half of the adapter entries are updated and uploaded. Therefore, assuming the same transmission precision and excluding the negligible control metadata, CFLoRA reduces the adapter upload by 50% and the combined adapter download and upload by 25% .Table C.1 summarizes the comparison between standard federated LoRA and CFLoRA . Moreover, Figure C.1 illustrates accuracy versus communication costs under heterogeneous client ranks. 
+
+## D EXPERIMENTS 
+
+D.1 IMPLEMENTATION DETAILS 
+
+In the homogeneous setting, all clients share a uniform rank of R = 8 . In the heterogeneous setting, the server maintains rank R = 32 , and each client is assigned a fixed rank ri ∈ { 4, 8, 16 , 32 }
+
+throughout training. To model heterogeneous client capabilities, we draw rank values from a normal distribution with mean μ = ( a+b)/2 and standard deviation σ = ( b−a)/6, where a = 4 and b = 32 .The sampled values are then clipped to [4 , 32] and mapped to the nearest allowed rank. The LoRA factors A and B are initialized randomly and with zeros, respectively. For the shared global adapter, the LoRA scaling multiplier is fixed at 2. In each round, all clients use the same complementary channel selection matrix Z. For the commonsense reasoning benchmark, the training corpus is a mixture of the ARC-c/e (Clark et al., 2018), BoolQ (Clark et al., 2019), HellaSwag (Zellers et al., 2019), OBQA (Mihaylov et al., 2018), PIQA (Bisk et al., 2020), and SIQA (Sap et al., 2019) datasets. Unless otherwise stated, the default hyperparameters used in our experiments are summarized in Table D.2. Table D.2: parameter settings.                           
+
+> Setting RoBERTa / GLUE LLaMA-3.2-3B-Instruct / commonsense reasoning Total clients 25 25
+> Client participation ratio q0.40.4
+> Communication rounds T200 100
+> Local steps K50 40
+> Batch size 88
+> Learning rate 1×10 −42×10 −4
+> LoRA dropout rate 0.10.1
+> Channel sampling probability p0.90.9
+
+D.2 EXPERIMENTS OF LL AMA-3.2-3B-I NSTRUCT 
+
+In this section, we present an extended evaluation of fine-tuning LLaMA-3.2-3B-Instruct on the commonsense reasoning benchmark under both homogeneous and heterogeneous client ranks. The complete empirical results are summarized in Table D.3 and Table D.4. 
+
+Discussions on Homogeneous Client Ranks. As shown in Table D.3, CFLoRA achieves an over-all average accuracy of 74 .28% , outperforming all baseline methods including the strongest base-line FLoRA ( 72 .83% ) and RoLoRA ( 72 .27% ). Crucially, comparison with single-factor adaptation schemes reveals a fundamental empirical insight for large language models: methods that freeze one matrix factor (such as FFA-LoRA at 69 .62% and AS-LoRA at 69 .71% ) suffer a severe performance drop of over 4.5 percentage points compared to CFLoRA .
+
+Discussions on Heterogeneous Client Ranks. Table D.4 demonstrates that the advantages of 
+
+CFLoRA are pronounced in the presence of client rank heterogeneity ( ri ∈ { 4, 8, 16 , 32 }). CFLoRA 
+
+delivers an average accuracy of 75 .36% , outperforming FSLoRA by 2.16 points, FLoRA by 2.76 
+
+points, FlexLoRA by 3.77 points, and standard FedIT by 5.45 points. 22 Table D.3: Testing accuracy for fine-tuning the LLaMA-3.2-3B-Instruct on the commonsense rea-soning tasks under homogeneous client ranks. 
+
+Method ARC-c ARC-e BoolQ OBQA PIQA SIQA Avg. 
+
+FedIT 67.72 ± 0.45 84.48 ± 1.10 62.44 ± 0.27 74.53 ± 0.47 70.51 ± 2.39 66.47 ± 1.89 71.03 FFA-LoRA 67.45 ± 0.10 80.62 ± 0.29 64.17 ± 0.04 63.37 ± 1.93 70.39 ± 3.89 71.69 ± 0.54 69.62 RoLoRA 69.60 ± 1.93 86.78 ± 0.12 64.18 ± 0.07 73.73 ± 2.45 69.61 ± 3.88 69.73 ± 2.27 72.27 AS-LoRA 67.53 ± 0.06 80.75 ± 0.26 64.12 ± 0.01 63.60 ± 1.70 70.30 ± 3.03 71.95 ± 0.69 69.71 FLoRA 70.65 ± 0.16 83.67 ± 0.03 65.26 ± 1.10 72.07 ± 0.75 72.67 ± 1.34 72.67 ± 1.41 72.83 
+
+CFLoRA 70.67 ± 1.39 85.55 ± 1.05 64.24 ± 0.11 75.60 ± 0.90 75.73 ± 1.27 73.88 ± 0.58 74.28 
+
+Table D.4: Testing accuracy for fine-tuning the LLaMA-3.2-3B-Instruct on the commonsense rea-soning benchmark under heterogeneous client ranks. 
+
+Method ARC-c ARC-e BoolQ OBQA PIQA SIQA Avg. 
+
+FedIT 67.04 ± 0.32 80.13 ± 0.97 62.37 ± 0.81 71.33 ± 1.40 70.24 ± 2.13 68.32 ± 1.37 69.91 FLoRA 66.98 ± 1.20 84.18 ± 0.42 63.55 ± 1.94 76.00 ± 0.57 74.27 ± 1.63 70.63 ± 1.88 72.60 FlexLoRA 67.45 ± 0.74 82.84 ± 1.03 62.35 ± 0.97 74.02 ± 0.55 73.31 ± 0.86 69.59 ± 1.64 71.59 FSLoRA 69.88 ± 0.27 84.51 ± 0.49 64.21 ± 0.75 73.80 ± 0.92 74.96 ± 1.50 71.83 ± 1.69 73.20 
+
+CFLoRA 69.51 ± 0.12 85.82 ± 0.77 66.51 ± 0.35 75.40 ± 0.39 78.73 ± 1.45 76.20 ± 1.52 75.36 
+
+D.3 FURTHER EXPERIMENTS ON ABLATION STUDY ON p
+
+In this section, we provide additional ablation studies to further analyze the impact of the comple-mentary channel selection probability p. In addition to Tables 3, we evaluate the performance of CFLoRA across varying values of p for RoBERTa on the GLUE benchmark under heterogeneous client ranks (Table 4), as well as for LLaMA-3.2-3B-Instruct on the commonsense reasoning bench-mark under both homogeneous and heterogeneous client ranks (Table D.5 and D.6). Both sets of experiments are conducted under a partial-participation setting with q = 0 .4 to simulate practical resource-constrained federated learning environments. Table D.5: Ablation study on selection probability p for LLaMA-3.2-3B-Instruct on the common-sense reasoning benchmark under homogeneous client ranks. 
+
+Method ARC-c ARC-e BoolQ OBQA PIQA SIQA Avg. 
+
+p = 0 .3 65.98 ± 1.67 84.71 ± 0.44 62.54 ± 0.50 70.40 ± 0.57 72.33 ± 1.79 72.25 ± 2.07 71.37 
+
+p = 0 .5 69.51 ± 0.96 84.87 ± 0.15 63.62 ± 0.67 74.63 ± 0.65 74.53 ± 1.48 73.26 ± 0.62 73.40 
+
+p = 0 .7 68.65 ± 0.14 85.64 ± 1.24 64.17 ± 0.13 75.09 ± 0.41 75.74 ± 2.00 73.63 ± 1.31 73.82 
+
+p = 0 .9 70.67 ± 1.39 85.55 ± 1.05 64.24 ± 0.11 75.60 ± 0.90 75.73 ± 1.27 73.88 ± 0.58 74.28 
+
+p = 1 .0 67.56 ± 0.13 80.54 ± 0.24 64.31 ± 0.08 64.25 ± 1.39 70.15 ± 2.44 71.63 ± 0.73 69.74 
+
+Asymmetric Allocation. Theoretically, the convergence upper bounds established in Theorem 3 and Corollary 4 depend inversely on pmin = min {p, 1 − p} via the parameter κ = p−1min . Under worst-case analysis where both factors are treated symmetrically, the theoretical bound is minimized at p = 0 .5. However, our empirical findings reveal a distinct asymmetric behavior during actual federated optimization: • Asymmetric Importance of Factor B: Increasing p from 0.3 to 0.9 consistently improves downstream performance across all benchmark tasks. For instance, on RoBERTa under homogeneous ranks (Table 3), the average score rises from 74 .72 at p = 0 .3 to 78 .70 at 
+
+p = 0 .5, peaking at 79 .73 when p = 0 .9. A similar steady gain is observed in the hetero-geneous setting (Table 4), rising from 73 .37 (p = 0 .3) to 79 .57 (p = 0 .9). This behav-ior aligns closely with findings in centralized PEFT literature (Hayou et al., 2024), which demonstrate that the two low-rank factor matrices contribute asymmetrically to model rep-resentation updates: B typically requires larger effective updates or faster gradient move-ment to steer model representations, whereas A acts primarily as a random subspace pro-23 Table D.6: Ablation study on selection probability p for LLaMA-3.2-3B-Instruct on the common-sense reasoning benchmark under heterogeneous client ranks. 
+
+Method ARC-c ARC-e BoolQ OBQA PIQA SIQA Avg. 
+
+p = 0 .3 68.81 ± 0.16 82.78 ± 0.76 62.25 ± 0.11 74.97 ± 0.61 71.47 ± 3.24 73.44 ± 0.20 72.29 
+
+p = 0 .5 68.89 ± 0.45 83.76 ± 0.71 65.25 ± 0.44 75.50 ± 1.13 76.93 ± 0.46 75.61 ± 0.07 74.32 
+
+p = 0 .7 69.10 ± 0.60 84.53 ± 0.66 66.18 ± 0.50 75.82 ± 0.57 78.88 ± 4.90 76.01 ± 0.17 75.09 
+
+p = 0 .9 69.51 ± 0.12 85.82 ± 0.77 66.51 ± 0.35 75.40 ± 0.39 78.73 ± 1.45 76.20 ± 1.52 75.36 
+
+p = 1 .0 69.13 ± 0.38 83.65 ± 0.73 62.34 ± 0.23 67.73 ± 0.94 73.33 ± 0.63 74.12 ± 0.34 71.72 jection. Prioritizing updates to B (p = 0 .9) thus accelerates optimization while preserving sufficient exploration along the latent channels. • Penalty for Starving B (p = 0 .3): When p is decreased to 0.3 (meaning the majority of active channels update A instead of B), we observe a pronounced drop of 5.01 points on RoBERTa homogeneous and 6.20 points on heterogeneous ranks. This confirms that allocating insufficient updates to B acts as a bottleneck for parameter adaptation. 
+
+Hyperparameter Robustness Across p ∈ [0 .5, 0.9] . Despite the empirical preference for higher 
+
+p, CFLoRA exhibits robustness across the wide range. On RoBERTa (both homogeneous and het-erogeneous), variations across p ∈ { 0.5, 0.7, 0.9} remain within a tight margin of approximately 1.0
+
+point on average (e.g., 78 .70 → 78 .84 → 79 .73 in Table 3, and 78 .74 → 79 .45 → 79 .57 in Table 4). A similar plateau is evident on LLaMA-3.2-3B-Instruct in Table D.5, where tasks such as OBQA, PIQA, and SIQA perform consistently well from p = 0 .5 onward. This hyperparameter insensitivity is of substantial practical value in federated learning: practitioners do not need exhaustive tuning to identify a value of p.
+
+Catastrophic Degradation at Single-Factor Boundary ( p = 1 .0). Crucially, when p reaches 
+
+1.0, which entirely eliminates updates to A, performance experiences a sharp drop across different settings. On RoBERTa under homogeneous ranks, the overall average drops sharply by 4.39 points (from 79 .73 at p = 0 .9 down to 75 .34 at p = 1 .0), with severe regressions across individual tasks such as CoLA ( −5.06 ) and MNLI-M ( −6.80 ). The degradation is even more pronounced when fine-tuning LLaMA-3.2-3B-Instruct on reasoning tasks (Table D.5). Comparing p = 0 .9 to p = 1 .0,accuracy drops 4.54% on average. These empirical observations directly corroborate our core theo-retical insights: freezing one low-rank projection matrix permanently severely curtails the adapter’s expressive capacity. D.4 EXPERIMENTS WITH VARYING CLIENT PARTICIPATION 
+
+We evaluate the effect of client participation by varying the participation rate q from 0.2 to 1.0. Ta-bles D.7 and D.8 report test accuracy on the QNLI dataset under homogeneous and heterogeneous client ranks, respectively. Under homogeneous ranks, CFLoRA achieves the highest average accu-racy, exceeding the strongest baseline by 1.38 points. Under heterogeneous ranks, it improves the average over the strongest baseline by 1.52 points. We further evaluate full participation across six GLUE tasks under homogeneous ranks in Table D.9, CFLoRA obtains the highest average score of 
+
+84 .82 , surpassing the strongest baseline (FLoRA) by 2.26 points. These results indicate that its per-formance advantage extends beyond the partial-participation setting used in the main experiments. 24 Table D.7: Testing accuracy for fine-tuning the RoBERTa model on the QNLI dataset under homo-geneous client ranks with varying client participation. 
+
+Method q = 0 .2 q = 0 .4 q = 0 .6 q = 0 .8 q = 1 .0 Avg. 
+
+FedIT 85.01 ± 0.23 86.61 ± 0.26 88.90 ± 0.26 93.06 ± 0.90 90.02 ± 0.46 88.72 FFA-LoRA 86.13 ± 0.35 88.49 ± 0.23 90.94 ± 0.33 94.09 ± 0.32 91.42 ± 0.19 90.21 RoLoRA 86.52 ± 0.27 87.60 ± 2.21 92.60 ± 0.46 93.23 ± 0.14 93.10 ± 0.46 90.61 AS-LoRA 87.13 ± 0.35 88.26 ± 0.67 91.28 ± 0.38 92.71 ± 0.17 92.46 ± 1.03 90.37 FLoRA 88.83 ± 0.24 89.27 ± 0.20 90.69 ± 0.41 92.93 ± 0.44 91.41 ± 0.35 90.63 
+
+CFLoRA 88.95 ± 0.06 90.61 ± 0.25 92.98 ± 0.31 93.59 ± 0.06 93.93 ± 0.34 92.01 
+
+Table D.8: Testing accuracy for fine-tuning the RoBERTa model on the QNLI dataset under hetero-geneous client ranks with varying client participation. 
+
+Method q = 0 .2 q = 0 .4 q = 0 .6 q = 0 .8 q = 1 .0 Avg. 
+
+FedIT 68.01 ± 4.58 70.34 ± 2.01 85.89 ± 0.37 90.03 ± 3.26 88.22 ± 2.36 80.50 FLoRA 70.97 ± 4.32 87.35 ± 1.84 87.75 ± 3.21 92.67 ± 0.72 91.77 ± 2.35 86.10 FlexLoRA 78.41 ± 5.10 86.66 ± 1.55 86.81 ± 1.36 93.11 ± 1.25 94.02 ± 0.95 87.80 FSLoRA 73.68 ± 4.01 86.68 ± 2.27 86.92 ± 1.48 89.40 ± 2.45 88.54 ± 1.60 85.04 
+
+CFLoRA 76.84 ± 3.73 91.29 ± 0.45 91.46 ± 2.10 93.60 ± 0.38 93.39 ± 0.91 89.32 
+
+Table D.9: Testing accuracy for fine-tuning the RoBERTa model on the GLUE benchmark under homogeneous client ranks with full participation. 
+
+Method QNLI MRPC CoLA MNLI-M MNLI-MM QQP Avg. 
+
+FedIT 90.02 ± 0.46 70.30 ± 0.39 75.16 ± 0.15 82.40 ± 0.44 82.19 ± 0.33 80.98 ± 1.05 80.18 FFA-LoRA 91.42 ± 0.19 73.20 ± 0.42 74.16 ± 0.45 84.79 ± 0.16 84.78 ± 0.16 81.89 ± 1.05 81.71 RoLoRA 93.10 ± 0.46 73.86 ± 1.26 73.93 ± 0.29 85.76 ± 0.43 85.84 ± 0.53 81.25 ± 0.38 82.29 AS-LoRA 92.46 ± 1.03 72.44 ± 0.67 75.04 ± 0.94 82.79 ± 0.33 86.76 ± 0.35 80.95 ± 1.67 81.74 FLoRA 91.41 ± 0.35 76.34 ± 0.80 77.26 ± 0.25 83.66 ± 0.77 83.88 ± 0.66 82.79 ± 0.32 82.56 
+
+CFLoRA 93.93 ± 0.34 80.83 ± 0.85 76.74 ± 0.46 86.54 ± 0.40 86.71 ± 0.26 84.15 ± 0.53 84.82 
+
+25
