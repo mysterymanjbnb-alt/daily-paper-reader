@@ -1,0 +1,2126 @@
+Title: Beyond Empirical Support: Structured Outlier Generation via Sinkhorn Optimal Transport
+
+URL Source: https://arxiv.org/pdf/2609.31470v1
+
+Published Time: Mon, 28 Sep 2026 01:21:37 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Beyond Empirical Support: Structured Outlier Generation via Sinkhorn Optimal Transport 
+
+Haixiang Sun, Andrew L. Liu 
+
+Edwardson School of Industrial Engineering Purdue University West Lafayette, IN, 47906 
+
+{sun1321, andrewliu}@purdue.edu 
+
+## Abstract 
+
+Outliers are essential for evaluating and improving the robustness of machine learning systems, especially when future distributions may differ significantly from historical training data. In high-stakes applications, robustness often depends on rare cases that finite datasets fail to capture, making simple resampling or perturba-tion insufficient for stress scenario generation. Existing outlier synthesis methods typically rely on sparse neighborhoods, low support latent regions, or classifier boundary crossings, which can be heuristic, unstable, and tied to specific modalities or architectures. We therefore propose Sinkhorn Boundary Outlier Generation (SBOG), a structured framework for latent-space outlier generation that couples Sinkhorn optimal transport geometry with distributionally robust boundary model-ing. The resulting Sinkhorn-induced support cost guides the sampler toward weakly supported boundary regions, while semantic constraints prevent uncontrolled drift from the intended context, yielding controlled deviations from the in-distribution reference measure rather than arbitrary sparse-region samples. Experiments on time series anomaly generation and image outlier synthesis show that our framework produces informative, semantically controlled outliers and improves downstream robustness evaluation across modalities, providing a foundation for stress scenario generation beyond empirical support. 
+
+## 1 Introduction 
+
+Outliers play an important role in building reliable machine learning systems. In many real-world applications, rare or atypical cases are often precisely the ones that determine whether a model behaves robustly under deployment. Yet such outliers are inherently difficult to study since they occur infrequently, can vary substantially in form, and therefore are poorly covered by finite training datasets. Consequently, most existing work treats outliers primarily as anomalies to be detected, monitored, and mitigated [44, 37]. Although this line of work is indispensable, it leaves open a complementary question of equal importance: how to model and generate outliers themselves. Addressing this question is important for understanding the structure and mechanisms underlying rare events. It also enables systematic construction of informative training and evaluation cases beyond standard data collection, which can strengthen model robustness, reveal failure modes before deployment, and support safer decision-making under uncertainty. However, dedicated work on outlier generation remains relatively scarce. Existing approaches typically first learn a representation space and then identify candidate boundary samples using empirical support criteria, such as sparse nearest-neighbor neighborhoods [55], low-likelihood latent regions [12], or classifier-boundary crossing rules [35]. These candidates are then perturbed, sampled, or decoded back to the input space to produce synthetic outliers. Although effective in practice, such criteria often treat low support as the primary signal of outlyingness. Low support alone, 
+
+> 40th Conference on Neural Information Processing Systems (NeurIPS 2026). arXiv:2609.31470v1 [stat.ML] 25 Sep 2026
+
+however, is not sufficient for useful outlier generation. A point may be sparse because it lies near an informative class boundary, but it may also be sparse because it drifts off the semantic manifold, moves toward another class, or becomes difficult for the generator to decode into a meaningful sample. Therefore, for outlier generation, the relevant objective is not merely to find low-density feature points, but to find weakly supported candidates that remain semantically anchored and generatively valid. Moreover, existing synthesis pipelines are often tailored to a specific modality or generator, with many methods designed primarily for time-series anomaly generation [9, 25, 8] or image outlier synthesis [12, 16, 64]. As a result, these modality-specific designs may not generalize well when the underlying data distribution or modality changes. Motivated by this perspective, we use Sinkhorn optimal transport [7] as a support-aware geometry for structured outlier generation in latent space. Given an in-distribution reference measure and a ground cost induced by the learned representation, the entropic transport geometry provides a smooth way to measure how much in-distribution mass can support a candidate latent point. This support cost guides generation toward weakly supported boundary regions, while semantic constraints ensure that the generated candidates remain aligned with the intended context rather than drifting into arbitrary sparse regions. Since the construction only requires a latent reference measure and a ground cost, the same principle can be instantiated across different underlying distributions and modalities, including time series and images, without relying on modality-specific neighborhood rules. Based on this principle, we propose Sinkhorn Boundary Outlier Generation (SBOG), a structured boundary-generation framework that combines transport-based support scoring, boundary-anchor selection and semantic feasibility. The key component of SBOG is Sinkhorn Outlier Energy (SOE), which measures the transport cost of supporting a candidate point from the in-distribution reference measure. Notably, under the empirical Euclidean case, SOE recovers a smooth kernel-support form closely related to Gaussian Kernel Density Estimation (KDE). However, here SOE is not to introduce a standalone density estimator. Rather, SBOG uses SOE as a transport-based boundary score: SOE identifies smooth boundary regions for anchor selection and candidate acceptance, while semantic constraints keep the generated outliers controlled and class-consistent. This use differs from purely statistical sparsity or density-rejection rules, which often yield unstable low-support scores. Beyond this geometric view, the corresponding Sinkhorn Distributionally Robust Optimization (DRO) formulation provides an optimization-consistent interpretation of the boundary decisions made by SBOG [29]. The one-dimensional dual [59] exposes the same Gibbs normalizer that appears in SOE, linking high-energy candidates to deviations that are expensive to support under the transport uncer-tainty geometry. We use this connection to justify SBOG as a model-agnostic boundary-generation procedure: SOE selects transport-expensive candidates, while semantic constraints restrict them to meaningful class-consistent deviations. When a downstream loss is available, the same dual can be used to derive task-aware variants. As a result, SBOG provides a unified sampling framework that can be evaluated through both generation-quality diagnostics and downstream robustness performance. Our main contributions are summarized as follows: • We formulate structured outlier generation as constrained latent boundary generation, where candidates must be weakly supported by the in-distribution reference measure while remaining semantically anchored and generatively valid. This reframes outlier synthesis beyond low-density or sparse-neighborhood search. • We develop Sinkhorn Boundary Outlier Generation (SBOG), an algorithm that uses Sinkhorn Outlier Energy (SOE) to select boundary anchors, accept weakly supported candidates under the Sinkhorn transport geometry, enforce semantic feasibility, and decode synthetic outliers. While SOE reduces to a kernel-support score in the empirical Euclidean case, SBOG uses it as a transport-based boundary criterion rather than as a standalone density score. • We show that the SOE boundary rule appears as Gibbs-normalization term in the Sinkhorn-DRO dual, linking SBOG’s thresholding and energy-maximizing candidate selection to boundary decisions. Across time-series and image benchmarks, SBOG generates informative, semantically controlled outliers and improves downstream robustness evaluation. 
+
+## 2 Preliminaries 
+
+2.1 Sinkhorn Distributionally Robust Optimization 
+
+We begin by recalling the Sinkhorn Distributionally Robust Optimization framework [29], which provides the transport geometry used later to define outlyingness in latent space. Let X be a 2measurable space, μ ∈ P (X ) denote a nominal distribution, ν ∈ P (X ) be a reference measure for admissible perturbations, and d : X × X → R+ be a ground cost. For ε > 0, define Kν (x) := 
+
+R 
+
+> X
+
+exp 
+
+
+
+− d(x, ˜x)
+
+> ε
+
+
+
+dν (˜ x), and assume 0 < K ν (x) < ∞ for μ-almost every x. The associated Gibbs kernel is 
+
+dQ νε,x (˜ x) = exp   − d(x, ˜x)/ε 
+
+Kν (x) dν (˜ x). (1) 
+
+Definition 2.1 (Sinkhorn OT) . For any candidate worst-case distribution P ∈ P (X ), define the normalized Sinkhorn Optimal Transport (OT) discrepancy 
+
+W νε (μ, P ) = inf  
+
+> γ∈Γ( μ,P )
+
+E(x, ˜x)∼γ
+
+d(x, ˜x) + εKL( γ∥μ ⊗ ν) + εEx∼μ
+
+ log Kν (x) , (2) 
+
+where Γ( μ, P ) is the set of couplings with first marginal μ and second marginal P , and KL( ·∥· ) is the Kullback–Leibler divergence. Equivalently, 
+
+W νε (μ, P ) = inf   
+
+> γ∈Γ( μ,P )
+
+εKL( γ∥μ ⊗ Qνε ) ,
+
+where (μ ⊗ Qνε )( dx, d ˜x) := μ(dx )Qνε,x (d˜x). The normalization by Kν (x) makes the minimum discrepancy over all candidate marginals equal to zero. 
+
+Definition 2.2 (Sinkhorn DRO) . Let f : X → R be measurable and let ρ > 0. The Sinkhorn ambiguity set is the normalized entropic OT ball Uνρ (μ) = {P ∈ P (X ) : W νε (μ, P ) ≤ ρ},and the corresponding worst-case expected value is 
+
+Vρ(f ; μ, ν ) = sup   
+
+> P∈U νρ(μ)
+
+E˜x∼P
+
+f (˜ x). (3) By adapting the strong-duality result of [59, Theorem 1], the Sinkhorn DRO can be simplified as: 
+
+Lemma 2.3 (One-dimensional Sinkhorn-DRO dual) . Assume the ambiguity set is nonempty and the exponential moments below are finite. By strong duality, Vρ(f ; μ, ν ) admits the one-dimensional dual representation Vρ(f ; μ, ν ) = inf λ> 0 VD (λ), with 
+
+VD (λ) = λρ + λε Ex∼μ
+
+
+
+log E˜x∼Qνε,x exp 
+
+ f (˜ x)
+
+λε 
+
+ 
+
+. (4) The kernel Qνε,x concentrates on low-cost perturbations of x, while the log-moment generating term in (4) exponentially tilts toward large values of f , yielding a softmax-type robustification governed by (ρ, ε ) and the dual temperature λ.
+
+2.2 Outlier Generation 
+
+Let X denote the input space, and let Din = {(xi, y i)}ni=1 with yi ∈ { 1, . . . , C } be an in-distribution dataset. Let T : {1, . . . , C } → Rm be a fixed conditioning map, with tc := T (c). Let hθ : X → Rm
+
+be a trainable encoder and define the normalized representation z(x; θ) := hθ (x)  
+
+> ∥hθ(x)∥2
+
+∈ Z ⊆ Rm. We write zi := z(xi; θ) and define the empirical In-Distriubtion (ID) embedding set Zn := {zi}ni=1 ⊂ Z .The first stage learns θ so that each zi is aligned with its corresponding conditioning vector tyi . The empirical latent reference measure is ˆνn := 1
+
+> n
+
+Pni=1 δzi . Outlier generation can therefore be viewed as the problem of generating new latent points relative to the geometry induced by the embedding set. Given the learned latent space Z and the empirical ID set Zn, let I(Zn) ⊆ Z denote the region regarded as in-distribution. An outlier sampler is a conditional distribution S(· | Zn) over Z designed to place most of its mass outside I(Zn). It produces latent candidates v at least approximately. Each sampled latent point v is then mapped back to the input space through a fixed conditional generator xood ∼ p(x | v), where OOD denotes out-of-distribution.. Repeating this procedure yields an auxiliary set Dood = {xood }.
+
+## 3 SBOG: Sinkhorn Boundary Outlier Generation 
+
+3.1 Outlier Sampling under Latent Space 
+
+We instantiate the sampler S(· | Zn) as Sinkhorn Boundary Outlier Generation (SBOG), a latent-space procedure for generating structured outliers. We work in the latent representation space Z and 3Time-series 
+
+> encoder
+> Time
+> Value
+> Time
+> Value
+> Time-series input
+> Image input
+> ID embeddings
+> (choose one modality)
+> or
+> …
+> Class token
+> embedding
+
+Inlier input 
+
+> (one row = one
+> class embedding set)
+
+Generated Outlier 
+
+> Time-series outlier
+> Decoder
+> Image outlier
+> Image
+> encoder
+> Colors indicate class.
+> Shown groups are
+> representative examples from many classes
+
+Sinkhorn Outlier energy  
+
+> …
+> ID embeddings High-energy anchors
+> Energy level Synthetic outliers
+> Class-wise threshold
+> contour
+> Each anchors proposes
+> multiple candidate outliers
+
+Figure 1: Pipeline of Sinkhorn Boundary Outlier Generation (SBOG). generate synthetic outliers v ∈ Z . This is reasonable because alignment-trained encoders tend to organize representations semantically: samples from the same class concentrate around their class prototype, while different classes become separated in latent space [42]. We therefore assume that the learned representation space Z is sufficiently aligned so that the ground cost d : Z × Z → R+
+
+reflects local semantic geometry. Under this geometry, SBOG does not define outlyingness through a purely statistical proxy such as nearest-neighbor sparsity or classifier-boundary crossing. Instead, it measures how expensive it is to support a candidate latent point using mass from the in-distribution reference measure under an entropic transport geometry. This gives a smooth boundary-support criterion that can be instantiated across different underlying distributions and modalities. The key support component of SBOG is a transport-based energy, which we introduce first. Let 
+
+ν ∈ P (Z) denote the in-distribution reference measure in the latent representation space, for a candidate latent point z ∈ Z , we define its entropic Sinkhorn support as 
+
+Kνε (z) := 
+
+Z
+
+> Z
+
+exp 
+
+
+
+− d(z, u )
+
+ε
+
+
+
+dν (u), z ∈ Z . (5) This quantity aggregates the amount of in-distribution mass that can support z, where nearby mass contributes more strongly and the temperature ε controls the softness of the transport neighborhood. A large value of Kνε (z) indicates that z is well supported by the reference measure, whereas a small value indicates weak support under the Sinkhorn transport geometry. 
+
+Definition 3.1 (Sinkhorn Outlier Energy) . Let ν ∈ P (Z) be a reference measure on the latent representation space Z, let d : Z × Z → R+ be a ground cost, and let ε > 0. For any z ∈ Z with 
+
+0 < K νε (z) < ∞, we define the Sinkhorn outlier energy of z as 
+
+Eνε (z) := −ε log Kνε (z). (6) Sinkhorn Outlier Energy (SOE) is the transport-support energy used inside SBOG: larger values indicate candidate points that are more expensive to support from the in-distribution reference measure under the chosen ground geometry. SBOG uses SOE to define boundary contours for anchor selection and candidate acceptance, and its relation to empirical kernel support is clarified in Lemma 3.2. 
+
+Lemma 3.2 (Entropic support cost of Sinkhorn outlier energy) . For any z ∈ Z such that 0 <Kνϵ (z) < ∞, given the Sinkhorn outlier energy Eνϵ (z), in particular, for the empirical reference measure ˆνn = 1
+
+> n
+
+Pni=1 δzi with distinct atoms, we have 
+
+E ˆνn 
+
+> ϵ
+
+(z) = min 
+
+> w∈∆n
+
+( nX
+
+> i=1
+
+wid(z, z i) + ϵ
+
+> n
+
+X
+
+> i=1
+
+wi log( nw i)
+
+)
+
+,
+
+where ∆n = {w ∈ Rn 
+
+> +
+
+: Pni=1 wi = 1 } with the minimizer being w⋆i (z) = exp( −d(z,z i)/ϵ )Pnj=1 exp( −d(z,z j )/ϵ ) .
+
+Relation to kernel support. Lemma 3.2 shows that, for the empirical reference measure ˆνn =
+
+> 1
+> n
+
+P i = 1 nδzi , SOE admits a kernel-support form. Only in the special case of uniform empirical support with squared Euclidean cost does SOE reduce to a monotone transform of an unnormalized RBF-KDE score. Beyond this restricted setting, SOE is not equivalent to KDE, and our experiments 4further show that this transport-based boundary criterion yields stronger outlier anchors than KDE-based alternatives. In SBOG, we use this connection to reinterpret kernel support as an entropic transport support cost: Eνϵ (z) = −ϵ log Kνϵ (z) measures how costly it is, under the chosen ground geometry, for the in-distribution reference measure to assign support to z. Inside SBOG, this energy defines smooth boundary contours for anchor selection and candidate acceptance, while semantic feasibility and decoding constraints turn these contours into valid outlier candidates. The construction is modality-agnostic in latent space and, through the shared Gibbs normalizer in the Sinkhorn-DRO dual, links boundary selection to a robust downstream decision view. 
+
+Algorithm 1 Sinkhorn Boundary Outlier Generation (SBOG) 
+
+Require: Din = {(xi, y i)}ni=1 , encoder hθ , decoder p(x | v)
+
+Require: class anchors {tc}Cc=1 , semantic floor τsem ≥ 0
+
+Require: ε, τ E , σ > 0, boundary anchors A, proposals M ,samples Nood , projection ΠZ , bE(·) := Ebνn 
+
+> ε
+
+(·) 
+
+> 1:
+
+Zn ← { zi = z(xi; θ)}ni=1 , bνn ← 1
+
+> n
+
+Pni=1 δzi 
+
+> 2:
+
+let IA be the indices of the top-A values of { bE(zi)}ni=1  
+
+> 3:
+
+Dood ← ∅  
+
+> 4:
+
+for k = 1 , . . . , N ood do  
+
+> 5:
+
+repeat  
+
+> 6:
+
+sample i ∼ Unif( IA) 
+
+> 7:
+
+vj ← ΠZ (zi + ηj ), ηj ∼ N (0 , σ 2I), j ∈ [M ] 
+
+> 8:
+
+J ← { j : bE(vj ) ≥ τE and cos( vj , t yi ) ≥ τsem } 
+
+> 9:
+
+until J̸ = ∅ 
+
+> 10:
+
+v ← arg max j∈J bE(vj ), xood ∼ p(x | v) 
+
+> 11:
+
+Dood ← Dood ∪ { xood } 
+
+> 12:
+
+end for  
+
+> 13:
+
+return Dood 
+
+Given the empirical latent reference set 
+
+Zn, SBOG first computes bE(zi) := 
+
+Ebνn 
+
+> ε
+
+(zi) for all embeddings zi ∈ Zn
+
+and selects the top-energy embeddings as boundary anchors. Around each selected anchor, SBOG draws local latent propos-als by adding isotropic Gaussian perturba-tions and projecting them back to Z when needed. A proposal v is feasible only if it crosses the SOE support-cost contour 
+
+bE(v) ≥ τE and satisfies the semantic feasibility constraint cos( v, t yi ) ≥ τsem ,where tyi is the class anchor associated with the source embedding zi. Among the feasible proposals, SBOG selects the candidate with the largest SOE, the most transport-expensive point that remains se-mantically anchored, and then decodes it into input space via xood ∼ p(x | v). Un-like purely statistical density-rejection or hard k-NN-based methods [55, 12], SBOG does not rely on a low-support criterion alone. It uses a smooth transport-support contour for boundary selection and explicitly couples this boundary criterion with semantic anchoring and generative validity. The preceding sampler uses SOE as a model-agnostic boundary energy. We next show that this energy is not an isolated support heuristic, but the support-normalization term induced by the same Sinkhorn-DRO geometry. For a radius rDRO > 0, the Sinkhorn uncertainty set around μ defines 
+
+sup      
+
+> P∈P (Z): Wνε(μ,P )≤rDRO
+
+Eu∼P [f (u)] , (7) for a latent loss or score function f . The next result explains why the SOE threshold and energy-maximizing feasible proposal in SBOG correspond to transport support-boundary acquisition. 
+
+Proposition 3.3 (Sinkhorn outlier energy in the Sinkhorn-DRO dual) . Under the definitions above, for any measurable f : Z → R whose log-moment is finite for every λ > 0, the Sinkhorn-DRO dual objective admits the following decomposition: 
+
+VD (λ) = λr DRO + λε Ez∼μ
+
+
+
+log Eu∼Qνε,z exp 
+
+ f (u)
+
+λε 
+
+ 
+
+= λr DRO + Ez∼μ
+
+
+
+λε log 
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε − d(z, u )
+
+ε
+
+
+
+dν (u) + λE νε (z)
+
+
+
+, (8) 
+
+where Qνε,z is the Gibbs kernel and Eνε (z) = −ε log Kνε (z) is the Sinkhorn outlier energy from Defi-nition 3.1. Thus, the Sinkhorn-DRO dual objective contains the outlier energy term λEz∼μ[Eνε (z)] .
+
+Proposition 3.3 clarifies the role of SOE in SBOG. The decomposition shows that SOE is the support-normalization cost induced by the Sinkhorn uncertainty geometry. SBOG uses this term in a model-agnostic way: the threshold bE(v) ≥ τE selects candidates beyond a transport support-cost contour, and the final maximization chooses the most transport-expensive candidate among the semantically feasible proposals. Thus, the DRO connection justifies the support-boundary acquisition rule used by SBOG, rather than claiming that the submitted algorithm solves a downstream task-specific DRO problem. If a downstream model is available, one can augment the acquisition with a task loss or uncertainty score using the same Gibbs kernel, and we leave this task-aware variant as a 5direct extension. Since SBOG relies on the empirical SOE threshold bE(v) ≥ τE for anchor selection and proposal acceptance, we next analyze the finite-sample stability of this boundary decision. 
+
+Theorem 3.4 (Finite-sample stability of SOE thresholding) . For a fixed finite candidate pool V ⊂ Z ,define K := inf v∈V K ¯νε (v) > 0, ∆E = inf v∈V |E ¯νε (v) − τE | > 0, and τn(δ) = plog(2 |V| /δ )/2n.If τn(δ) ≤ K/ 2, then with probability at least 1 − δ,
+
+sup 
+
+> v∈V
+
+Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) ≤ 2εK τn(δ).
+
+Consequently, if τn(δ) ≤ min 
+
+n K 
+
+> 2
+
+, K∆E
+
+> 4ε
+
+o
+
+, then with probability at least 1 − δ, 1{Ebνn 
+
+> ε
+
+(v) ≥ τE } =
+
+1{E ¯νε (v) ≥ τE } for any v ∈ V . In particular, it suffices that 
+
+n ≥ max 
+
+ 2
+
+K2 log 2|V| 
+
+δ , 8ε2
+
+K2∆2
+
+> E
+
+log 2|V| 
+
+δ
+
+
+
+.
+
+For a fixed candidate pool V, the sufficient sample size scales as O
+
+ ε2
+
+> K2∆2
+> E
+
+log |V| 
+
+> δ
+
+
+
+up to the 
+
+K−2 log( |V| /δ ) normalizer condition. Thus, the dependence on the latent geometry, the Sinkhorn temperature, and the placement of the candidate pool is captured by K and by the attainable energy margin ∆E . In particular, if ε is too small or the candidate pool lies in extremely weakly supported regions, then K may be small and the bound can become loose. We also analyze the sample complexity of neighborhood-based methods in Appendix C, highlighting the advantages of SOE. We next give a theorem for the consistency of the generated distribution. Write bEn = Ebνn 
+
+> ε
+
+and 
+
+E = E ¯νε . Let QSBOG  
+
+> n
+
+and Q⋆n, SOE be the class–latent output distributions of Algorithm 1 using 
+
+bEn and E, respectively, on the same observed bank. Denote their top-A anchor sets by bIA,n 
+
+and I⋆A, and their energy thresholds by bτn and τ ⋆n . All remaining components and tie-breaking rules are shared. Define en = sup v∈Z | bEn(v) − E(v)| and an = |bIA,n △I⋆A| 
+
+> 2A
+
+,where △ denotes symmetric difference. In one population-SOE proposal round, let S = {j : cos( Vj , t yI ) ≥ τsem }
+
+and J⋆ = {j ∈ S : E(Vj ) ≥ τ ⋆n }. Let ∆n be the gap between the two largest energies in J⋆, with 
+
+∆n = ∞ when |J⋆| < 2. Conditional on the observed bank, define 
+
+bn(t) = Pr 
+
+
+
+min  
+
+> j∈S
+
+|E(Vj ) − τ ⋆n | ≤ 2t or ∆n ≤ 2t
+
+
+
+,
+
+and p⋆n = Pr( J⋆̸ = ∅), with min ∅ = ∞.
+
+Theorem 3.5 (Population-SOE consistency) . Suppose |bτn − τ ⋆n | ≤ en, p⋆n ≥ p0 > 0, and an +
+
+bn(en) < p 0. Then the empirical sampler terminates almost surely, and 
+
+dTV 
+
+ QSBOG  
+
+> n
+
+, Q ⋆n, SOE 
+
+ ≤ min 
+
+
+
+1, 2{an + bn(en)}
+
+p0
+
+
+
+=: ζn, (9) 
+
+where dTV (P, Q ) = sup B |P (B)−Q(B)|. The same bound holds after applying a shared conditional decoder. If en → 0 and an + bn(en) → 0 in probability over the bank, and the threshold and acceptance conditions hold with probability tending to one, then dTV (QSBOG  
+
+> n
+
+, Q ⋆n, SOE ) → 0 in probability. 
+
+The proof is given in Appendix D. This result concerns consistency with the population SOE criterion, not alignment with an independently defined target boundary. 
+
+3.2 Sinkhorn-DRO Alignment for Boundary-Aware Representations 
+
+SBOG relies on a latent ground cost whose local neighborhoods reflect both geometric proximity and semantic similarity. If the representation is trained only with pointwise alignment logits, the resulting distances may separate classes at training points but still give poorly calibrated boundary geometry for outlier generation. We therefore use the same Sinkhorn-DRO principle to robustify the alignment objective: instead of matching each sample only to its class prototype at a point, we require the alignment to remain stable under a local Sinkhorn transport neighborhood. Concretely, consider the standard alignment objective 
+
+L = E(x,y )∼D 
+
+"
+
+− log exp  T (y)⊤z(x; θ)/t PCc=1 exp( T (c)⊤z(x; θ)/t )
+
+#
+
+, (10) 6where z(x; θ) = hθ (x)/∥hθ (x)∥2 and {T (c)}Cc=1 are class prototypes. Since these logits are purely pointwise, they may not adequately reflect the boundary geometry of the in-distribution, where informative outlier signals tend to concentrate. We incorporate local Sinkhorn geometry through a reference measure νx ∈ P (X ) centered around x.Let W νx 
+
+> ε
+
+denote the normalized Sinkhorn OT discrepancy with reference measure νx and regulariza-tion ε > 0. For class c, define ℓalign (˜ x, c ; θ) = − T (c)⊤z(˜ x;θ) 
+
+> t
+
+and z(˜ x; θ) = hθ (˜ x)  
+
+> ∥hθ(˜ x)∥2
+
+. We replace the nominal logit by the Sinkhorn-DRO robust logit 
+
+Vc(x; θ) := − sup    
+
+> q∈P (X): Wνx ε(δx,q )≤ρ
+
+E˜x∼q [ℓalign (˜ x, c ; θ)] ,
+
+where δx is the point mass at x, and rDRO > 0 is the local DRO radius. By Lemma 2.3, this is equivalently given by the corresponding one-dimensional dual with f (˜ x) = ℓalign (˜ x, c ; θ), namely, 
+
+Vc(x; θ) = − inf 
+
+> λ> 0
+
+
+
+λr DRO + λε log E˜x∼Qνx ε,x 
+
+
+
+exp 
+
+ ℓalign (˜ x, c ; θ)
+
+λε 
+
+ 
+
+.
+
+Using {Vc(x; θ)}Cc=1 in place of the nominal similarity logits yields 
+
+Lrob = E(x,y )∼D 
+
+"
+
+− log exp( Vy (x; θ)) 
+
+PCc=1 exp( Vc(x; θ)) 
+
+#
+
+. (11) 
+
+Remark 3.6. If rDRO = 0 and νx = δx, then Qνx 
+
+> ε,x
+
+= δx and Vc(x; θ) = −ℓalign (x, c ; θ) = 
+
+T (c)⊤z(x; θ)/t . Therefore Lrob reduces to the standard alignment loss. More generally, when νx
+
+is chosen as a local neighborhood measure and dX is a metric, the robust logit aggregates local evidence through a log-sum-exp tilt, recovering neighbor- or margin-based variants as limiting cases. 
+
+This alignment module makes the learned representation geometry more compatible with SBOG by using the same local Sinkhorn neighborhoods in both robust alignment and SOE. The robust logits aggregate local perturbations through the Sinkhorn transport geometry, while SOE uses the corresponding Gibbs kernel to measure support for boundary generation. 
+
+## 4 Experiments 
+
+Since synthetic outliers do not have a canonical target distribution or a universally accepted fidelity metric, we evaluate them through their downstream utility, following standard practice in the outlier-synthesis literature [12, 9]. Specifically, we borrow detector-side benchmarks as a practical and task-relevant proxy: better synthesized outliers should better cover informative regions outside the in-distribution support, and therefore lead to a clearer boundary between inliers and outliers therefore improved discrimination performance [20]. All experiments are conducted on a machine equipped with 13th Gen Intel(R) Core(TM) i9-13900HX CPU (24 cores) and NVIDIA A100 GPU (40GB). The experimental details are in Appendix Section F. The code is available at https: //github.com/hSun08/SBOG .
+
+4.1 Time Series Generation 
+
+We evaluate SBOG on five standard multivariate time-series anomaly detection benchmarks, including SMD [52], MSL [23], SMAP, SWaT [39], and WADI [1] and baselines of COUTA [64], Ts2Vec [72], Dcdetector [67], TranAD [56], AnomalyTransformer [65], ScatterAD [68], THOC [48] and Sub-Adjacent Transformer [71]. We use F1 and AU-PR as the main evaluation metrics for each method. To avoid overestimating detection performance [27], our main tables use the stricter point-wise evaluation without Point Adjustment. The upper part of Table 1 reports general time-series anomaly detection baselines, while CARLA [9] is the only compatible framework that explicitly uses synthetic negatives for time-series anomaly detection. We therefore use CARLA as a controlled testbed with only the negative-sample construction rule changed. Specifically, we compare random negatives, k-NN based sparse negatives, KDE-based support negatives, and SBOG negatives. It is worth noting that the robust alignment module is not used in the time-series experiments because these benchmarks do not contain semantic class anchors or prototype labels that define logits T (c)⊤z. Under this matched setting, CARLA-SBOG achieves 7Table 1: Comparison results on SMD, MSL, SMAP, SWaT, and WADI datasets. Bold indicates the best result among the synthesis baselines, and † indicates the best result among all baselines. Methods SMD MSL SMAP SWaT WADI Average AU-PR F1 AU-PR F1 AU-PR F1 AU-PR F1 AU-PR F1 AU-PR F1 AnomalyTransformer [65] 0.082 0.137 0.129 0.218 0.203 0.307 0.375 0.531 0.064 0.145 0.171 0.268 DCdetector [67] 0.044 0.086 0.115 0.204 0.131 0.225 0.401 0.537 0.059 0.109 0.150 0.232 TranAD [56] 0.389 0.450 0.204 0.314 0.196 0.308 0.464 † 0.684 † 0.040 0.109 0.259 0.373 COUTA [64] 0.409 † 0.461 † 0.321 0.403 0.309 0.382 0.303 0.535 0.207 0.266 0.310 0.410 TS2Vec [72] 0.113 0.186 0.145 0.253 0.165 0.276 0.337 0.532 0.057 0.114 0.163 0.272 ScatterAD [68] 0.300 0.360 0.144 0.234 0.143 0.251 0.347 0.532 0.053 0.121 0.198 0.299 THOC [48] 0.321 0.381 0.227 0.322 0.235 0.333 0.301 0.538 0.053 0.125 0.227 0.340 Sub-Adjacent Transformer [71] 0.185 0.269 0.295 0.408 0.171 0.269 0.384 0.533 0.458 † 0.571 † 0.299 0.410                                                                               
+
+> Synthesis baselines
+> CARLA [9] 0.236 0.296 0.337 0.420 0.304 0.378 0.402 0.606 0.058 0.109 0.267 0.362 CARLA-RandomNeg 0.219 0.285 0.334 0.431 0.274 0.352 0.319 0.531 0.028 0.102 0.235 0.340 CARLA-k-NNNeg 0.371 0.434 0.250 0.350 0.390 0.451 0.402 0.604 0.045 0.109 0.291 0.390 CARLA-KDENeg 0.258 0.348 0.351 0.445 0.391 0.465 0.350 0.578 0.049 0.129 0.280 0.393 CARLA-SBOG 0.413 0.471 0.352 †0.463 †0.449 †0.515 †0.369 0.625 0.063 0.133 0.312 †0.432 †MSL SMD SMAP SWaT WADI 0.0 0.2 0.4 0.6 0.8 1.0
+> Anchor Fidelity (  )
+> (a) Fidelity across datasets
+> MSL SMD SMAP SWaT WADI 0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4
+> MMD 2 ( )
+> (b) MMD 2across datasets
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5
+> Cross-class Margin (×10 2,)
+> 3.0 3.5 4.0 4.5
+> Diversity (×10  3, )
+> (c) Margin vs. Diversity Random w/o anchor w/o
+> w/o argmax kNN KDE SBOG (full)
+
+Figure 2: Component ablation of the time-series sampler. the best average AU-PR and F1 among all CARLA variants. This indicates that the SBOG boundary rule produces more useful negatives for downstream anomaly detection. To further examine whether the gains come from the SOE sampler itself, we ablate the main mechanisms of Algorithm 1, including high-energy anchor selection, energy-threshold acceptance, and argmax candidate selection, and additionally compare with k-NN and KDE support-based variants. All variants use the same trained encoder, so the comparison iso-lates the effect of the sampler and boundary scoring rule. Panels (a) and (b) show that SBOG maintains high anchor fidelity while inducing a stronger distributional shift as measured by MMD 2, whereas random sampling and removing anchor selection reduce fi-delity. Panel (c) further shows that SBOG achieves a better margin–diversity trade-off Table 2: Sensitivity to the threshold τE
+
+τE Avg AUPR Avg F1 Gap Fill 
+
+0.50 0.279 0.387 0.225 1.000 
+
+0.70 0.295 0.409 0.224 1.000 
+
+0.90 0.310 0.430 0.217 1.000 
+
+0.95 0.312 0.432 0.126 1.000 
+
+0.98 0.305 0.422 0.109 0.999 
+
+0.99 0.277 0.384 0.079 0.945 
+
+than the ablated and support-score variants: it moves gen-erated negatives farther along the boundary while retaining high intra-negative diversity. This suggests that selecting the most energetic feasible candidate improves boundary informativeness beyond generic low-support scoring. We sweep the threshold τE using the same trained encoder and report Avg AUPR and F1 together with two proposal diagnostics. Gap measures the average margin E(neg) −
+
+τE of accepted negatives, and Fill is the fraction of anchors that yield at least one feasible proposal. Table 2 shows that performance is stable over a broad middle range of thresholds, while overly high thresholds reduce both the margin and feasible-anchor coverage. This is consistent with Theorem 3.4: reliable thresholding requires a nontrivial energy margin and a well-conditioned support normalizer. 
+
+4.2 Image Generation 
+
+For a more comprehensive evaluation, we also apply our method to image outlier generation. We follow the experimental protocol used in recent image outlier synthesis works [55, 12, 16, 35] and the standard benchmark setting in [22] for evaluation. For fair comparison, we adopt ResNet-34 [19] as the ID classifier and CIFAR-100 and ImageNet-100 [10] as the in-distribution datasets. Following prior baselines, we generate OOD samples with Stable Diffusion v1.5. On ImageNet-100, we use iNaturalist [58], SUN [63], Places [75], and Textures [6] as test datasets. On CIFAR-100, we use SVHN [40], Places365 [75], LSUN-R [70], iSUN [66], and Textures [6] as test datasets. 8We compare our method against representative baselines for synthesis methods about outlier detection, including GAN [31], VOS [13], NPOS [55], DreamOOD [12], BOOD [35], FodFoM [4], and GOOD [16]. Following the standard evaluation protocol used by these baselines, we assess the quality of the generated data using FPR95, the false positive rate when the true positive rate for ID samples is 95% and AUROC, the area under the receiver operating characteristic curve. The results on ImageNet-100 and CIFAR-100 are reported in Table 3 and Table 4, respectively. For methods without official released code, we report the summarized results provided in recent benchmark papers [16, 35]. Methods marked with an asterisk (*) do not have publicly available official implementations and are therefore not included in the formal ranking. In the tables, bold indicates the best result and underline indicates the second-best result. Table 3: Comparative evaluation of outlier detection performance on ImageNet-100 as the ID dataset.                                                                                                         
+
+> Methods INATURALIST PLACES SUN TEXTURES Average FPR95 ↓AUROC ↑FPR95 ↓AUROC ↑FPR95 ↓AUROC ↑FPR95 ↓AUROC ↑FPR95 ↓AUROC ↑
+> GAN [31] 83.10 71.35 83.20 69.85 84.40 67.56 91.00 59.16 85.42 66.98 VOS [13] 43.00 93.77 47.60 91.77 39.40 93.17 66.10 81.42 49.02 90.03 NPOS [55] 53.84 86.52 59.66 83.50 53.54 87.99 8.98 98.13 44.00 89.04 Dream-OOD [12] 24.10 96.10 39.87 93.11 36.88 93.31 53.99 85.56 38.76 92.02 NCIS [11] 20.70 96.56 34.60 94.07 35.43 94.13 44.83 88.50 33.89 93.32 BOOD* [35] 18.33 96.74 33.33 94.08 37.92 93.52 51.88 85.41 35.37 92.44 GOOD* [16] 9.22 97.61 24.79 94.82 17.20 96.10 19.51 96.60 17.68 96.30 SBOG 9.44 ±0.73 98.09 ±0.10 14.40 ±1.01 97.09 ±0.16 13.22 ±0.92 97.61 ±0.11 24.26 ±1.06 94.82 ±0.23 15.33 ±0.46 96.90 ±0.08
+> SBOG (robust) 9.89 ±0.76 97.99 ±0.10 13.24 ±0.85 97.21 ±0.15 11.81 ±0.99 97.64 ±0.11 24.06 ±1.06 95.05 ±0.22 14.75 ±0.46 96.97 ±0.08
+
+The results show that SBOG achieves near state-of-the-art outlier detection performance on both CIFAR-100 and ImageNet-100. More importantly, SOE improves over several representative statis-tical support-based synthesis methods, especially VOS [13] and Dream-OOD [12], which sample virtual outliers from low-likelihood regions, and NPOS [55], which is the cloest non-parametric density estimation baseline. The results support the central design of SBOG: SOE identifies infor-mative weak-support boundary regions, while semantic anchoring controls class drift. The SBOG (robust) variant uses the Sinkhorn-DRO alignment module from Section 3.2. Its small but consistent improvement suggests that calibrating the latent representation with the same Sinkhorn geometry used by SOE can improve the boundary candidates generated by SBOG. Table 5: Anchor-selection ablation. 
+
+Strategy Token cos. Diversity Yield 
+
+k-NN 0.490 0.635 0.277 KDE-RBF 0.464 0.626 0.272 SBOG 0.691 0.835 0.490 
+
+We first test whether the boundary component of SBOG can be replaced by generic support scores. We replace the SOE anchor rule with two statistical alternatives, k-NN sparsity and KDE-RBF scoring, while keeping the remain-ing proposal, semantic filtering, and decoding steps fixed. Table 5 shows that SOE gives better token alignment, di-versity, and feasible yield. This indicates that the transport boundary energy selects more useful anchors than purely statistical support scores, even when the rest of the SBOG pipeline is unchanged. = 0.02 = 0.05 = 0.10 = 0.20                 
+
+> 0.00 0.02 0.04 0.06 0.08
+> Empirical Margin
+> (a) Empirical decision margin
+> = 0.02 = 0.05 = 0.10 = 0.20
+> 010 4
+> 10 3
+> 10 2
+> 10 1
+> Flip Rate@256
+> (b) Decision instability at n= 256
+> E= 0.60 E= 0.80 E= 0.90 E= 0.95
+
+Figure 3: Finite-sample stability of the outlier-energy decision under varying ϵ and m.Table 6: Effect of semantic anchor-ing. 
+
+Metric w/o filter SBOG Purity ↑ 0.381 0.824 Token cos. ↑ 0.329 0.602 Class margin ↑ -0.074 0.220 
+
+We next study the calibration of the SOE acceptance contour. Using the same trained encoder, we sweep the threshold τE and report the empirical margin together with flip rate. Figure 3 shows that very small ε makes the energy landscape sharp and unstable, while moderate smoothing yields larger margins and lower flip rates. This supports the use of SOE as a smooth boundary criterion inside SBOG and is consistent with the finite-sample stability condition in Theorem 3.4. 9Table 4: Comparative evaluation of outlier detection performance on CIFAR-100 as the ID dataset. Methods SVHN PLACES365 LSUN-R iSUN TEXTURES Average FPR95 ↓ AUROC ↑ FPR95 ↓ AUROC ↑ FPR95 ↓ AUROC ↑ FPR95 ↓ AUROC ↑ FPR95 ↓ AUROC ↑ FPR95 ↓ AUROC ↑                                                                                                              
+
+> GAN [31] 89.45 66.95 88.75 66.76 82.35 75.87 83.45 73.49 92.80 62.99 87.36 69.21 VOS [13] 78.50 73.11 84.55 75.85 59.05 85.72 72.45 82.66 75.35 80.08 73.98 79.48 NPOS [55] 11.14 97.84 79.08 71.30 56.27 82.43 51.72 85.48 35.20 92.44 46.68 85.90 DreamOOD [12] 58.75 87.01 70.85 79.94 24.25 95.23 1.10 99.73 46.60 88.82 40.31 90.15 BOOD* [35] 5.42 98.43 40.55 90.76 2.06 99.25 0.22 99.91 5.10 98.74 10.67 97.42 FodFoM [4] 33.19 94.02 42.30 90.68 28.24 95.09 33.06 94.45 35.44 93.38 34.45 93.52 GOOD* [16] 19.37 95.34 65.85 82.04 18.82 94.15 0.81 99.59 23.47 95.98 25.66 93.34 SBOG 5.38 ±0.64 98.67 ±0.10 47.48 ±1.70 89.70 ±0.34 3.48 ±0.52 99.13 ±0.06 0.10 ±0.07 99.95 ±0.01 5.74 ±0.61 98.69 ±0.11 12.44 ±0.39 97.23 ±0.08
+> SBOG (robust) 5.49 ±0.57 98.69 ±0.09 50.60 ±1.51 88.28 ±0.39 2.96 ±0.43 99.10 ±0.07 0.35 ±0.13 99.88 ±0.02 5.46 ±0.54 98.78 ±0.10 12.97 ±0.36 96.95 ±0.05 ID inlier Outlier candidate Class text anchor
+
+Figure 4: Visualization of anchors. Finally, we isolate the role of semantic anchoring. The previous ablation shows that SOE provides stronger boundary anchors than k-NN or KDE, but weak support alone does not guarantee class consis-tency. We then compare an unanchored candidate pool with the token-anchored SBOG pool, using the same downstream ranking rule and evaluating the top 250 candidates. Table 6 shows that seman-tic anchoring improves intended-class purity, token alignment, cross-class margin, and contamination control. The t-SNE [57] in Figure 4 visualizes the same effect: anchored SBOG candidates remain near intended class boundaries, whereas unanchored candidates often mix with other class clusters or are absorbed into them. These ablations separate the two roles in SBOG: SOE improves boundary selection over purely statistical support scores, while semantic anchoring prevents the selected weak-support candidates from drifting off class. 
+
+## 5 Conclusion 
+
+In this paper, we proposed Sinkhorn Boundary Outlier Generation (SBOG), a structured framework for latent-space outlier generation. SBOG uses Sinkhorn Outlier Energy (SOE) as a transport-support energy to identify weakly supported boundary regions, and combines it with semantic feasibility and decoding constraints to generate controlled, class-consistent outliers. We showed that SOE recovers kernel support as an empirical Euclidean special case, while its appearance in the Sinkhorn-DRO dual gives the boundary rule an optimization-consistent interpretation. Experiments on time-series anomaly generation and image outlier synthesis demonstrate that SBOG can generate informative synthetic outliers across modalities and improve downstream robustness evaluation. SBOG depends on representation quality, transport-cost design, semantic anchoring, and generator expressiveness. Weak embeddings or limited decoders may reduce outlier fidelity and utility. Future work can develop adaptive calibration strategies for the Sinkhorn temperature and SOE threshold, jointly learn the latent representation, transport cost, and outlier generator, and extend the Sinkhorn-DRO interpretation toward downstream-aware stress generation. 
+
+## References 
+
+[1] Chuadhry Mujeeb Ahmed, Venkata Reddy Palleti, and Aditya P. Mathur. WADI: a water distribution testbed for research in the design of secure cyber physical systems. CySWATER ’17, page 25–28, New York, NY, USA, 2017. Association for Computing Machinery. [2] Julien Audibert, Pietro Michiardi, Frédéric Guyard, Sébastien Marti, and Maria A. Zuluaga. USAD: Unsupervised anomaly detection on multivariate time series. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , KDD ’20, page 3395–3404, New York, NY, USA, 2020. Association for Computing Machinery. [3] Chris U. Carmona, François-Xavier Aubet, Valentin Flunkert, and Jan Gasthaus. Neural contextual anomaly detection for time series. In Lud De Raedt, editor, Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence, IJCAI-22 , pages 2843–2851. International Joint Conferences on Artificial Intelligence Organization, 7 2022. Main Track. 10 [4] Jiankang Chen, Ling Deng, Zhiyong Gan, Wei-Shi Zheng, and Ruixuan Wang. Fodfom: Fake outlier data by foundation models creates stronger visual out-of-distribution detector. In ACM Multimedia 2024 , 2024. [5] Dongchan Cho, Jiho Han, Keumyeong Kang, Minsang Kim, Honggyu Ryu, and Namsoon Jung. Structured temporal causality for interpretable multivariate time series anomaly detection. In 
+
+The Thirty-ninth Annual Conference on Neural Information Processing Systems .[6] Mircea Cimpoi, Subhransu Maji, Iasonas Kokkinos, Sammy Mohamed, and Andrea Vedaldi. Describing textures in the wild. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 3606–3613, 2014. [7] Marco Cuturi. Sinkhorn distances: Lightspeed computation of optimal transport. Advances in neural information processing systems , 26, 2013. [8] Zahra Zamanzadeh Darban, Qizhou Wang, Geoffrey I Webb, Shirui Pan, Charu C Aggarwal, and Mahsa Salehi. Genias: Generator for instantiating anomalies in time series. arXiv preprint arXiv:2502.08262 , 2025. [9] Zahra Zamanzadeh Darban, Geoffrey I Webb, Shirui Pan, Charu C Aggarwal, and Mahsa Salehi. Carla: Self-supervised contrastive representation learning for time series anomaly detection. 
+
+Pattern Recognition , 157:110874, 2025. [10] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition , pages 248–255. Ieee, 2009. [11] Lars Doorenbos, Raphael Sznitman, and Pablo Márquez-Neila. Non-linear outlier synthesis for out-of-distribution detection. arXiv preprint arXiv:2411.13619 , 2024. [12] Xuefeng Du, Yiyou Sun, Jerry Zhu, and Yixuan Li. Dream the impossible: Outlier imagination with diffusion models. Advances in Neural Information Processing Systems , 36:60878–60901, 2023. [13] Xuefeng Du, Zhaoning Wang, Mu Cai, and Sharon Li. Towards unknown-aware learning with virtual outlier synthesis. In International Conference on Learning Representations , 2022. [14] John C Duchi and Hongseok Namkoong. Learning models with uniform performance via distributionally robust optimization. The Annals of Statistics , 49(3):1378–1406, 2021. [15] Yuchen Fang, Jiandong Xie, Yan Zhao, Lu Chen, Yunjun Gao, and Kai Zheng. Temporal-frequency masked autoencoders for time series anomaly detection. In 2024 IEEE 40th Interna-tional Conference on Data Engineering (ICDE) , pages 1228–1241, 2024. [16] Xin Gao, Jiyao Liu, Guanghao Li, Yueming Lyu, Jianxiong Gao, Weichen Yu, Ningsheng Xu, Liang Wang, Caifeng Shan, Ziwei Liu, and Chenyang Si. GOOD: Training-free guided diffusion sampling for out-of-distribution detection. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. [17] Astha Garg, Wenyu Zhang, Jules Samaran, Ramasamy Savitha, and Chuan-Sheng Foo. An evaluation of anomaly detection and diagnosis in multivariate time series. IEEE Transactions on Neural Networks and Learning Systems , 33(6):2508–2517, 2021. [18] Shantanu Ghosh, Tiankang Xie, and Mikhail Kuznetsov. Distributionally robust self-supervised learning for tabular data. In NeurIPS 2024 Third Table Representation Learning Workshop ,2024. [19] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition ,pages 770–778, 2016. [20] Dan Hendrycks, Mantas Mazeika, and Thomas Dietterich. Deep anomaly detection with outlier exposure. In International Conference on Learning Representations , 2019. 11 [21] Weihua Hu, Gang Niu, Issei Sato, and Masashi Sugiyama. Does distributionally robust super-vised learning give robust classifiers? In International Conference on Machine Learning , pages 2029–2037. PMLR, 2018. [22] Rui Huang and Yixuan Li. Mos: Towards scaling out-of-distribution detection for large semantic space. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pages 8710–8719, 2021. [23] Kyle Hundman, Valentino Constantinou, Christopher Laporte, Ian Colwell, and Tom Soderstrom. Detecting spacecraft anomalies using lstms and nonparametric dynamic thresholding. In 
+
+Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining , pages 387–395, 2018. [24] Pavel Izmailov, Polina Kirichenko, Nate Gruver, and Andrew G Wilson. On feature learning in the presence of spurious correlations. Advances in Neural Information Processing Systems ,35:38516–38532, 2022. [25] Seungho Jeon, Kijong Koo, Daesung Moon, and Jung Taek Seo. Mutation-based multivariate time-series anomaly generation on latent space with an attention-based variational recurrent neural network for robust anomaly detection in an industrial control system. Applied Sciences ,14(17), 2024. [26] Jinyong Jeong, Hyungu Kahng, and Seoung Bum Kim. Multi-expert distributionally robust optimization for out-of-distribution generalization. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. [27] Siwon Kim, Kukjin Choi, Hyun-Soo Choi, Byunghan Lee, and Sungroh Yoon. Towards a rigorous evaluation of time-series anomaly detection. In Proceedings of the AAAI conference on artificial intelligence , volume 36, pages 7194–7201, 2022. [28] Taero Kim, Subeen Park, Sungjun Lim, Yonghan Jung, Krikamol Muandet, and Kyungwoo Song. Sufficient invariant learning for distribution shift. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 4958–4967, 2025. [29] Daniel Kuhn, Soroosh Shafiee, and Wolfram Wiesemann. Distributionally robust optimization. 
+
+Acta Numerica , 34:579–804, 2025. [30] Tian Lan, Hao Duong Le, Jinbo Li, Wenjun He, Meng Wang, Chenghao Liu, and Chen Zhang. Towards foundation models for zero-shot time series anomaly detection: Leveraging synthetic data and relative context discrepancy. arXiv preprint arXiv:2509.21190 , 2025. [31] Kimin Lee, Honglak Lee, Kibok Lee, and Jinwoo Shin. Training confidence-calibrated clas-sifiers for detecting out-of-distribution samples. In International Conference on Learning Representations , 2018. [32] Beibu Li, Qichao Shentu, Yang Shu, Hui Zhang, Ming Li, Ning Jin, Bin Yang, and Chenjuan Guo. Crossad: Time series anomaly detection with cross-scale associations and cross-window modeling. In The Thirty-ninth Annual Conference on Neural Information Processing Systems .[33] Chun-Guo Li. Learn hybrid prototypes for multivariate time series anomaly detection. In The Thirteenth International Conference on Learning Representations , 2025. [34] Hengzhuang Li and Teng Zhang. Outlier synthesis via hamiltonian monte carlo for out-of-distribution detection. In The Thirteenth International Conference on Learning Representations ,2025. [35] Qilin Liao, Shuo Yang, Bo Zhao, Ping Luo, and Hengshuang Zhao. Bood: Boundary-based out-of-distribution data generation. arXiv preprint arXiv:2508.00350 , 2025. [36] Qinghua Liu and John Paparrizos. The elephant in the room: Towards a reliable time-series anomaly detection benchmark. In The Thirty-eight Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track , 2024. 12 [37] Weitang Liu, Xiaoyun Wang, John Owens, and Yixuan Li. Energy-based out-of-distribution detection. Advances in neural information processing systems , 33:21464–21475, 2020. [38] Natalia Martinez, Fearghal O’Donncha, Wesley M. Gifford, Nianjun Zhou, Dhaval C Patel, and Roman Vaculin. Adaptive conformal anomaly detection with time series foundation models for signal monitoring. In The Fourteenth International Conference on Learning Representations ,2026. [39] Aditya P. Mathur and Nils Ole Tippenhauer. SWaT: a water treatment testbed for research and training on ICS security . In 2016 International Workshop on Cyber-physical Systems for Smart Water Networks (CySWater) , pages 31–36, Los Alamitos, CA, USA, April 2016. IEEE Computer Society. [40] Yuval Netzer, Tao Wang, Adam Coates, Alessandro Bissacco, Baolin Wu, Andrew Y Ng, et al. Reading digits in natural images with unsupervised feature learning. In NIPS workshop on deep learning and unsupervised feature learning , volume 2011, page 4. Granada, 2011. [41] Guansong Pang, Chunhua Shen, and Anton Van Den Hengel. Deep anomaly detection with deviation networks. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining , pages 353–362, 2019. [42] Vardan Papyan, X. Y. Han, and David L. Donoho. Prevalence of neural collapse during the terminal phase of deep learning training. Proceedings of the National Academy of Sciences ,117(40):24652–24663, 2020. [43] Qi Qian, Juhua Hu, and Hao Li. Hierarchically robust representation learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 7336–7344, 2020. [44] Lukas Ruff, Robert Vandermeulen, Nico Goernitz, Lucas Deecke, Shoaib Ahmed Siddiqui, Alexander Binder, Emmanuel Müller, and Marius Kloft. Deep one-class classification. In Jennifer Dy and Andreas Krause, editors, Proceedings of the 35th International Conference on Machine Learning , volume 80 of Proceedings of Machine Learning Research , pages 4393–4402. PMLR, 10–15 Jul 2018. [45] Lukas Ruff, Robert A. Vandermeulen, Nico Görnitz, Alexander Binder, Emmanuel Müller, Klaus-Robert Müller, and Marius Kloft. Deep semi-supervised anomaly detection. In Interna-tional Conference on Learning Representations , 2020. [46] Shiori Sagawa*, Pang Wei Koh*, Tatsunori B. Hashimoto, and Percy Liang. Distributionally robust neural networks. In International Conference on Learning Representations , 2020. [47] Soroosh Shafieezadeh-Abadeh, Daniel Kuhn, and Peyman Mohajerin Esfahani. Regularization via mass transportation. Journal of Machine Learning Research , 20(103):1–68, 2019. [48] Lifeng Shen, Zhuocong Li, and James Kwok. Timeseries anomaly detection using temporal hierarchical one-class network. In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin, editors, Advances in Neural Information Processing Systems , volume 33, pages 13016– 13026. Curran Associates, Inc., 2020. [49] Aman Sinha, Hongseok Namkoong, and John Duchi. Certifying some distributional robustness with principled adversarial training. In International Conference on Learning Representations ,2018. [50] Agnieszka Słowik and Leon Bottou. On distributionally robust optimization and data rebal-ancing. In Gustau Camps-Valls, Francisco J. R. Ruiz, and Isabel Valera, editors, Proceedings of The 25th International Conference on Artificial Intelligence and Statistics , volume 151 of 
+
+Proceedings of Machine Learning Research , pages 1283–1297. PMLR, 28–30 Mar 2022. [51] Junho Song, Keonwoo Kim, Jeonglyul Oh, and Sungzoon Cho. Memto: Memory-guided transformer for multivariate time series anomaly detection. Advances in Neural Information Processing Systems , 36:57947–57963, 2023. 13 [52] Ya Su, Youjian Zhao, Chenhao Niu, Rong Liu, Wei Sun, and Dan Pei. Robust anomaly detection for multivariate time series through stochastic recurrent neural network. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , KDD ’19, page 2828–2837, New York, NY, USA, 2019. Association for Computing Machinery. [53] Haixiang Sun and Andrew Liu. Robust generalization with adaptive optimal transport priors for decision-focused learning. In The 29th International Conference on Artificial Intelligence and Statistics .[54] Haixiang Sun, Ye Shi, Jingya Wang, Hoang Duong Tuan, H. Vincent Poor, and Dacheng Tao. Alternating differentiation for optimization layers. In The Eleventh International Conference on Learning Representations , 2023. [55] Leitian Tao, Xuefeng Du, Jerry Zhu, and Yixuan Li. Non-parametric outlier synthesis. In The Eleventh International Conference on Learning Representations .[56] Shreshth Tuli, Giuliano Casale, and Nicholas R Jennings. TranAD: Deep Transformer Networks for Anomaly Detection in Multivariate Time Series Data. Proceedings of VLDB , 15(6):1201– 1214, 2022. [57] Laurens van der Maaten and Geoffrey Hinton. Visualizing data using t-sne. Journal of Machine Learning Research , 9(86):2579–2605, 2008. [58] Grant Van Horn, Oisin Mac Aodha, Yang Song, Yin Cui, Chen Sun, Alex Shepard, Hartwig Adam, Pietro Perona, and Serge Belongie. The inaturalist species classification and detection dataset. In Proceedings of the IEEE conference on computer vision and pattern recognition ,pages 8769–8778, 2018. [59] Jie Wang, Rui Gao, and Yao Xie. Sinkhorn distributionally robust optimization. Operations Research , 2025. [60] Haixu Wu, Tengge Hu, Yong Liu, Hang Zhou, Jianmin Wang, and Mingsheng Long. Times-net: Temporal 2d-variation modeling for general time series analysis. arXiv preprint arXiv:2210.02186 , 2022. [61] Junkang Wu, Jiawei Chen, Jiancan Wu, Wentao Shi, Xiang Wang, and Xiangnan He. Un-derstanding contrastive learning via distributionally robust optimization. Advances in Neural Information Processing Systems , 36:23297–23320, 2023. [62] Xingjian Wu, Xiangfei Qiu, Zhengyu Li, Yihang Wang, Jilin Hu, Chenjuan Guo, Hui Xiong, and Bin Yang. Catch: Channel-aware multivariate time series anomaly detection via frequency patching. In The Thirteenth International Conference on Learning Representations .[63] Jianxiong Xiao, James Hays, Krista A Ehinger, Aude Oliva, and Antonio Torralba. Sun database: Large-scale scene recognition from abbey to zoo. In 2010 IEEE computer society conference on computer vision and pattern recognition , pages 3485–3492. IEEE, 2010. [64] Hongzuo Xu, Yijie Wang, Songlei Jian, Qing Liao, Yongjun Wang, and Guansong Pang. Calibrated one-class classification for unsupervised time series anomaly detection. IEEE Transactions on Knowledge and Data Engineering , 36(11):5723–5736, 2024. [65] Jiehui Xu, Haixu Wu, Jianmin Wang, and Mingsheng Long. Anomaly transformer: Time series anomaly detection with association discrepancy. In International Conference on Learning Representations , 2022. [66] Pingmei Xu, Krista A Ehinger, Yinda Zhang, Adam Finkelstein, Sanjeev R Kulkarni, and Jianxiong Xiao. Turkergaze: Crowdsourcing saliency with webcam based eye tracking. arXiv preprint arXiv:1504.06755 , 2015. [67] Yiyuan Yang, Chaoli Zhang, Tian Zhou, Qingsong Wen, and Liang Sun. Dcdetector: Dual attention contrastive representation learning for time series anomaly detection. In Proceedings of the 29th ACM SIGKDD conference on knowledge discovery and data mining , pages 3033–3045, 2023. 14 [68] Tao Yin, Shaochen Fu, Zhibin Zhang, Li Huang, Xiaohong Zhang, Yiyuan Yang, Kaixiang Yang, and Meng Yan. Scatterad: Temporal-topological scattering mechanism for time series anomaly detection. In The Thirty-ninth Annual Conference on Neural Information Processing Systems .[69] Suhee Yoon, Sanghyu Yoon, Ye Seul Sim, Sungik Choi, Kyungeun Lee, Hye-Seung Cho, Hankook Lee, and Woohyung Lim. Diffusion-based semantic outlier generation via nuisance awareness for out-of-distribution detection. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 13078–13086, 2025. [70] Fisher Yu, Ari Seff, Yinda Zhang, Shuran Song, Thomas Funkhouser, and Jianxiong Xiao. Lsun: Construction of a large-scale image dataset using deep learning with humans in the loop. arXiv preprint arXiv:1506.03365 , 2015. [71] Wenzhen Yue, Xianghua Ying, Ruohao Guo, DongDong Chen, Ji Shi, Bowei Xing, Yuqing Zhu, and Taiyan Chen. Sub-adjacent transformer: improving time series anomaly detection with reconstruction error from sub-adjacent neighborhoods. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence , IJCAI ’24, 2024. [72] Zhihan Yue, Yujing Wang, Juanyong Duan, Tianmeng Yang, Congrui Huang, Yunhai Tong, and Bixiong Xu. Ts2vec: Towards universal representation of time series. In Proceedings of the AAAI conference on artificial intelligence , volume 36, pages 8980–8987, 2022. [73] Zahra Zamanzadeh Darban, Geoffrey I Webb, Shirui Pan, Charu Aggarwal, and Mahsa Salehi. Deep learning for time series anomaly detection: A survey. ACM Computing Surveys , 57(1):1– 42, 2024. [74] Fan Zhang, Sinchee Chin, Jing-Hao Xue, and Wenming Yang. ICDiffAD: Implicit conditioning diffusion model for time series anomaly detection. In The Fourteenth International Conference on Learning Representations , 2026. [75] Bolei Zhou, Agata Lapedriza, Aditya Khosla, Aude Oliva, and Antonio Torralba. Places: A 10 million image database for scene recognition. IEEE transactions on pattern analysis and machine intelligence , 40(6):1452–1464, 2017. [76] Chunting Zhou, Xuezhe Ma, Paul Michel, and Graham Neubig. Examining and combating spurious features under distribution shift. In International Conference on Machine Learning ,pages 12857–12867. PMLR, 2021. 15 A Related works 
+
+DRO for representation Classical DRO and its Wasserstein variants learn models against worst-case shifts through ambiguity sets over distributions [47, 14, 49], later extended to local perturbations and entropic Sinkhorn formulations [59]. A closer line uses DRO to shape robust representations under subgroup or covariate shift, for example by learning hierarchically robust features [26], analyzing robust versus spurious representations [28, 54], or coupling invariant representation learning with worst-group objectives [43, 76, 53]. More recent work connects DRO to self-supervised and latent representation learning, but they are mostly concerned about interpretation [61] or designing loss function for robustness in worst-case [18]. However, even in those work consider the outlier or negative points explicitly [21, 46, 24, 50], DRO is still used mainly to reweight losses or stabilize learned features thereby stabilize features and working on loss function refinement. Instead, our framework turns Sinkhorn-DRO geometry into an explicit and rigorous definition of outlyingness in latent space, yielding a training-consistent criterion for outlier identification and synthesis that is naturally more general than modality-specific generation pipelines. 
+
+Outlier in time series Most existing work on time-series outliers is still detection-oriented [48, 36, 73], focusing on learning a reliable notion of normality rather than explicitly modeling how outliers are formed. Typical approaches either learn compact normal regions, sometimes with weak anomaly supervision to calibrate the boundary [44, 41, 45, 64], or strengthen detector backbones through reconstruction-based scoring [2, 17, 56], contextual comparison [3], and representation learning with attention or contrastive objectives [65, 67]. Recent work has mostly strengthened detector backbones instead of rethinking outlier formation, by improving temporal structure modeling [60, 32], memory modules [51], hybrid prototypes [33], and exploiting masking or frequency-domain learning [15, 62]. This trend continues in newer interpretable and foundation-style detectors [5, 30, 68, 38, 74] and. By contrast, work that explicitly generates time-series outliers remains scarce. Most anomaly simulation is only auxiliary to detector training [9, 64], while dedicated synthesis methods are still rare [8, 25]. Relative to these baselines, our focus is not merely to separate normal from abnormal windows, but to define and synthesize informative outliers from a principled latent geometry, making the generated samples directly useful for further downstream evaluation and analysis. 
+
+Image outlier synthesis For image data, the literature on synthetic outliers has mostly been driven by OOD detection rather than outlier generation itself. Early training-based methods improved detectors by using curated auxiliary negatives to regularize classifiers rather than explicitly generating new outliers [20, 37]. Later work began to synthesize outliers in feature space [31], either with learned generators or with virtual sampling schemes [13, 55, 34], which improves boundary regularization but still defines candidate outliers through empirical density or sampling heuristics. More recent methods further push synthesis to the image level: [12] decodes low-likelihood latent samples with diffusion, while [69, 4, 35, 16] generate more realistic visual outliers through diffusion or foundation-model guidance. Despite the stronger visual quality, most of these methods still localize candidate outliers through heuristic proxies such as low-likelihood regions [12], sparse k-NN neighborhoods [55, 16], or boundary-crossing perturbations [35], rather than from a principled definition of outlyingness for detection. In contrast, our method is more general and not restricted to certain modality. Besides, we provide a rigorous definition of outlyingness through Sinkhorn geometric boundary, so outlier selection and synthesis are both grounded in a principled geometry rather than heuristic and purely statistic rules. 
+
+## B Discussion of Sinkhorn Boundary Outlier Energy 
+
+We record the variational identity underlying the Sinkhorn outlier energy in Definition 3.1. For any 
+
+v ∈ Z , recall that 
+
+Kνε (v) := 
+
+Z
+
+> Z
+
+exp 
+
+
+
+− d(v, u )
+
+ε
+
+
+
+dν (u), Eνε (v) := −ε log Kνε (v).
+
+Assume 0 < K νε (v) < ∞. Then 
+
+inf  
+
+> r∈P (Z)
+
+{Eu∼r [d(v, u )] + εKL( r∥ν)} = −ε log Kνε (v) = Eνε (v). (12) Therefore, Eνε (v) is exactly the optimal value of the entropic cost–KL tradeoff centered at v relative to the reference measure ν. Larger values of Eνε (v) correspond to smaller kernel mass under ν,16 meaning that v is less supported by the reference geometry and is therefore more likely to be an outlier under the proposed energy criterion. Fix v ∈ Z , and define the Gibbs-tilted probability measure rν,⋆ v,ε ∈ P (Z) by 
+
+dr ν,⋆ v,ε (u) := exp( −d(v, u )/ε )
+
+Kνε (v) dν (u).
+
+Then for any r ≪ ν,
+
+KL( r∥rν,⋆ v,ε ) = 
+
+Z
+
+> Z
+
+log 
+
+ dr dr ν,⋆ v,ε 
+
+
+
+dr 
+
+=
+
+Z
+
+> Z
+
+log 
+
+ dr dν 
+
+
+
+dr +
+
+Z
+
+> Z
+
+d(v, u )
+
+ε dr (u) + log Kνε (v)= KL( r∥ν) + 1
+
+ε Eu∼r [d(v, u )] + log Kνε (v).
+
+Rearranging gives 
+
+Eu∼r [d(v, u )] + εKL( r∥ν) = −ε log Kνε (v) + εKL( r∥rν,⋆ v,ε ) ≥ − ε log Kνε (v),
+
+with equality if and only if r = rν,⋆ v,ε . This proves (12). Hence the definition 
+
+Eνε (v) = −ε log Kνε (v)
+
+is exactly the entropic variational cost associated with v relative to the reference measure ν.Finally, the thresholded outlier set 
+
+Oν,ε (τE ) := {v ∈ Z : Eνε (v) ≥ τE }
+
+is equivalently characterized by 
+
+Kνε (v) ≤ e−τE /ε .
+
+Similarly, we give the proof of Lemma 3.2. 
+
+Lemma 3.2 (Entropic support cost of Sinkhorn outlier energy) For any z ∈ Z such that 0 <Kνϵ (z) < ∞, given the Sinkhorn outlier energy Eνϵ (z), in particular, for the empirical reference measure ˆνn = 1
+
+> n
+
+Pni=1 δzi with distinct atoms, we have 
+
+E ˆνn 
+
+> ϵ
+
+(z) = min 
+
+> w∈∆n
+
+( nX
+
+> i=1
+
+wid(z, z i) + ϵ
+
+> n
+
+X
+
+> i=1
+
+wi log( nw i)
+
+)
+
+,
+
+where ∆n = {w ∈ Rn 
+
+> +
+
+: Pni=1 wi = 1 } with the minimizer being w⋆i (z) = exp( −d(z,z i)/ϵ )Pnj=1 exp( −d(z,z j )/ϵ ) .Proof. Fix z ∈ Z with 0 < K νϵ (z) < ∞, and define 
+
+dr ⋆z
+
+dν (u) = exp( −d(z, u )/ϵ )
+
+Kνϵ (z) .
+
+This is a probability density with respect to ν. For any r ∈ P (Z) with r ≪ ν, using the chain rule for Radon–Nikodym derivatives gives 
+
+log dr dr ⋆z
+
+(u) = log dr dν (u) + d(z, u )
+
+ϵ + log Kνϵ (z).
+
+Therefore, in the extended-real sense, 
+
+ϵKL( r∥r⋆z ) = ϵKL( r∥ν) + Eu∼r [d(z, u )] + ϵ log Kνϵ (z).
+
+Rearranging yields 
+
+Eu∼r [d(z, u )] + ϵKL( r∥ν) = −ϵ log Kνϵ (z) + ϵKL( r∥r⋆z ).
+
+Since KL( r∥r⋆z ) ≥ 0, the right-hand side is minimized by r = r⋆z , and the minimum value is 
+
+−ϵ log Kνϵ (z) = Eνϵ (z).
+
+17 For ˆνn = 1
+
+> n
+
+Pni=1 δzi with distinct atoms, any r ≪ ˆνn can be written as r = Pni=1 wiδzi for some 
+
+w ∈ ∆n. In this case, 
+
+KL( r∥ˆνn) = 
+
+> n
+
+X
+
+> i=1
+
+wi log( nw i),
+
+and substituting this expression into the variational formula gives the empirical form. The expression for w⋆i (z) follows by substituting ν = ˆ νn into the Gibbs reweighting above. 
+
+Proposition 3.3 (Outlier energy appears in the Sinkhorn-DRO dual) Following the previous definitions, for any measurable f : Z → R such that the log-moment below is finite for λ > 0, the Sinkhorn-DRO dual objective admits the following decomposition: for every λ > 0,
+
+VD (λ) = λτ E + λε Ez∼μ
+
+
+
+log Eu∼Qνε,z exp 
+
+ f (u)
+
+λε 
+
+ 
+
+= λτ E + Ez∼μ
+
+
+
+λε log 
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε − d(z, u )
+
+ε
+
+
+
+dν (u) + λE νε (z)
+
+
+
+,
+
+where Qνε,z is the Gibbs kernel and Eνε (z) = −ε log Kνε (z) is the Sinkhorn outlier energy from Definition 3.1. In particular, minimizing the Sinkhorn-DRO objective necessarily optimizes an objective that contains the outlier energy term λEz∼μ[Eνε (z)] .Proof. Fix λ > 0. By definition of the Gibbs kernel from Lemma 2.3, 
+
+dQ νε,v (u) = exp   − d(z, u )/ε 
+
+Kνε (z) dν (u), Kνε (z) = 
+
+Z
+
+> Z
+
+exp   − d(z, u )/ε dν (u).
+
+For each fixed representation z ∈ Z , expand the inner expectation: 
+
+Eu∼Qνε,z exp 
+
+ f (u)
+
+λε 
+
+
+
+=
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε 
+
+
+
+dQ νε,z (u)=
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε 
+
+ exp   − d(z, u )/ε 
+
+Kνε (z) dν (u)= 1
+
+Kνε (z)
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε − d(z, u )
+
+ε
+
+
+
+dν (u).
+
+Taking log gives 
+
+log Eu∼Qνε,z exp 
+
+ f (u)
+
+λε 
+
+
+
+= log 
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε − d(z, u )
+
+ε
+
+
+
+dν (u) − log Kνε (z).
+
+Multiplying by λε yields 
+
+λε log Eu∼Qνε,z exp 
+
+ f (u)
+
+λε 
+
+
+
+= λε log 
+
+Z
+
+> Z
+
+exp 
+
+ f (u)
+
+λε − d(z, u )
+
+ε
+
+
+
+dν (u) − λε log Kνε (z).
+
+By Definition 3.1, Eνε (z) = −ε log Kνε (z), and hence 
+
+−λε log Kνε (z) = λE νε (z).
+
+Substituting this identity into the Sinkhorn-DRO dual objective from Lemma 2.3 and taking Ev∼μ[·]
+
+proves the decomposition (8). The final statement follows because the normalization term defining 
+
+Eνε (v) appears explicitly in this decomposition of the robust log-moment term. 
+
+## C Comparison of Sample Complexity 
+
+We give discussion about sample complexity about neighborbood selection and our Sinkhorn outlier energy. To avoid confounding the comparison with pipeline differences, we keep all components fixed, and vary only the boundary scoring rule used in the sampling step. We first take k-NN as an example, then formalize the sample complexity by a hard neighborhood-based rule. 18 Theorem C.1 (Sample Complexity of Hard Neighborhood Selection) . For any integer k ≥ 1 and any v ∈ Z , define the empirical k-NN radius by 
+
+brn,k (v) := inf 
+
+
+
+r > 0 : bνn(B(v, r )) ≥ kn
+
+
+
+, B(v, r ) := {u ∈ Z : d(v, u ) ≤ r}. (13) 
+
+Assume that there exist constants C > 0, m > 0, and r0 > 0 such that ¯ν(B(v, r )) ≤ Cr m for all 
+
+v ∈ V and r ∈ (0 , r 0], where V ⊆ Z is the set of candidate query points. Then for any fixed v ∈ V 
+
+and any 0 < ∆r ≤ r0, if n < k
+
+> 2C∆mr
+
+, then P(brn,k (v) > ∆r ) ≥ 1 − e−k/ 6.Proof. Fix v ∈ V and define Nn(v, r ) := Pni=1 1{zi ∈ B(v, r )}. Then Nn(v, r ) is a binomial random variable with success probability pv (r) := ¯ ν(B(v, r )) . By assumption, for every r ∈ (0 , r 0],
+
+pv (r) ≤ Cr m. Fix 0 < ∆r ≤ r0. If n < k
+
+> 2C∆mr
+
+, then 
+
+μv := E[Nn(v, ∆r )] = np v (∆ r ) ≤ nC ∆mr < k
+
+2 . (14) By the definition of brn,k (v), {brn,k (v) ≤ ∆r } = {Nn(v, ∆r ) ≥ k}. Since μv < k/ 2, we have 
+
+k ≥ 2μv . Applying the multiplicative Chernoff bound for the upper tail of a binomial random variable gives 
+
+P(Nn(v, ∆r ) ≥ k) ≤ exp 
+
+
+
+− k − μv
+
+3
+
+
+
+≤ e−k/ 6. (15) Therefore, 
+
+P(brn,k (v) ≤ ∆r ) ≤ e−k/ 6,
+
+or equivalently, 
+
+P(brn,k (v) > ∆r ) ≥ 1 − e−k/ 6.
+
+This proves the claim for the fixed query point v ∈ V .Theorem C.1 shows that, under the local mass upper bound ¯ν(B(v, r )) ≤ Cr m, a hard k-NN rule cannot reliably resolve a neighborhood scale ∆r unless the sample size is on the order of k∆−mr .This reflects the cost of estimating a local counting or radius event in weakly supported regions. The SOE rule is based on a different statistical object: for a fixed proposal pool, it asks whether the smooth Gibbs support cost crosses a threshold τE . The next theorem gives a finite-candidate stability guarantee for this threshold decision under explicit normalizer and margin conditions. We next prove Theorem 3.4. 
+
+Theorem 3.4 (Finite-sample stability of SOE thresholding) For a fixed finite candidate pool V ⊂ Z ,define K := inf v∈V K ¯νε (v) > 0, ∆E = inf v∈V |E ¯νε (v) − τE | > 0, and τn(δ) = plog(2 |V| /δ )/2n.If τn(δ) ≤ K/ 2, then with probability at least 1 − δ,
+
+sup 
+
+> v∈V
+
+Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) ≤ 2εK τn(δ).
+
+Consequently, if τn(δ) ≤ min 
+
+n K 
+
+> 2
+
+, K∆E
+
+> 4ε
+
+o
+
+, then with probability at least 1 − δ, 1{Ebνn 
+
+> ε
+
+(v) ≥ τE } =
+
+1 E ¯νε (v) ≥ τE } for any v ∈ V . In particular, it suffices that 
+
+n ≥ max 
+
+ 2
+
+K2 log 2|V| 
+
+δ , 8ε2
+
+K2∆2
+
+> E
+
+log 2|V| 
+
+δ
+
+
+
+.
+
+Proof. Fix a finite candidate pool V ⊂ Z , and define ψv (u) := exp 
+
+
+
+− d(v,u )
+
+> ε
+
+
+
+. Since d(v, u ) ≥ 0,we have 0 < ψ v (u) ≤ 1 for all u ∈ Z . By the definition of Kνε ,
+
+K ¯νε (v) = 
+
+Z
+
+> Z
+
+exp 
+
+
+
+− d(v, u )
+
+ε
+
+
+
+d¯ν(u), Kbνn 
+
+> ε
+
+(v) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+exp 
+
+
+
+− d(v, z i)
+
+ε
+
+
+
+.
+
+Therefore, for each fixed v ∈ V , the quantity Kbνn 
+
+> ε
+
+(v) is the empirical mean of n i.i.d. random variables in [0 , 1] with mean K ¯νε (v).19 By Hoeffding’s inequality, for any t > 0 and any fixed v ∈ V ,
+
+P
+
+
+
+Kbνn 
+
+> ε
+
+(v) − K ¯νε (v) > t 
+
+
+
+≤ 2e−2nt 2
+
+.
+
+Applying the union bound over v ∈ V gives 
+
+P
+
+
+
+sup 
+
+> v∈V
+
+Kbνn 
+
+> ε
+
+(v) − K ¯νε (v) > t 
+
+
+
+≤ 2|V| e−2nt 2
+
+.
+
+Choosing t = τn(δ) yields 
+
+P
+
+
+
+sup 
+
+> v∈V
+
+Kbνn 
+
+> ε
+
+(v) − K ¯νε (v) ≤ τn(δ)
+
+
+
+≥ 1 − δ. 
+
+Hence, with probability at least 1 − δ, the event En := sup v∈V Kbνn 
+
+> ε
+
+(v) − K ¯νε (v) ≤ τn(δ) holds. We now work on En. Since K := inf v∈V K ¯νε (v) > 0, the condition τn(δ) ≤ K/ 2 implies 
+
+Kbνn 
+
+> ε
+
+(v) ≥ K ¯νε (v) − τn(δ) ≥ K − τn(δ) ≥ K
+
+2 , ∀v ∈ V .
+
+Also, since 0 < ψ v (u) ≤ 1, we have K ¯νε (v) ≤ 1 and Kbνn 
+
+> ε
+
+(v) ≤ 1. Thus both K ¯νε (v) and Kbνn 
+
+> ε
+
+(v)
+
+lie in [K/ 2, 1] for every v ∈ V .Consider the function ϕ(x) := −ε log x on (0 , ∞). Its derivative satisfies ϕ′(x) = −ε/x , so on 
+
+[K/ 2, 1] we have 
+
+|ϕ′(x)| ≤ 2εK .
+
+Hence ϕ is (2 ε/K )-Lipschitz on [K/ 2, 1] . Using the definition of Eνε , for every v ∈ V ,
+
+Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) = ϕ(Kbνn 
+
+> ε
+
+(v)) − ϕ(K ¯νε (v)) ≤ 2εK Kbνn 
+
+> ε
+
+(v) − K ¯νε (v) .
+
+Taking the supremum over V and using En, we obtain 
+
+sup 
+
+> v∈V
+
+Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) ≤ 2εK τn(δ),
+
+which proves the first claim. For the second claim, assume in addition that 2εK τn(δ) ≤ ∆E 
+
+> 2
+
+for ∆E := inf v∈V |E ¯νε (v) − τE | > 0.Fix any v ∈ V , if E ¯νε (v) ≥ τE , then by the definition of ∆E , we have 
+
+E ¯νε (v) − τE = E ¯νε (v) − τE ≥ ∆E ,
+
+hence E ¯νε (v) ≥ τE + ∆ E . Using the uniform energy bound proved above, 
+
+Ebνn 
+
+> ε
+
+(v) ≥ E ¯νε (v) − Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) ≥ (τE + ∆ E ) − ∆E
+
+2 = τE + ∆E
+
+2 > τ E .
+
+Therefore, 1{Ebνn 
+
+> ε
+
+(v) ≥ τE } = 1 .If instead E ¯νε (v) < τ E , then τE − E ¯νε (v) = |E ¯νε (v) − τE | ≥ ∆E , so E ¯νε (v) ≤ τE − ∆E . Again using the uniform energy bound, 
+
+Ebνn 
+
+> ε
+
+(v) ≤ E ¯νε (v) + Ebνn 
+
+> ε
+
+(v) − E ¯νε (v) ≤ (τE − ∆E ) + ∆E
+
+2 = τE − ∆E
+
+2 < τ E .
+
+Therefore, 
+
+1{Ebνn 
+
+> ε
+
+(v) ≥ τE } = 0 .
+
+Thus, on the event En,
+
+1{Ebνn 
+
+> ε
+
+(v) ≥ τE } = 1{E ¯νε (v) ≥ τE }, ∀v ∈ V .
+
+Since P(En) ≥ 1 − δ, the conclusion follows with probability at least 1 − δ.Finally, the conditions τn(δ) ≤ K 
+
+> 2
+
+and 2εK τn(δ) ≤ ∆E 
+
+> 2
+
+are implied by 
+
+τn(δ) ≤ min 
+
+ K
+
+2 , K∆E
+
+4ε
+
+
+
+.
+
+Rearranging these two inequalities yields the sufficient sample-size bound 
+
+n ≥ max 
+
+ 2
+
+K2 log 2|V| 
+
+δ , 8ε2
+
+K2∆2
+
+> E
+
+log 2|V| 
+
+δ
+
+
+
+.
+
+This completes the proof. 20 D Population-SOE consistency of the sampler 
+
+We give the definitions and proof for Theorem 3.5. Unless stated otherwise, probabilities in this subsection are conditional on the observed bank and the fixed representation. The empirical and population-SOE samplers both use Algorithm 1, including redrawing the source anchor after an unsuccessful round. The population-SOE sampler replaces the energy evaluations, not the observed anchor candidates, by their population counterparts. 
+
+Threshold calibration. Let si = E(zi) and bsi = bEn(zi). Write the thresholds as τ ⋆n =
+
+Tn(s1, . . . , s n) and bτn = Tn(bs1, . . . , bsn), where the common calibration map satisfies 
+
+|T n(u) − T n(v)| ≤ ∥ u − v∥∞. (16) A common fixed threshold satisfies this condition. So does a fixed empirical quantile, computed by an order statistic or a fixed interpolation of adjacent order statistics, plus a common additive margin. Indeed, perturbing every score by at most t perturbs every order statistic, and hence such a quantile, by at most t.
+
+Anchor-selection margin. Let 1 ≤ A = An ≤ n. Let I⋆A and bIA,n contain the indices of the top-A
+
+population and empirical bank energies, respectively, using the same deterministic tie-breaking rule. For A < n , sort the population energies as s(1) ≥ · · · ≥ s(n) and define 
+
+ξA,n = s(A) + s(A+1) 
+
+2 , an(t) = min 
+
+(
+
+1, 12A
+
+> n
+
+X
+
+> i=1
+
+1{| si − ξA,n | ≤ 2t}
+
+)
+
+.
+
+For A = n, set an(t) = 0 . This quantity bounds the fraction of the uniform anchor law that can change under an energy perturbation of size t.
+
+Proposal-selection margin. A population proposal round first draws I ∼ Unif( I⋆A) and then draws 
+
+Vj = Π Z (zI + ηj ), ηj
+
+> i.i.d.
+
+∼ N (0 , σ 2Im), j = 1 , . . . , M. 
+
+Let R⋆n denote the joint law of (I, V 1, . . . , V M ). Define the semantic and population-feasible index sets by S = {j : cos( Vj , t yI ) ≥ τsem } and J⋆ = {j ∈ S : E(Vj ) ≥ τ ⋆n }.s Let ∆n be the difference between the largest and second-largest values of E(Vj ) over j ∈ J⋆. Set ∆n = + ∞ when |J⋆| ≤ 1,and use min ∅ = + ∞. Define 
+
+bn(t) = R⋆n
+
+ 
+
+min  
+
+> j∈S
+
+|E(Vj ) − τ ⋆n | ≤ 2t
+
+
+
+∪ { ∆n ≤ 2t}
+
+
+
+, (17) 
+
+p⋆n = R⋆n(J⋆̸ = ∅). (18) The factor 2t in the threshold event accounts for errors in both the candidate energy and the calibrated threshold. The second event accounts for instability of the energy-maximizing feasible proposal. No semantic-margin assumption is needed because the coupled samplers use the same semantic test on the same proposals. 
+
+Theorem 3.5 (Population-SOE consistency) Suppose |bτn − τ ⋆n | ≤ en, p⋆n ≥ p0 > 0, and an +
+
+bn(en) < p 0. Then the empirical sampler terminates almost surely, and 
+
+dTV 
+
+ QSBOG  
+
+> n
+
+, Q ⋆n, SOE 
+
+ ≤ min 
+
+
+
+1, 2{an + bn(en)}
+
+p0
+
+
+
+=: ζn,
+
+where dTV (P, Q ) = sup B |P (B)−Q(B)|. The same bound holds after applying a shared conditional decoder. If en → 0 and an + bn(en) → 0 in probability over the bank, and the threshold and acceptance conditions hold with probability tending to one, then dTV (QSBOG  
+
+> n
+
+, Q ⋆n, SOE ) → 0 in probability. Proof. Fix a bank satisfying the theorem’s conditions and set ηn = an(t) + bn(t). We first bound disagreement in one proposal round and then account for repeated rejection. 21 Anchor selection. Let r = |bIA,n \ I⋆A| = |I⋆A \ bIA,n |. The total variation distance between the two uniform anchor laws is r/A . When r > 0, take any j ∈ bIA,n \ I⋆A and k ∈ I⋆A \ bIA,n . The empirical ranking gives bsj ≥ bsk. Therefore, 
+
+sk − sj ≤ | sk − bsk| + |bsj − sj | ≤ 2t. 
+
+Since sk ≥ s(A) ≥ ξA,n and sj ≤ s(A+1) ≤ ξA,n , both indices lie in the band |si − ξA,n | ≤ 2t. All 
+
+2r differing indices lie in this band, so 
+
+dTV 
+
+
+
+Unif( bIA,n ), Unif( I⋆A)
+
+
+
+= rA ≤ an(t).
+
+The claim is immediate when A = n. Couple the two anchor draws so that they differ with probability at most an(t). Such a coupling assigns the common probability mass to identical indices and couples the remaining mass separately. 
+
+Feasibility and maximization. When the anchors agree, use the same Gaussian perturbations and projection in both samplers. Their semantic sets then agree. By (16), |bτn − τ ⋆n | ≤ t. Thus, for every shared proposal, 
+
+( bEn(Vj ) − bτn) − (E(Vj ) − τ ⋆n ) ≤ 2t. 
+
+Outside the threshold event in (17), the feasible sets agree. If this common set contains at least two candidates and ∆n > 2t, its population maximizer j⋆ satisfies 
+
+bEn(Vj⋆ ) − bEn(Vj ) ≥ E(Vj⋆ ) − E(Vj ) − 2t > 0 (j̸ = j⋆).
+
+Hence the selected candidate agrees as well. Agreement is immediate when the feasible set has at most one element. Let Wn and W ⋆ be the outputs of this coupled round, recording the accepted pair (yI , V j ) or a failure symbol ⊥. The preceding argument and a union bound give 
+
+Pr( Wn̸ = W ⋆) ≤ an(t) + bn(t) = ηn.
+
+Consequently, for every measurable set B of class–latent pairs, 
+
+|μn(B) − μ⋆n(B)| ≤ ηn, |pn − p⋆n| ≤ ηn,
+
+where μn(B) = Pr( Wn ∈ B), μ⋆n(B) = Pr( W ⋆ ∈ B), and pn = Pr( Wn̸ = ⊥).
+
+Repeat-until-feasible sampling. Since pn ≥ p⋆n − ηn ≥ p0 − ηn > 0, independent proposal rounds terminate almost surely. Summing over the number of failed rounds gives 
+
+QSBOG  
+
+> n
+
+(B) = μn(B)
+
+pn
+
+, Q⋆n, SOE (B) = μ⋆n(B)
+
+p⋆n
+
+.
+
+Therefore, 
+
+QSBOG  
+
+> n
+
+(B) − Q⋆n, SOE (B) ≤ |μn(B) − μ⋆n(B)|
+
+p⋆n
+
++ μn(B)
+
+pn
+
+|pn − p⋆n|
+
+p⋆n
+
+≤ 2ηn
+
+p⋆n
+
+≤ 2ηn
+
+p0
+
+.
+
+Taking the supremum over B and using dTV ≤ 1 proves (D). The convergence statement follows on the stated events. For this statement, assign an arbitrary output law on exceptional banks where the sampler is undefined; their probability vanishes under the stated assumptions. 
+
+Decoding. Let D(dx | c, v ) be the shared conditional decoder, including p(dx | v) as a special case. For every measurable input-space set B, the function D(B | c, v ) lies in [0 , 1] . Integration of such a function against the difference of two probability measures is bounded by their total variation distance. Hence 
+
+dTV 
+
+ QSBOG  
+
+> n
+
+D, Q ⋆n, SOE D ≤ dTV 
+
+ QSBOG  
+
+> n
+
+, Q ⋆n, SOE 
+
+ .
+
+This proves the decoded-distribution claim. 22 A sufficient uniform estimation condition. We now give one setting in which the required uniform energy error vanishes. Fix the encoder before drawing an i.i.d. reference bank z1, . . . , z n ∼ ¯ν.Suppose Z ⊂ Rm is compact, d ≥ 0, and 
+
+|d(v, u ) − d(w, u )| ≤ Ld∥v − w∥2 for all u, v, w ∈ Z .
+
+Assume K0 = inf v∈Z K ¯νε (v) > 0. Let NZ (h) be the size of a finite Euclidean h-net of Z, and define 
+
+un(h, δ ) = 
+
+r log {2NZ (h)/δ }
+
+2n + 2Ldhε .
+
+If un(h, δ ) ≤ K0/2, then, with probability at least 1 − δ,
+
+sup 
+
+> v∈Z
+
+| bEn(v) − E(v)| ≤ en(h, δ ) := 2εK0
+
+un(h, δ ). (19) To prove this claim, note that u 7 → exp {− d(v, u )/ε } takes values in [0 , 1] . Hoeffding’s inequality and a union bound over an h-net control the kernel-support error on that net by plog {2NZ (h)/δ }/(2 n).The kernel is Ld/ε -Lipschitz in its first argument. Moving from any query to a net point contributes at most 2Ldh/ε to the difference between empirical and population supports. Thus their uniform difference is at most un(h, δ ). Both supports are then at least K0/2, where x 7 → − ε log x is 
+
+2ε/K 0-Lipschitz. This proves (19). Because the bound is uniform over Z, it also applies to the data-dependent anchor locations. For the normalized latent space, one may use NZ (h) ≤ (1 + 2 /h )m. Taking h = n−1 and δ = n−2,with fixed m, ε, L d, K 0, gives en = O(plog n/n ). Consistency also requires the selection-margin terms to vanish. For example, if, on events of probability tending to one, 
+
+an(t) + bn(t) ≤ Csel tα + vn, α > 0, vn → 0, p⋆n ≥ p0 > 0,
+
+for all sufficiently small t, then the theorem gives 
+
+dTV 
+
+ QSBOG  
+
+> n
+
+, Q ⋆n, SOE 
+
+ ≤ 2
+
+p0
+
+(Csel eαn + vn) → 0
+
+on the corresponding events. These margin and acceptance conditions are additional assumptions, not consequences of uniform energy estimation alone. The concentration calculation above concerns an i.i.d. global reference bank; it does not by itself establish the same bound for data-dependent trimming, local-reference restrictions, or an encoder fitted on the same reference sample. 
+
+Boundary precision and coverage. The following consequence separates population-SOE consis-tency from alignment with an independently specified target boundary. 
+
+Corollary D.1 (Conditional boundary precision and coverage) . Fix a bank for which 
+
+dTV (QSBOG  
+
+> n
+
+, Q ⋆n, SOE ) ≤ ζn. For any measurable target boundary region B,
+
+QSBOG  
+
+> n
+
+(B) ≥ Q⋆n, SOE (B) − ζn.
+
+In particular, define BPrec( Q) = Q(B). If Q⋆n, SOE (B) = 1 , then BPrec( QSBOG  
+
+> n
+
+) ≥ 1 − ζn.Let B1, . . . , BL be measurable target regions such that min ℓ≤L Q⋆n, SOE (Bℓ) ≥ qmin > ζ n. For N
+
+independent outputs U1, . . . , U N from the fitted empirical sampler, conditional on this bank, 
+
+Pr( every Bℓ contains at least one Uj | bank ) ≥ 1 − L exp {− N (qmin − ζn)}.
+
+The same statements hold for the decoded laws and input-space regions when the common decoder is applied. Proof. The precision and per-region mass bounds follow directly from the definition of total variation. Conditional independence gives 
+
+Pr( Uj /∈ B ℓ for all j | bank ) = {1 − QSBOG  
+
+> n
+
+(Bℓ)}N ≤ exp {− N (qmin − ζn)}.
+
+A union bound over the L regions proves the coverage statement. The decoded version follows from the decoder contraction established in Theorem 3.5. 23 The corollary is conditional on the fitted bank; outputs that share this bank are not asserted to be independent unconditionally. The coverage step uses only total variation and the assumed region masses. It does not establish that the SOE-selected regions coincide with a task-defined boundary. Also, Q⋆n, SOE depends on the observed bank. Convergence to a fixed, sample-independent law Q⋆
+
+> SOE
+
+would additionally require convergence of these population-SOE counterparts. For example, an additional bound dTV (Q⋆n, SOE , Q ⋆
+
+> SOE
+
+) ≤ λn → 0 would give the bound ζn + λn to that fixed law by the triangle inequality. 
+
+## E Controlled Numerical Validation 
+
+Downstream detection performance provides only indirect evidence of generation quality. We therefore first examine whether SBOG generates boundary outliers in a controlled setting where the target boundary is known and defined independently of SOE. The population oracle uses three stable vector autoregressive (VAR) processes with perturbations ∆bc, ∆Σ c, and ∆Ac to their local means, innovation covariances, and transition dynamics, respectively. Using the corresponding exact population log-likelihood ratio rc,k (x), the target boundary band is 0 < r c,k (x) ≤ δc,k , where the indices identify the process and perturbation, and δc,k determines the selected band. This oracle is distinct from the population-SOE sampler in Theorem 3.5. We compare SBOG with RandomNeg, kNNNeg, and KDENeg. We report boundary precision (BPrec), semantic validity (SemValid), average and worst-region boundary coverage (BCov and WorstCov), sliced Wasserstein-2 distance to the oracle (SW2), and detection AUPR on held-out oracle samples. Together, these measurements assess boundary alignment, coverage, and downstream utility. Table 7: Controlled boundary-generation evaluation against a method-independent population oracle.                             
+
+> Method BPrec ↑SemValid ↑BCov ↑WorstCov ↑
+> SW2-to-oracle ↓
+> Oracle AUPR ↑
+> RandomNeg 0.229 ±0.027 0.950 ±0.001 0.091 ±0.036 0.011 ±0.004 0.2349 ±0.0034 0.455 ±0.005 kNNNeg 0.298 ±0.036 0.977 ±0.014 0.033 ±0.005 0.002 ±0.002 0.1453 ±0.0062 0.684 ±0.014 KDENeg 0.305 ±0.043 0.972 ±0.011 0.070 ±0.008 0.005 ±0.003 0.1489 ±0.0089 0.830 ±0.012 SBOG 0.629 ±0.032 0.983 ±0.013 0.236 ±0.006 0.012 ±0.003 0.1405 ±0.0069 0.896 ±0.052
+
+Table 7 shows that SBOG places more samples in the independently defined boundary band and achieves greater average boundary coverage than the competing generators, while maintaining high semantic validity. Its generated samples also support higher AUPR on held-out oracle data. Worst-region coverage nevertheless remains low, so these results do not establish uniform coverage of all boundary regions. The experiment provides direct evidence of boundary alignment in this controlled setting, complementing rather than directly verifying the population-SOE consistency result. 
+
+## F Time-Series Experimental Details 
+
+F.1 Pipeline parameters 
+
+We keep the CARLA [9] pipeline fixed throughout Section 4.1 and only swap the negative-sample construction module. All five datasets (SMD, MSL, SMAP, SWaT, WADI) share the same encoder architecture and optimization schedule; the only per-dataset quantity is the input channel count C,which equals the number of variates in the benchmark. 
+
+Pretext stage (representation learning). We use a 1-D ResNet encoder with mid-channel width 4
+
+and an MLP projection head of output dimension 4, so the latent space Z is a 4-D unit sphere after 
+
+ℓ2 normalization. Pretext training uses the contrastive objective with temperature τctr = 0 .4, batch size 50 , AdamW with lr = 10 −3 and weight decay 10 −2 with cosine schedule for 30 epochs, and the augmentation pipeline of [9] with noise σaug = 0 .01 . The pseudo-label space has K = 10 classes obtained by the standard CARLA neighborhood-clustering procedure. 
+
+Negative-sample construction (SOE sampler). For all five time-series benchmarks, we use the same SOE sampler hyperparameters. We set the Sinkhorn regularization to ε = 0 .02 and define the 24 energy threshold as τE = ρq + m, where ρq is the 95 -th percentile of the refined ID energies and the margin is m = 0 .04 . For proposal generation, we use isotropic Gaussian noise with standard deviation σ = 0 .02 and draw M = 128 proposals per anchor. The anchor pool contains the top-A
+
+high-energy ID points, with A = ⌈0.02 n⌉ capped at 256 and lower bounded by 8 for small entities. When constructing the reference measure bνn, we trim the top 8% highest-energy ID points to reduce boundary contamination. 
+
+Classification stage (downstream detector). We use the same ResNet backbone, 5-NN soft-assignment, 50 epochs of Adam ( lr = 10 −2, weight decay 10 −3) with constant schedule, batch size 
+
+50 , entropy weight 2.0, and inconsistency weight 0. Anomaly contamination of the training pool is fixed at 0.99 . Detection scores are reported point-wise following [27]. 
+
+F.2 Quality and stability metrics 
+
+For every (sampler, entity) pair we generate negatives {vi}Ni=1 ⊂ Z and evaluate them against the in-distribution embeddings Zn and pseudo-labels {yi} on the same latent space the encoder produces. All metrics are computed on the 4-D unit sphere with cosine ground cost. Let z(v) denote the 1-NN of v in Zn under dcos , src( vi) the index of the boundary anchor that proposed vi, and Nk(v) its k
+
+nearest ID neighbors. 
+
+Energy gap (Table 2). Gap = bE(v) − τE , averaged over all generated negatives. Measures by how much each accepted negative exceeds the acceptance threshold. Larger gaps mean negatives sit deeper in the high-energy outlier region, but as τE rises into the right tail of the ID energy distribution the gap shrinks because τE rises faster than bE(v) can. 
+
+Feasible fill ratio (Table 2). Fraction of ID anchors with at least one of M proposals satisfying 
+
+bE(vj ) ≥ τE ,
+
+Fill = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1
+
+n
+
+∃j ∈ [M ] : bE(v(i) 
+
+> j
+
+) ≥ τE
+
+o
+
+. (20) 
+
+MMD 2 (RBF, median heuristic, Figure 2). Squared maximum mean discrepancy between the negative and ID samples, 
+
+MMD 2( bPv , bνn) = 1
+
+N 2
+
+X
+
+> i,j
+
+k(vi, v j ) + 1
+
+n2
+
+X
+
+> i,j
+
+k(zi, z j ) − 2
+
+N n 
+
+X
+
+> i,j
+
+k(vi, z j ), (21) with Gaussian kernel k(a, b ) = exp( −γ∥a − b∥22) and bandwidth γ = 1 /(2 σ2med ), where σmed is the median pairwise Euclidean distance on a random 1024 -point subset of the union bPv ∪ bνn. Both samples are subsampled to 2048 points before evaluation. Higher is better : large MMD 2 means the negatives form a distribution that is detectable as different from ID. 
+
+Sliced Wasserstein-2 distance (Figure 2). The 2-Wasserstein distance averaged over 1000 random unit-norm 1-D projections, 
+
+dSW 2( bPv , bνn) = 
+
+vuut 1
+
+L
+
+> L
+
+X
+
+> ℓ=1
+
+W 22
+
+
+
+θ⊤ 
+
+> ℓ
+
+bPv , θ ⊤ 
+
+> ℓ
+
+bνn
+
+
+
+, L = 1000 , (22) with W2 on each line computed in O(n log n) via sorting. 
+
+Intra-negative diversity (Figure 2). Mean pairwise cosine distance among generated negatives, 
+
+Diversity = 1
+
+N (N − 1) 
+
+X
+
+> i̸=j
+
+ 1 − v⊤ 
+
+> i
+
+vj
+
+. (23) 
+
+Anchor fidelity (intended-class purity, Figure 2). Fraction of negatives whose 1-NN in Zn shares the pseudo-label of the boundary anchor that proposed them, 
+
+Fidelity = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1yz(vi) = ysrc( vi) . (24) 25 Contamination (Table 7). Contam . = 1 − Fidelity .
+
+Cross-class margin (Table 7). Let μc be the (re-normalized) mean of Zn within pseudo-class c.For each negative vi with source class c⋆i = ysrc( vi),
+
+Margin( vi) = cos( vi, μ c⋆i ) − max 
+
+> c̸=c⋆i
+
+cos( vi, μ c), Margin = 1
+
+N
+
+X
+
+> i
+
+Margin( vi).
+
+Table 8: Component ablation of the TS outlier-synthesis sampler.                                                                                                                      
+
+> Variant Fidelity ↑Contam. ↓Margin ↑MMD 2↑Diversity ↑
+> Random 0.339 ±0.014 0.661 ±0.014 -0.000 ±0.002 0.140 ±0.043 0.051 ±0.074 w/o top-A anchor 0.329 ±0.025 0.671 ±0.025 0.000 ±0.002 0.467 ±0.121 0.223 ±0.062 w/o ρthreshold 0.988 ±0.004 0.012 ±0.004 0.034 ±0.038 1.076 ±0.227 0.182 ±0.026 w/o argmax select 0.989 ±0.004 0.011 ±0.004 0.034 ±0.039 1.049 ±0.247 0.099 ±0.022
+> k-NN 0.990 ±0.031 0.010 ±0.031 0.025 ±0.030 0.934 ±0.301 0.195 ±0.027 KDE 0.992 ±0.028 0.008 ±0.028 0.028 ±0.032 0.978 ±0.265 0.198 ±0.024
+> SBOG (ours) 0.999 ±0.004 0.001 ±0.004 0.082 ±0.038 1.156 ±0.227 0.202 ±0.026
+
+## G Image Experimental Details 
+
+G.1 Configuration In-distribution datasets and classifiers. We follow the experimental protocol of recent image outlier-synthesis works [55, 12, 16, 35] and the benchmark setting of [22]. The ID classifier is ResNet-34 [19], trained on CIFAR-100 and ImageNet-100 [10] with the standard cross-entropy objective. The latent representation z(x; θ) ∈ R768 is the row-normalised penultimate feature. 
+
+Class text anchors. Class anchors {tc}Cc=1 are the unit-normalised text-token embeddings produced by the text encoder of Stable Diffusion v1.5 on each class name. 
+
+ID feature bank. For each class c we cache 1000 ID features, giving an ID tensor Zn ∈
+
+RC×1000 ×768 . All energies, anchors and candidates are computed in this normalised cosine space. 
+
+Parameters in outlier energy. 
+
+• Smoothing parameter ε = 0 .05 .• Threshold τE calibrated per class as the 0.95 -quantile of bE(zi) over Zn, plus a margin m:
+
+τE = ρ + m with m = 0 as default. • Gaussian perturbation scale σ = 0 .012 .• Each anchor proposes M = 256 candidates per round, up to max_rounds = 10 rounds, until the per-class accepted set reaches Nood = 10000 .• Local-energy reference = the 128 nearest ID neighbours of each anchor; seed-cosine floor 
+
+0.7.
+
+Decoder. Accepted latents are decoded back to image space by Stable Diffusion v1.5 conditioned on the class token of the source anchor; one image per accepted latent. The decoded set Dood is used as auxiliary outlier exposure during detector calibration. 
+
+G.2 Definition of Diagnostic Metrics 
+
+This subsection collects the precise definitions of every metric that appears in the diagnostic tables and figures of Section 4.2 (Tables 4, 6, 8 and Figure 3). Throughout, Zn = {zi}ni=1 ⊂ Z denotes the ID feature bank for the class under consideration, tc ∈ Z its class text anchor, bE(·) = Ebνn 
+
+> ε
+
+(·) the empirical Sinkhorn outlier energy of Definition 3.1 with smoothing ε, and τE = ρ + m the energy threshold of Algorithm 1. Per-class quantities are reported as mean ± standard deviation across the 
+
+100 ImageNet-100 classes. 26 Empirical decision margin ∆ (Figure 4). For each candidate v in the accepted candidate pool we compute | bE(v) − τE |, and report 
+
+∆ = median | bE(v) − τE | : v ∈ V . (25) A larger ∆ means accepted/rejected candidates sit further from the threshold, so each individual decision is more confident. This is the quantity controlled by Theorem 3.4: the sample complexity scales as ε2/(K2∆2 
+
+> E
+
+), so ∆ acts as the operationally observable proxy for ∆E .
+
+Flip Rate@ 256 (Figure 4). For each class we draw a calibration subset S of size n = 256 uniformly without replacement from Zn, recompute the empirical energy bE(S) from S alone, and re-derive a class-specific threshold τ (S) 
+
+> E
+
+by the same 0.95 -quantile rule. The flip rate is 
+
+FlipRate@256 = ES
+
+"
+
+1
+
+|V| 
+
+X
+
+> v∈V
+
+1
+
+n
+
+1{ bE(S)(v) ≥ τ (S) 
+
+> E
+
+}̸ = 1{ bE(v) ≥ τE }
+
+o#
+
+, (26) averaged over 30 random calibration subsets. Smaller is better: flip rate → 0 means small calibration sets reach the same accept/reject decisions as the full ID bank, the regime predicted by Theorem 3.4 when the margin ∆E is well-conditioned. 
+
+Token cosine (Table 4). Mean cosine similarity to the class text token, 
+
+cos tok = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+⟨vj , t c⟩. (27) 
+
+Diversity (Table 4). One minus the mean off-diagonal cosine of the candidate set, 
+
+Diversity = 1 − 1
+
+N (N − 1) 
+
+X
+
+> i̸=j
+
+⟨vi, v j ⟩. (28) A larger value means candidates spread more uniformly along the boundary rather than collapsing to a few directions. 
+
+Yield (Table 4). The product of the on-class pass rate and the mean Sinkhorn outlier energy of the passing subset: 
+
+Yield = Pass · Epass ,
+
+where, for each anchor, 32 Gaussian perturbations of scale σ = 0.012 are drawn, Pass =Pr[cos( v, t c) ≥ τsem ] is the fraction that survives the semantic filter, and Epass is the mean Sinkhorn outlier energy of those passing perturbations. Yield captures both axes simultaneously: a strategy must produce on-class proposals and those proposals must be high-energy. 
+
+Intended-class purity (Table 6). Fraction of candidates whose nearest ID neighbour over all C
+
+classes lies in the intended class c:
+
+Purity c = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+1
+
+(
+
+arg max  
+
+> i∈S
+> c′Zc′
+> n
+
+⟨vj , z i⟩ ∈ Zcn
+
+)
+
+, (29) where Zc′ 
+
+> n
+
+is the ID bank of class c′ (we use 150 samples per class for this nearest-neighbour bank). Higher = the candidate stays inside the correct class manifold. 
+
+Margin vs. other classes (Table 6). 
+
+Margin = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+h
+
+⟨vj , t c⟩ − max   
+
+> c′̸=c
+
+⟨vj , t c′ ⟩
+
+i
+
+. (30) 
+
+Contamination (Table 6). Fraction of candidates whose nearest class token is not the intended class: 
+
+Contamination = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+1
+
+n
+
+arg max  
+
+> c′
+
+⟨vj , t c′ ⟩̸ = c
+
+o
+
+. (31) 27 Fidelity. Mean cosine similarity between each generated negative and its source anchor’s pseudo-class prototype μy(vj ), averaged over N . High fidelity means generated negatives are still recognisably class-conditional rather than generic noise. 
+
+Contamination. Per-negative defined as Contam( vj ) = 1{arg max c′ ⟨vj , μ c′ ⟩̸ = y(vj )}, aver-aged over N . Lower is better; together with Fidelity it satisfies Fidelity + Contam ≈ 1 in the matched-prototype regime. 
+
+Margin. Margin( vj ) = ⟨vj , μ y(vj )⟩ − max c′̸ =y(vj )⟨vj , μ c′ ⟩, averaged over N . Positive margin =
+
+negatives sit closer to their pseudo-class than to any other. 
+
+MMD 2. Squared maximum-mean-discrepancy between the generated-negative distribution bPN
+
+and the empirical positive distribution bPZn ,
+
+MMD 2( bPN , bPZn ) = Ek(v, v ′) + Ek(z, z ′) − 2Ek(v, z ),
+
+with a Gaussian RBF kernel k(·, ·) at the median heuristic bandwidth. Larger = generated negatives induce a stronger distributional shift away from positives, which is desirable for contrastive negative mining. 
+
+Intra-negative diversity. 1 − 1  
+
+> N(N−1)
+
+P 
+
+> i̸=j
+
+⟨vi, v j ⟩, the same formula as “Diversity” in Table 4 above, applied to the time-series generated-negative set. Higher = negatives cover a wider range of boundary directions instead of clustering on a single axis. The last result shows the factors that influence the quality of the generation. Consider the two smoothing parameter ϵ in the outlier energy E(v) = −ϵ log R exp  −d(v, u )/ϵ dν (u), and the energy margin m in the acceptance rule E(v) ≥ ρ + m. The four panels in Figure 5 respectively summarize their influence on energy separation (Energy Gap and Energy Strength), semantic preservation 
+
+cos( v, t c) (Semantic Alignment), and sampling feasibility (Feasible Fill Ratio). 0.02 0.00 0.02 0.05             
+
+> Energy Margin
+> 0.00 0.05 0.10 0.15
+> Energy Gap 0.02 0.00 0.02 0.05
+> Energy Margin
+> 0.0 0.2 0.4 0.6
+> Energy Strength 0.02 0.00 0.02 0.05
+> Energy Margin
+> 0.645 0.650 0.655
+> Semantic Alignment 0.02 0.00 0.02 0.05
+> Energy Margin
+> 0.2 0.3 0.4 0.5 0.6 0.7
+> Feasible Fill Ratio = 0.02 = 0.05 = 0.10 = 0.20
+
+Figure 5: Generation quality validation As m increases, the acceptance condition becomes stricter, which consistently reduces the energy advantage and the number of feasible synthesized outliers; this effect is especially severe for very small ϵ, where the energy landscape becomes overly sharp and the feasible fill ratio drops rapidly. By contrast, semantic alignment remains nearly unchanged across settings, suggesting that the dominant trade-off is not semantic drift but the balance between outlier strength and synthesis stability. Overall, the results indicate that a moderate ϵ together with a small margin provides the most reliable setting, preserving strong outlierness while maintaining stable and feasible synthesis. 28

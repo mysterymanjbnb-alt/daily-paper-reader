@@ -1,0 +1,736 @@
+Title: Ask Without Telling: Local SLMs Consult Cloud LLMs Without Revealing Task Intent
+
+URL Source: https://arxiv.org/pdf/2609.32642v1
+
+Published Time: Tue, 29 Sep 2026 01:31:10 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# ASK WITHOUT TELLING : L OCAL SLM S CONSULT 
+
+# CLOUD LLM S WITHOUT REVEALING TASK INTENT 
+
+Yanmeng Wang 1, Yunxuan Li 2, Shilong Fan 1, Yuhan Zheng 1, Tsung-Hui Chang 2∗
+
+> 1
+
+Nanjing University of Posts and Telecommunications, Nanjing, 210023, China 
+
+> 2
+
+The Chinese University of Hong Kong, Shenzhen, 518172, China 
+
+> ∗
+
+Corresponding author. 
+
+ABSTRACT 
+
+As local small language models (SLMs) increasingly collaborate with more capable cloud large language models (LLMs), a natural privacy question arises: Can a local SLM obtain cloud LLM guidance while protecting user privacy? Existing privacy-preserving SLM-LLM frameworks primarily hide sensitive values while preserving task semantics, which can still expose what the user is trying to accomplish. For example, allocating scarce medical sup-plies across hospitals may signal an emerging public-health emergency, while rebalancing an investment portfolio may reveal a private investment strategy, even when names and numerical values are hidden. Recent decoy-based methods further obscure task intent by hiding the real request among alternatives, but stronger protection relies on more decoys or semantic abstraction, increasing overhead or risking utility loss. More fundamentally, existing work does not systematically characterize the components of private task intent or how each should be protected. We therefore introduce task-private consultation , which characterizes task intent through two components: task context and task operation . To the best of our knowledge, this is the first systematic study of these components and their individual and joint protection in local-cloud SLM-LLM consultation. To realize this set-ting, we propose PriCon , an end-to-end framework that transforms the task itself through recoverable mathematical reformulation rather than hiding it among alternatives. A local closed-loop refinement mechanism further maintains privacy and recoverability throughout consultation. Experiments on 100 tasks show that PriCon reduces cloud-side task-intent inference Hit@1 to nearly 0%, versus 93–99% under sensitive-value removal and 3–30% under decoy-based protection, while preserving cloud-assisted utility. 
+
+1 INTRODUCTION 
+
+Imagine a local small language model (SLM) assistant deployed by a regional public-health authority. Following a sudden increase in infectious-disease cases, the authority must allocate a limited stock of critical medical supplies across hospitals. Different hospitals face different supply demands and urgency levels, while the total regional stock is limited. The local SLM may not have sufficient reasoning capability to reliably coordinate the allocation across all hospitals, and therefore turns to a more capable cloud-hosted large language model (LLM) for assistance. Before consulting the cloud, the SLM removes or replaces sensitive values, including hospital names, priority weights, inventory levels, and demand values. The new request appears sanitized:          
+
+> ‘‘Given :::::: hospitals [H] with different priority levels [W], multiple types of ::::: medical :::::: supplies
+> [S] with limited available stocks [B], and hospital-specific :::: supply :::::: demands [D], allocate the available supplies across hospitals to minimize the overall impact of medical-supply shortages .’’
+
+No hospital name, exact demand, inventory level, or priority value is revealed. Yet the request still tells a revealing story. It exposes both the context : a public-health authority distributing scarce medical resources across hospitals, and the operation : a constrained allocation problem prioritizing hospitals while minimizing shortage impact. From this alone, an observer may infer unusual pressure on regional medical resources, potentially signaling an emerging public-health emergency. Such task-intent leakage extends well beyond public-health settings. For example, rescheduling a production line may reveal an upcoming product launch or a capacity bottleneck; restructuring a small business’s debt may signal severe cash-flow pressure; and rebalancing an investment portfolio may expose a confidential investment strategy. In each case, hiding names, identifiers, and numerical values is not enough. What the user aims to accomplish may itself be private .1(Preprint. Under review) arXiv:2609.32642v1 [cs.CR] 26 Sep 2026 This risk is particularly relevant to the emerging paradigm of local SLM-cloud LLM collaboration, where local models work together with more capable cloud models to solve tasks that cannot be reliably completed on-device alone. Recent systems therefore split responsibilities between local SLMs that handle private data and local execution, and stronger cloud LLMs that provide reasoning and planning guidance for complex tasks (Zhang et al., 2024; Narayan et al., 2025; Ni et al., 2026). However, obtaining such guidance still requires the local SLM to send task-related information to the cloud, making every consultation message visible to the cloud provider. Existing privacy-aware collaboration primarily protects sensitive values by removing, replacing, or obscuring private information before cloud consultation (Siyan et al., 2025; Yuan et al., 2026a; Zhan et al., 2026). However, as the medical-supply example illustrates, preserving task semantics for cloud assistance can still expose the application context, requested operation, and underlying objective. Recent decoy-based methods further obscure user intent by hiding the true request among plausible alternatives (Huang et al., 2026a; Zhou et al., 2026). Yet the true request remains cloud-visible, while stronger obfuscation requires more decoys or semantic abstraction, increasing inference overhead or potentially compromising task utility. More fundamentally, existing approaches do not systematically characterize the components of private task intent or how each should be protected. This gap motivates a fundamental question: 
+
+Can a local SLM consult a cloud LLM without revealing the user’s private task intent? 
+
+We take a more structured view and refer to this setting as task-private consultation . We view task intent as containing two components: task context , which captures the real-world setting from which the task arises, and task operation , which captures the computation or decision the user wishes to perform. Either component may be private. Importantly, the two are not independent sources of leakage: contextual details can themselves reveal the underlying operation. 
+
+> Fig. 1: Task-private consultation.
+
+As illustrated in Fig. 1, task-private consultation follows a rewrite, consult, and execute workflow: 1) Rewrite : the local SLM transforms the original task into an intent-obscuring surrogate; 2) Consult : the cloud LLM reasons only over the surrogate and returns a trans-ferable solution blueprint; 3) Execute :the local SLM maps the blueprint back to the original task and executes the resulting solution locally. If further assistance is needed, local difficulties are converted into surrogate-level diagnostic requests and the consultation is repeated without exposing the original task or local execution details. We formalize this workflow, its protection scopes, and the cloud-visible transcript in Section 3. Realizing this workflow presents two central challenges: • How can the local SLM construct an intent-obscuring surrogate? The surrogate must hide the protected intent while preserving the solution-relevant structure needed for cloud guidance. Insufficient transformation leaves the intent recognizable, whereas excessive transformation may weaken the structure needed for useful guidance. • How can privacy and recoverability be maintained throughout the consultation? A safe initial rewrite is insufficient, as local execution failures may trigger follow-up requests that reveal additional task-specific information. Each consultation round must therefore preserve both privacy and local recoverability. To address these challenges, we propose PriCon , an end-to-end framework for task-private consul-tation. Instead of hiding the true task among alternatives, PriCon transforms the task itself through recoverable mathematical reformulation. For context protection, it extracts a domain-neutral mathe-matical representation that preserves solution-relevant structure and then uses semantic rewriting to recast it as a different application story. For operation or joint protection, it additionally changes the apparent computation through an alternative mathematical formulation before semantic rewriting. A local review and closed-loop refinement mechanism further preserves privacy and recoverability throughout the consultation while reusing successful experience across related tasks. In summary, our main contributions are as follows: 2• Task-private consultation. We systematically characterize task intent through task context and 
+
+task operation , reveal their coupled leakage, and define context, operation, and joint protection over the complete cloud-visible transcript. • PriCon framework. We propose PriCon , which transforms the original task into a recoverable, intent-obscuring surrogate through domain-neutral mathematical reformulation and semantic rewriting, while keeping the recovery mapping local. To the best of our knowledge, PriCon is the first local-cloud LLM consultation framework to use recoverable mathematical reformulation for task-intent protection without relying on additional decoy queries. • Transcript-level intent evaluation. We evaluate task-intent inference by an honest-but-curious cloud LLM from the complete cloud-visible transcript. Experiments on 100 tasks show that  
+
+> PriCon
+
+strongly protects task intent while preserving the utility of cloud LLM assistance. 
+
+2 RELATED WORK 
+
+We organize prior work around the evolving goals of local-cloud language-model collaboration, from efficient workload sharing to privacy-aware delegation and task-intent protection. 
+
+Local-cloud language-model collaboration. Existing local SLM-cloud LLM systems divide work according to query difficulty, reasoning complexity, data locality, or system cost. Hybrid LLM (Ding et al., 2024) routes queries between local SLMs and cloud LLMs according to predicted difficulty and desired quality, while AdaSwitch (Sun et al., 2024) lets a local SLM handle simpler reasoning steps and escalates harder ones to the cloud LLM. Minions (Narayan et al., 2025) keeps long contexts local while using the cloud LLM to decompose tasks into simpler subtasks for local execution.  
+
+> CE-CoLLM
+
+(Jin & Wu, 2025) and TMO (Yuan et al., 2026b) further optimize local-cloud execution for latency, communication, and inference cost. Overall, these approaches primarily treat local-cloud collaboration as a capability- and efficiency-allocation problem. As such collaboration involves user-side context and intermediate task information, privacy becomes an important concern. 
+
+Privacy-preserving SLM-LLM collaboration. Recent privacy-aware frameworks use local SLMs to limit private information exposed to the cloud, either by keeping private context local or sanitizing transmitted information. In its sketch-based variant, CoGenesis (Zhang et al., 2024) keeps personalized context local and sends only a general task instruction to the cloud LLM, which returns a sketch for local generation. Need to Know (Huang et al., 2026b) suppresses task-unnecessary private information while preserving task-essential information for cloud reasoning. Other approaches sanitize private information before transmission. PAPILLON (Siyan et al., 2025) rewrites private queries into privacy-preserving prompts, PAAC (Yuan et al., 2026a) replaces sensitive values with typed placeholders, and  
+
+> PRISM
+
+(Zhan et al., 2026) perturbs sensitive entities using local differential privacy. Despite their different mechanisms, these approaches primarily reduce the exposure of private information while preserving the task semantics needed for cloud assistance. Such semantic preservation can still leave the task context and requested operation recognizable, allowing the cloud to infer private activities or objectives even when sensitive values are protected. 
+
+Task-intent protection. Recent work has begun to protect task intent through decoy-based ob-fuscation. PrivShield (Huang et al., 2026a) hides a real query among adversarial queries, while  
+
+> GS-Chaff
+
+(Zhou et al., 2026) combines query-adaptive semantic abstraction with plausible decoy queries. Despite their different designs, both rely on ambiguity, with a query representing the real request remaining in a cloud-visible candidate set alongside decoys. Achieving stronger obfusca-tion may require more decoys or semantic abstraction, increasing inference overhead or potentially compromising task utility. In contrast, PriCon replaces the original task with a recoverable surrogate through mathematical reformulation, without sending the original task or decoys to the cloud. 
+
+3 TASK -P RIVATE CONSULTATION 
+
+We now formalize task-private consultation by specifying the consultation setting, the information to be protected, and the threat model considered in this work. 3.1 CONSULTATION SETTING AND WORKFLOW 
+
+We consider a trusted local device hosting an SLM and a more capable cloud-hosted LLM. The local SLM receives an original task T , sensitive values V, and access to a local execution environment. 3Here, V denotes task-specific sensitive inputs, such as names, exact locations, identifiers, and measurements, that are required to instantiate the task. We focus on tasks that exceed the SLM’s end-to-end reasoning capability but can be reformulated into a recoverable surrogate whose solution can be instantiated locally. For such tasks, the SLM consults the cloud without transmitting the original task. As illustrated in Fig. 1, task-private consultation follows a rewrite, consult, and execute workflow: 
+
+T|{z} 
+
+> Original Task (1) SLM: Rewrite
+
+−−−−−−−−−→
+
+> M
+
+eT|{z} 
+
+> Intent-Obscuring Surrogate (2) LLM: Consult
+
+−−−−−−−−−−→ B|{z} 
+
+> Solution Blueprint (3) SLM: Execute
+
+−−−−−−−−−−→
+
+> M,V
+
+bY
+
+|{z} 
+
+> Local Solution
+
+.
+
+1) Rewrite. The local SLM transforms the original task T into an intent-obscuring surrogate eT
+
+while replacing sensitive values V with placeholders. It also establishes a local correspondence 
+
+M recording how solution-relevant elements of the surrogate relate to the original task. 2) Consult. The cloud LLM receives only eT and returns a transferable solution blueprint B, such as an algorithm, decision procedure, program skeleton, or reasoning steps. The blueprint is expressed entirely in terms of the surrogate because the cloud does not observe T , M, or V.3) Execute. The local SLM uses the correspondence M to map the cloud-provided blueprint B
+
+back to the original task and instantiates it with the sensitive values V. The resulting solution bY is verified against the original task requirements and executed locally. If further assistance is needed during local interpretation or execution, the SLM constructs a surrogate-level diagnostic request and repeats the consultation without exposing the original task or execution trace. A consultation may contain an initial request followed by multiple diagnostic rounds. We define the 
+
+cloud-visible transcript as the complete sequence of surrogate requests and cloud responses exchanged throughout the interaction. Crucially, task-intent privacy is defined over this complete transcript rather than over any single sanitized request. The original task, sensitive values, correspondence, and task-specific execution traces are excluded from this transcript and remain on the local device. 3.2 TASK INTENT AND PROTECTION SCOPE 
+
+Beyond protecting sensitive values V, task-private consultation aims to protect the task intent revealed through cloud interaction. We use the medical-supply allocation example from Section 1 as a running example to formalize this notion. We characterize task intent through two components: 1) Task context C captures the application domain, entities, and situational background. In our example, it corresponds to a public-health setting involving hospitals, medical-supply demands, and scarce regional supplies. 2) Task operation O captures the computation or decision requested by the user, including its objective and major constraints. Here, it corresponds to allocating limited medical supplies across hospitals to minimize priority-weighted shortage impact. The user or application policy may designate task context C, task operation O, or both as the privacy target. Accordingly, we consider three protection scopes: • Context protection protects task context C without requiring task operation O itself to be hidden. In the public-health scenario, the authority may wish to conceal the underlying medical emergency while still allowing the cloud to recognize that it is solving a generic resource-allocation problem. • Operation protection protects task operation O, while task context C need not itself be private. For the medical-supply allocation example, if the public-health situation is already known, the privacy target may instead be how scarce supplies are prioritized and allocated across hospitals. • Joint protection protects both C and O. This applies when revealing either the underlying healthcare situation or the resource-allocation strategy would disclose private information. 3.3 THREAT MODEL 
+
+Trusted local device. We assume that the local SLM and all local components, including storage, rewriting, review, and execution procedures, behave as intended. The original task T , sensitive values 
+
+V, local correspondence M, and local execution results remain under local control. Compromise of the local device is outside the scope of this work. 4Honest-but-curious cloud. The cloud follows the consultation protocol and provides guidance, but may store and jointly analyze the complete cloud-visible transcript to infer the protected task intent. Under this threat model, task-private consultation aims to make the protected task intent difficult to infer from the cloud-visible transcript. 
+
+4 PRI CON : R EALIZING TASK -P RIVATE CONSULTATION 
+
+We now present PriCon , our end-to-end framework for realizing task-private consultation. It centers on two local mechanisms: intent-obscuring rewriting , which constructs the cloud-visible surrogate, and closed-loop refinement , which maintains privacy and recoverability throughout consultation. 4.1 INTENT -O BSCURING REWRITING 
+
+> Fig. 2: Rewriting paths.
+
+As illustrated in Fig. 2, PriCon selects a rewriting path according to the protection scope defined in Section 3.2. A natural first step is to abstract the task into a domain-neutral mathematical representation. Although this removes much of the original semantics, the resulting representation may still contain recognizable structural cues about the original task intent, as reflected by the Math-only results in Table 2. Rather than bypassing this step, PriCon retains the mathematical representation as a local intermediate, since it provides the experience bank in Section 4.2 with a shared structure for identifying similar tasks across domains and reusing successful experience. It then applies semantic rewriting to recast this representation as a different application story before cloud consultation. For context protection, PriCon follows this mathematical-to-semantic path; for operation or joint protection, it additionally introduces an 
+
+alternative mathematical formulation to change the apparent computation before semantic rewriting. Throughout the process, the correspondence M remains local and maps cloud guidance back to the original task. We illustrate these rewriting paths using our running medical-supply example. 4.1.1 CONTEXT PROTECTION 
+
+We first consider context protection, where the goal is to hide the original task context while leaving the underlying task operation O unchanged. 
+
+Mathematical reformulation. PriCon first expresses the task in a domain-neutral mathematical form, replacing domain-specific entities with abstract roles while preserving their relations and underlying operation. Applying this abstraction to our running medical-supply example yields the following intermediate representation:        
+
+> ‘‘Given :::: demand ::::: groups [G] with different priority weights [W], multiple :::::: resource :::: types [R] with limited capacities [B], and group-specific resource requirements [D], allocate available resources across demand groups to minimize the overall impact of unmet resource requirements .’’
+
+Hospitals are abstracted as demand groups and medical supplies as resource types, while sensitive values remain local in V. This abstraction removes most healthcare-specific cues and substantially reduces task-intent inference, but does not eliminate it. The remaining concepts, such as demand groups, limited capacities, and unmet requirements, still reveal a recognizable resource-allocation operation, leaving the cloud LLM with a few clues about the task context. PriCon therefore treats the mathematical form as an intermediate representation rather than the final cloud-facing request. 
+
+Semantic rewriting. PriCon further embeds the mathematical structure in a coherent but semantically distant application story. Intuitively, this alternative story gives the cloud LLM a coherent surrogate-domain interpretation, making it less likely to associate the request with original task. For example, the generic resource-allocation problem can be rewritten as GPU allocation in a data-center setting:        
+
+> ‘‘Given ::::::::::: model-training ::: jobs [J] with different priority levels [W], multiple types of ::: GPU
+> :::::: resources [G] with limited available capacities [B], and job-specific compute demands [D],
+> allocate the available GPU resources across training jobs to minimize the overall impact of unmet compute demand .’’
+
+5Here, demand groups and resource types become model-training jobs and GPU resources. The cloud now sees a GPU-allocation task rather than the original healthcare task, while the relationships needed for local recovery remain available through the correspondence M.4.1.2 OPERATION PROTECTION AND JOINT PROTECTION 
+
+Protecting task operation is more challenging because the surrounding context may itself reveal the protected operation. For example, hospitals, medical-supply demands, and limited stocks already suggest a resource-allocation problem even if the operation is not explicitly stated. PriCon therefore adopts a conservative strategy: whenever task operation O is protected, it also transforms contextual cues that could help infer O. Operation protection and joint protection consequently follow the same rewriting path, although their requested protection scopes remain conceptually distinct. 
+
+Alternative mathematical formulation. Starting from the mathematical representation, PriCon 
+
+constructs an alternative formulation with a different apparent computation and a recoverable solution mapping. In our example, the generic resource-allocation problem is recast as shortest-path search on layered directed acyclic graphs (DAGs):          
+
+> ‘‘Given a set of ::::: layered :::::: directed ::::: graphs [G], each with :::: states [V], ::::: feasible :::::::: transitions [E], and
+> ::::::: transition :::: costs [C], find a minimum-cost path from the source to a terminal node in each graph.’’
+
+The correspondence between the original and alternative formulations can be made explicit. Since supply types are independent in both the objective and stock constraints, the task can be decomposed into separate allocation subproblems, one for each supply type. For supply type s, the subproblem is: 
+
+min 
+
+> {xsh}
+
+XHh=1 wh · ℓsh(dsh − xsh)
+
+| {z }
+
+> minimize shortage impact
+
+, s.t. 0 ≤ xsh ≤ dsh, xsh ∈ Z≥0, ∀h
+
+| {z }
+
+> allocation within demand, discrete units
+
+; XHh=1 xsh ≤ Bs
+
+| {z }
+
+> stock constraint
+
+. (1) 
+
+Here, dsh and xsh denote the demand and allocation of supply s at hospital h, wh is its priority weight, 
+
+Bs is the available stock, and the function ℓsh measures shortage impact. 
+
+Fig. 3: Layered-DAG reformulation. 
+
+As illustrated in Fig. 3, each supply-specific subprob-lem is represented by a layered DAG. For supply type 
+
+s, layer h corresponds to hospital h, while node vsh,b 
+
+represents a cumulative allocation of b units after the first h hospitals. An edge from vsh−1,b −xsh
+
+to vsh,b 
+
+represents assigning xsh units to hospital h and incurs cost wh · ℓsh(dsh − xsh). Thus, each source-to-terminal path corresponds to a feasible allocation, and the minimum-cost path yields the optimal solution to formulation (1). Repeating this construction across supply types yields the complete allocation {xsh}. The transformation changes the apparent operation from resource allocation to layered-DAG shortest-path search while preserving a reliable mapping back to the original solution. Compared with the initial mathematical reformulation, this alternative formulation further obscures task intent, but its mathematical structure may still leave some clues, as reflected by the Math-only results in Table 2. 
+
+Semantic rewriting. PriCon therefore recasts the path-search structure as a network-routing story before cloud consultation:                    
+
+> ‘‘Given multiple ::::: layered ::::::::::: communication :::::: networks [N], each with ::::: network ::::: states [V], :::::: available
+> ::: links [E], and associated ::::::::: transmission :::: costs [C], find aminimum-cost route through each network from its source gateway to a destination gateway.’’
+
+Under this interpretation, graph states, transitions, and costs become network states, communication links, and transmission costs. The cloud therefore reasons over a network-routing task rather than the original medical-supply allocation task, further obscuring its context and operation. Appendix A provides detailed local correspondences M and representative cloud outputs for the medical-supply example. Appendix B further presents an interesting PriCon case transforming logic-grid reasoning into cooking-procedure planning. 6Fig. 4: Closed-loop consultation and refinement in PriCon .
+
+4.2 LOCAL REVIEW AND CLOSED -L OOP REFINEMENT 
+
+Stronger transformations can better obscure task intent but make cloud guidance harder to map back for local execution. Preserving more of the original structure improves recoverability but may retain intent-revealing cues. As shown in Fig. 4, PriCon therefore forms a closed refinement loop: failed reviews trigger further rewriting, execution failures trigger privacy-preserving debugging, and successful executions are stored in a local experience bank. 1) Privacy and recoverability review. Before transmission, a local reviewer checks whether sensitive values V are exposed, whether the protected intent is inferable from semantic or structural cues, and whether M can map cloud guidance back to the original task. If any check fails, the SLM revises the surrogate and repeats the review within a refinement budget. 2) Privacy-preserving debugging. Cloud guidance may still be too abstract or complex for the local SLM to execute reliably. Instead of returning task-specific failures to the cloud, the SLM abstracts them into surrogate-level diagnostic requests and subjects them to the same privacy and recoverability review. For example, it may ask the cloud to decompose a difficult surrogate reasoning step without revealing the original task or local execution trace. 3) Local experience bank. Successful consultations are stored locally as reusable experiences, including the mathematical representation, optional alternative formulation, semantic rewrite, correspondence M, and validated refinement or debugging trajectories. When a new task arrives, PriCon retrieves prior experiences by comparing their mathematical structures rather than rewritten stories, using four fields: problem type, decision variables, objective, and constraints. Prior experiences are ranked by embedding similarity across these fields; see Appendix C for details. If a sufficiently similar experience is found, it is used to initialize surrogate construction, reducing LLM consultation rounds and token usage; otherwise, PriCon constructs a new surrogate and stores its validated trajectory as a new experience. 
+
+5 EXPERIMENTAL RESULTS 
+
+5.1 EXPERIMENTAL SETUP 
+
+Models and tasks. We evaluate PriCon with three models serving as local-side SLMs: GPT-4o-mini, DeepSeek-V4-Flash, and Qwen3.5-Flash, each paired with DeepSeek-V4 Pro as the cloud LLM (OpenAI, 2024; DeepSeek-AI, 2026; Qwen Team, 2026). Our benchmark contains 10 task families spanning structured and long-context reasoning, decision and optimization, coding, and cross-domain composite tasks, as summarized in Table 1. We retain only tasks that local SLMs cannot reliably solve end-to-end, thus requiring cloud LLM guidance; see Appendix D for the screening procedure. After screening, we retain 10 diverse instances per family, yielding 100 tasks in total . All retained task instances are available in our GitHub repository. 1
+
+Comparison settings. We compare direct cloud consultation, sensitive-value removal, a decoy-based obfuscation baseline (Huang et al., 2026a), and PriCon . For PriCon , we evaluate the complete semantic rewriting process under context and joint protection. We additionally report a Math-only 
+
+ablation that stops before semantic rewriting, isolating its benefit. Operation-only protection is evaluated separately to study context-operation coupling. For the decoy baseline, we use 5 and 20 decoys to examine its privacy-overhead trade-off. 
+
+Metrics. As each benchmark task may contain multiple subtasks, we evaluate privacy and utility at the subtask level. For privacy, we ask the cloud LLM to infer three targets from the complete 
+
+> 1https://github.com/guantian111/Pricon tasks
+
+7Table 1: Task families in our evaluation benchmark.                                                                                                                      
+
+> Category Task families Structured and long-context reasoning Alibi verification, logic grid, counterfactual reasoning, recursive expansion, relation graph
+> Decision and optimization Financial modeling, budget allocation, office setup
+> Coding Python coding
+> Cross-domain composite Composite cross-domain Table 2: Task-intent inference by the cloud LLM under different consultation settings and local SLMs. Entries report task-averaged Hit@1 / Hit@5 (%) over 100 benchmark tasks.
+> Local SLM Inference Target
+> Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint
+> 520 Math-only Semantic Math-only Semantic
+> GPT-4o-mini Context 94 / 98 94 / 98 10 / 32 6 / 21 1 / 3 0 / 0 3 / 10 0 / 0
+> Operation 98 / 100 99 / 100 30 / 65 18 / 50 49 / 63 31 / 42 1 / 5 0 / 0
+> Joint 95 / 98 94 / 98 7 / 31 3 / 13 0 / 0 0 / 0 0 / 1 0 / 0
+> DeepSeek-V4-Flash Context 98 / 100 96 / 99 9 / 34 8 / 20 3 / 3 0 / 0 1 / 4 0 / 0
+> Operation 95 / 99 95 / 99 26 / 63 30 / 68 48 / 62 59 / 75 1 / 4 0 / 0
+> Joint 98 / 100 96 / 99 6 / 30 4 / 15 0 / 1 0 / 0 0 / 2 0 / 0
+> Qwen3.5-Flash Context 95 / 97 93 / 99 10 / 38 3 / 18 1 / 3 0 / 0 2 / 6 0 / 0
+> Operation 99 / 100 96 / 98 29 / 66 18 / 46 48 / 64 56 / 69 2 / 7 0 / 2
+> Joint 96 / 97 93 / 99 7 / 30 4 / 14 0 / 0 0 / 0 0 / 2 0 / 0
+> Table 3: Cloud-assisted utility under different consultation settings. Entries report task-averaged subtask success rate (%) over 100 benchmark tasks.
+> Local SLM Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint
+> 520 Math-only Semantic Math-only Semantic
+> GPT-4o-mini 100 100 100 100 100 100 100 100 DeepSeek-V4-Flash 100 100 100 100 100 100 100 100 Qwen3.5-Flash 100 100 100 100 100 100 100 100
+
+cloud-visible transcript: task context, task operation, and their pair (joint inference). For each task, Hit@1 and Hit@5 measure the proportions of its subtasks whose ground-truth targets appear among the cloud LLM’s top-1 and top-5 guesses, respectively; joint inference requires the correct context-operation pair. For utility, we compute each task’s subtask success rate as the proportion of its subtasks yielding functionally correct final solutions, with direct cloud consultation as the reference. In the main results, we average these per-task privacy and utility scores across all 100 benchmark tasks. We additionally report LLM token usage and consultation rounds as system overhead. 5.2 MAIN RESULTS 
+
+Task-intent protection. We first evaluate task-intent protection across the three local SLMs, with the local experience bank disabled to isolate the effect of rewriting. Table 2 compares the cloud LLM’s task-intent inference under different consultation settings, with detailed category-wise results in Appendix E. Direct cloud consultation yields Hit@1 scores of 94–99%, while sensitive-value removal yields similarly high scores of 93–99%, showing that hiding sensitive values alone provides little protection against task-intent inference. The decoy baseline reduces inference, but operation Hit@1 remains 18–30% even with 20 decoys. In contrast, PriCon-Context with semantic rewriting reduces context Hit@1 to 0% across all three local SLMs. Under joint protection, PriCon-Joint with semantic rewriting achieves 0% Hit@1 for all three inference targets, while Hit@5 remains at 0% in nearly all cases. 
+
+Effect of semantic rewriting. The Math-only ablation already substantially reduces inference of the protected intent, showing that the mathematical stages provide strong protection. Under context protection, its context Hit@1 is 1–3%, whereas semantic rewriting reduces it to 0% across all three local SLMs. Under joint protection, some inference remains with Math-only , whereas semantic rewriting reduces Hit@1 to 0% across all inference targets. These results support using mathematical reformulation as an intermediate stage and semantic rewriting as the final cloud-facing form. 
+
+Utility. Table 3 shows that the complete PriCon with semantic rewriting achieves 100% subtask success across all three local SLMs, matching direct cloud consultation. Thus, task-intent protection does not reduce cloud-assisted utility on our benchmark. 
+
+Consultation overhead. Direct cloud consultation and sensitive-value removal each require only one round: the former sends the task directly, while the latter simply replaces sensitive values with placeholders. However, direct consultation sends all task-specific inputs to the cloud LLM, so its token cost can grow substantially with input size. PriCon introduces additional rewriting and refinement, requiring 5.6–7.2 consultation rounds and 1.96–2.52M LLM tokens with semantic rewriting. Nevertheless, this overhead remains far below that of the 20-decoy setting, which requires 8Table 4: Average consultation overhead across 100 benchmark tasks. LLM token usage is reported in millions (M = 10 6).                                                                                                    
+
+> Local SLM Metric Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint
+> 520 Math-only Semantic Math-only Semantic
+> GPT-4o-mini LLM token usage 0.49 M 0.34 M 2.48 M 11.4 M 2.29 M 1.96 M 2.39 M 2.52 M Consultation rounds 117.8 35.9 7.2 5.6 7.5 7.2 DeepSeek-V4-Flash LLM token usage 0.65 M 0.35 M 2.86 M 12.1 M 2.29 M 2.03 M 2.39 M 2.31 M Consultation rounds 119.0 38.1 7.2 7.1 5.8 6.6 Qwen3.5-Flash LLM token usage 0.54 M 0.39 M 2.86 M 12.7 M 2.51 M 2.0 M 2.60 M 2.52 M Consultation rounds 119.0 39.8 7.9 5.7 7.7 7.2
+> Table 5: Context-operation coupling under operation-only and joint protection. Entries report Hit@1 / Hit@5 (%).
+> Local SLM Inference Target Sensitive-value removal
+> Operation-only PriCon-Joint
+> Math-only Semantic Math-only Semantic
+> GPT-4o-mini Operation 99 / 100 3 / 10 3 / 6 1 / 5 0 / 0
+> Joint 94 / 98 2 / 5 1 / 5 0 / 1 0 / 0
+> DeepSeek-V4-Flash Operation 95 / 99 1 / 7 2 / 4 1 / 4 0 / 0
+> Joint 96 / 99 1 / 4 1 / 4 0 / 2 0 / 0
+> Qwen3.5-Flash Operation 96 / 98 3 / 9 2 / 7 2 / 7 0 / 2
+> Joint 93 / 99 0 / 4 0 / 2 0 / 2 0 / 0
+
+(a) LLM token usage ratio. (b) Consultation round ratio. Fig. 5: Effect of experience similarity on consultation overhead under PriCon-Joint with semantic rewriting. Each ratio is computed as the overhead with experience reuse divided by that without experience reuse. 
+
+35.9–39.8 rounds and 11.4–12.7M tokens. Together with Table 2, these results show that PriCon 
+
+achieves stronger task-intent protection at much lower overhead than heavy decoy-based obfuscation. 
+
+Context-operation coupling. Although task context and operation are distinct privacy targets, contextual cues may still reveal the protected operation. With operation-only protection, operation Hit@1 remains at 2–3% when the original context is retained, whereas joint protection reduces it to 0% across all local SLMs. These results show that task context can act as a side channel for operation inference, supporting PriCon ’s strategy of transforming context whenever the operation is protected. 
+
+Experience reuse. We finally evaluate experience reuse on held-out tasks. Figure 5 shows that both LLM token usage and consultation rounds generally decrease as experience similarity increases. At low similarity (below approximately 0.55), retrieved experiences may introduce irrelevant information and increase token usage. For consultation rounds, some tasks also show little reduction because their original overhead is already low. For more demanding cases, reuse can reduce consultation rounds to approximately 20% of the baseline. These observations suggest using a similarity threshold around 0.6 to avoid ineffective reuse; for less similar tasks, PriCon constructs surrogates independently and stores them as new experiences for future reuse. 
+
+6 DISCUSSION 
+
+Applicability boundary. PriCon is most suitable when the task context can be separated from the underlying task operation needed for cloud reasoning. It is less applicable to knowledge queries whose answers are inherently tied to the task context, such as the effects or use of a particular medication. Such queries may instead be handled by a local knowledge base without cloud consultation. Operation protection is also challenging for complex tasks, where finding an alternative formulation with a reliable solution mapping can be difficult. A richer experience bank may expand this boundary. 
+
+A moving capability frontier. As local SLMs become more capable, more tasks will be completed entirely on-device. Task-private consultation will therefore shift toward harder reasoning, planning, and decision tasks that still benefit from cloud guidance. Advances in local SLMs and cloud LLMs may also enable more complex transformations, further extending this frontier. 
+
+Beyond language models. This work focuses on text-based SLM-LLM consultation, while task intent may also be revealed through images, audio, and other modalities. Extending PriCon to multimodal models may require modality-specific transformations of objects, scenes, or spatial relations while preserving information needed for reasoning. Extending task-private consultation beyond text is an important direction for multimodal local-cloud collaboration. 9ACKNOWLEDGMENTS 
+
+We thank Mingcai Chen, Qiao Zhang, and Shuai Wang for their valuable feedback on this work. 
+
+REFERENCES 
+
+DeepSeek-AI. DeepSeek-V4 Preview: Entering the Era of Affordable Million-Token Context, April 2026. Official release announcement. Dujian Ding, Ankur Mallick, Chi Wang, Robert Sim, Subhabrata Mukherjee, Victor R¨ uhle, Laks V. S. Lakshmanan, and Ahmed Hassan Awadallah. Hybrid LLM: Cost-efficient and quality-aware query routing. In International Conference on Learning Representations (ICLR) , 2024. Xinyu Huang, Leming Shen, Zijing Ma, and Yuanqing Zheng. Toward privacy-preserving and personalized smart homes via tailored small language models. IEEE Transactions on Mobile Computing , 25(7):9505–9520, 2026a. Xinyue Huang, Xiaochun Cao, and Wenyuan Yang. Need to know: Contextual-integrity-grounded query rewriting for privacy-conscious LLM delegation. arXiv preprint arXiv:2606.04067 , 2026b. Hongpeng Jin and Yanzhao Wu. CE-CoLLM: Efficient and adaptive large language models through cloud-edge collaboration. In IEEE International Conference on Web Services (ICWS) , pp. 316–323, 2025. Avanika Narayan, Dan Biderman, Sabri Eyuboglu, Avner May, Scott Linderman, James Zou, and Christopher Re. Cost-efficient collaboration between on-device and cloud language models. In 
+
+International Conference on Machine Learning (ICML) , pp. 45682–45719, 2025. Xiaoqi Ni, Jie Wang, Lin Yang, Yiyang Lu, Hanzhu Chen, Rui Liu, and Jianye Hao. Following the navigation: Enhancing small language models contextual reasoning with LLM guidance. In 
+
+International Conference on Learning Representations (ICLR) , pp. 145028–145051, 2026. OpenAI. GPT-4o mini: Advancing Cost-Efficient Intelligence, July 2024. Official release announce-ment. Qwen Team. Qwen3.5: Towards Native Multimodal Agents, February 2026. Official release announcement. Li Siyan, Vethavikashini Chithrra Raghuram, Omar Khattab, Julia Hirschberg, and Zhou Yu. PAPIL-LON: Privacy preservation from Internet-based and local language model ensembles. In Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT) , pp. 3371–3390, 2025. Hao Sun, Jiayi Wu, Hengyi Cai, Xiaochi Wei, Yue Feng, Bo Wang, Shuaiqiang Wang, Yan Zhang, and Dawei Yin. AdaSwitch: Adaptive switching between small and large agents for effective cloud-local collaborative learning. In Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 8052–8062, 2024. Liangqi Yuan, Wenzhi Fang, Shiqiang Wang, and Christopher G. Brinton. PAAC: Privacy-aware agentic device-cloud collaboration. arXiv preprint arXiv:2605.08646 , 2026a. Liangqi Yuan, Dong-Jun Han, Shiqiang Wang, and Christopher G. Brinton. Device-cloud collabora-tive llm inference with multi-modal, multi-task, and multi-turn conversations. IEEE Transactions on Networking , 34:6124–6139, 2026b. Junfei Zhan, Haoxun Shen, Zheng Lin, and Tengjiao He. PRISM: Privacy-aware routing for adaptive cloud–edge llm inference via semantic sketch collaboration. In AAAI Conference on Artificial Intelligence (AAAI) , pp. 28150–28158, 2026. Kaiyan Zhang, Jianyu Wang, Ermo Hua, Biqing Qi, Ning Ding, and Bowen Zhou. CoGenesis: A framework collaborating large and small language models for secure context-aware instruction following. In Annual Meeting of the Association for Computational Linguistics (ACL) , pp. 4295– 4312, 2024. Quan Zhou, Zhicheng Wang, Zhe Yue, Libin Cai, Kuien Liu, and Caiyan Qin. Gs-chaff: Multi-agent prompt-level semantic chaffing for privacy-preserving llm inference. Sensors , 26(17):5385, 2026. 10 APPENDICES 
+
+A LOCAL CORRESPONDENCES FOR THE MEDICAL -S UPPLY EXAMPLE 
+
+We provide detailed examples of how PriCon transforms the medical-supply task into a semantic surrogate and maps cloud guidance back to the original task. We show the necessary intermediate mathematical representations, followed by semantic rewriting, representative cloud guidance, and local execution. A.1 CONTEXT PROTECTION 
+
+Original task Intermediate mathematical representation Hospital h Demand group gh
+
+Supply type s Resource type rs
+
+Priority wh Priority weight wgh
+
+Available stock Bs Resource capacity Brs
+
+Demand dsh Resource requirement drs
+
+> gh
+
+Allocation xsh Resource allocation xrs
+
+> gh
+
+Shortage impact ℓsh(·) Unmet-requirement impact ℓrs 
+
+> gh
+
+(·)
+
+This intermediate representation preserves the allocation structure needed for subsequent rewriting and local recovery, while the concrete values remain local. 
+
+Semantic rewriting and local correspondence M. PriCon then rewrites the intermediate mathe-matical representation as a GPU-allocation task. The correspondence below allows cloud guidance expressed in GPU terminology to be mapped back through the mathematical representation to the original healthcare task. 
+
+Intermediate mathematical representation Semantic surrogate Demand group gh Model-training job jh
+
+Resource type rs GPU resource type us
+
+Priority weight wgh Job priority wjh
+
+Resource capacity Brs GPU capacity Bus
+
+Resource requirement drs 
+
+> gh
+
+Compute demand dus
+
+> jh
+
+Resource allocation xrs 
+
+> gh
+
+GPU allocation xus
+
+> jh
+
+Unmet-requirement impact ℓrs 
+
+> gh
+
+(·) Unmet-compute impact ℓus 
+
+> jh
+
+(·)
+
+LLM guidance. The cloud reasons entirely over the rewritten GPU-allocation task. It processes each GPU type independently, considers feasible GPU allocations for each training job, and identifies the allocation minimizing cumulative unmet-compute impact. A representative reasoning response is: • Process each GPU resource type independently because their capacities are separate. • For one GPU type, consider the training jobs while tracking the capacity already allocated. • For each job, enumerate feasible GPU allocations up to its compute demand and the remaining capacity. • Update the cumulative unmet-compute impact and retain the lowest-cost feasible allocation. • Repeat the procedure for all GPU resource types. Alternatively, the cloud may return code implementing the same GPU-allocation procedure: 
+
+def allocate_gpu(job_demand, job_priority, gpu_capacity, loss): ... limit = min(job_demand[i], gpu_capacity - used) ... cost = dp[i][used] + job_priority[i] * loss(i, job_demand[i] - x) ... return gpu_allocation 
+
+11 Here, job demand , job priority , and gpu capacity correspond to the demand, weight, and capacity arguments in the mathematical surrogate. 
+
+Local execution. Consider one supply type with local demands ds = [8 , 5, 7] , priority weights 
+
+w = [0 .5, 0.3, 0.2] , and available stock Bs = 10 . The SLM instantiates the cloud guidance with these local values and obtains the surrogate allocation [6 , 2, 2] . Through M, model-training jobs are mapped back to demand groups and hospitals, while GPU resources are mapped back to medical-supply types. The allocation is therefore recovered locally as [6 , 2, 2] for the corresponding hospitals. A.2 OPERATION AND JOINT PROTECTION 
+
+Intermediate alternative formulation. When the task operation is protected, PriCon further trans-forms each supply-specific allocation problem into a layered-DAG shortest-path problem. 
+
+Allocation representation Intermediate alternative mathematical representation Resource type rs Layered graph Gs
+
+Demand group gh Layer h
+
+Cumulative allocation b State vsh,b 
+
+Resource allocation xrs 
+
+> gh
+
+Transition increment xrs
+
+> gh
+
+Feasible allocation choice Directed edge Unmet-requirement impact Edge cost Initial allocation state Source node vs
+
+> 0,0
+
+Complete allocation state Terminal node vsH,b 
+
+Allocation sequence Source-to-terminal path Optimal allocation Minimum-cost path 
+
+Semantic rewriting and local correspondence M. PriCon then rewrites the layered-DAG repre-sentation as a communication-network routing task before cloud consultation. The correspondence below maps a returned network route first to the intermediate DAG path and then to the original allocation. 
+
+Intermediate alternative mathematical representation Semantic surrogate Layered graph Gs Layered communication network N s
+
+Layer h Network layer h
+
+State vsh,b Network state qsh,b 
+
+Transition increment xrs 
+
+> gh
+
+Routed resource increment Directed edge Available communication link Edge cost Transmission cost Source node vs 
+
+> 0,0
+
+Source gateway Terminal node vsH,b Destination gateway Source-to-terminal path End-to-end route Minimum-cost path Minimum-cost route 
+
+Each source-to-terminal path therefore encodes a feasible allocation, allowing the local SLM to recover the original allocation from the increments between consecutive states. 
+
+LLM guidance. The cloud now describes the same shortest-path reasoning in communication-network terminology: it propagates minimum transmission costs across network layers, updates reachable states through available links, records predecessors, and backtracks from the minimum-cost destination. A representative reasoning response is: • Traverse the layered communication network from the source gateway toward the destination layer. • Maintain the minimum cumulative transmission cost of reaching each network state. • Update reachable states through available links and record the predecessor whenever a lower-cost route is found. • At the destination layer, select the gateway with the minimum cumulative cost and backtrack to recover the route. • Repeat the procedure independently for each network. The cloud may also return code implementing the same routing procedure: 12 def min_cost_route(layers, links, source_gateway, destination_states): ... for v, transmission_cost in links.get(u, []): cand = cost[u] + transmission_cost ... route.reverse() return route, cost[destination] 
+
+Here, links , transmission cost , and route replace the corresponding graph edges, edge costs, and path in the alternative mathematical formulation. 
+
+Local execution. The local SLM first maps the returned network route through M to the layered-DAG path vs 
+
+> 0,0
+
+→ vs 
+
+> 1,6
+
+→ vs 
+
+> 2,8
+
+→ vs
+
+> 3,10
+
+. It then recovers the allocation from the state increments as xs = [6 , 2, 2] . Thus, the cloud interacts entirely with the network-routing task, while the local correspondence maps its guidance through the intermediate DAG representation back to the original allocation. 
+
+B ADDITIONAL CASE STUDY : F ROM LOGIC -G RID REASONING TO RECIPE 
+
+PLANNING 
+
+This section provides an additional example illustrating the rewriting process in PriCon . Unlike the medical-supply example, the original task here requires multi-stage logic-grid reasoning. PriCon 
+
+first captures its reasoning structure in an intermediate mathematical representation and, when the operation is protected, further transforms it into layered state-transition planning. Semantic rewriting then recasts this structure as a different story for cloud consultation. B.1 ORIGINAL TASK 
+
+We begin with the following logic-grid reasoning task. 
+
+Please complete the following four-stage logical grid reasoning task in order. 
+
+=== Background === 
+
+There are 5 people (Zhang, Wang, Li, Zhao, Chen), each living on a different floor (floors 1--5), each with a different pet (dog/cat/bird/fish/rabbit) and a different occupation (doctor/teacher/lawyer/engineer/accountant). The following 6 clues are known: 1. Zhang lives on a floor above Li (not necessarily adjacent). 2. The doctor lives on floor 3. 3. Wang’s pet is a dog. 4. Zhao’s occupation is teacher. 5. The person who keeps a cat lives on a floor above the person who keeps a bird. 6. Chen’s occupation is neither engineer nor accountant. 
+
+=== Stage 1: Initial Extraction === 
+
+Extract all directly knowable facts from the clues (no inference required). For example: ‘‘Doctor = floor 3’’, ‘‘Wang’s pet = dog’’ are direct facts; ‘‘Zhang is above Li’’ is a relationship. 
+
+=== Stage 2: First Round of Inference (using Stage 1 results) === 
+
+Use Clue 1 (Zhang above Li) and Clue 5 (cat above bird): - Given the floor relationship between Zhang and Li, combined with the 5-floor constraint, which floors can they each be on? - What does the floor relationship between cat and bird imply? Combine with Clue 3 (Wang = dog). List the possible floor ranges for the 5 people. 
+
+=== Stage 3: Second Round of Inference (using Stage 1--2 results) === 
+
+Use Clue 2 (doctor = floor 3), Clue 4 (Zhao = teacher), Clue 6 (Chen is not engineer/accountant): - After the doctor’s floor is determined, what restrictions does this place on the others? - Which possibilities are narrowed down by the occupational constraints of Zhao and Chen? 
+
+13 Combined with Stage 2, what assignments can currently be determined? 
+
+=== Stage 4: Final Inference === 
+
+a) Output the final answer: a list of 5-tuples [(Name, Floor, Pet, Occupation), . . . ] b) Verification: Is each clue satisfied? List the verification result for each clue. c) What pet does the engineer keep? 
+
+B.2 CONTEXT PROTECTION 
+
+Intermediate mathematical representation. PriCon first abstracts the logic-grid task into a constraint-reasoning problem in which people become entities, floors become ordered positions, pets become attributes, and occupations become categories. The original ordering, assignment, and exclusion relations are preserved in this representation. 
+
+Please complete the following four-stage constraint-reasoning task. 
+
+=== Background === 
+
+There are [N] entities {e1, e 2, . . . , e N }. Each entity is assigned a distinct ordered position from {p1, p 2, . . . , p N }, one distinct value from attribute set A = {a1, . . . , a N }, and one distinct value from category set B = {b1, . . . , b N }.The following constraints are known: 1. e1 is assigned a higher position than e3.2. The entity with category b1 occupies position p[K].3. Entity e2 has attribute a1.4. Entity e4 has category b2.5. The entity with attribute a2 occupies a higher position than the entity with attribute a3.6. Entity e5 has neither category b3 nor b4.
+
+=== Stage 1: Initial Extraction === 
+
+Extract all constraints that can be read directly from the specification without additional inference. For example, ‘‘ b1 = p[K]’’ and ‘‘ e2 = a1’’ are direct assignments, while ‘‘ e1 is above e3’’ is an ordering relation. 
+
+=== Stage 2: First Round of Inference === 
+
+Use the ordering constraints involving (e1, e 3) and (a2, a 3):- Determine the feasible position ranges of e1 and e3.- Determine the feasible relative positions of a2 and a3.- Combine these relations with e2 = a1.List the remaining feasible position ranges for all entities. 
+
+=== Stage 3: Second Round of Inference === 
+
+Use the fixed-position and category constraints: - b1 occurs at position p[K].- e4 = b2.- e5 /∈ { b3, b 4}.Combine these constraints with the previous stage and determine which assignments can be further restricted. 
+
+=== Stage 4: Final Inference === 
+
+a) Output the resulting tuples [(Entity, Position, Attribute, Category), . . . ]. b) Verify that every constraint is satisfied. c) Determine the attribute associated with category b3.
+
+Under the local correspondence, entities correspond to people, ordered positions to floors, attributes to pets, and categories to occupations. This intermediate representation is kept local and serves as the structural bridge for subsequent semantic rewriting and recovery. 
+
+Semantic rewriting. PriCon then rewrites this constraint structure as a different story, obscuring the original task context while preserving the same reasoning relationships. For example, the logic-grid task becomes a group-of-friends activity: 14 Please complete the following four-part activity involving a group of friends. 
+
+=== Background === 
+
+There are [N] friends (Alice, Bob, Charlie, David, Emily), each living in adifferent neighborhood ordered by distance from the city center. Each friend has a different favorite snack (chips/candy/popcorn/fruit/nuts) and a different hobby (painting/cycling/gaming/cooking/reading). The following details are known: 1. Alice lives farther from the city center than Charlie. 2. The person who enjoys painting lives in neighborhood [P]. 3. Bob’s favorite snack is chips. 4. David’s hobby is cooking. 5. The person who likes fruit lives farther from the city center than the person who likes popcorn. 6. Emily’s hobby is neither cycling nor reading. 
+
+=== Part 1: Initial Gathering === 
+
+Gather all directly knowable details from the information provided without additional inference. For example, ‘‘Painter = neighborhood [P]’’ and ‘‘Bob’s snack = chips’’ are direct details, while ‘‘Alice lives farther from the city center than Charlie’’ is a relationship. 
+
+=== Part 2: First Round of Reasoning === 
+
+Use the relationship between Alice and Charlie and the relationship between fruit and popcorn: - Given the ordered neighborhoods, which neighborhoods can Alice and Charlie each occupy? - What does the ordering between fruit and popcorn imply? - Combine these relations with Bob’s preference for chips. List the possible neighborhood ranges for the friends. 
+
+=== Part 3: Second Round of Reasoning === 
+
+Use the remaining hobby constraints: - The person who enjoys painting lives in neighborhood [P]. - David enjoys cooking. - Emily enjoys neither cycling nor reading. Determine which possibilities are further restricted and which assignments can currently be established. 
+
+=== Part 4: Final Reasoning === 
+
+a) Output the resulting tuples [(Name, Neighborhood, Snack, Hobby), . . . ]. b) Check whether every provided detail is satisfied. c) What snack does the person who enjoys cycling prefer? 
+
+The cloud therefore sees a group-of-friends reasoning task rather than the original logic-grid prob-lem, while the local correspondence maps the returned reasoning back to the original entities and assignments. B.3 OPERATION PROTECTION AND JOINT PROTECTION 
+
+Protecting the operation requires changing the apparent reasoning procedure while retaining a local path back to the original solution. 
+
+Intermediate alternative formulation. To change the apparent operation, PriCon represents each feasible partial assignment as a state and each valid extension as a transition. The original constraint-solving task is thereby converted into source-to-terminal path planning over a layered directed graph, with each path locally corresponding to a complete assignment. 
+
+Please complete the following four-stage layered state-transition planning task. 
+
+=== Background === 
+
+A layered directed graph G = ( V, E) contains layers L0, L1, . . . , L[N ].The source node v0 ∈ L 0 represents an empty state. A node in layer Lk represents a feasible partial state after k decisions. A directed edge connects two states when the latter is a valid one-step extension of the former. All exclusivity, ordering, fixed-position, and exclusion constraints have already been encoded into the admissible edges. Nodes that violate any constraint are absent from the graph. 
+
+15 A set of valid terminal nodes VT ⊆ L [N ] represents complete feasible states. 
+
+=== Stage 1: Initial Graph Inspection === 
+
+Identify the source node, terminal nodes, and admissible outgoing transitions from the first layer. Record which states can be reached directly from the source. 
+
+=== Stage 2: Forward Reachability === 
+
+Propagate reachability layer by layer. At each layer: - retain only nodes reachable from the previous layer; - remove transitions leading to dead-end states; - record the remaining candidate paths. 
+
+=== Stage 3: Path Refinement === 
+
+Continue pruning states that cannot reach any valid terminal node. Combine forward reachability with terminal reachability to identify transitions that can participate in at least one complete source-to-terminal path. 
+
+=== Stage 4: Path Recovery === 
+
+a) Return a complete valid path from v0 to a node in VT .b) Verify that every consecutive pair of states is connected by an admissible transition. c) Return the transition labels along the selected path. 
+
+This intermediate transformation changes the apparent reasoning procedure from logic-grid deduction to layered path planning while preserving a local mapping back to the original assignment. The resulting path structure is then used for semantic rewriting. 
+
+Semantic rewriting. PriCon then recasts the layered state-transition structure as a cooking-procedure planning task. The cloud therefore reasons about feasible preparation steps rather than either logic-grid constraints or an explicit graph formulation. 
+
+Please complete the following four-part cooking-procedure planning task. 
+
+=== Kitchen Setup === 
+
+You are preparing a multi-step tasting menu using a recipe-planning board with [N] preparation stages. Each card on the board represents a valid partial kitchen state after some preparation steps have been completed. An arrow between two cards represents an allowed next cooking action. Ingredient conflicts, timing restrictions, incompatible techniques, and invalid preparation orders have already been removed from the board. The process begins at the Kitchen Ready card and must finish at one of the valid Meal Ready cards. 
+
+=== Part 1: Inspect the Preparation Board === 
+
+Starting from Kitchen Ready, identify all cooking actions that can be performed first. Record the preparation states that can be reached after the first action. 
+
+=== Part 2: Explore Feasible Cooking Sequences === 
+
+Move through the preparation stages in order. At each stage: - keep only cooking states reachable from the previous stage; - discard actions that lead to a dead end; - retain preparation sequences that can still lead to a completed meal. 
+
+=== Part 3: Refine the Procedure === 
+
+Work backward from the valid Meal Ready states and remove any preparation state that cannot lead to a completed menu. Use both forward and backward feasibility to determine which cooking actions can belong to a valid procedure. 
+
+=== Part 4: Final Recipe Plan === 
+
+a) Return one complete cooking procedure from Kitchen Ready to a valid Meal Ready state. b) Check that every cooking action follows an allowed transition on the preparation board. c) List the action labels in the order in which they are performed. 
+
+16 Here, preparation states and cooking actions correspond to states and transitions in the interme-diate alternative formulation. Locally, PriCon maps the returned cooking procedure back to the corresponding state-transition path and then to the original logic-grid solution. 
+
+C EXPERIENCE RETRIEVAL DETAILS 
+
+The local experience bank retrieves prior rewriting experiences through the intermediate mathematical representation. We use this representation rather than the original or semantically rewritten task because it captures reusable solution structure while reducing dependence on surface-level domain descriptions. PriCon standardizes it into four structural fields: problem type , decision variables ,
+
+objective , and constraints . For a task Ti, we denote this representation as 
+
+Zi =  ztype  
+
+> i
+
+, z var  
+
+> i
+
+, z obj  
+
+> i
+
+, z con 
+
+> i
+
+.
+
+For example, the medical-supply allocation task in Section 4.1 can be represented as: • Problem type: constrained resource allocation. • Decision variables: discrete allocation amount for each demand-group/resource pair. • Objective: minimize weighted shortage impact across demand groups. • Constraints: allocation bounded by local demand; total allocation bounded by resource capacity; nonnegative discrete allocations. This structured representation reduces sensitivity to surface-level differences in mathematical expres-sions. For example, min x
+
+P 
+
+> i
+
+wi(di − xi)2 and min x
+
+P 
+
+> i
+
+wi(x2 
+
+> i
+
+− 2dixi) have the same optimizer under the same constraints, since they differ only by the constant term P 
+
+> i
+
+wid2 
+
+> i
+
+, although their raw expressions appear different. Representing both formulations through the same four structural fields makes their underlying correspondence easier to capture. 
+
+Field-wise similarity. For each field k ∈ { type , var , obj , con }, we encode its text using an embed-ding model E(·) and compute cosine similarity: 
+
+sk(Ti, Tj ) = cos  E(zki ), E (zkj ) .
+
+The overall structural similarity between two tasks is the average over the four fields: 
+
+S(Ti, Tj ) = 14
+
+X
+
+> k∈{ type ,var ,obj ,con }
+
+sk(Ti, Tj ).
+
+This field-wise comparison keeps retrieval simple and interpretable: two tasks receive a high score when their problem type, decision variables, objective, and constraints are jointly similar. 
+
+Experience retrieval. For a new task Tq , PriCon first derives its mathematical reformulation and corresponding four-field representation. It then computes 
+
+Si = S(Tq , Ti)
+
+for each prior task Ti stored in the local experience bank B and ranks the corresponding experiences by Si. The top-K candidates are retrieved as 
+
+E∗ = TopK Ei∈B S(Tq , Ti),
+
+When a sufficiently similar experience is available, its validated rewriting trajectory and correspon-dence M are reused to initialize the mathematical transformation and subsequent semantic rewriting for the new task. Otherwise, PriCon constructs and validates a new surrogate from scratch and adds the resulting experience to the bank. The four-field representation, embedding computation, retrieval, and experience storage are all performed locally. 
+
+D TASK SCREENING PROCEDURE 
+
+We screen candidate tasks to focus on settings where cloud LLM assistance is genuinely needed. Each candidate task is independently evaluated using GPT-4o-mini, DeepSeek-V4-Flash, and Qwen3.5-Flash without cloud consultation, PriCon , or the local experience bank. 17 A task is retained only if all three local SLMs fail to complete it end-to-end under the screening protocol. We consider three major failure modes: (i) context-length failure , where the task exceeds the model’s effective context capacity or necessary information is lost through truncation; (ii) execution timeout , where model inference or execution of the generated solution exceeds the prescribed time limit; (iii) reasoning failure , where the model produces a well-formed but incorrect output or is unable to complete the required reasoning steps; and (iv) execution error , where the generated solution fails during execution or does not produce a syntactically valid output. The failure mode may differ across local SLMs for the same task. Applying this screening criterion, we retain 10 instances from each task family, resulting in the 100-task benchmark used in our evaluation. 
+
+E CATEGORY RESULTS 
+
+Appendix E reports per-family results for GPT-4o-mini (Table 6), DeepSeek-V4-Flash (Table 7), and Qwen3.5-Flash (Table 8), complementing the aggregated results in Table 2. The trends observed in Table 2—near-perfect inference under direct consultation and sensitive-value removal, partial reduc-tion under the decoy baseline, and near-zero inference under PriCon with semantic rewriting—hold consistently across individual task families. 
+
+Table 6: Task-family-wise task-intent inference with GPT-4o-mini as the local SLM. Entries report Hit@1 / Hit@5 (%). 
+
+Task Family Inference Target 
+
+Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint 
+
+5 20 Math-only Semantic Math-only Semantic Structured and long-context reasoning 
+
+Alibi verification Context 100 / 100 92 / 92 24 / 33 1 / 1 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 49 / 63 25 / 56 69 / 77 61 / 66 0 / 0 0 / 0 Joint 100 / 100 92 / 97 32 / 46 15 / 47 0 / 0 0 / 0 0 / 0 0 / 0 Logic grid Context 97 / 100 100 / 100 19 / 24 1 / 9 0 / 0 0 / 0 16 / 36 0 / 0 Operation 97 / 100 100 / 100 31 / 65 28 / 66 83 / 88 61 / 66 5 / 11 0 / 0 Joint 97 / 100 100 / 100 27 / 57 17 / 55 0 / 0 0 / 0 0 / 2 0 / 0 Counterfactual reasoning Context 92 / 100 100 / 100 4 / 33 1 / 11 0 / 0 0 / 0 0 / 2 0 / 0 Operation 92 / 100 100 / 100 27 / 65 23 / 46 75 / 88 27 / 38 0 / 2 0 / 0 Joint 92 / 100 100 / 100 19 / 50 14 / 38 0 / 0 0 / 0 0 / 0 0 / 0 Recursive expansion Context 97 / 100 100 / 100 14 / 24 21 / 21 0 / 0 0 / 0 11 / 38 0 / 0 Operation 97 / 100 100 / 100 15 / 67 31 / 48 22 / 38 0 / 0 8 / 22 0 / 0 Joint 97 / 97 100 / 100 0 / 51 18 / 40 0 / 0 0 / 0 0 / 8 0 / 0 Relation graph Context 92 / 97 100 / 100 4 / 39 6 / 21 0 / 0 0 / 0 2 / 13 0 / 0 Operation 100 / 100 100 / 100 39 / 67 10 / 53 33 / 55 66 / 86 2 / 8 0 / 0 Joint 92 / 97 100 / 100 25 / 58 6 / 45 0 / 0 0 / 0 2 / 2 0 / 0 
+
+Decision and optimization 
+
+Financial modeling Context 97 / 100 100 / 100 13 / 24 1 / 4 11 / 11 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 47 / 67 17 / 66 58 / 69 16 / 22 0 / 2 0 / 0 Joint 97 / 100 100 / 100 43 / 57 10 / 55 0 / 2 0 / 0 0 / 0 0 / 0 Budget allocation Context 95 / 100 82 / 100 14 / 45 18 / 68 0 / 8 0 / 0 0 / 2 0 / 0 Operation 100 / 100 97 / 100 29 / 60 13 / 33 72 / 80 33 / 50 0 / 2 0 / 0 Joint 97 / 100 85 / 100 25 / 50 8 / 28 0 / 0 0 / 0 0 / 0 0 / 0 Office setup Context 90 / 97 82 / 90 0 / 48 1 / 28 2 / 13 0 / 0 0 / 0 0 / 0 Operation 97 / 97 92 / 97 0 / 65 4 / 51 19 / 36 5 / 30 0 / 0 0 / 0 Joint 92 / 97 82 / 92 0 / 54 2 / 43 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Coding 
+
+Python coding Context 97 / 100 95 / 100 0 / 9 1 / 11 0 / 0 0 / 0 0 / 12 0 / 0 Operation 100 / 100 100 / 100 23 / 65 1 / 21 32 / 50 7 / 12 0 / 5 0 / 0 Joint 97 / 100 97 / 100 19 / 51 1 / 17 0 / 0 0 / 0 0 / 2 0 / 0 
+
+Cross-domain composite 
+
+Composite cross-domain Context 77 / 87 90 / 92 2 / 37 6 / 31 0 / 0 0 / 0 0 / 2 0 / 0 Operation 90 / 100 97 / 100 35 / 63 23 / 56 27 / 44 36 / 50 0 / 0 0 / 0 Joint 82 / 92 85 / 90 16 / 40 14 / 47 0 / 0 0 / 0 0 / 0 0 / 0 
+
+18 Table 7: Task-family-wise task-intent inference with DeepSeek-V4-Flash as the local SLM. Entries report Hit@1 / Hit@5 (%). 
+
+Task Family Inference Target 
+
+Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint 
+
+5 20 Math-only Semantic Math-only Semantic Structured and long-context reasoning 
+
+Alibi verification Context 97 / 100 90 / 100 29 / 46 1 / 0 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 46 / 64 44 / 70 47 / 66 63 / 94 0 / 2 0 / 0 Joint 95 / 100 87 / 100 42 / 53 20 / 39 0 / 0 0 / 0 0 / 0 0 / 0 Logic grid Context 97 / 100 100 / 100 5 / 17 4 / 15 0 / 0 0 / 0 8 / 22 0 / 0 Operation 92 / 97 97 / 100 38 / 66 47 / 85 61 / 80 58 / 72 2 / 11 0 / 0 Joint 100 / 100 100 / 100 25 / 61 22 / 47 0 / 0 0 / 0 0 / 8 0 / 0 Counterfactual reasoning Context 100 / 100 100 / 100 0 / 28 1 / 0 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 10 / 66 32 / 68 77 / 88 94 / 100 5 / 8 0 / 0 Joint 100 / 100 100 / 100 9 / 49 15 / 38 0 / 0 0 / 0 0 / 0 0 / 0 Recursive expansion Context 97 / 100 100 / 100 5 / 27 1 / 5 0 / 0 0 / 0 0 / 16 0 / 0 Operation 85 / 97 92 / 97 8 / 66 16 / 53 25 / 44 72 / 86 2 / 13 0 / 0 Joint 97 / 100 100 / 100 0 / 61 7 / 29 0 / 0 0 / 0 0 / 13 0 / 0 Relation graph Context 100 / 100 100 / 100 0 / 30 4 / 15 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 38 / 66 36 / 80 63 / 75 72 / 91 2 / 2 0 / 0 Joint 100 / 100 100 / 100 22 / 61 17 / 45 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Decision and optimization 
+
+Financial modeling Context 100 / 100 100 / 100 23 / 40 4 / 5 11 / 11 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 43 / 61 26 / 73 61 / 66 72 / 75 0 / 0 0 / 0 Joint 100 / 100 100 / 100 38 / 55 12 / 40 0 / 13 0 / 0 0 / 0 0 / 0 Budget allocation Context 97 / 100 92 / 100 13 / 43 23 / 65 0 / 0 0 / 0 2 / 11 0 / 0 Operation 97 / 100 92 / 100 21 / 64 26 / 68 61 / 72 75 / 86 0 / 2 0 / 0 Joint 97 / 100 92 / 100 17 / 52 12 / 38 0 / 0 0 / 0 0 / 2 0 / 0 Office setup Context 92 / 100 90 / 95 0 / 57 21 / 50 16 / 16 0 / 0 0 / 0 0 / 0 Operation 87 / 95 80 / 90 0 / 64 12 / 55 19 / 36 22 / 47 2 / 2 0 / 0 Joint 92 / 100 90 / 95 0 / 58 5 / 31 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Coding 
+
+Python coding Context 100 / 100 100 / 100 0 / 0 11 / 10 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 26 / 58 14 / 48 30 / 37 25 / 47 2 / 5 0 / 0 Joint 100 / 100 97 / 100 19 / 46 6 / 27 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Cross-domain composite 
+
+Composite cross-domain Context 95 / 100 87 / 97 11 / 47 6 / 30 0 / 0 0 / 0 0 / 0 0 / 0 Operation 90 / 100 90 / 100 25 / 49 41 / 75 36 / 52 36 / 50 0 / 0 0 / 0 Joint 97 / 100 87 / 97 17 / 45 19 / 42 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Table 8: Task-family-wise task-intent inference with Qwen3.5-Flash as the local SLM. Entries report Hit@1 / Hit@5 (%). 
+
+Task Family Inference Target 
+
+Direct cloud consultation Sensitive-value removal Decoy PriCon-Context PriCon-Joint 
+
+5 20 Math-only Semantic Math-only Semantic Structured and long-context reasoning 
+
+Alibi verification Context 100 / 100 95 / 100 10 / 49 0 / 0 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 54 / 67 39 / 61 41 / 61 75 / 86 0 / 8 0 / 2 Joint 100 / 100 100 / 100 36 / 52 32 / 55 0 / 0 0 / 0 0 / 0 0 / 0 Logic grid Context 100 / 100 97 / 100 0 / 38 0 / 0 0 / 0 0 / 0 11 / 19 0 / 0 Operation 100 / 100 97 / 100 19 / 67 26 / 56 63 / 88 47 / 63 5 / 8 0 / 0 Joint 100 / 100 97 / 100 8 / 61 22 / 50 0 / 0 0 / 0 0 / 0 0 / 0 Counterfactual reasoning Context 95 / 100 100 / 100 0 / 36 0 / 1 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 97 / 100 13 / 67 19 / 44 75 / 91 86 / 100 2 / 11 0 / 0 Joint 100 / 100 100 / 100 4 / 52 16 / 39 0 / 0 0 / 0 0 / 2 0 / 0 Recursive expansion Context 100 / 100 97 / 100 10 / 12 0 / 0 0 / 0 0 / 0 11 / 27 0 / 0 Operation 100 / 100 100 / 100 30 / 67 4 / 41 8 / 36 50 / 55 13 / 22 0 / 0 Joint 100 / 100 97 / 100 25 / 61 4 / 37 0 / 0 0 / 0 2 / 13 0 / 0 Relation graph Context 100 / 100 95 / 97 10 / 51 9 / 26 0 / 0 0 / 0 0 / 0 0 / 0 Operation 100 / 100 85 / 85 32 / 67 14 / 41 61 / 72 75 / 88 0 / 5 0 / 0 Joint 100 / 100 97 / 97 8 / 61 12 / 37 0 / 0 0 / 0 0 / 0 0 / 0 
+
+Decision and optimization 
+
+Financial modeling Context 97 / 100 100 / 100 0 / 12 0 / 3 11 / 11 0 / 0 0 / 0 0 / 0 Operation 100 / 100 100 / 100 58 / 66 17 / 46 66 / 77 58 / 69 0 / 5 0 / 0 Joint 97 / 100 100 / 100 57 / 60 14 / 41 0 / 0 0 / 0 0 / 0 0 / 0 Budget allocation Context 95 / 97 77 / 100 10 / 56 15 / 67 0 / 0 0 / 0 2 / 2 0 / 0 Operation 100 / 100 95 / 100 30 / 62 17 / 44 66 / 72 61 / 80 0 / 2 0 / 0 Joint 97 / 97 80 / 97 21 / 50 14 / 39 0 / 0 0 / 0 0 / 0 0 / 0 Office setup Context 87 / 90 82 / 95 10 / 64 9 / 47 2 / 19 0 / 0 0 / 11 0 / 0 Operation 95 / 100 92 / 95 6 / 64 7 / 41 25 / 38 47 / 58 0 / 0 2 / 5 Joint 90 / 92 85 / 97 6 / 56 6 / 37 0 / 0 0 / 0 0 / 0 0 / 2 
+
+Coding 
+
+Python coding Context 95 / 100 95 / 100 10 / 12 9 / 18 0 / 0 0 / 0 2 / 12 0 / 0 Operation 100 / 100 100 / 100 19 / 67 7 / 19 30 / 47 30 / 42 0 / 7 0 / 0 Joint 95 / 100 95 / 100 17 / 56 6 / 17 0 / 0 0 / 0 0 / 2 0 / 0 
+
+Cross-domain composite 
+
+Composite cross-domain Context 77 / 82 87 / 95 22 / 44 1 / 17 0 / 0 0 / 0 0 / 0 0 / 0 Operation 97 / 100 92 / 100 23 / 59 27 / 61 38 / 55 33 / 50 0 / 2 0 / 0 Joint 80 / 82 80 / 95 17 / 43 22 / 55 0 / 0 0 / 0 0 / 0 0 / 0 
+
+19

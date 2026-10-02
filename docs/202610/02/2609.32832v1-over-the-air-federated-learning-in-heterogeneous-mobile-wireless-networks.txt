@@ -1,0 +1,6036 @@
+Title: Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks
+
+URL Source: https://arxiv.org/pdf/2609.32832v1
+
+Published Time: Tue, 29 Sep 2026 01:19:46 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks 
+
+## Ming Xiang 1, Nicolò Michelusi 2, Yonina C. Eldar 1,3, Lili Su 1
+
+> 1
+
+Northeastern University, Boston, MA, USA; 2Arizona State University, Tempe, AZ, USA; 3Weizmann Institute of Science, Rehovot, Israel. 
+
+## Abstract 
+
+Over-the-air computation has emerged as a scalable and efficient solution for deploying federated learning algorithms in wireless networks by exploiting waveform superposition for simultaneous model aggregation. Most existing work struggles with heteroge-neous fading channels. These approaches either enforce unbiased updates from all devices or allow partial device contributions, re-quiring careful tuning of the convergence bound to mitigate bias under specific fading models. However, the former significantly amplifies receiver noise due to the weakest channel, whereas the latter is sensitive to fading model mismatch and converges only to a biased objective. To tackle these challenges, we propose FedOAG ,which employs algorithmic components to automatically satisfy en-ergy constraints via gradient normalization and evenly mix devices’ updates through implicit gossiping. Importantly, FedOAG does not require transmission from all devices, nor does it rely on a specific fading model or knowledge of time-varying statistical channel dis-tributions. We show that FedOAG converges to a stationary point of an unbiased non-convex objective at the best possible rate O( 1/√𝑇 )
+
+for any stochastic first-order method. We corroborate our analysis with numerical experiments over dynamic wireless conditions on real-world datasets. 
+
+## CCS Concepts 
+
+• Computing methodologies → Distributed algorithms ; • The-ory of computation → Multi-agent learning ; • Mathematics of computing → Mathematical optimization .
+
+## Keywords 
+
+Federated learning, over-the-air computation, heterogeneous fad-ing channel, time-varying statistical channel gain, noisy energy superposition. 
+
+ACM Reference Format: 
+
+Ming Xiang 1, Nicolò Michelusi 2, Yonina C. Eldar 1,3, Lili Su 1. 2026. Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks. In 
+
+Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 22 pages. https://doi.org/XXXXXXX.XXXXXXX 
+
+> Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> © 2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+## 1 Introduction 
+
+Federated learning is a distributed machine learning framework that enables distributed devices to collectively train a global model [24]. Instead of sending raw data directly to the parameter server, devices process their data locally and periodically report updates to it. In wireless networks, the high-dimensional device updates are transmitted over noisy and bandwidth-limited wireless channels, creating a communication bottleneck that limits scalability [1, 14]. Over-the-air (OTA) federated learning addresses this by exploit-ing the principle of waveform superposition on the multiple access channel (MAC), enabling a noisy single-shot aggregation [32, 45, 50]. The single-shot feature renders conventional federated learning approaches largely infeasible, as the parameter server receives only a superimposed analog waveform and cannot isolate, decode, or individually reweight the updates from distinct devices. The OTA federated learning approach, by contrast, focuses on designing power-control strategies to achieve high-quality global aggrega-tion under an energy constraint. For example, the seminal OTA federated learning algorithm [45] ensures unbiased global aggrega-tion over a fading channel by scaling down the device signal based on the weakest device channel; however, this aggressive down-scaling forces the parameter server to massively amplify received transmission, inadvertently blowing up the receiver noise. Truncated channel inversion through thresholding has then been adopted to facilitate partial device contributions and exclude de-vices with poor channels to mitigate noise amplification at the receiver [5, 49], yet with an implicit homogeneous wireless path loss assumption across devices [5, 23, 30]. In reality, heterogeneous wireless channel conditions and a diversified device population are two defining features of OTA federated learning systems. When mobile devices are spatially distributed, their statistical channel distribution information (CDI) becomes both heterogeneous and time-varying. Relying on homogeneous channels introduces pro-hibitive overhead for continuously tracking time-varying CDIs or inevitably leads to biased global aggregation. Biased global aggrega-tion leads to objective inconsistency and can significantly harm the federated learning performance. Details can be found in Section 3. When path losses are heterogeneous, a line of work [8, 49] relaxes unbiased aggregation in exchange for reduced noise amplification; however, the resulting bias remains uncorrected, and its impact on learning performance is not quantitatively characterized. Recently, Abrar and Michelusi in [3, 4] propose a successive convex approx-imation framework to simultaneously optimize the learning and power control by designing an optimal pre-scalar at each device. However, the learning objective remains biased, the analysis therein only accounts for Rayleigh fading, and does not readily extend to other fading models. Moreover, the statistical CDIs are assumed to be time-invariant and known a priori, which may break down arXiv:2609.32832v1 [cs.LG] 26 Sep 2026 Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. Building                      
+
+> Parameter Server
+> t=0
+> t=8
+> t=3
+> t=1 t=2
+> t=4
+> t=5
+> t=6
+> t=7
+> t=1 t=2 t=3 t=4 t=5 t=6 t=7
+> Uplink Activation Probability pti
+> Reliable Downlink
+> Device A
+> (Mobile Phone)
+> NN
+> Device A
+> (Mobile phone)
+> Statistical CDI Λt
+> 1
+> Uplink Activation Probability pt
+> 1
+> Uplink Activation Event
+> Training Round NN
+> Reliable Downlink
+> Unreliable Uplink
+> Device B
+> (Autonomous Vehicle)
+> Moving
+> Device B
+> (Autonomous vehicle)
+> Statistical CDI Λt
+> 2
+> Uplink Activation Probability pt
+> 2
+> Training Round
+> Uplink Activation Event
+> t=0 t=1 t=2 t=3 t=4 t=5 t=6 t=7 t=8
+> t=8
+> t=0
+> Over-the-Air Aggregation
+> Moving
+> Higher pti
+> Active Uplink
+> Inactive Uplink
+
+Figure 1: Mobile devices lead to time-varying statistical CDIs, which determine the uplink activation probabilities 𝑝 𝑡 𝑖 for heterogeneous devices. 
+
+under device mobility. As devices move, channel distributions drift over time, rendering any precomputed CDIs quickly outdated. 
+
+Contributions. In this paper, we develop FedOAG that converges to an unbiased objective over noisy MACs without requiring trans-mission from every device, avoiding high variance and degraded utility. To capture heterogeneous and time-varying channel effects, we model device 𝑖 ’s uplink availability in round 𝑡 by probability 𝑝 𝑡 𝑖 ,while assuming reliable downlink communication. An illustration plot can be found in Fig. 1. Importantly, neither the parameter server nor the devices know 
+
+𝑝 𝑡 𝑖 ’s or the underlying fading models. This precludes conventional OTA approaches that rely on exact channel knowledge for power control and scheduling. A detailed formulation of 𝑝 𝑡 𝑖 ’s can be found in Section 3. Our contributions are three-fold: 
+
+• We propose FedOAG . The design of FedOAG relies on two al-gorithmic innovations: (i) channel inversion with gradient normalization, and (ii) postponed global model broadcast. Generally speaking, these algorithmic components (i) tackle energy-constrained transmission with partial device contri-butions over noisy MACs, and (ii) enable devices to evenly mix their information through implicit device-device gossip without the knowledge of fading models or time-varying 
+
+𝑝 𝑡 𝑖 ’s. It is worth noting that no direct device-device commu-nication is involved. 
+
+• We provide a non-asymptotic convergence bound. Despite dynamic, heterogeneous, and mobile wireless conditions, we show that FedOAG converges at a rate of O( 1/√𝑇 ), which is the best possible rate for any first-order method that has access to only stochastic gradients. 
+
+• We corroborate our analysis with experiments over dynamic wireless channel conditions on real-world datasets. 
+
+Organizations. The remainder of this paper is organized as follows. Section 2 reviews related work. Section 3 formulates the problem.                                       
+
+> Algorithms Small-scale CDIs ℎ𝑡 𝑖 Statistical CDIs Λ𝑡 𝑖 Fading Model The PS The Devices The PS The Devices Ours ( FedOAG )×✓××Arbitrary
+> SCA [3, 4] ×✓✓×Rayleigh Vanilla OTA [45] ✓✓××Arbitrary BB methods [49] ×✓✓✓Rayleigh OPC/LCPC methods [8] ✓✓✓×Rayleigh Air-FEEL [9] ×✓✓×Block
+
+Table 1: The knowledge of channel distribution information from key references. 
+
+Section 4 introduces the design of FedOAG . Section 5 analyzes the convergence of FedOAG . Section 6 presents numerical experiments. Section 7 concludes this paper. 
+
+Notations. We introduce the notations that we will use throughout the paper. ∥𝒗 ∥2 defines its 𝑙 2 norm for a given vector 𝒗 . ∥𝐴 ∥F defines the Frobenius norm of a given matrix 𝐴 , and 𝜆 2 (𝐴 ) denotes its second largest eigenvalue when 𝐴 is a square matrix. R𝑑 defines a 
+
+𝑑 -dimensional vector space. [𝑚 ] ≜ {1, · · · , 𝑚 }. 1 is an all-one vector. 
+
+1{ E } is an indicator function of event E, i.e., 1{ E } = 1 when the event E occurs; 1{ E } = 0 otherwise. F 𝑡 denotes the sigma-algebra generated by the randomness up to round 𝑡 . 𝑓 (𝑛 ) = O( 𝑔 (𝑛 )) if there exist 𝑐 0 > 0 and 𝑛 0 ∈ N such that 𝑓 (𝑛 ) ≤ 𝑐 0𝑔 (𝑛 ), ∀𝑛 ≥ 𝑛 0.
+
+## 2 Related Work 
+
+The core challenge in OTA federated learning is to balance strict local energy constraints with the need to achieve an unbiased global update across noisy, heterogeneous MACs. To ensure the parame-ter server receives a high-quality aggregated update, each device must meticulously calibrate its transmission message while strictly adhering to local energy constraints. Earlier work [5, 23, 30, 50] lets devices contribute uniformly at random, thereby implicitly assuming identical path losses. Yang et al. [45] ensure unbiased aggregation via channel inversion. A strict per-device energy con-straint forces transmit scaling to be dictated by the weakest device, thereby substantially amplifying noise in the aggregated signal. Yao et al. in [46] enforce unbiased aggregation by mandating trun-cated channel inversion and dropping out devices with deep fading. Unfortunately, the path losses are naturally heterogeneous and may even be time-varying in expectation [1, 14], e.g., when devices are mobile. In scenarios with heterogeneous path losses, Abrar and Michelusi in [2] perform channel inversion at every device to achieve unbiased aggregation, but offload devices with weak channels to digital networks. They focus on minimizing the error of gradient estimation from both digital and analog networks under a delay constraint, without convergence guarantees. In contrast, we establish explicit convergence guarantees for FedOAG . Truncated channel inversion is a commonly adopted method to filter out de-vices with extreme channel conditions. For example, Zhu et al. in [49] schedule only a fixed subset of devices in each round according to their distances to the parameter server; however, their methods remain largely heuristic and inherently introduce bias due to in-complete device population. Cao et al. in [8] optimize joint transmit-power and denoising-factor to balance the aggregation-coefficient misalignment against receiver noise amplification, leaving learning performance uncharacterized and therefore still leading to a biased convergence. Cao et al. in [9] optimize the power control of de-vices to minimize a learning convergence bound, which admits two regimes. The former admits a biased aggregation that will hurt per-formance; the latter recovers exact convergence, but each device’s Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+power budgets have to be relatively high. Abrar and Michelusi in [3, 4] design a successive convex approximation framework to simultaneously optimize the learning performance and power con-trol of a biased learning objective under the Rayleigh fading model, while our FedOAG can correct bias and account for arbitrary fading models. Table 1 illustrates the CDI knowledge required by the key references, both at the parameter server and devices. It is easy to check that our FedOAG requires the least amount of channel distri-bution information and allows the fading model to be arbitrary. In federated learning without OTA transmission, dynamic de-vice availability is typically modeled as a discrete network event, independent from wireless transmission errors. The device updates are transmitted and decoded individually without errors. The OTA federated learning, however, relies on the superposition property of analog waveforms; the absence of individual device updates fundamentally alters the aggregation protocol, rendering direct ap-plications of their tools infeasible. We defer the detailed discussions to Appendix A. 
+
+## 3 Problem Formulation 
+
+Federated Learning System. A federated learning system de-ployed in a wireless network consists of one parameter server and 
+
+𝑚 devices that collaboratively minimize min   
+
+> 𝒙 ∈R𝑑
+
+𝐹 (𝒙 ) ≜ 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝐹 𝑖 (𝒙 ), (1) where, at device 𝑖 , 𝐹 𝑖 (𝒙 ) = E𝜉 𝑖 ∈ D 𝑖 [ℓ𝑖 (𝒙 ; 𝜉 𝑖 )] is the local objective, 
+
+D𝑖 is the local distribution, 𝜉 𝑖 is a stochastic sample that device 𝑖 has access to, and ℓ𝑖 is the local loss function, which can be non-convex. We are interested in solving (1) over dynamic wireless networks. Specifically, in each round 𝑡 , the communication uplink between the parameter server and the device 𝑖 is active with probability 
+
+𝑝 𝑡 𝑖 , which can be simultaneously time-varying across rounds and heterogeneous across devices. The activation probability 𝑝 𝑡 𝑖 will be formally derived next as a function of the fading distribution and a truncation threshold. 
+
+Assumption 1 (Uncertainties in 𝑝 𝑡 𝑖 ’s) . There exists a 𝑐 ∈ ( 0, 1] such that 𝑝 𝑡 𝑖 ≥ 𝑐 , where the activation events of uplink 𝑖 are independent across devices 𝑖 ∈ [ 𝑚 ] and across rounds 𝑡 ∈ [ 𝑇 ].
+
+Assumption 1 is a mild regularity condition on the environment. For our algorithm to work, neither the parameter server nor the devices are required to know 𝑐 . Dynamic 𝑝 𝑡 𝑖 ’s cause the standard FedAvg to optimize an auxiliary objective. 
+
+Remark 1 (Objective Inconsistency) . In a standard digital FedAvg implementation, each device 𝑖 computes a local update based on the most recent global model parameters and transmits it to the parameter server. When 𝑝 𝑖 ’s are heterogeneous across devices but time-invariant across rounds, the learning process minimizes a biased objective [4, 37] 
+
+e𝐹 (𝒙 ) =
+
+Í𝑚 𝑖 =1 𝑝 𝑖 𝐹 𝑖 (𝒙 )
+
+Í𝑚 𝑖 =1 𝑝 𝑖 
+
+, (2) 
+
+rather than the unbiased objective in (1) . Depending on the hetero-geneity in 𝑝 𝑖 ’s, the output of FedAvg can be significantly away from the true optimum of (1) . It is easy to see that time-varying 𝑝 𝑡 𝑖 ’s only exacerbate the bias. 
+
+In our setting, 𝑝 𝑡 𝑖 is dictated by the wireless channel model and the over-the-air computation mechanism. Without an algorithmic correction, this objective inconsistency is unavoidable. We next make 𝑝 𝑡 𝑖 ’s explicit under channel models. 
+
+Communication Channel Model. Following the common prac-tice of over-the-air federated learning literature [30, 42, 45], we assume that the downlink channels, used by the parameter server to broadcast the global model to all devices in a wireless network, are reliable and error-free. The uplink channel from device 𝑖 to the parameter server in round 𝑡 is subject to complex fading ℎ𝑡 𝑖 ∈ C independent across devices and rounds. We define the statistical channel gain Λ𝑡 𝑖 =
+
+E[| ℎ𝑡 𝑖 |2] > 0, which may change across rounds due to, e.g., device mobility. Rayleigh fading, where ℎ𝑡 𝑖 ∼ CN ( 0, Λ𝑡 𝑖 ), is a canonical example. We assume Λ𝑡 𝑖 is constant within each round but may change across rounds, and that neither the parameter server nor the devices have access to the statistical CDI Λ𝑡 𝑖 ’s during training. 
+
+Over-the-Air Computation. We assume each device 𝑖 knows its own small-scale CDI ℎ𝑡 𝑖 , which can be acquired via standard pilot-based channel estimation. The statistical channel gain Λ𝑡 𝑖 remains unknown. Based on this, device 𝑖 uses a truncated channel inversion strategy: if the channel coefficient magnitude exceeds a threshold 
+
+𝜙 𝑖 > 0, the device transmits a pre-scaled signal; otherwise, no message will be transmitted. Let 𝑑 define the model dimension, and 𝐸 𝑠 the per-dimension energy budget. Often, the transmitted message b𝒖 𝑡 𝑖 is a multi-step local gradient sum. Formally, b𝒖 𝑡 𝑖 , subject to an energy constraint b𝒖 𝑡 𝑖  
+
+> 22
+
+≤ 𝑑𝐸 𝑠 [2–4], can be defined as 
+
+b𝒖 𝑡 𝑖 ≜
+
+
+
+> 𝛾 𝒖 𝑡 𝑖
+> ℎ𝑡 𝑖
+
+, if ℎ𝑡 𝑖 ≥ 𝜙 𝑖 ,
+
+0, otherwise .
+
+(3) Specifically, it requires ∥𝒖 𝑡 𝑖 ∥2 ≤ 𝑑𝐸 𝑠 |ℎ𝑡 𝑖 |2/𝛾 2 to satisfy the energy constraint when |ℎ𝑡 𝑖 | ≥ 𝜙 𝑖 . When the transmitted message 𝒖 𝑡 𝑖 is the gradient, prior work commonly addresses this via assuming a uniformly bounded gradient [3, 4, 30, 32, 50]. However, in practice, the value of such a bound may not be readily available prior to algorithm implementation. This motivates our algorithm design in Section 4, which does not require its value as an input. For the uplink of device 𝑖 in round 𝑡 , we define its binary ac-tivation indicator function as 𝛿 𝑡 𝑖 ≜ 1{ ℎ𝑡 𝑖 ≥ 𝜙 𝑖 }. The transmitted message b𝒖 𝑡 𝑖 can therefore be simplified as b𝒖 𝑡 𝑖 = 𝛾 𝒖 𝑡 𝑖 𝛿 𝑡 𝑖 /ℎ𝑡 𝑖 . When the activation events are independent of the transmission message, the uplink activation probability is 
+
+𝑝 𝑡 𝑖 ≜ E 𝛿 𝑡 𝑖 
+
+ = P  ℎ𝑡 𝑖 ≥ 𝜙 𝑖 ∈ ( 0, 1]. (4) The specific form of 𝑝 𝑡 𝑖 depends on the fading model, for example, under Rayleigh fading, 𝑝 𝑡 𝑖 = exp (− 𝜙 2 
+
+> 𝑖
+
+/Λ𝑡 𝑖 ). The parameter server receives the superimposed signal over a noisy MAC and estimates the global aggregation as 
+
+𝒚 𝑡 = 1
+
+𝛾 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+ℎ𝑡 𝑖 b𝒖 𝑡 𝑖 + 𝒛 𝑡 
+
+!
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝛿 𝑡 𝑖 𝒖 𝑡 𝑖 + 𝒛 𝑡 
+
+𝛾 , (5) where 𝑧 𝑡 ∼ N ( 0, 𝜎 2 
+
+> 𝑧
+
+I) is receiver noise. The pre-scalar 𝛾 controls a tradeoff between transmit power and effective receiver noise: a large 𝛾 reduces the effective noise term 𝒛 𝑡 /𝛾 at the cost of requiring higher transmission power, while a smaller 𝛾 relaxes the power requirement at the expense of increased effective receiver noise. Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+When 𝒖 𝑡 𝑖 encodes device 𝑖 ’s local gradients, taking the expecta-tion with respect to the randomness in 𝛿 𝑡 𝑖 ’s and the receiver noise 𝒛 𝑡 ,we have a weighted average of local gradients E𝛿, 𝒛 
+
+𝒚 𝑡  = Í𝑚 𝑖 =1 𝑝 𝑡 𝑖 𝒖 𝑡 𝑖 ,which leads to the biased objective in (2) in Remark 1. 
+
+## 4 Algorithm: FedOAG 
+
+## 4.1 Overview 
+
+In this section, we propose Fed erated Over-the-Air Implicit Gossiping (FedOAG ), formally presented in Algorithm 1. FedOAG aims to tackle two primary challenges in over-the-air computation: (i) energy-constrained transmission over noisy MACs and (ii) unbiased conver-gence without enforcing all device transmission. To address these challenges, FedOAG introduces two key mechanisms: (i) truncated channel inversion with gradient normalization that guarantees en-ergy compliance and partial device contributions, and (ii) postponed global model broadcast that enables a balanced information mixture through implicit device-device gossip. Next, we provide algorithm design details. In each round 𝑡 , device 𝑖 performs 𝑠 -steps of local stochastic gradient descent on its own model 𝒙 𝑡 𝑖 , which generates a local iterate e𝒙 𝑡 𝑖 (lines 4-9). Let 𝜂 denote a learning rate, and 𝜏 𝑖 (𝑡 ) denote the most recent round prior to 𝑡 in which device 𝑖 successfully uploaded to the parameter server, with the convention 𝜏 𝑖 (0) = −1for 𝑖 ∈ [ 𝑚 ]. The multi-step local update is then defined as Δ𝑡 𝑖 =
+
+(e𝒙 𝑡 𝑖 − 𝒙 𝜏 𝑖 (𝑡 )+ 1)/ 𝜂 , which characterizes the local cumulative unsent gradient innovation since the device’s 𝜏 𝑖 (𝑡 ) + 1. Notably, each device continues to compute fresh gradients in each round regardless of its respective uplink conditions. Departing from the standard FedAvg algorithm, where each device updates using the most recent global model, FedOAG has each device up-date its own local model, which may be stale depending on its uplink conditions. In the special case where 𝑐 = 1, the staleness vanishes, and FedOAG reduces to standard FedAvg. It turns out that such updates help mitigate the bias caused by heterogeneous and time-varying uplinks. We show that the staleness is bounded in expectation by 1 /𝑐 in Lemma 7 in Appendix D, and there is no significant empirical slowdown observed in Fig. 2 in Section 6. 
+
+Truncated channel inversion with gradient normalization (Energy Compliance). In fading MACs, weak channels might cause arbitrarily large amplification of the transmitted message when inverted. We adopt the truncated channel inversion (3) at device 𝑖 in round 𝑡 (lines 11 - 17). Specifically, device 𝑖 transmits only when |ℎ𝑡 𝑖 | ≥ 𝛾 /√𝑑𝐸 𝑠 . Consequently, in highly dynamic wire-less channels, not all devices will transmit. Let A𝑡 ≜ {𝑖 : |ℎ𝑡 𝑖 | ≥ 
+
+𝛾 /√𝑑𝐸 𝑠 } denote the collection of devices at round 𝑡 . For ease of exposition, we refer to devices in A𝑡 as devices with active uplinks in round 𝑡 . The transmission message b𝒙 𝑡 𝑖 at device 𝑖 in round 𝑡 is designed as 
+
+b𝒙 𝑡 𝑖 =
+
+ 
+
+> 𝛾 ℎ𝑡 𝑖
+> Δ𝑡 𝑖
+> 𝐵 𝑡
+
+, if ℎ𝑡 𝑖 ≥ 𝛾  
+
+> √𝑑𝐸 𝑠
+
+,
+
+0, otherwise ,
+
+(6) where 𝛾 is a pre-scalar to determine the channel quality relative to the energy constraint √𝑑𝐸 𝑠 , and 𝐵 𝑡 ≜ max 𝑖 ∈ A 𝑡 Δ𝑡 𝑖 2 is an online norm tracker to obtain the maximum norm of local updates across the devices with active uplinks. In practice, 𝛾 can be tuned to obtain the best empirical perfor-mance. The scalar 𝐵 𝑡 can be determined through a bilateral light-weight coordination between the parameter server and the devices. Upon observing ℎ𝑡 𝑖 , devices with active uplinks report their one-dimensional Δ𝑡 𝑖 2 to the parameter server over high-quality digital uplinks such as FDMA, OFDMA, and TDMA [1, 14]. The parameter server then computes 𝐵 𝑡 = max 𝑖 ∈ A 𝑡 Δ𝑡 𝑖 2 and sends it back to the devices in A𝑡 . The additional communication overhead is O( 1) per device and therefore negligible relative to the 𝑑 dimensional model parameter transmission. On the technical front, our design guarantees (i) energy con-straint compliance for each device 𝑖 in A𝑡 , and (ii) independent uplink activation events without requiring a known gradient bound. For (i), observe that for any device 𝑖 in A𝑡 in round 𝑡 , we have 
+
+|ℎ𝑡 𝑖 | ≥ 𝛾 
+
+√𝑑𝐸 𝑠 
+
+⇔ 𝛾 
+
+ℎ𝑡 𝑖 
+
+≤√︁ 𝑑𝐸 𝑠 ⇒ b𝒙 𝑡 𝑖  
+
+> 22
+
+= 𝛾 ℎ𝑡 𝑖 
+
+Δ𝑡 𝑖 
+
+𝐵 𝑡 𝑖 
+
+> 22
+
+≤ 𝛾 ℎ𝑡 𝑖 
+
+> 22
+
+≤ 𝑑𝐸 𝑠 .
+
+For (ii), since energy constraint is guaranteed by construction, the uplink activation event {𝑖 ∈ A 𝑡 } depends only on the fading chan-nel threshold ℎ𝑡 𝑖 ≥ 𝛾 /√𝑑𝐸 𝑠 , and thus inherits the independence structures of the fading variable ℎ𝑡 𝑖 across devices and rounds. Our design is also more general than most prior OTA works, which often require a uniformly bounded gradient norm as an input [3, 4, 30, 32, 50], a condition that is hard to obtain in advance of any algorithm implementations. Upon receiving 𝒚 𝑡 as in (5), the parameter server rescales the received noisy message by 𝐵 𝑡 /( 𝛾 |A 𝑡 |) , thereby amplifying the re-ceiver noise accordingly: the effective noise variance in the recov-ered update is 𝐵 2 
+
+> 𝑡
+
+𝜎 2 
+
+> 𝑧
+
+/( 𝛾 2 |A 𝑡 |2) (line 18). 𝛾 governs a fundamental tradeoff between uplink availability and signal quality. Intuitively, 
+
+𝛾 ≈ 0 allows all devices to satisfy the energy constraint and transmit their local updates, but the resulting noise amplification renders the gradient information unusable. Conversely, a large 𝛾 suppresses noise but excludes devices with weak channels from contributions to the global training. We will characterize its impacts theoretically in Remark 2 in Section 5 and empirically in Fig. 3 in Section 6. 
+
+Postponed Global Model Broadcast (Debias Updates). Unlike standard FedAvg, where the parameter server broadcasts the global model at the beginning of each round, FedOAG employs a postponed broadcast . In FedOAG , the parameter server collects updates from devices with active uplinks, and then sends the updated global model 𝒙 𝑡 +1 back to devices in A𝑡 at the end of each round (lines 22-23). Note that the aggregated signal ˘ Δ𝑡 is computed relative to dif-ferent reference models {𝒙 𝜏 𝑖 (𝑡 )+ 1 }𝑖 ∈ A 𝑡 , the parameter server must compensate for the reference models accordingly to recover the original updated model parameter e𝒙 𝑡 𝑖 (line 19). This is because the local cumulative unsent innovation is calculated relative to the updated global, which is broadcast back to the device at the end of its last successful transmission round 𝜏 𝑖 (𝑡 ). Formally, we have 
+
+𝒙 𝑡 +1 = 𝜂 ˘Δ𝑡 + 1
+
+|A 𝑡 |∑︁ 𝑖 ∈ A 𝑡 
+
+𝒙 𝜏 𝑖 (𝑡 )+ 1 = 1
+
+|A 𝑡 |∑︁ 𝑖 ∈ A 𝑡 
+
+e𝒙 𝑡 𝑖 + 𝜂𝐵 𝑡 
+
+𝛾 |A 𝑡 | 𝒛 𝑡 ,
+
+where 𝒛 𝑡 ∼ N ( 0, 𝜎 2 
+
+> 𝑧
+
+I) is the receiver noise. Notably, these reference models are originally generated by the parameter server; the server simply retrieves them from a checkpoint buffer C. Thus, we will Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+not incur any additional communication overhead to obtain such computation anchors. In line 21, we remove outdated models from 
+
+C that will no longer be referenced by any devices. In the worst-case scenario where all devices hold different 𝜏 𝑖 (𝑡 )’s, the parameter server will incur an additional memory overhead of O( 𝑚𝑑 ).
+
+## 4.2 Implicit Gossiping 
+
+Through postponed broadcast in Algorithm 1, devices in A𝑡 im-plicitly gossip their local updated models with each other through the parameter server [38–40]. Unlike standard gossiping protocols, no direct device-to-device communication is involved. Gossip-type algorithms were originally used for device-to-device networks and are well-known for their resilience to reach average consensus despite communication failures and asynchronous in-formation exchange [7, 22, 27]. At a high level, the devices’ local estimates are ultimately weighted evenly in the final model out-put. Formally, the information mixing matrix 𝑊 is constructed as a doubly stochastic matrix in (7). 
+
+𝑊 (𝑡 ) 
+
+> 𝑖 𝑗
+
+=
+
+  
+
+> 1
+> | A 𝑡 |
+
+, if 𝑖, 𝑗 ∈ A 𝑡 ;1, if 𝑖 = 𝑗 and 𝑖 ∉ A𝑡 ;0, otherwise .
+
+(7) The information mixing matrix 𝑊 can be time-varying even in ex-pectation due to the high uncertainties in 𝑝 𝑡 𝑖 ’s. Let 𝑀 (𝑡 ) ≜ E [( 𝑊 (𝑡 ) )2],
+
+𝜌 (𝑡 ) ≜ 𝜆 2 (𝑀 (𝑡 ) ), J ≜ 11 ⊤/𝑚 , and 𝜌 ≜ max 𝑡 𝜌 (𝑡 ), where 𝜆 2 (·) de-notes the second largest eigenvalue. Lemma 1 characterizes the information mixing error, i.e., consensus error. 
+
+Lemma 1 ([25, 26]) . For any matrix 𝐵 ∈ R𝑑 ×𝑚 that is independent of 𝑊 matrices, it holds that 
+
+E
+
+"
+
+𝐵 
+
+> 𝑡
+
+Ö 
+
+> 𝑟 =1
+
+𝑊 (𝑟 ) − J
+
+! 2F
+
+𝐵 
+
+#
+
+≤ 𝜌 𝑡 ∥𝐵 ∥2F ,
+
+where ∥·∥ F denotes the Frobenius norm of a matrix. 
+
+Lemma 2 (Ergodicity [38–40]) . Suppose that Assumption 1 holds. For all 𝑡 ≥ 1, it holds that 𝜌 = max 𝑡 𝜌 (𝑡 ) ≤ 1 − 𝑐 4 [1− ( 1−𝑐 )𝑚 ]2 
+
+> 8
+
+.
+
+## 5 Convergence Analysis 
+
+In this section, we analyze the convergence of FedOAG . All missing proofs and intermediate results are deferred to Appendix. 
+
+## 5.1 Assumptions and Preliminaries 
+
+We first introduce regularity assumptions and preliminary results that are used in our convergence analysis. Let F 𝑡 denote the natural filtration generated by the randomness up to round 𝑡 .
+
+Assumption 2 (Smoothness) . For each device node 𝑖 ∈ [ 𝑚 ], its local stochastic gradient function ∇ℓ𝑖 (𝒙 , 𝜉 ) is 𝐿 𝑖 -Lipschitz, i.e., for any stochastic sample 𝜉 ,
+
+∥∇ ℓ𝑖 (𝒙 1; 𝜉 ) − ∇ ℓ𝑖 (𝒙 2; 𝜉 )∥ 2 ≤ 𝐿 𝑖 ∥𝒙 1 − 𝒙 2 ∥2 ≤ 𝐿 ∥𝒙 1 − 𝒙 2 ∥2 , ∀𝒙 1, 𝒙 2,
+
+where 𝐿 ≜ max   
+
+> 𝑖 ∈ [ 𝑚 ]
+
+𝐿 𝑖 .
+
+Algorithm 1: FedOAG  
+
+> 1
+
+Input: Total number of rounds: 𝑇 , model initialization: 𝒙 0,number of local steps: 𝑠 , learning rate: 𝜂 , pre-scalar 𝛾 , and checkpoint buffer C = ∅; 
+
+> 2
+
+Initialization: 𝒙 0 
+
+> 𝑖
+
+← 𝒙 0, 𝜏 𝑖 (0) ← − 1, ∀𝑖 ∈ [ 𝑚 ],
+
+C = {( 0, 𝒙 0)} ; 
+
+> 3
+
+for 𝑡 = 0, · · · ,𝑇 − 1 do 
+
+/* On all devices. */  
+
+> 4
+
+for 𝑖 ∈ [ 𝑚 ] do  
+
+> 5
+
+Draw a fresh sample 𝜉 𝑡 𝑖 ; 
+
+> 6
+
+𝒙 (𝑡, 0) 
+
+> 𝑖
+
+← 𝒙 𝑡 𝑖 ; 
+
+> 7
+
+for 𝑘 = 0, · · · , 𝑠 − 1 do  
+
+> 8
+
+𝒙 (𝑡,𝑘 +1) 
+
+> 𝑖
+
+← 𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+− 𝜂 ∇ℓ𝑖 (𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 ); 
+
+> 9
+
+e𝒙 𝑡 𝑖 ← 𝒙 (𝑡,𝑠 ) 
+
+> 𝑖
+
+; 
+
+> 10
+
+Compute local cumulative unsent innovation 
+
+𝚫 𝑡 𝑖 ← ( e𝒙 𝑡 𝑖 − 𝒙 𝜏 𝑖 (𝑡 )+ 1)/ 𝜂 ;
+
+/* Decide active uplinks. */  
+
+> 11
+
+A𝑡 ←
+
+n
+
+𝑖 ∈ [ 𝑚 ] | ℎ𝑡 𝑖 ≥ 𝛾 
+
+> √𝑑𝐸 𝑠
+
+o
+
+; 
+
+> 12
+
+if A𝑡 ≠ ∅ then 
+
+/* On the devices with active uplinks. */  
+
+> 13
+
+for 𝑖 ∈ A 𝑡 do  
+
+> 14
+
+Report 𝚫 𝑡 𝑖 2 to the parameter server; 
+
+/* On the parameter server. */  
+
+> 15
+
+𝐵 𝑡 ← max 𝑖 ∈ A 𝑡 𝚫 𝑡 𝑖 2; 
+
+> 16
+
+for 𝑖 ∈ A 𝑡 do  
+
+> 17
+
+b𝒙 𝑡 𝑖 ← 𝛾 ℎ𝑡 𝑖 
+
+𝚫 𝑡 𝑖 
+
+𝐵 𝑡 
+
+;
+
+/* On the parameter server. */  
+
+> 18
+
+˘𝚫 𝑡 ← 𝐵 𝑡 
+
+𝛾 |A 𝑡 |
+
+ 𝒛 𝑡 + Í𝑖 ∈ A 𝑡 ℎ𝑡 𝑖 b𝒙 𝑡 𝑖 
+
+, where 
+
+𝒛 𝑡 ∼ N ( 0, 𝜎 2 
+
+> 𝑧
+
+I);
+
+/* Model reconstruction. */  
+
+> 19
+
+𝒙 𝑡 +1 ← 𝜂 ˘𝚫 𝑡 + 1
+
+|A 𝑡 |
+
+Í𝑖 ∈ A 𝑡 𝒙 𝜏 𝑖 (𝑡 )+ 1;
+
+/* Local checkpoint buffer update. */  
+
+> 20
+
+C ← C ∪ {( 𝑡 + 1, 𝒙 𝑡 +1)} ; // store latest model  
+
+> 21
+
+C ← {( 𝑟, 𝒙 𝑟 ) ∈ C | 𝑟 ≥ min 𝑗 ∈ [ 𝑚 ] 𝜏 𝑗 (𝑡 + 1) + 1} ;
+
+// prune outdated models /* Postponed broadcast. */  
+
+> 22
+
+for 𝑖 ∈ A 𝑡 do  
+
+> 23
+
+𝒙 𝑡 +1 
+
+> 𝑖
+
+← 𝒙 𝑡 +1, 𝜏 𝑖 (𝑡 + 1) ← 𝑡 ; 
+
+> 24
+
+else 𝒙 𝑡 +1 
+
+> 𝑖
+
+← e𝒙 𝑡 𝑖 , 𝜏 𝑖 (𝑡 + 1) ← 𝜏 𝑖 (𝑡 ) ; 
+
+> 25
+
+else  
+
+> 26
+
+𝒙 𝑡 +1 ← 𝒙 𝑡 ; 
+
+> 27
+
+for 𝑖 ∈ [ 𝑚 ] do 𝒙 𝑡 +1 
+
+> 𝑖
+
+← e𝒙 𝑡 𝑖 , 𝜏 𝑖 (𝑡 + 1) ← 𝜏 𝑖 (𝑡 );
+
+Assumption 3 (Bounded Variance) . Stochastic gradients at each device node 𝑖 ∈ [ 𝑚 ] are unbiased estimates of the true gradient of the Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+local objectives, i.e., 
+
+E ∇ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 ) | F 𝑡  = ∇𝐹 𝑖 (𝒙 𝑡 𝑖 ),
+
+and the variance of stochastic gradients at each device node 𝑖 ∈ [ 𝑚 ]
+
+is uniformly bounded, i.e., 
+
+E
+
+h
+
+∇ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 ) − ∇ 𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22 | F 𝑡 i
+
+≤ 𝜎 2, ∀ 𝒙 ∈ R𝑑 .
+
+Notably, in Algorithm 1, although each round consists of 𝑠 local steps, only a single sample 𝜉 𝑡 𝑖 is drawn. The unbiasedness in As-sumption 3 is imposed with respect to 𝒙 𝑡 𝑖 , rather than 𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+for all 
+
+𝑘 = 0, ..., 𝑠 − 1. In other words, Assumption 3 is more relaxed than the assumption of unbiased stochastic gradients at each local step. To account for this relaxation, following [31, 38, 40], we bound the cumulative deviation of ∇ℓ𝑖 (𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 ) from ∇ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 ); details can be seen in Lemma 3. 
+
+Lemma 3 ([31, 38, 40]) . Suppose Assumption 2 holds. When 𝑠 > 1,
+
+∥ 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+[∇ ℓ𝑖 (𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 ) −∇ ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 )] ∥ 2 ≤ 𝜅𝜂𝑠 (𝑠 − 1)𝐿 𝑖 
+
+2 ∇ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 ) 2 ,
+
+where 𝜅 ≜ max 𝑖 2( ( 1+𝜂𝐿 𝑖 )𝑠 −1−𝑠𝜂𝐿 𝑖 )    
+
+> 𝑠 (𝑠 −1) ( 𝜂𝐿 𝑖 )2
+
+and non-decreases with respect to 
+
+𝜂 > 0. When 𝑠 = 1, ∥∇ ℓ𝑖 (𝒙 (𝑡, 0) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 ) − ∇ ℓ𝑖 (𝒙 𝑡 𝑖 ; 𝜉 𝑡 𝑖 )∥ 2 = 0.
+
+It is easy to check that 𝜅 remains bounded from above as long as the learning rate 𝜂 is bounded. For example, when 𝜂 ≤ 𝜖 /( 𝑠𝐿 ),we have 𝜅 ≤ 2(𝑒 𝜖 − 1 − 𝜖 )/ 𝜖 2. That is, we can treat 𝜅 as a constant 
+
+when 𝜂 is sufficiently small. 
+
+Assumption 4 (Bounded Inter-device Heterogeneity) . We say that local objective function 𝐹 𝑖 ’s satisfy (𝛽, 𝜁 )-bounded dissimilarity con-dition for 𝛽, 𝜁 ≥ 0 if 
+
+1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∥∇ 𝐹 𝑖 (𝒙 ) − ∇ 𝐹 (𝒙 )∥ 22 ≤ 𝛽 2 ∥∇ 𝐹 (𝒙 )∥ 22 + 𝜁 2, ∀ 𝒙 ∈ R𝑑 . (8) Assumptions 2, and 3 are standard in federated learning anal-ysis [17, 20, 48]. Assumption 4 captures the heterogeneity across different users. When devices have identical local datasets, it holds for (8) that 𝛽 = 𝜁 = 0 since 𝐹 𝑖 = 𝐹 𝑗 .
+
+Assumption 5 (Bounded True Gradient) . The full-batch gradient is uniformly bounded, i.e., ∥∇ 𝐹 𝑖 (𝒙 )∥ 2 ≤ 𝐺 max , ∀𝒙 ∈ R𝑑 .
+
+Assumption 5 assumes that the true gradients are bounded from above. It is more relaxed than those commonly adopted in the OTA literature [3, 4, 30, 32, 50], where stochastic gradients are typically required to be uniformly bounded. We conjecture that the gradient boundedness assumption is primarily imposed for technical convenience, and we leave its relaxation for future work. Notably, it is easy to check that implementing our algorithm does not require 𝐺 max as an input. 
+
+## 5.2 Convergence Results 
+
+Following the widely adopted roadmap of gossip-type learning algorithm analysis [25–27, 35], we focus on the convergence of ¯𝒙 𝑡 ≜ 1
+
+> 𝑚
+
+Í𝑚 𝑖 =1 𝒙 𝑡 𝑖 , while our numerical experiments validate the 𝒙 𝑡 .
+
+Lemma 4 (Descent Lemma) . Suppose Assumptions 2, 3, and 4 hold. Choose a learning rate 𝜂 such that 𝜂 ≤ 1108 𝑠𝐿 (𝜅 +1) ( 𝛽 2+1) . It holds that 
+
+E 𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) | F 𝑡  ≤ − 𝜂𝑠 
+
+3 ∇𝐹 ( ¯𝒙 𝑡 ) 22 + 𝜂 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2𝑚 2 E 𝐵 2 
+
+> 𝑡
+
+| F 𝑡 | {z }
+
+> Receiver Noise
+
++ 6𝜂 2𝑠 2𝐿  𝜁 2 + 𝜎 2    1 + 𝜅 2𝐿 2  + 𝜂𝑠𝐿 2
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
+| {z }
+
+> Consensus Error
+
+.
+
+Proof Sketch. Unroll one iteration of ¯ 𝒙 𝑡 +1, it holds that 
+
+¯𝒙 𝑡 +1 − ¯𝒙 𝑡 = 1
+
+𝑚 ∑︁ 𝑖 ∈A 𝑡 
+
+1
+
+| A 𝑡 |
+
+𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾 +∑︁  
+
+> 𝑖 ∈A 𝑡
+
+e𝒙 𝑡 𝑖 
+
+!
+
+− 𝒙 𝑡 𝑖 
+
+!
+
++ 1
+
+𝑚 ∑︁ 𝑖 ∉A𝑡 
+
+ e𝒙 𝑡 𝑖 − 𝒙 𝑡 𝑖 
+
+
+
+= − 𝜂 𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑖
+
+) + 𝜂 𝑚 𝐵 𝑡 𝒛 𝑡 
+
+𝛾 . (9) 
+
+Via Assumption 2, we have 
+
+𝐹 ( ¯𝒙 𝑡 +1 ) − 𝐹 ( ¯𝒙 𝑡 ) ≤ 
+
+*
+
+∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 )
+
++| {z }
+
+> (𝐴 )
+
++
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 𝜂 𝑚 𝐵 𝑡 
+
+𝛾 𝒛 (𝑡 )
+
+| {z }
+
+> (𝐵 )
+
++ 𝐿 
+
+2
+
+𝜂 𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 ) − 𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾𝑚 
+
+> 22
+
+| {z } 
+
+> (𝐶 )
+
+.
+
+Term (𝐴 ) can be bounded by following the standard roadmap of stochastic gradient analysis with Lemma 3 and Assumptions 3 and 4. Recall that 𝐵 𝑡 ≜ max 𝑖 ∈ A 𝑡 ∥Δ𝑡 𝑖 ∥22 is an online norm tracker to obtain the maximum norm of local updates in A𝑡 in round 𝑡 . The key observation is that, conditional on F 𝑡 , 𝐵 𝑡 and receiver noise 𝒛 𝑡 are independent. So, we have 
+
+E (𝐵 ) | F 𝑡  = 𝜂 𝑚𝛾 ∇𝐹 ( ¯𝒙 𝑡 ), E 𝐵 𝑡 | F 𝑡  E 𝒛 𝑡 | F 𝑡  = 0
+
+Next, we use Jensen’s inequality to upper bound the term (𝐶 ):
+
+E (𝐶 ) | F 𝑡  ≤ 2𝜂 2
+
+𝑚 2
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑡 𝑖 )
+
+> 22
+
+| {z }
+
+> (𝐶. I)
+
++ 2𝜂 2
+
+𝛾 2𝑚 2 𝐵 𝑡 𝒛 𝑡 22
+
+| {z }
+
+> (𝐶. II )
+
+.
+
+By the conditional independence of 𝐵 𝑡 and 𝒛 𝑡 on F 𝑡 , we have 
+
+(𝐶. II ) = E[∥ 𝐵 𝑡 𝒛 𝑡 ∥22 |F 𝑡 ] ≤ 𝑑𝜎 2 
+
+> 𝑧
+
+E[𝐵 2 
+
+> 𝑡
+
+|F 𝑡 ]. Term (𝐶. I) can be up-per bounded by invoking Assumptions 3, 4, and Lemma 3. The rest of the proof combines the intermediate results of terms (𝐴 ),
+
+(𝐵 ), and (𝐶 ), and by applying our learning rate condition 𝜂 ≤
+
+1/( 108 𝑠𝐿 (𝜅 + 1)( 𝛽 2 + 1)) . Unlike FedAvg algorithm, Lemma 4 high-lights a consensus error term arising from the implicit gossiping and receiver noise term from OTA computation. □
+
+Performing a direct analysis of 𝐵 𝑡 is challenging due to the high uncertainties of A𝑡 and the heterogeneous updates of the device. Recall that device 𝑖 computes Δ𝑡 𝑖 relative to 𝒙 𝜏 𝑖 (𝑡 )+ 1, where 𝜏 𝑖 (𝑡 ) ≜
+
+{𝑡 ′ : 𝑡 ′ < 𝑡 and 𝑖 ∈ A 𝑡 ′
+
+} defines the most recent round when device 
+
+𝑖 had an active uplink. As such, we define an auxiliary variable 
+
+𝐶 2 
+
+> 𝑡
+
+≜ Í𝑚 𝑖 =1 Δ𝑡 𝑖 
+
+> 22
+
+. It is easy to see that 𝐵 2 
+
+> 𝑡
+
+= max 𝑖 ∈ A 𝑡 ∥Δ𝑡 𝑖 ∥22 ≤ 𝐶 2 
+
+> 𝑡
+
+.Note that 𝐶 2 
+
+> 𝑡
+
+is never computed by devices but is used as a tool to aid our analysis. Lemma 5 presents the result. Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+Lemma 5. Suppose Assumptions 1, 2, 3, 4, and 5 hold, and 𝜂 ≤  
+
+> 1
+> 𝑠𝐿 (𝜅 +1)
+
+. It holds that 
+
+1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E 𝐵 2
+
+> 𝑡
+
+ ≤ 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ ≤ 12 𝑚𝑠 2  𝜎 2 + 𝐺 2max 
+
+
+
+𝑐 2 .
+
+Proof Sketch. Expand 𝐶 2 
+
+> 𝑡
+
+, and by Jensen’s inequality, we have 
+
+𝐶 2 
+
+> 𝑡
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+Δ𝑡 𝑖  
+
+> 22
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+≤
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑡 − 𝜏 𝑖 (𝑡 ) ) 
+
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+.
+
+By taking the expectation and averaging over 𝑇 rounds, we have 
+
+1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ ≤ 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+"
+
+(𝑡 − 𝜏 𝑖 (𝑡 ) ) 
+
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+#
+
+.
+
+(10) 
+
+The key step is to regroup the terms in (10): 
+
+(10) = 1
+
+𝑇 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+E
+
+" 𝑠 −1∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+| {z }  
+
+> ≜𝑔 𝑖,𝑘
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =𝑘
+
+(𝑡 − 𝜏 𝑖 (𝑡 ) ) 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 }
+
+| {z } 
+
+> ≜𝑆 𝑖,𝑘
+
+#
+
+.
+
+Crucially, conditional on F 𝑘 , the multi-step gradient sum 𝑔 𝑖,𝑘 and 
+
+𝑆 𝑖,𝑘 are independent because future channel randomness and the current round stochastic gradients are independent. Therefore, we have 
+
+E
+
+h
+
+𝑔 𝑖,𝑘 · 𝑆 𝑖,𝑘 F𝑘 i
+
+= E
+
+h
+
+𝑔 𝑖,𝑘 F𝑘 i
+
+E
+
+h
+
+𝑆 𝑖,𝑘 F𝑘 i
+
+. (11) 
+
+We first bound 𝑆 𝑖,𝑘 . We define an auxiliary look-ahead variable 
+
+𝜏 + 
+
+> 𝑖
+
+(𝑘 ) ≜ min {𝑡 > 𝑘 : 𝑖 ∈ A 𝑡 } to denote the first round after 𝑘 
+
+at which uplink 𝑖 becomes active. Since 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 } = 0 for all 
+
+𝑡 ≥ 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) + 1, the sum 𝑆 𝑖,𝑘 accumulates only until device 𝑖 ’s next contribution: 
+
+𝑆 𝑖,𝑘 =   
+
+> 𝜏 +
+> 𝑖 (𝑘 )
+
+∑︁  
+
+> 𝑡 =𝑘
+
+(𝑡 − 𝜏 𝑖 (𝑡 ) ) (𝑎 )
+
+=   
+
+> 𝜏 +
+> 𝑖 (𝑘 ) − 𝑘
+
+∑︁  
+
+> 𝑗 =0
+
+( 𝑗 + 𝑘 − 𝜏 𝑖 (𝑘 ) ) 
+
+= (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )2
+
+2 + 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 
+
+2 + ( 𝑘 − 𝜏 𝑖 (𝑘 ) )  𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘  + ( 𝑘 − 𝜏 𝑖 (𝑘 ) ) ,
+
+where equality (𝑎 ) follows from change of variable 𝑗 = 𝑡 − 𝑘 and the fact that 𝜏 𝑖 (𝑘 ) = 𝜏 𝑖 ( 𝑗 + 𝑘 ) for 𝑘 ≤ 𝑗 + 𝑘 ≤ 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) because the uplink is inactive during that period. We can then invoke Lemma 7 in Appendix D to bound the first moment of the staleness factor 
+
+(𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 ) by 1 /𝑐 and its second moment by 2 /𝑐 2. Lemma 3 is used to bound 𝑔 𝑖,𝑘 . Combining them together, we have 
+
+E 𝑔 𝑖,𝑘 𝑆 𝑖,𝑘 F𝑘  = E
+
+" (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )2 + 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 
+
+2 F𝑘 
+
+#
+
+E 𝑔 𝑖,𝑘 F𝑘 
+
++ E (𝑘 − 𝜏 𝑖 (𝑘 ) )  𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘  + ( 𝑘 − 𝜏 𝑖 (𝑘 ) ) F𝑘  E 𝑔 𝑖,𝑘 F𝑘 
+
+≤
+
+ 1
+
+𝑐 2 + 12𝑐 +
+
+ 1
+
+𝑐 + 1
+
+
+
+(𝑘 − 𝜏 𝑖 (𝑘 ) ) 
+
+
+
+𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2 
+
+𝜎 2 + ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22
+
+
+
+.
+
+We use Assumption 5 to bound ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 2 ≤ 𝐺 max . Observe that the only remaining randomness comes from (𝑘 − 𝜏 𝑖 (𝑘 )) . Taking expectation over the remaining randomness and reusing Lemma 7 to bound (𝑘 − 𝜏 𝑖 (𝑘 )) yields Lemma 5 under 𝜂 ≤ 1/( 𝑠𝐿 (𝜅 + 1). □
+
+Next, we bound the consensus error in Lemma 6. To facilitate analysis, we introduce the following compact matrix forms: 
+
+𝑿 (𝑡 ) = 𝒙 𝑡 
+
+> 1
+
+, · · · , 𝒙 𝑡 𝑚 
+
+ ; 𝑮 (𝑡 ) =
+
+h𝑠 −1∑︁  
+
+> 𝑟 =0
+
+∇ℓ1 (𝒙 (𝑡,𝑟 ) 
+
+> 1
+
+), · · · , 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑚 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑚
+
+)
+
+i
+
+;
+
+𝒁 (𝑡 ) = 𝐵 𝑡 
+
+𝛾 
+
+1{ | A𝑡 |>0}| A 𝑡 | + 1{A𝑡 =0}
+
+h
+
+𝒛 𝑡 1{1∈A 𝑡 }, · · · , 𝒛 𝑡 1{𝑚 ∈A 𝑡 }
+
+i
+
+,
+
+where 𝑿 (𝑡 ) is a concatenated model parameter matrix for all devices at the beginning of round 𝑡 , 𝑮 (𝑡 ) is a local stochastic gradient accu-mulation, and 𝒁 (𝑡 ) is a scaled receiver noise matrix. When A𝑡 ≠ ∅,the receiver noise is rescaled by 𝐵 𝑡 /( 𝛾 A𝑡 ). When A𝑡 = ∅, it is easy to check that we simply have 𝒁 𝑡 = 0I.
+
+Lemma 6 (Consensus Error) . Suppose Assumptions 1, 2, 3, 4, and 5 hold. Choose a learning rate 𝜂 such that 𝜂 ≤ 1−√𝜌  
+
+> 632 𝑠𝐿 (𝜅 +1)
+
+√𝛽 2+1 . It holds that 
+
+1
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+h
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
+i
+
+≤ 108 𝜌𝜂 2𝑠 2 (𝛽 2 + 1)(1 − √𝜌 )2
+
+1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 36 𝜌𝜂 2𝑠 2𝜎 2
+
+(1 − √𝜌 )2 + 96 𝜌𝑚𝜂 2𝑠 2𝑑𝜎 2 
+
+> 𝑧
+
+(𝜎 2 + 𝐺 2max )
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 .
+
+Proof Sketch. Recall that J = 1 
+
+> 𝑚
+
+11 ⊤ . Unroll the recursion, we have 
+
+𝑿 (𝑡 ) (I − J) 2F
+
+> (𝑎 )
+
+= 𝜂 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+
+
+𝑮 (𝑞 ) − 𝒁 (𝑞 )  ©« 
+
+> 𝑡 −1
+
+Ö 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − Jª®¬
+
+> 2F
+> (𝑏 )
+
+≤ 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝑮 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − Jª®¬
+
+> 2F
+
++ 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − Jª®¬
+
+> 2F
+
+,
+
+where equality (𝑎 ) follows from the double-stochasticity, and in-equality (𝑏 ) follows from Jensen’s inequality. By following a similar roadmap as in [35, 38–40], Lemmas 3 and 1, we can bound the term 
+
+∥ Í𝑡 −1 
+
+> 𝑞 =0
+
+𝑮 (𝑞 ) (Î𝑡 −1 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − J)∥ 2F.The key technical challenge for bounding ∥ Í𝑡 −1 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) (Î𝑡 −1 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 −
+
+J)∥ 2F comes from the fact that 𝒁 𝑞 and 𝑊 𝑞 are not independent . Ob-serve that, by construction, 𝒁 𝑞 depends on A𝑞 and 𝐵 𝑞 , which are both functions of A𝑞 . We first upper bound 𝐵 𝑞 with 𝐶 𝑞 =
+
+Í𝑚 𝑖 =1 ∥Δ𝑞 𝑖 ∥22 because 𝐶 𝑞 and (A 𝑞 ,𝑊 (𝑞 ) ) are independent. It is easy to see that Î𝑡 −1 
+
+> 𝑙 =𝑞
+
+𝑊 (𝑙 ) − J = (𝑊 (𝑞 ) − J)( Î𝑡 −1 
+
+> 𝑙 =𝑞 +1
+
+𝑊 (𝑙 ) − J) due to double-stochasticity. Let IA𝑞 ≜ 1{1∈ A 𝑞 }, · · · , 1{𝑚 ∈ A 𝑞 }
+
+. We then have 𝒁 𝑞 = 𝐵 𝑞       
+
+> 𝛾
+> 1{ | A𝑞 |>0}𝒛 𝑞 IA𝑞
+> | A 𝑞 |+ 1{A𝑞 =0}
+
+. We can show that 
+
+1{|A 𝑞 |>0}𝒛 𝑞 IA𝑞 (𝑊 (𝑞 ) − J)| A 𝑞 | + 1{|A 𝑞 |=0} 
+
+> 2F
+
+≤ ∥ 𝒛 𝑞 ∥22 𝑊 (𝑞 ) − J 2F .
+
+Using a similar technique to bounding ∥ Í𝑡 −1 
+
+> 𝑞 =0
+
+𝑮 (𝑞 ) (Î𝑡 −1 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 −
+
+J)∥ 2F and by Lemma 5, we complete bounding ∥ Í𝑡 −1 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) (Î𝑡 −1 
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 −
+
+J)∥ F. Putting everything together, we obtain the desired consensus error bound in Lemma 6 with 𝜂 ≤ ( 1 − √𝜌 )/( 632 𝑠𝐿 (𝜅 + 1)√︁ 𝛽 2 + 1).
+
+□
+
+In the special case where all uplinks are always reliable, i.e., when 𝑐 = 1, we have 𝜌 = 0, and the consensus error reduces to 0. Lemma 6 says that the spectral norm 𝜌 must be strictly less than 1 to ensure a valid bound, which is an important ingredient to reach Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+a stationary point in the final convergence. Lemma 2 guarantees 
+
+𝜌 < 1. Let 𝐹 ∗ ≜ min 𝒙 𝐹 (𝒙 ).
+
+Theorem 1. Suppose Assumptions 1, 2, 3, 4, and 5 hold. Choose a learning rate 𝜂 such that 𝜂 ≤ 1−√𝜌  
+
+> 632 𝑠𝐿𝑚 (𝜅 +1)
+
+√𝛽 2+1 . It holds that                                 
+
+> 1
+> 𝑇
+> 𝑇 −1∑︁
+> 𝑡 =0
+> E
+> h
+> ∇𝐹 (¯𝒙 𝑡 )22
+> i
+> ≤6(E𝐹 (¯𝒙 0)−𝐹 ∗)
+> 𝜂𝑠𝑇 +216 𝜌𝜂 2𝑠 2𝐿 2𝜎 2
+> (1− √𝜌 )2
+> +36 𝜂𝑠𝐿  𝜅 2𝐿 2+1   𝜎 2+𝜁 2+73 𝜂𝑠𝐿𝑑𝜎 2
+> 𝑧
+> 𝑐 2𝛾 2𝑚
+>  𝜎 2+𝐺 2max
+> .
+
+The proof of Theorem 1 combines the key intermediate results stated in Section 5.2 and can be obtained by taking expectation over the remaining randomness, telescoping sum, and term rearrange-ments. Putting a specific choice of learning rate 𝜂 = √𝑚 /( 𝐿 √𝑠𝑇 )
+
+in Theorem 1, we have Corollary 1. 
+
+Corollary 1. Suppose Assumptions 1, 2, 3, 4, and 5 hold. Let 𝜂 =
+
+√𝑚 /( 𝐿 √𝑠𝑇 ), where 𝑇 ≥
+
+ 632 𝑠𝑚 (𝜅 +1)√𝛽 2+1 
+
+> (1−√𝜌 )
+
+2
+
+. It holds that                                      
+
+> 1
+> 𝑇
+> 𝑇 −1∑︁
+> 𝑡 =0
+> E
+> h
+> ∇𝐹 (¯𝒙 𝑡 )22
+> i
+> ≤6𝐿  E[𝐹 (¯𝒙 0) ] − 𝐹 ★
+> √𝑚𝑠𝑇
+> |{z }
+> (𝐴 )
+> +216 𝜌𝜎 2
+> (1− √𝜌 )2
+> 𝑚𝑠 𝑇
+> |{z }
+> (𝐵 )
+> +36  𝜅 2𝐿 2+1   𝜎 2+𝜁 2√︂ 𝑚𝑠 𝑇
+> |{z }
+> (𝐶 )
+> +73 𝑑𝜎 2
+> 𝑧
+>  𝜎 2+𝐺 2max
+> 
+> 𝑐 2𝛾 2√︂
+> 𝑠 𝑚𝑇
+> |{z }
+> (𝐷 )
+> .
+
+Remark 2. Theorem 1 and Corollary 1 establish our final conver-gence bound. 
+
+On the structures. (𝐴 ) characterizes the initialization error, (𝐵 )
+
+results from the consensus error, (𝐶 ) is due to noisy stochastic gradi-ents (Assumption 3) and inter-device gradient heterogeneity (Assump-tion 4), and (𝐷 ) stems from receiver noise. Notably, the receiver noise term in Theorem 1 exhibits an O( 1/𝑚 ) reduction, where simultane-ous transmission effectively averages out the receiver noise, consistent with the OTA literature [3, 30]. 
+
+On the convergence. Corollary 1 shows that ¯𝒙 𝑡 converges to a sta-tionary point of an unbiased non-convex objective 𝐹 at rate 1/√𝑇 ,which is optimal for any first-order method with access only to sto-chastic gradients [6], rather than to the biased auxiliary objective e𝐹 
+
+in (2) . Term (𝐴 ) exhibits linear speedup in 𝑚 and 𝑠 , and term (𝐷 )
+
+speeds up with 𝑚 . However, terms (𝐵 ) and (𝐶 ) ultimately dominate, consistent with the literature [21]. In future work, we will investigate how to achieve linear speedup in both the number of devices 𝑚 and the number of local steps 𝑠 .
+
+On the role of uplink dynamics. A larger 𝑐 implies a better uplink reliability and a smaller spectral norm 𝜌 . Consequently, our bound on 1
+
+> 𝑇
+
+Í𝑇 −1 
+
+> 𝑡 =0
+
+E[∥∇ 𝐹 ( ¯𝒙 𝑡 )∥ 22] would become tighter. In the special case when 𝑐 = 1, i.e., uplinks are always reliable, FedOAG reduces to FedAvg with a receiver noise, and we also have 𝜌 = 0. Without receiver noise ( 𝜎 2 
+
+> 𝑧
+
+= 0), our bound reduces to O( 1√𝑚𝑠𝑇 +√︁ 𝑚𝑠 𝑇 (𝜎 2 + 𝜁 2)) and matches the FedAvg literature [34]. When 𝑝 𝑡 𝑖 = 𝑐 for all 𝑖 ∈ [ 𝑚 ]
+
+and 𝑡 ∈ [ 𝑇 ], i.e., uniformly at random uplink availability. Setting 
+
+𝜂 =√︁ 𝑘 /𝑠𝑇 in Theorem 1, our convergence rate becomes O( 1√𝑘𝑠𝑇 +  
+
+> 𝜎 2+𝜁 2
+> (1−√𝜌 )2
+
+√︃ 𝑘 𝑠𝑇 ), which introduces a larger variance compared to fully reliable, consistent with literature [44]. Note that 𝛾 also affects 𝑐 .For example, we have 𝑝 𝑡 𝑖 = exp (− 𝛾 2/( 𝑑 Λ𝑡 𝑖 𝐸 𝑠 )) in the special case of Rayleigh fading. When the parameters 𝑑 , Λ𝑡 𝑖 , and 𝐸 𝑠 are fixed, a smaller 𝛾 leads to a greater 𝑐 , yet at the expense of amplifying the receiver noise term (𝐷 ). Similarly, a greater 𝛾 , which attenuates the receiver noise term (𝐷 ), leads to a smaller 𝑐 , i.e., fewer active uplinks. In other words, the term (𝐷 ) reveals the fundamental tradeoff between uplink availability and signal quality. We demonstrate such a tradeoff empirically in Fig. 3. A principled choice of 𝛾 would require explicit knowledge of the statistical CDIs; we defer the design of CDI-agnostic tuning frameworks for 𝛾 to future work. 
+
+## 6 Numerical Experiments 
+
+In this section, we evaluate the proposed FedOAG against baseline algorithms under time-varying and heterogeneous wireless condi-tions arising from mobile devices. 
+
+## 6.1 Experiment Setup 
+
+Federated Learning System. We consider 𝑚 = 30 devices, each continuing to compute locally despite uncertainties in their up-links. Only devices with active uplinks can transmit their updates to the parameter server. Each device performs 𝑠 = 10 steps of local stochastic gradient descent with a mini-batch size of 32. The re-sults are obtained over five repetitions with a total 𝑇 = 800 rounds. We use a multi-layer perceptron as the neural network with ReLU activations. Hyperparameter settings and network details are de-ferred to Appendix E. We use MNIST [19] dataset, which admits 10 classes of images, as the basis for our simulations. We first partition the datasets according to a Dirichlet distribution parameterized by 0.1, which creates a highly non-i.i.d. local data distribution across devices. Then, we assign partitioned data samples to devices. 
+
+Wireless Channel Model. The devices are uniformly distributed within a cell of radius 𝑟 max = 1500 meters centered on the parameter server. The communication bandwidth is 𝐵 = 1 MHz with carrier frequency 𝑓 𝑐 = 2.4 GHz, and the transmission power is set to be 
+
+𝑃 tx = 0 dBm. The noise power spectral density at the parameter server is 𝑁 0 = −173 dBm/Hz. For a device at a distance 𝐷 from the parameter server, the statistical gain is modeled as 
+
+Λ(𝐷 ) = 10 −PL ref /10   𝐷 𝐷 0
+
+ −𝑛 , (12) where 𝐷 is the device-to-parameter-server distance, 𝐷 0 = 1 meter is the reference distance, PL ref = 50 dB is the path loss at 𝐷 0, and 𝑛 =
+
+3.5 is the path-loss exponent, which yields a highly heterogeneous loss profile across devices. Since devices move according to the mobility model below, we denote Λ𝑡 𝑖 ≜ Λ(p𝑡 𝑖 ) as a function of its position p𝑡 𝑖 for the time-varying statistical gain of device 𝑖 in round 
+
+𝑡 . The small-scale fading coefficient is ℎ𝑖,𝑡 ∼ CN ( 0, Λ𝑡 𝑖 ), drawn independently across devices and rounds. 
+
+Mobility Model. To simulate time-varying channel conditions while preserving statistical channel heterogeneity across devices, we design a bounded random waypoint (RWP) model [13]. Each de-vice 𝑖 starts at the initial position p0 
+
+> 𝑖
+
+∈ R2 drawn from the stratified placement described in Wireless Channel Model , and a personal terri-tory of radius 𝑟 local = 50 m, centered on p0 
+
+> 𝑖
+
+, is fixed for the duration of training. At the start of each leg, device 𝑖 draws a target waypoint 
+
+w𝑖 uniformly at random over its personal territory disc and a travel speed 𝑣 𝑖 ∼ U [ 𝑣 min , 𝑣 max ]. It then moves in a straight line toward 
+
+w𝑖 at speed 𝑣 𝑖 for a duration of 𝜏 until the waypoint is reached, at Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 0 100 200 300 400 500 600 700 800 round 10 20 30 40 50 60 70 80 90 Test Accuracy (%)      
+
+> FedAvg (Noise Free) FedOAG (Ours) SCA BB Alternative BB Interior Vanilla OTA
+> 750 760 770 780 790 800 round (Rounds) 65 70 75 80 85 90 Test Accuracy (%)
+> Zoom-in
+
+(a) Test accuracy for stationary statistical CDI dynamics. 0 100 200 300 400 500 600 700 800 round 20 40 60 80 Test Accuracy (%)   
+
+> FedAvg (Noise Free) FedOAG (Ours) SCA BB Alternative BB Interior Vanilla OTA
+> 760 780 800 round (Rounds) 65 70 75 80 85 90 Test Accuracy (%)
+> Zoom-in
+
+(b) Test accuracy for non-stationary statistical CDI dynam-ics. 0 100 200 300 400 500 600 700 800 round 20 40 60 80 Test Accuracy (%)   
+
+> FedAvg (Noise Free) FedOAG (Ours) SCA BB Alternative BB Interior Vanilla OTA
+> 760 780 800 round (Rounds) 65 70 75 80 85 90 Test Accuracy (%)
+> Zoom-in
+
+(c) Test accuracy for mixed non-stationary statistical CDI dynamics. 
+
+Figure 2: Comparisons of different OTA federated learning algo-rithms on the MNIST dataset with 𝑚 = 30 devices. The results are obtained over five repetitions with solid curves depicting mean test accuracy, and the shaded area denotes standard deviation. 
+
+which point a new waypoint and speed are drawn immediately, and the next leg begins. To draw w𝑖 uniformly over the personal ter-ritory disc of radius 𝑟 local , one samples an angle 𝜙 ∼ U [ 0, 2𝜋 ] and a radius via the inverse-CDF of the marginal PDF 𝑓 (𝑟 ) = 2𝑟 /𝑟 2local ,giving waypoint coordinates w𝑖 = p0
+
+𝑖 + ( 𝑟 cos 𝜙, 𝑟 sin 𝜙 ), clipped to the cell boundary. At the end of round 𝑡 , device 𝑖 has traveled at most Δ𝑖 = 𝑣 𝑖 𝜏 along its current leg, and its updated position is 
+
+p𝑡 +1
+
+𝑖 = p𝑡 𝑖 + min 1, Δ𝑖 
+
+w𝑖 − p𝑡 𝑖 2
+
+!
+
+(w𝑖 − p𝑡 𝑖 ), (13) 
+
+where 𝜏 = 8 seconds. 
+
+Baseline algorithms. We compare the proposed FedOAG with five baseline algorithms. (i) The ideal FedAvg algorithm [24] aggregates each device’s update without any receiver noise, (ii) the SCA algo-rithm [3], (iii) the BB-interior algorithm [49], (iv) the BB-alternative algorithm [49], and (v) the vanilla OTA [45]. Table 1 specifies the CDI knowledge of each algorithm. Details of algorithm implemen-tations are deferred to Appendix E. 
+
+## 6.2 Experiment Results 
+
+We consider three mobility regimes. (i) Stationary: 𝑣 min = 𝑣 max =
+
+0 m/s. In this regime, devices do not move throughout training. 0510 15 20 25 30 # Active uplinks 1e-15 1e-12 1e-09 5e-09 1e-08 1e-05 
+
+> 10 20 30 40 50 60 70 80 Test accuracy (%)
+> 10.5 77.1 83.2 44.0 16.5 9.7
+> More active uplinks Higher receiver noise amplification Fewer active uplinks Lower receiver noise amplification
+> Test Accuracy (average over last 50 rounds) Average # active uplinks (all rounds)
+
+Figure 3: Comparison of FedOAG under different 𝛾 on MNIST with 
+
+𝑚 = 30 devices in the stationary regime, averaged over five repeti-tions. The blue curve (left axis) shows test accuracy over the final 
+
+50 rounds; yellow bars (right axis) show the average number of ac-tive devices per round. Smaller 𝛾 lowers the truncation threshold, yielding more active uplinks but greater receiver noise amplifica-tion, and vice versa. 𝛾 values on the 𝑥 -axis are uniformly spaced for readability. 
+
+statistical gains Λ𝑡 𝑖 = Λ0
+
+𝑖 for all 𝑖 ∈ [ 𝑚 ] and 𝑡 ∈ [ 𝑇 ]. (ii) Non-stationary: Following the mobility classifications defined in [1, Table 7.2-3] and [14], we consider the speed range 𝑣 min = 0 m/s, 𝑣 max = 2.5m/s = 9 km/h, which covers walking to cycling speeds. (iii) Mixed non-stationary: Half of the devices remain stationary throughout training. The other half are pedestrian mobile with 𝑣 min = 0 m/s, and 𝑣 max = 2.5 m/s. Ideal FedAvg, which aggregates updates without receiver noise, serves as the benchmark. Fig. 2 shows that FedOAG achieves the highest test accuracy among all distributed OTA baselines, main-taining around 83% across mobility regimes. The SCA algorithm reaches about 81% in the stationary regime but drops below 80% under non-stationarity. Although the SCA tunes its pre-scalars through a bias-variance tradeoff, its convergence remains biased, whereas FedOAG converges asymptotically to a stationary point of the non-convex objective. Figs. 2b and 2c further show that vanilla OTA, BB-interior, and BB-alternative fluctuate heavily under mo-bility, while FedOAG remains stable. The BB methods admit only a subset of devices per round, yielding a highly dynamic aggregation population that injects variance into the trajectory. Vanilla OTA, by forcing every device to transmit, is dominated by the weakest channel, which disproportionally amplifies receiver noise. FedOAG ’s shaded band is comparable to the SCA and BB-alternative but cen-tered at a higher mean test accuracy, while vanilla OTA and BB-interior show markedly wider dispersion. Finally, FedOAG requires only local small-scale CDI at each device, avoiding the overhead and latency of global CDI acquisition at the parameter server. We can see from Fig. 2 that FedOAG exhibits no significant slow-down, confirming the mild impact of stale updates (Lemma 7 in Appendix). In fact, FedOAG achieves the fastest convergence among the OTA baselines. This is partly enabled by the ability to tune 𝛾 
+
+to balance uplink availability against receiver noise. Fig. 3 illus-trates this tradeoff: smaller 𝛾 activates more uplinks but degrades utility due to significantly amplified receiver noise, while larger 𝛾 
+
+suppresses noise at the cost of fewer active uplinks. Test accuracy Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+peaks at an intermediate 𝛾 = 10 −9, where the two effects are jointly balanced. 
+
+## 7 Conclusion 
+
+In this paper, we have shown that heterogeneous and time-varying statistical CDIs induce highly uncertain uplink availability probabil-ities 𝑝 𝑡 𝑖 . To tackle this, we have proposed FedOAG , which converges to a stationary point of an unbiased non-convex objective via trun-cated transmission with gradient normalization and a postponed global broadcast. Notably, the algorithm achieves convergence with-out knowing the underlying true dynamics in 𝑝 𝑡 𝑖 ’s or the fading models. Future work will investigate how to improve storage ef-ficiency, avoid the need to save checkpoints, relax Assumption 5, and develop a CDI-agnostic tuning framework for 𝛾 .
+
+## Acknowledgements 
+
+We gratefully acknowledge the support from the NSF CAREER award under grants 2129015 and 2340482. The views and conclu-sions contained in this document are those of the authors and should not be interpreted as representing the official policies, ei-ther expressed or implied, of the NSF or the U.S. Government. The U.S. Government is authorized to reproduce and distribute reprints for Government purposes notwithstanding any copyright notation herein. 
+
+## References 
+
+[1] 3GPP. 2017. Study on Channel Model for Frequencies from 0.5 to 100 GHz . Technical Report TR 38.901. 3rd Generation Partnership Project. [2] Muhammad Faraz Ul Abrar and Nicolò Michelusi. 2023. Analog-digital scheduling for federated learning: A communication-efficient approach. In 2023 57th Asilomar Conference on Signals, Systems, and Computers . IEEE, 53–58. [3] Muhammad Faraz Ul Abrar and Nicolò Michelusi. 2025. Non-Convex Over-the-Air Heterogeneous Federated Learning: A Bias-Variance Trade-off. arXiv preprint arXiv:2510.26722 (2025). [4] Muhammad Faraz Ul Abrar and Nicolò Michelusi. 2026. Biased Federated Learn-ing under Wireless Heterogeneity. IEEE Transactions on Wireless Communications 
+
+(2026), 1–1. doi:10.1109/TWC.2026.3678173 [5] Mohammad Mohammadi Amiri and Deniz Gündüz. 2020. Federated learning over wireless fading channels. IEEE transactions on wireless communications 19, 5 (2020), 3546–3557. [6] Yossi Arjevani, Yair Carmon, John C Duchi, Dylan J Foster, Nathan Srebro, and Blake Woodworth. 2023. Lower bounds for non-convex stochastic optimization. 
+
+Mathematical Programming 199, 1 (2023), 165–214. [7] Stephen Boyd, Arpita Ghosh, Balaji Prabhakar, and Devavrat Shah. 2006. Ran-domized gossip algorithms. IEEE transactions on information theory 52, 6 (2006), 2508–2530. [8] Xiaowen Cao, Guangxu Zhu, Jie Xu, and Kaibin Huang. 2020. Optimized power control for over-the-air computation in fading channels. IEEE Transactions on Wireless Communications 19, 11 (2020), 7498–7513. [9] Xiaowen Cao, Guangxu Zhu, Jie Xu, Zhiqin Wang, and Shuguang Cui. 2021. Optimized power control design for over-the-air federated edge learning. IEEE Journal on Selected Areas in Communications 40, 1 (2021), 342–358. [10] Yae Jee Cho, Jianyu Wang, and Gauri Joshi. 2022. Towards understanding biased client selection in federated learning. In International Conference on Artificial Intelligence and Statistics . PMLR, 10351–10375. [11] Michael Crawshaw and Mingrui Liu. 2024. Federated Learning under Periodic Client Participation and Heterogeneous Data: A New Communication-Efficient Algorithm and Analysis. In The Thirty-eighth Annual Conference on Neural Infor-mation Processing Systems .[12] Xinran Gu, Kaixuan Huang, Jingzhao Zhang, and Longbo Huang. 2021. Fast federated learning in the presence of arbitrary device unavailability. Advances in Neural Information Processing Systems 34 (2021), 12052–12064. [13] Esa Hyytiä and Jorma Virtamo. 2007. Random waypoint mobility model in cellular networks. Wireless Networks 13, 2 (2007), 177–188. [14] ITU-R. 1997. Guidelines for Evaluation of Radio Transmission Technologies for IMT-2000 . Technical Report M.1225. International Telecommunication Union. [15] Mark Jerrum and Alistair Sinclair. 1988. Conductance and the rapid mixing prop-erty for Markov chains: the approximation of permanent resolved. In Proceedings of the Twentieth Annual ACM Symposium on Theory of Computing . 235–244. [16] Divyansh Jhunjhunwala, Pranay Sharma, Aushim Nagarkatti, and Gauri Joshi. 2022. Fedvarp: Tackling the variance due to partial client participation in feder-ated learning. In Uncertainty in Artificial Intelligence . PMLR, 906–916. [17] Sai Praneeth Karimireddy, Satyen Kale, Mehryar Mohri, Sashank Reddi, Sebas-tian Stich, and Ananda Theertha Suresh. 2020. Scaffold: Stochastic controlled averaging for federated learning. In International Conference on Machine Learning .PMLR, 5132–5143. [18] Anastasiia Koloskova, Sebastian U Stich, and Martin Jaggi. 2022. Sharper conver-gence guarantees for asynchronous sgd for distributed and federated learning. 
+
+Advances in Neural Information Processing Systems 35 (2022), 17202–17215. [19] Yann LeCun, Corinna Cortes, and CJ Burges. 2010. MNIST handwritten digit database. ATT Labs [Online]. Available: http://yann.lecun.com/exdb/mnist 2 (2010). [20] Tian Li, Anit Kumar Sahu, Manzil Zaheer, Maziar Sanjabi, Ameet Talwalkar, and Virginia Smith. 2020. Federated optimization in heterogeneous networks. 
+
+Proceedings of Machine Learning and Systems 2 (2020), 429–450. [21] Xiang Li, Kaixuan Huang, Wenhao Yang, Shusen Wang, and Zhihua Zhang. 2020. On the Convergence of FedAvg on Non-IID Data. In International Conference on Learning Representations .[22] Nancy A. Lynch. 1996. Distributed Algorithms . Morgan Kaufmann Publishers Inc., San Francisco, CA, USA. [23] Jiayu Mao, Haibo Yang, Peiwen Qiu, Jia Liu, and Aylin Yener. 2022. CHARLES: Channel-quality-adaptive over-the-air federated learning over wireless networks. In 2022 IEEE 23rd International Workshop on Signal Processing Advances in Wireless Communication (SPAWC) . IEEE, 1–5. [24] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Aguera y Arcas. 2017. Communication-efficient learning of deep net-works from decentralized data. In Artificial intelligence and statistics . PMLR, 1273–1282. [25] Angelia Nedić, Alex Olshevsky, and Michael G Rabbat. 2018. Network topology and communication-computation tradeoffs in decentralized optimization. Proc. IEEE 106, 5 (2018), 953–976. [26] Angelia Nedic, Alex Olshevsky, and Wei Shi. 2017. Achieving geometric conver-gence for distributed optimization over time-varying graphs. SIAM Journal on Optimization 27, 4 (2017), 2597–2633. [27] Angelia Nedic and Asuman Ozdaglar. 2009. Distributed subgradient methods for multi-agent optimization. IEEE Trans. Automat. Control 54, 1 (2009), 48–61. [28] John Nguyen, Kshitiz Malik, Hongyuan Zhan, Ashkan Yousefpour, Mike Rabbat, Mani Malek, and Dzmitry Huba. 2022. Federated learning with buffered asyn-chronous aggregation. In International Conference on Artificial Intelligence and Statistics . PMLR, 3581–3607. [29] Mónica Ribero, Haris Vikalo, and Gustavo De Veciana. 2022. Federated learn-ing under intermittent client availability and time-varying communication con-straints. IEEE Journal of Selected Topics in Signal Processing 17, 1 (2022), 98–111. [30] Tomer Sery, Nir Shlezinger, Kobi Cohen, and Yonina C Eldar. 2021. Over-the-air federated learning from heterogeneous data. IEEE Transactions on Signal Processing 69 (2021), 3796–3811. [31] Lili Su, Ming Xiang, Jiaming Xu, and Pengkun Yang. 2023. Federated learning in the presence of adversarial client unavailability. arXiv preprint arXiv:2305.19971 
+
+(2023). [32] Busra Tegin and Tolga M Duman. 2023. Federated learning with over-the-air aggregation over time-varying channels. IEEE Transactions on Wireless Commu-nications 22, 8 (2023), 5671–5684. [33] Mohammad Taha Toghani and César A Uribe. 2022. Unbounded Gradients in Federated Learning with Buffered Asynchronous Aggregation. In 2022 58th Annual Allerton Conference on Communication, Control, and Computing (Allerton) .IEEE, 1–8. [34] Jianyu Wang, Qinghua Liu, Hao Liang, Gauri Joshi, and H Vincent Poor. 2020. Tackling the objective inconsistency problem in heterogeneous federated opti-mization. Advances in Neural Information Processing Systems 33 (2020), 7611–7623. [35] Jianyu Wang, Anit Kumar Sahu, Gauri Joshi, and Soummya Kar. 2022. Matcha: A matching-based link scheduling strategy to speed up distributed optimization. 
+
+IEEE Transactions on Signal Processing 70 (2022), 5208–5221. [36] Shiqiang Wang and Mingyue Ji. 2022. A Unified Analysis of Federated Learning with Arbitrary Client Participation. In Advances in Neural Information Processing Systems , Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho (Eds.). [37] Shiqiang Wang and Mingyue Ji. 2023. A lightweight method for tackling unknown participation statistics in federated averaging. arXiv preprint arXiv:2306.03401 
+
+(2023). [38] Ming Xiang, Stratis Ioannidis, Edmund Yeh, Carlee Joe-Wong, and Lili Su. 2023. Towards Bias Correction of FedAvg over Nonuniform and Time-Varying Com-munications. In 2023 62nd IEEE Conference on Decision and Control (CDC) . IEEE, 6719–6724. [39] Ming Xiang, Stratis Ioannidis, Edmund Yeh, Carlee Joe-Wong, and Lili Su. 2024. Efficient federated learning against heterogeneous and non-stationary client Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+unavailability. Advances in Neural Information Processing Systems 37 (2024), 104281–104328. [40] Ming Xiang, Stratis Ioannidis, Edmund Yeh, Carlee Joe-Wong, and Lili Su. 2025. Empowering federated learning with implicit gossiping: Mitigating connection unreliability amidst unknown and arbitrary dynamics. IEEE Transactions on Signal Processing 73 (2025), 766–780. [41] Cong Xie, Sanmi Koyejo, and Indranil Gupta. 2019. Asynchronous federated optimization. arXiv preprint arXiv:1903.03934 (2019). [42] Chunmei Xu, Shengheng Liu, Zhaohui Yang, Yongming Huang, and Kai-Kit Wong. 2021. Learning rate optimization for federated learning exploiting over-the-air computation. IEEE Journal on Selected Areas in Communications 39, 12 (2021), 3742–3756. [43] Yikai Yan, Chaoyue Niu, Yucheng Ding, Zhenzhe Zheng, Shaojie Tang, Qinya Li, Fan Wu, Chengfei Lyu, Yanghe Feng, and Guihai Chen. 2023. Federated opti-mization under intermittent client availability. INFORMS Journal on Computing 
+
+(2023). [44] Haibo Yang, Minghong Fang, and Jia Liu. 2021. Achieving linear speedup with partial worker participation in non-iid federated learning. arXiv preprint arXiv:2101.11203 (2021). [45] Kai Yang, Tao Jiang, Yuanming Shi, and Zhi Ding. 2020. Federated learning via over-the-air computation. IEEE transactions on wireless communications 19, 3 (2020), 2022–2035. [46] Jiacheng Yao, Wei Xu, Zhaohui Yang, Xiaohu You, Mehdi Bennis, and H Vincent Poor. 2024. Wireless federated learning over resource-constrained networks: Dig-ital versus analog transmissions. IEEE Transactions on Wireless Communications 
+
+23, 10 (2024), 14020–14036. [47] Bicheng Ying, Zhe Li, and Haibo Yang. 2025. Exact and Linear Convergence for Federated Learning under Arbitrary Client Participation is Attainable. In 
+
+The Thirty-ninth Annual Conference on Neural Information Processing Systems .https://openreview.net/forum?id=TeocEZCWnr [48] Xiaotong Yuan and Ping Li. 2022. On Convergence of FedProx: Local Dissim-ilarity Invariant Bounds, Non-smoothness and Beyond. In Advances in Neural Information Processing Systems , Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho (Eds.). [49] Guangxu Zhu, Yong Wang, and Kaibin Huang. 2019. Broadband analog aggre-gation for low-latency federated edge learning. IEEE transactions on wireless communications 19, 1 (2019), 491–506. [50] Jingyang Zhu, Yuanming Shi, Yong Zhou, Chunxiao Jiang, Wei Chen, and Khaled B Letaief. 2024. Over-the-air federated learning and optimization. IEEE Internet of Things Journal 11, 10 (2024), 16996–17020. Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+## Appendix for “Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks” 
+
+Ming Xiang, Nicolò Michelusi, Yonina C. Eldar, Lili Su 
+
+## A Additional Related Work 
+
+Dynamic device availability. Such dynamic client availability is often handled either via proactively server-side scheduling [10, 24] or by modeling uncontrollable device availability through homogeneous Markovian dynamics [29], regularized participation [11, 36], and time-invariant but heterogeneous available probabilities [37, 47]. Xiang et al. develop resilient algorithms for heterogeneous and time-varying device availability in [38–40] in standard digital networks, where device updates are transmitted and decoded individually without errors. The OTA federated learning, however, relies on the superposition property of analog waveforms, the absence of individual device updates fundamentally alters the aggregation protocol. For example, the algorithms proposed in [12, 16, 43], despite their superior numerical performance, require the parameter server to access each device’s most recent 𝑑 -dimensional individual multi-step gradients. Unless we can have a separate procedure to extract and deliver those memorized updates, direct application of these algorithms to OTA remains infeasible. Our algorithm is specifically designed for noisy OTA aggregation and can correct the bias arising from heterogeneous and time-varying uplink 𝑝 𝑡 𝑖 ’s in wireless communication channels. 
+
+Asynchronous federated learning. Another related line of research is asynchronous federated learning [18, 28, 33, 41], in which devices experience message transmission delays, and the reported updates may be stale. However, the proposed methods therein assume that the uplinks of all devices are either always available or uniformly available at random, which is infeasible in practice. 
+
+## B Proof of Lemma 2 
+
+We include the proof here for completeness. For ease of exposition, we drop time index 𝑡 in this proof. We first get the explicit expression for 
+
+E
+
+h
+
+𝑊 2  
+
+> 𝑗 𝑗 ′
+
+| A ≠ ∅
+
+i
+
+. Suppose that A ≠ ∅, we have 
+
+(𝑊 2)𝑗 𝑗 ′ =
+
+> 𝑚
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑊 𝑗𝑘 𝑊 𝑗 ′𝑘 = 𝑊 𝑗 𝑗 𝑊 𝑗 ′ 𝑗 + 𝑊 𝑗 𝑗 ′𝑊 𝑗 ′ 𝑗 ′ 1{ 𝑗 ≠𝑗 ′ } +∑︁     
+
+> 𝑘 ∈ [ 𝑚 ]\{ 𝑗,𝑗 ′}
+
+𝑊 𝑗𝑘 𝑊 𝑗 ′𝑘 .
+
+When 𝑘 ≠ 𝑗 and 𝑘 ≠ 𝑗 ′ by Eq. (7), we have 
+
+𝑊 𝑗𝑘 𝑊 𝑗 ′𝑘 = 1
+
+|A| 2 1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } 1{𝑘 ∈ A } .
+
+In addition, we have 𝑊 𝑗 𝑗 𝑊 𝑗 ′ 𝑗 = 1 
+
+> | A | 2
+
+1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } , and 𝑊 𝑗 ′ 𝑗 ′𝑊 𝑗 𝑗 ′ = 1 
+
+> | A | 2
+
+1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } . Thus, 
+
+• For 𝑗 ≠ 𝑗 ′, we have 
+
+(𝑊 2)𝑗 𝑗 ′ =
+
+> 𝑚
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑊 𝑗𝑘 𝑊 𝑗 ′𝑘 = 1
+
+|A| 1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } ;
+
+• For 𝑗 = 𝑗 ′, we have 
+
+(𝑊 2)𝑗 𝑗 = 1
+
+|A| 1{ 𝑗 ∈ A } +  1 − 1{ 𝑗 ∈ A } 
+
+ .
+
+(i) The general case where 𝑝 𝑡 𝑖 ≥ 𝑐 . In the special case where A = ∅, we simply have 𝑊 = I by the algorithmic clauses. Therefore, 
+
+E 𝑊 𝑗 𝑗 ′ | A = ∅ ≥ 0 holds for any pair of 𝑗, 𝑗 ′ ∈ [ 𝑚 ]. It follows, by the law of total expectation and for all 𝑗, 𝑗 ′ ∈ [ 𝑚 ], that 
+
+E 𝑊 𝑗 𝑗 ′
+
+ = E 𝑊 𝑗 𝑗 ′ | A = ∅ P {A = ∅} + E 𝑊 𝑗 𝑗 ′ | A ≠ ∅ P {A ≠ ∅} ≥ E 𝑊 𝑗 𝑗 ′ | A ≠ ∅ P {A ≠ ∅} . (14) 
+
+• For 𝑗 ≠ 𝑗 ′, it holds that 
+
+E (𝑊 2)𝑗 𝑗 ′ | A ≠ ∅ = E
+
+ 1
+
+|A| 1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } A ≠ ∅
+
+ (a)
+
+≥ E
+
+ 1
+
+𝑚 1{ 𝑗 ∈ A } 1{ 𝑗 ′ ∈ A } A ≠ ∅
+
+
+
+= 𝑝 𝑗 𝑝 𝑗 ′
+
+𝑚 ≥ 𝑐 2
+
+𝑚 ,
+
+where (a) holds because |A| ≤ 𝑚 ;
+
+• For 𝑗 = 𝑗 ′, it holds that 
+
+E (𝑊 2)𝑗 𝑗 | A ≠ ∅ = E
+
+ 1
+
+|A| 1{ 𝑗 ∈ A } +  1 − 1{ 𝑗 ∈ A } 
+
+ A ≠ ∅
+
+
+
+≥ E
+
+ 1
+
+𝑚 
+
+1{ 𝑗 ∈ A } +  1 − 1{ 𝑗 ∈ A } 
+
+ A ≠ ∅
+
+
+
+= 1
+
+𝑚 ≥ 𝑐 2
+
+𝑚 .
+
+Recall that 𝑀 = E 𝑊 2 . Next, we show that each element of 𝑀 is lower bounded. 
+
+𝑀 𝑗 𝑗 ′ ≥ E (𝑊 2)𝑗 𝑗 ′ | A ≠ ∅ P {A ≠ ∅} ≥ 𝑐 2
+
+𝑚 [1 − ( 1 − 𝑐 )𝑚 ] .Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+We note that 𝜌 (𝑡 ) = 𝜆 2 (𝑀 ), where 𝜆 2 is the second largest eigenvalue of matrix 𝑀 . A Markov chain with 𝑀 as the transition matrix is ergodic as the chain is (1) irreducible : 𝑀 𝑗 𝑗 ′ ≥ 𝑐 2 
+
+> 𝑚
+
+[1 − ( 1 − 𝑐 )𝑚 ] > 0 for 𝑗, 𝑗 ′ ∈ [ 𝑚 ] and (2) aperiodic (it has self-loops). In addition, 𝑊 matrix is by definition doubly-stochastic. Hence, 𝑀 has a uniform stationary distribution 𝜋 = 1 
+
+> 𝑚
+
+1⊤. Furthermore, the irreducible Markov chain is reversible since it holds for all the states that 𝜋 𝑖 𝑀 𝑖 𝑗 = 𝜋 𝑗 𝑀 𝑗𝑖 . The conductance of a reversible Markov chain [15] with a transition matrix 𝑀 
+
+can be bounded by 
+
+Φ(𝑀 ) = min Í𝑖 ∈S 𝜋 𝑖 ≤ 12
+
+𝜋 𝑖 
+
+Í𝑖 ∈ S ,𝑗 ∉S 𝑀 𝑖 𝑗 
+
+Í𝑖 ∈ S 𝜋 𝑖 
+
+≥
+
+  𝑐 𝑚 
+
+2 [1 − ( 1 − 𝑐 )𝑚 ] |S| ¯S
+
+> | S |
+> 𝑚
+
+= 𝑐 2 [1 − ( 1 − 𝑐 )𝑚 ]
+
+𝑚 ¯S ,
+
+where ¯S = 𝑚 − |S| ≥ 𝑚  
+
+> 2
+
+. From Cheeger’s inequality, we know that 1−𝜆 2 
+
+> 2
+
+≤ Φ(𝑀 ) ≤ √︁ 2 (1 − 𝜆 2). Finally, we have 
+
+Φ(𝑀 ) ≥ 𝑐 2 [1 − ( 1 − 𝑐 )𝑚 ]
+
+𝑚 ¯S ≥ 𝑐 2 [1 − ( 1 − 𝑐 )𝑚 ]
+
+2 .
+
+Thus, 𝜌 (𝑡 ) = 𝜆 2 ≤ 1 − Φ2 (𝑀 ) 
+
+> 2
+
+≤ 1 − 𝑐 4 [1− ( 1−𝑐 )𝑚 ]2 
+
+> 8
+
+.
+
+## C Convergence Analysis 
+
+Our analysis leverages compact matrix representations of several key quantities, which are especially useful for characterizing the consensus error. Formally, define 
+
+𝑿 (𝑡 ) = 𝒙 𝑡 
+
+> 1
+
+, · · · , 𝒙 𝑡 𝑚 
+
+ ;
+
+𝒁 (𝑡 ) = 𝐵 𝑡 
+
+𝛾 
+
+1{ | A 𝑡 |>0}
+
+|A 𝑡 | + 1{ A 𝑡 =0}
+
+𝒛 𝑡 1{1∈ A 𝑡 }, · · · , 𝒛 𝑡 1{𝑚 ∈ A 𝑡 }
+
+ ;
+
+𝑮 (𝑡 ) 
+
+> 0
+
+=
+
+h
+
+𝑠 ∇ℓ1 (𝒙 (𝑡, 0) 
+
+> 1
+
+), · · · , 𝑠 ∇ℓ𝑚 (𝒙 (𝑡, 0) 
+
+> 𝑚
+
+)
+
+i
+
+;
+
+𝑮 (𝑡 ) =
+
+"𝑠 −1∑︁  
+
+> 𝑟 =0
+
+∇ℓ1 (𝒙 (𝑡,𝑟 ) 
+
+> 1
+
+), · · · , 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑚 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑚
+
+)
+
+#
+
+;
+
+∇𝑭 (𝑡 ) = ∇𝐹 1 (𝒙 𝑡 
+
+> 1
+
+), · · · , ∇𝐹 𝑚 (𝒙 𝑡 𝑚 ) ,
+
+where 𝑿 (𝑡 ) is a concatenated model parameter matrix for all devices at the beginning of round 𝑡 , 𝑮 (𝑡 ) 
+
+> 0
+
+is an initial local stochastic gradient matrix, 𝑮 (𝑡 ) is a local stochastic gradient accumulation, ∇𝑭 (𝑡 ) is a true local gradient matrix, and 𝒁 (𝑡 ) is a scaled receiver noise matrix. When A𝑡 ≠ ∅, the receiver noise is rescaled by 𝐵 𝑡 /( 𝛾 A𝑡 ). When A𝑡 = ∅, it is easy to check that we simply have 𝒁 𝑡 = 0I.
+
+## C.1 Proof of Lemma 4 
+
+Recall that ¯𝒙 𝑡 ≜ 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 .
+
+Unroll one iteration of ¯ 𝒙 𝑡 +1, we have ¯𝒙 𝑡 +1 − ¯𝒙 𝑡 = 1
+
+𝑚 ∑︁ 𝑖 ∈ A 𝑡 
+
+1
+
+|A 𝑡 |
+
+𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾 +∑︁  
+
+> 𝑖 ∈ A 𝑡
+
+e𝒙 𝑡 𝑖 
+
+!
+
+− 𝒙 𝑡 𝑖 
+
+!
+
++ 1
+
+𝑚 ∑︁ 𝑖 ∉A𝑡 
+
+ e𝒙 𝑡 𝑖 − 𝒙 𝑡 𝑖 
+
+ = − 𝜂 𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑡,𝑟 ) 
+
+> 𝑖
+
+) + 𝜂 𝑚 𝐵 𝑡 𝒛 𝑡 
+
+𝛾 .
+
+By Assumption 2, we have 
+
+𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) ≤ ∇𝐹 ( ¯𝒙 𝑡 ), ¯𝒙 𝑡 +1 − ¯𝒙 𝑡 + 𝐿 
+
+2 ¯𝒙 𝑡 +1 − ¯𝒙 𝑡 22 =
+
+D
+
+∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 𝑮 (𝑡 ) 1
+
+E
+
++
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 𝜂 𝑚 𝐵 𝑡 
+
+𝛾 𝒛 𝑡 
+
+
+
++ 𝐿 
+
+2
+
+𝜂 𝑚 𝑮 (𝑡 ) 1 − 𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾𝑚 
+
+> 22
+
+.
+
+Taking expectations conditional on filtration F 𝑡 , we have 
+
+E 𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) | F 𝑡  ≤ E
+
+"D
+
+∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 𝑮 (𝑡 ) 1
+
+E
+
++
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 𝜂 𝑚 𝐵 𝑡 
+
+𝛾 𝒛 𝑡 
+
+
+
++ 𝐿 
+
+2
+
+𝜂 𝑚 𝑮 (𝑡 ) 1 − 𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾𝑚 
+
+> 22
+
+| F 𝑡 
+
+#
+
+.
+
+We know, by zero-mean Gaussian noise and independence, that 
+
+E
+
+ 
+
+∇𝐹 ( ¯𝒙 𝑡 ), 1
+
+𝛾𝑚 𝐵 𝑡 𝒛 𝑡 
+
+
+
+| F 𝑡 
+
+
+
+=
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 1
+
+𝛾𝑚 E 𝐵 𝑡 𝒛 𝑡 | F 𝑡  
+
+=
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 1
+
+𝛾𝑚 E 𝐵 𝑡 | F 𝑡  E 𝒛 𝑡 | F 𝑡  
+
+= 0,Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+where the last equality holds because 𝐵 𝑡 and 𝒛 𝑡 are independent. It follows that 
+
+E
+
+"
+
+𝐿 
+
+2
+
+𝜂 𝑚 𝑮 (𝑡 ) 1 − 𝜂 𝛾𝑚 𝐵 𝑡 𝒛 𝑡 
+
+> 22
+
+| F 𝑡 
+
+#
+
+≤ E
+
+"
+
+𝐿 𝜂 𝑚 𝑮 (𝑡 ) 1 22 + 𝜂𝐵 𝑡 𝒛 𝑡 
+
+𝛾𝑚 
+
+> 22
+
+!
+
+F 𝑡 
+
+#
+
+≤ 𝐿 E
+
+ 𝜂 𝑚 𝑮 (𝑡 ) 1 22 | F 𝑡 
+
+
+
++ 𝜂 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2𝑚 2 E 𝐵 2 
+
+> 𝑡
+
+| F 𝑡  .
+
+For ease of notations, we abbreviate ∇ℓ𝑖 (𝒙 (𝑡,𝑘 ) 
+
+> 𝑖
+
+) as ∇ℓ (𝑡,𝑘 ) 
+
+> 𝑖
+
+.
+
+(i) Bounding E[ ∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 ∇𝑮 (𝑡 ) 1 | F 𝑡 ].
+
+E
+
+hD 
+
+∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 𝑮 (𝑡 ) 1
+
+E
+
+| F 𝑡 i
+
+= − 𝜂 𝑚 E
+
+"* 
+
+∇𝐹 ( ¯𝒙 𝑡 ),
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+
++
+
+| F 𝑡 
+
+#
+
+= −𝑠𝜂 𝑚 ∇𝐹 ( ¯𝒙 𝑡 ), ∇𝑭 (𝑡 ) 1
+
+| {z }
+
+> (A)
+
++ E
+
+"
+
+𝜂 𝑚 
+
+*
+
+∇𝐹 ( ¯𝒙 𝑡 ),
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑠 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+
++
+
+| F 𝑡 
+
+#| {z }
+
+> (B)
+
+.
+
+Term (A) can be bounded as 
+
+−𝑠𝜂 
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ), 1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+
+
+= −𝑠𝜂 
+
+2 ∇𝐹 ( ¯𝒙 𝑡 ) 22 + 𝑠𝜂 
+
+2 ∇𝐹 ( ¯𝒙 𝑡 ) − 1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+> 22
+
+− 𝑠𝜂 
+
+2
+
+1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+> 22
+
+≤ − 𝑠𝜂 
+
+2 ∇𝐹 ( ¯𝒙 𝑡 ) 22 − 𝑠𝜂 
+
+2
+
+1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+> 22
+
++ 𝑠𝜂𝐿 2
+
+2𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+¯𝒙 𝑡 − 𝒙 𝑡 𝑖  
+
+> 22
+
+.
+
+For term (B), we have 
+
+E
+
+"
+
+𝜂 𝑚 
+
+*
+
+∇𝐹 ( ¯𝒙 𝑡 ),
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑠 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+
++
+
+| F 𝑡 
+
+#
+
+= 𝜂 𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+*
+
+∇𝐹 ( ¯𝒙 𝑡 ), E
+
+"
+
+𝑠 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 ) 
+
+> 𝑖
+
+| F 𝑡 
+
+# + 
+
+> (a)
+
+≤ 𝜂 2𝑠 2
+
+2 ∇𝐹 ( ¯𝑥 𝑡 ) 22 + 12𝑚𝑠 2
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+
+
+𝑠 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+> 22
+
+F 𝑡 
+
+| {z }
+
+> (B.1)
+
+,
+
+where inequality (a) holds because of Young’s inequality. By Lemma 3, we bound term (B.1) as follows 12𝑚𝑠 2
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+
+
+𝑠 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− 
+
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+> 22
+
+| F 𝑡 
+
+
+
+> (b)
+
+≤ 12𝑚𝑠 2
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+"
+
+𝜅 2𝜂 2
+
+𝑠 
+
+2
+
+2
+
+𝐿 2 ∇ℓ (𝑡, 0) 
+
+> 𝑖
+> 22
+
+| F 𝑡 
+
+#
+
+= 𝜅 2𝜂 2  𝑠 
+
+> 2
+
+2𝐿 2
+
+2𝑚𝑠 2
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+
+
+∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− ∇ 𝐹 𝑖 (𝒙 𝑡 𝑖 ) + ∇ 𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22 | F 𝑡 
+
+
+
+> (c)
+
+≤ 𝜅 2𝜂 2𝐿 2𝜎 2 𝑠 2
+
+4 + 𝜅 2𝜂 2𝑠 2𝐿 2
+
+4𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22
+
+≤ 𝜅 2𝜂 2𝑠 2𝐿 2 𝐿 2
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22 + 𝜅 2𝜂 2𝑠 2𝐿 2 (𝜁 2 + 𝜎 2) + 𝜅 2𝜂 2𝑠 2𝐿 2  𝛽 2 + 1 ∇𝐹 ( ¯𝒙 𝑡 ) 22 ,
+
+where inequality (b) follows from Lemma 3, inequality (c) follows from Assumption 3, and the last inequality holds because of Proposition 1. Combing the bounds of terms (A) and (B), we get 
+
+E
+
+hD 
+
+∇𝐹 ( ¯𝒙 𝑡 ), − 𝜂 𝑚 𝑮 (𝑡 ) 1
+
+E
+
+| F 𝑡 i
+
+≤ − 
+
+ 𝑠𝜂 
+
+2 − 𝜂 2𝑠 2
+
+2 − 𝜅 2𝜂 2𝑠 2𝐿 2  𝛽 2 + 1
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22 − 𝑠𝜂 
+
+2
+
+1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+> 22
+
++ 𝜅 2𝜂 2𝑠 2𝐿 2 (𝜁 2 + 𝜎 2) + 
+
+ 𝑠𝜂𝐿 2
+
+2𝑚 + 𝜅 2𝜂 2𝑠 2𝐿 2 𝐿 2
+
+𝑚 
+
+ 𝑚 ∑︁ 
+
+> 𝑖 =1
+
+¯𝒙 𝑡 − 𝒙 𝑡 𝑖  
+
+> 22
+
+. (15) Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+(ii) Bounding E
+
+h 1 
+
+> 𝑚
+
+𝑮 (𝑡 ) 1 22 | F 𝑡 
+
+i
+
+. By adding and subtracting, we get 
+
+1
+
+𝑚 𝑮 (𝑡 ) 1
+
+> 22
+
+= 1
+
+𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+∇ℓ (𝑡,𝑘 )
+
+> 𝑖
+> 22
+
+≤ 2 1
+
+𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+
+
+∇ℓ (𝑡,𝑘 ) 
+
+> 𝑖
+
+− ∇ ℓ (𝑡, 0)
+
+> 𝑖
+
+ 22
+
+| {z }
+
+> (C)
+
++2 𝑠 𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇ℓ (𝑡, 0)
+
+> 𝑖
+> 22
+
+| {z }
+
+> (D)
+
+.
+
+For term (C), by Lemma 3, we have 
+
+E
+
+
+
+1
+
+𝑚 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑠 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+
+
+∇ℓ (𝑡,𝑘 ) 
+
+> 𝑖
+
+− ∇ ℓ (𝑡, 0)
+
+> 𝑖
+
+ 22
+
+| F 𝑡 
+
+
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2
+
+4𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+h
+
+∥∇ ℓ (𝑡, 0) 
+
+> 𝑖
+
+∥22 | F 𝑡 i
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2
+
+2𝑚 (
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+
+
+∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+− ∇ 𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22 | F 𝑡 
+
+
+
++
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22)
+
+> (d)
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2𝜎 2
+
+2 + 𝜅 2𝜂 2𝑠 4𝐿 2
+
+2𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22 ,
+
+where inequality (d) holds because of Assumption 3. For term (D), by Assumption 3, we likewise have 
+
+𝑠 2
+
+𝑚 2 E
+
+"
+
+∥
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇ℓ (𝑡, 0) 
+
+> 𝑖
+
+∥22 F 𝑡 
+
+#
+
+≤ 2𝑠 2
+
+𝑚 𝜎 2 +
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22
+
+!
+
+.
+
+Combing the above upper bounds of (C) and (D) and applying Proposition 1, we get 
+
+E
+
+"
+
+1
+
+𝑚 𝑮 (𝑡 ) 1
+
+> 22
+
+| F 𝑡 
+
+#
+
+≤ 2𝑠 2𝜎 2
+
+ 2
+
+𝑚 + 𝜅 2𝜂 2𝑠 2𝐿 2
+
+2
+
+
+
++ 6𝑠 2𝐿 2
+
+
+
+2 + 𝜅 2𝜂 2𝑠 2𝐿 2
+
+2
+
+ 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
++ 6𝑠 2  𝛽 2 + 1 
+
+2 + 𝜅 2𝜂 2𝑠 2𝐿 2
+
+2
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22 + 6𝑠 2𝜁 2
+
+
+
+2 + 𝜅 2𝜂 2𝑠 2𝐿 2
+
+2
+
+
+
+. (16) (iii) Putting them together. Combining (15) and (16), we get 
+
+E 𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) | F 𝑡  ≤ 𝜅 2𝜂 2𝑠 2𝐿 2 (𝜁 2 + 𝜎 2) − 𝜂𝑠 
+
+2
+
+1
+
+𝑚 ∇𝑭 (𝑡 ) 1
+
+> 22
+
++ 𝐿𝜂 2
+
+2 6𝑠 2𝜁 2
+
+
+
+2 + 𝜅 2𝐿 2
+
+2
+
+
+
+−
+
+ 𝜂𝑠 
+
+2 − 𝜂 2𝑠 2
+
+2 − 𝜅 2𝜂 2𝑠 2𝐿 2  𝛽 2 + 1
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
++
+
+ 𝑠𝜂𝐿 2
+
+2𝑚 + 𝜅 2𝜂 2𝑠 2 𝐿 4
+
+𝑚 
+
+ 𝑚 ∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
++ 𝐿𝜂 2
+
+2 6𝑠 2𝐿 2
+
+
+
+2 + 𝜅 2𝐿 2
+
+2
+
+ 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
++ 𝐿𝜂 2
+
+2 6𝑠 2  𝛽 2 + 1 
+
+2 + 𝜅 2𝐿 2
+
+2
+
+
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
++ 𝐿𝜂 2
+
+2 2𝑠 2𝜎 2
+
+ 2
+
+𝑚 + 𝜅 2𝐿 2
+
+2
+
+
+
++ 𝜂 2𝐿𝑑𝜎 2 
+
+> 𝑧
+
+E 𝐵 2 
+
+> 𝑡
+
+| F 𝑡 
+
+𝛾 2𝑚 2 .
+
+Assuming that 𝜂 ≤ 1/[ 108 𝑠𝐿 (𝜅 + 1)( 𝛽 2 + 1)] , the above displayed equation can be simplified as 
+
+E 𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) | F 𝑡  ≤ − 𝜂𝑠 
+
+3 ∇𝐹 ( ¯𝒙 𝑡 ) 22 + 𝜂𝑠 𝐿 2
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22 + 𝜂 2𝑠 26𝐿  𝜁 2 + 𝜎 2    1 + 𝐿 2𝜅 2  + 𝜂 2𝐿𝑑𝜎 2 
+
+> 𝑧
+
+E 𝐵 2 
+
+> 𝑡
+
+| F 𝑡 
+
+𝛾 2𝑚 2 .
+
+## C.2 Proof of Lemma 5 
+
+We have 
+
+𝐵 2 
+
+> 𝑡
+
+≜ max   
+
+> 𝑖 ∈ A 𝑡
+
+Δ𝑡 𝑖  
+
+> 22
+
+≤
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+Δ𝑡 𝑖  
+
+> 22
+
+= 𝐶 2 
+
+> 𝑡
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+≤
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑡 − 𝜏 𝑖 (𝑡 )) 
+
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ𝑖 (𝒙 (𝑘,𝑟 ) 
+
+> 𝑖
+
+; 𝜉 𝑘 𝑖 )
+
+> 22
+
+.Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+Taking expectation and averaging over 𝑇 rounds, we have 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ ≤ 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+
+
+(𝑡 − 𝜏 𝑖 (𝑡 )) 
+
+> 𝑡
+
+∑︁    
+
+> 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+
+
+. (17) 
+
+Change of summation order. Writing Í𝑡 𝑘 =𝜏 𝑖 (𝑡 )+ 1
+
+Í𝑠 −1  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+> 22
+
+= Í𝑡 𝑘 =0 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 }
+
+Í𝑠 −1  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+, and reordering the terms, we obtain (17) = 1
+
+𝑇 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+E
+
+" 𝑠 −1∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+> 22
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =𝑘
+
+(𝑡 − 𝜏 𝑖 (𝑡 )) 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 }
+
+| {z } 
+
+> ≜𝑆 𝑖,𝑘
+
+#
+
+. (18) For every term in the sum, 𝜏 𝑖 (𝑡 ) + 1 ≤ 𝑘 ≤ 𝑡 , so the gradient factor always involves iterating 𝒙 𝑘 𝑖 and the staleness factor 𝑆 𝑖,𝑘 always depends on rounds 𝑡 ≥ 𝑘 only. 
+
+Conditional independence. The gradient factor Í𝑠 −1  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+> 22
+
+depends on the data randomness 𝜉 𝑘 𝑖 at round 𝑘 , while 𝑆 𝑖,𝑘 depends on the channel randomness through the activation indicators {1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 } }𝑡 ≥𝑘 . Given F 𝑘 , under the standard assumption that future channel randomness and local data are mutually independent, we have 
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 F 𝑘 
+
+
+
+= E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+F 𝑘 
+
+
+
+E
+
+h
+
+𝑆 𝑖,𝑘 F 𝑘 i
+
+Tower property. For each (𝑖, 𝑘 ), apply the tower property conditioning on F 𝑘 , the sigma-algebra generated by all randomness up to round 
+
+𝑘 :
+
+E
+
+"∑︁ 
+
+> 𝑟
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 
+
+#
+
+= E
+
+"
+
+E
+
+"∑︁ 
+
+> 𝑟
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 F 𝑘 
+
+# # 
+
+. (19) Let 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) ≜ min {𝑡 > 𝑘 : 𝑖 ∈ A 𝑡 } denote the first round after 𝑘 at which uplink 𝑖 becomes active. Since 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 } = 0 for all 𝑡 ≥ 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) + 1, the sum 𝑆 𝑖,𝑘 accumulates only until device 𝑖 ’s next contribution: 
+
+𝑆 𝑖,𝑘 =  
+
+> 𝜏 +
+> 𝑖 (𝑘 )
+
+∑︁ 
+
+> 𝑡 =𝑘
+
+(𝑡 − 𝜏 𝑖 (𝑡 )) (𝑎 )
+
+=  
+
+> 𝜏 +
+> 𝑖 (𝑘 ) − 𝑘
+
+∑︁ 
+
+> 𝑗 =0
+
+( 𝑗 + 𝑘 − 𝜏 𝑖 (𝑘 )) = (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )( 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 + 1)
+
+2 + ( 𝑘 − 𝜏 𝑖 (𝑘 ))  𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 + 1
+
+= (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )2
+
+2 + 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 
+
+2 + ( 𝑘 − 𝜏 𝑖 (𝑘 ))  𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘  + ( 𝑘 − 𝜏 𝑖 (𝑘 )) , (20) where equality (𝑎 ) follows from change of variable 𝑗 = 𝑡 − 𝑘 and the fact that 𝜏 𝑖 (𝑘 ) = 𝜏 𝑖 ( 𝑗 + 𝑘 ) for 0 ≤ 𝑗 ≤ 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 because the uplink is inactive during that period. We know from Lemma 7 that E (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )2  ≤ 2 
+
+> 𝑐 2
+
+, E [𝑘 − 𝜏 𝑖 (𝑘 )] ≤ 1 
+
+> 𝑐
+
+, and that E 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘  ≤ 1 
+
+> 𝑐
+
+, it follows that 
+
+E 𝑆 𝑖,𝑘 | F 𝑘  = E
+
+ (𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 )2
+
+2 + 𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘 
+
+2 + ( 𝑘 − 𝜏 𝑖 (𝑘 ))  𝜏 + 
+
+> 𝑖
+
+(𝑘 ) − 𝑘  + ( 𝑘 − 𝜏 𝑖 (𝑘 )) | F 𝑘 
+
+
+
+≤ 1
+
+𝑐 2 + 12𝑐 +
+
+ 1
+
+𝑐 + 1
+
+
+
+(𝑘 − 𝜏 𝑖 (𝑘 )) . (21) 
+
+Bounding the gradients. We know that  
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+≤ 2 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+
+− ∇ ℓ (𝑘, 0)
+
+> 𝑖
+
+ 22
+
+| {z }
+
+> (A)
+
++2 𝑠 ∇ℓ (𝑘, 0)
+
+> 𝑖
+> 22
+
+| {z }
+
+> (B)
+
+.
+
+For term (A), by Lemma 3, we have 
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+
+− ∇ ℓ (𝑘, 0)
+
+> 𝑖
+
+ 22
+
+| F 𝑘 
+
+
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2
+
+4 E
+
+h
+
+∥∇ ℓ (𝑘, 0) 
+
+> 𝑖
+
+∥22 | F 𝑘 i
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2
+
+2 (E
+
+
+
+∇ℓ (𝑘, 0) 
+
+> 𝑖
+
+− ∇ 𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22 | F 𝑘 
+
+
+
++ ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22)
+
+> (d)
+
+≤ 𝜅 2𝜂 2𝑠 4𝐿 2𝜎 2
+
+2 + 𝜅 2𝜂 2𝑠 4𝐿 2
+
+2 ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22 .Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+For term (B), by Assumption 3, we likewise have 
+
+𝑠 2E
+
+h
+
+∥∇ ℓ (𝑘, 0) 
+
+> 𝑖
+
+∥22 | F 𝑡 i
+
+≤ 2𝑠 2
+
+
+
+𝜎 2 + ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22
+
+
+
+.
+
+Putting them together, we have 
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+| F 𝑘 
+
+
+
+≤ 𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2 
+
+𝜎 2 + ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22
+
+
+
+.
+
+It follows that 
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 F 𝑘 
+
+
+
+≤
+
+ 1
+
+𝑐 2 + 12𝑐 +
+
+ 1
+
+𝑐 + 1
+
+
+
+(𝑘 − 𝜏 𝑖 (𝑘 )) 
+
+
+
+𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2 
+
+𝜎 2 + ∇𝐹 𝑖 (𝒙 𝑘 𝑖 ) 22
+
+
+
+. (22) By Assumption 5, we have 
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 F 𝑘 
+
+
+
+≤
+
+ 1
+
+𝑐 2 + 12𝑐 +
+
+ 1
+
+𝑐 + 1
+
+
+
+(𝑘 − 𝜏 𝑖 (𝑘 )) 
+
+
+
+𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2   𝜎 2 + 𝐺 2max 
+
+ .
+
+Take expectation over the remaining randomness, it holds that 
+
+E
+
+
+
+E
+
+ 
+
+> 𝑠 −1
+
+∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 )
+
+> 𝑖
+> 22
+
+𝑆 𝑖,𝑘 F 𝑘 
+
+
+
+≤
+
+ 1
+
+𝑐 2 + 12𝑐 +
+
+ 1
+
+𝑐 + 1
+
+
+
+E [( 𝑘 − 𝜏 𝑖 (𝑘 ))] 
+
+
+
+𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2   𝜎 2 + 𝐺 2max 
+
+ ≤ 4𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2   𝜎 2 + 𝐺 2max 
+
+
+
+𝑐 2 .
+
+Combining everything together, we have 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐵 2
+
+> 𝑡
+
+ ≤ 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ = 1
+
+𝑇 
+
+> 𝑚
+
+∑︁  
+
+> 𝑖 =1
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+E
+
+" 𝑠 −1∑︁  
+
+> 𝑟 =0
+
+∇ℓ (𝑘,𝑟 ) 
+
+> 𝑖
+> 22
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =𝑘
+
+(𝑡 − 𝜏 𝑖 (𝑡 )) 1{𝜏 𝑖 (𝑡 )+ 1≤𝑘 }
+
+#
+
+≤ 4𝑚𝑠 2  𝜅 2𝜂 2𝑠 2𝐿 2 + 2   𝜎 2 + 𝐺 2max 
+
+
+
+𝑐 2 ≤ 12 𝑚𝑠 2  𝜎 2 + 𝐺 2max 
+
+
+
+𝑐 2 ,
+
+where the last inequality follows from our learning rate condition. 
+
+## C.3 Proof of Lemma 6 
+
+The consensus error, which measures the distance between the averaged model over all the devices and local models, can be written in matrix form as (23), 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+¯𝒙 𝑡 − 𝒙 𝑡 𝑖  
+
+> 22
+
+≜ 1
+
+𝑚 𝑿 (𝑡 ) (I − J) 2F = 1
+
+𝑚 
+
+
+
+𝑿 (𝑡 −1) − 𝜂 𝑮 (𝑡 −1) 
+
+𝑊 (𝑡 −1) (I − J) + 𝜂 𝒁 𝑡 −1𝑊 (𝑡 −1) (I − J) 2F
+
+= 1
+
+𝑚 𝜂  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+
+
+𝑮 (𝑞 ) − 𝒁 (𝑞 )  ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞
+
+𝑊 (𝑙 ) − Jª®¬
+
+> 2F
+
+≤ 2
+
+𝑚 𝜂  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝑮 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞
+
+𝑊 (𝑙 ) − Jª®¬
+
+> 2F
+
++ 2
+
+𝑚 𝜂  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − Jª®¬
+
+> 2F
+
+, (23) where the last inequality follows from Jensen’s inequality. Our proof includes two steps, (𝐼 ) and (𝐼𝐼 ).
+
+Bounding (𝐼 ). Define Δ𝑮 (𝑟 ) ≜ 𝑮 (𝑟 ) − 𝑮 (𝑟 ) 
+
+> 0
+
+and 𝐴 𝑟,𝑡 ≜ Î𝑡 ℓ=𝑟 𝑊 (ℓ ) − J. It holds that 
+
+𝜂  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝑮 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+≤ 3𝜂 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+Δ𝑮 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+| {z }
+
+> (A)
+
++3𝜂 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+
+
+𝑮 (𝑞 ) 
+
+> 0
+
+− 𝑠 ∇𝑭 (𝑞 ) 
+
+𝐴 𝑞,𝑡 −1
+
+> F
+
+| {z }
+
+> (B)
+
++3𝜂 2𝑠 2 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+∇𝑭 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+| {z }
+
+> (C)
+
+(24) where the second equality follows from the fact that all devices are initiated at the same weights. 
+
+(i) Bounding E [( A)] . The term (A) in Eq. (24) arises from multiple local steps. We have, 
+
+E [( A)] (a)
+
+≤ 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝜌 𝑡 −𝑞 E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+
+
++ 
+
+> 𝑡 −1
+
+∑︁  
+
+> 𝑞 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑝 =0,𝑝 ≠𝑞
+
+E
+
+h
+
+Δ𝑮 (𝑝 ) 𝐴 𝑝,𝑡 −1 F Δ𝑮 (𝑞 ) 𝐴 𝑞,𝑡 −1 F
+
+i
+
+> (b)
+
+≤ 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝜌 𝑡 −𝑞 E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+
+
++ 
+
+> 𝑡 −1
+
+∑︁  
+
+> 𝑞 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑝 =0,𝑝 ≠𝑞
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2 E
+
+
+
+Δ𝑮 (𝑝 ) 2F + Δ𝑮 (𝑞 ) 2F
+
+
+
+,Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+where inequality (a) follows from (1), inequality (b) holds because of Young’s inequality. Next, we bound the second term. It follows that  
+
+> 𝑡 −1
+
+∑︁  
+
+> 𝑞 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑝 =0,𝑝 ≠𝑞
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2 E
+
+
+
+Δ𝑮 (𝑝 ) 2F + Δ𝑮 (𝑞 ) 2F
+
+
+
+≤ 
+
+> 𝑡 −1
+
+∑︁  
+
+> 𝑞 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑝 =0
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2 E
+
+
+
+Δ𝑮 (𝑝 ) 2F + Δ𝑮 (𝑞 ) 2F
+
+
+
+≤√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+
+
+.
+
+In addition, since 𝜌 < 1, it holds that 𝜌 𝑡 −𝑞 ≤ √𝜌𝜌 𝑡 −𝑞  
+
+> 2
+
+for any 𝑞 ≤ 𝑡 − 1. Thus, we have 
+
+E [( A)] ≤ √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝜌 𝑡 −𝑞  
+
+> 2
+
+E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+
+
++√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+
+
+≤ 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+𝑮 (𝑞 ) − 𝑮 (𝑞 )
+
+> 0
+> 2F
+
+
+
+= 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+𝑮 (𝑞 ) − 𝑮 (𝑞 )
+
+> 0
+> 2F
+
+
+
+. (25) It remains to bound E
+
+h
+
+Δ𝑮 (𝑞 ) 2F
+
+i
+
+,
+
+E
+
+
+
+Δ𝑮 (𝑞 ) 2F
+
+ (c)
+
+≤ 𝜅 2𝜂 2𝑠 2𝐿 2E
+
+
+
+𝑮 (𝑞 ) 
+
+> 0
+
+− 𝑠 ∇𝑭 (𝑞 ) + 𝑠 ∇𝑭 (𝑞 ) 2F
+
+
+
+≤ 2𝜅 2𝜂 2𝑠 2𝐿 2E
+
+
+
+𝑮 (𝑞 ) 
+
+> 0
+
+− 𝑠 ∇𝑭 (𝑞 ) 2F
+
+
+
++ 2𝜅 2𝑠 2𝜂 2𝑠 4𝐿 2E
+
+
+
+∇𝑭 (𝑞 ) 2F
+
+
+
+≤ 2𝜅 2𝑠 2𝜂 2𝑠 4𝐿 2𝑚𝜎 2 + 2𝜅 2𝑠 2𝜂 2𝑠 4𝐿 2E
+
+
+
+∇𝑭 (𝑞 ) 2F
+
+
+
+,
+
+where inequality (c) follows from Lemma 3, adding and subtracting. Thus, 
+
+E [( A)] ≤ 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+𝑮 (𝑞 ) − 𝑮 (𝑞 )
+
+> 0
+> 2F
+
+
+
+≤ 4𝜅 2𝑠 2𝜂 2𝑠 4𝐿 2𝑚𝜎 2𝜌 
+
+ 1 − √𝜌 2 + 4𝜅 2𝑠 2𝜂 2𝑠 4𝐿 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+∇𝑭 (𝑞 ) 2F
+
+
+
+.
+
+(ii) Bounding E [( B)] .
+
+E [( B)] ≤  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝜌 𝑡 −𝑞 E
+
+
+
+𝑮 (𝑞 ) 
+
+> 0
+
+− 𝑠 ∇𝑭 (𝑞 ) 2F
+
+
+
+≤ 𝜌𝑚𝑠 2𝜎 2
+
+1 − 𝜌 = 𝜌𝑚𝑠 2𝜎 2
+
+ 1 − √𝜌    1 + √𝜌  ≤ 𝜌𝑚𝑠 2𝜎 2
+
+ 1 − √𝜌 2 .
+
+(iii) Bounding E [( C)] . Use a similar derivation as in (25), and we get 
+
+E [( C)] ≤ 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+∇𝑭 (𝑞 ) 2F
+
+
+
+.
+
+Furthermore, we have 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 E
+
+
+
+∇𝑭 (𝑞 ) 2F
+
+
+
+= 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑇 −2
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+
+
+∇𝑭 (𝑡 ) 2F
+
+ 𝑇 −1−𝑡 ∑︁ 
+
+> 𝑞 =1
+
+√𝜌 𝑞 ≤ 2𝜌 
+
+ 1 − √𝜌 2 
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+
+
+∇𝑭 (𝑡 ) 2F
+
+
+
+.
+
+Bounding (𝐼𝐼 ). By using a similar techniques as when bounding E [( 𝐴 )] , it holds that  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − Jª®¬
+
+> 2F
+
+= 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝒁 (𝑞 ) 𝐴 𝑡 −1
+
+> 𝑞
+> 2F
+
+≤ 
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+
+
++ 
+
+> 𝑡 −1
+
+∑︁  
+
+> 𝑞 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑝 =0,𝑝 ≠𝑞
+
+E
+
+h
+
+𝒁 (𝑝 ) 𝐴 𝑝,𝑡 −1 F 𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1 F
+
+i
+
+.
+
+We know that both 𝑊 (𝑞 ) is doubly stochastic, i.e., 𝑊 (𝑞 ) J = J. It holds that 
+
+𝐴 𝑞,𝑡 −1 = 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞
+
+𝑊 𝑙 − J = 𝑊 (𝑞 ) ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
+=
+
+
+
+𝑊 (𝑞 ) − J + J
+
+ ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
+=
+
+
+
+𝑊 (𝑞 ) − J
+
+ ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
++ J ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
+=
+
+
+
+𝑊 (𝑞 ) − J
+
+ ©« 
+
+> 𝑡 −1
+
+Ö
+
+> 𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
+.
+
+Recall that 𝒁 (𝑡 ) = 𝐵 𝑡    
+
+> 𝛾
+> 1{ | A𝑡 |>0}| A 𝑡 |+ 1{A𝑡 =0}
+
+𝒛 𝑡 1{1∈ A 𝑡 }, · · · , 𝒛 𝑡 1{𝑚 ∈ A 𝑡 }
+
+ . Let IA𝑡 ≜ 1{1∈ A 𝑡 }, · · · , 1{𝑚 ∈ A 𝑡 }
+
+.Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+It remains to bound E
+
+h
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+2F
+
+i
+
+. Recall that 𝐶 2
+
+𝑞 ≜ Í𝑚 𝑖 =1 Δ𝑞 𝑖 
+
+22 ≥ 𝐵 𝑞 , and that both 𝒛 𝑞 and 𝐶 2
+
+𝑞 are independent of A𝑞 .
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+2F
+
+
+
+= E
+
+" 𝐵 𝑞 𝒛 𝑞 IA𝑞 
+
+𝛾 
+
+1{ | A 𝑞 |>0}
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+𝐴 𝑞,𝑡 −1
+
+2F
+
+#
+
+≤ E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+" 𝒛 𝑞 IA𝑡 1{ | A 𝑞 |>0}
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+𝐴 𝑞,𝑡 −1
+
+2F
+
+#
+
+= E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑡 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+𝑡 −1Ö
+
+ℓ=𝑞 +1
+
+𝑊 (ℓ ) − J
+
+! 2F
+
+
+
+For the term 1{ | A𝑞 |>0} 𝒛 𝑞 IA𝑡 
+
+
+
+𝑊 (𝑞 ) −J
+
+
+
+| A 𝑞 |+ 1{ | A𝑞 |=0} , we have two cases: 
+
+Case #1: A𝑞 ≠ ∅. We have 
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑡 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+2F
+
+=
+
+𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 |
+
+2F
+
+= ∥𝒛 𝑞 ∥22
+
+|A 𝑞 |2 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+ 2F
+
+≤ ∥𝒛 𝑞 ∥22 ∥IA𝑞 ∥22
+
+|A 𝑞 |2 𝑊 (𝑞 ) − J 2F = ∥𝒛 𝑞 ∥22
+
+|A 𝑞 | 𝑊 (𝑞 ) − J 2F ≤ ∥ 𝒛 𝑞 ∥22 𝑊 (𝑞 ) − J 2F ,
+
+where the inequality follows from |A 𝑞 | ≥ 1. 
+
+Case #2: A𝑞 = ∅. We have 
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+2F
+
+= 0.
+
+Combining both cases, we have 
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+2F
+
+=
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+2F
+
+ 1{ A 𝑞 ≠∅ } + 1{ A 𝑞 =∅ } 
+
+ ≤ 01{ A 𝑞 =∅ } + ∥ 𝒛 𝑞 ∥22 𝑊 (𝑞 ) − J 2F 1{ A 𝑞 ≠∅ } ≤ ∥ 𝒛 𝑞 ∥22 𝑊 (𝑞 ) − J 2F .
+
+It follows that 
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+2F
+
+
+
+≤ E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+𝑡 −1Ö
+
+ℓ=𝑞 +1
+
+𝑊 (ℓ ) − J
+
+! 2F
+
+
+
+≤ E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+
+
+1{ | A 𝑞 |>0} 𝒛 𝑞 IA𝑞 
+
+
+
+𝑊 (𝑞 ) − J
+
+
+
+|A 𝑞 | + 1{ | A 𝑞 |=0}
+
+2F
+
+
+
+𝜌 𝑡 −𝑞 −1
+
+≤ E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+
+
+∥𝒛 𝑞 ∥22 𝑊 (𝑞 ) − J 2F
+
+
+
+𝜌 𝑡 −𝑞 −1 (𝑑 )
+
+= E ∥𝒛 𝑞 ∥22
+
+ E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 E
+
+
+
+𝑊 (𝑞 ) − J 2F
+
+
+
+𝜌 𝑡 −𝑞 −1 ≤ 𝑑𝜎 2
+
+𝑧 E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 𝜌 𝑡 −𝑞 ∥I∥2F = 𝑚𝑑𝜎 2
+
+𝑧 E 𝐶 2
+
+𝑞 
+
+
+
+𝛾 2 𝜌 𝑡 −𝑞 ,
+
+where equality (𝑑 ) follows from 𝒛 𝑞 and (A 𝑞 ,𝑊 (𝑞 ) ) are independent. For ease of notation, let 𝐻 𝑞 = 𝑚𝜌𝑑𝜎 2
+
+𝑧 E 𝐶 2
+
+𝑞 
+
+/𝛾 2. It follows that 
+
+E
+
+
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝒁 (𝑞 ) ©«
+
+𝑊 (𝑞 )
+
+𝑡 −1Ö
+
+𝑙 =𝑞 +1
+
+𝑊 𝑙 − Jª®¬
+
+2F
+
+
+
+≤
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+2F
+
+
+
++
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝑡 −1∑︁ 
+
+𝑝 =0,𝑝 ≠𝑞 
+
+E
+
+h
+
+𝒁 (𝑝 ) 𝐴 𝑝,𝑡 −1 F 𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1 F
+
+i
+
+≤
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝐻 𝑞 𝜌 𝑡 −𝑞 +
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝑡 −1∑︁ 
+
+𝑝 =0,𝑝 ≠𝑞 
+
+E
+
+h
+
+𝒁 (𝑝 ) 𝐴 𝑝,𝑡 −1 F 𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1 F
+
+i
+
+≤
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝐻 𝑞 𝜌 𝑡 −𝑞 +
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝑡 −1∑︁ 
+
+𝑝 =0,𝑝 ≠𝑞 
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2
+
+ 𝐻 𝑝 + 𝐻 𝑞 
+
+ .
+
+We have 
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝑡 −1∑︁ 
+
+𝑝 =0,𝑝 ≠𝑞 
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2
+
+ 𝐻 𝑝 + 𝐻 𝑞 
+
+ ≤
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+𝑡 −1∑︁ 
+
+𝑝 =0
+
+√𝜌 2𝑡 −𝑝 −𝑞 
+
+2
+
+ 𝐻 𝑝 + 𝐻 𝑞 
+
+ ≤√𝜌 
+
+1 − √𝜌 
+
+𝑡 −1∑︁ 
+
+𝑞 =0
+
+√𝜌 𝑡 −𝑞 𝐻 𝑞 .Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 
+
+In addition, since 𝜌 < 1, it holds that 𝜌 𝑡 −𝑞 ≤ √𝜌𝜌 𝑡 −𝑞  
+
+> 2
+
+for any 𝑞 ≤ 𝑡 − 1. Thus, we have 
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+
+
+≤ √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+𝜌 𝑡 −𝑞  
+
+> 2
+
+𝐻 𝑞 +√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 𝐻 𝑞 ≤ 2√𝜌 
+
+1 − √𝜌  
+
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 𝐻 𝑞 .
+
+It follows that  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 𝐻 𝑞 = 
+
+> 𝑇 −2
+
+∑︁ 
+
+> 𝑡 =0
+
+𝐻 𝑡 𝑇 −1−𝑡 ∑︁ 
+
+> 𝑞 =1
+
+√𝜌 𝑞 ≤√𝜌 
+
+ 1 − √𝜌  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+𝐻 𝑡 ,
+
+which leads to  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+E
+
+
+
+𝒁 (𝑞 ) 𝐴 𝑞,𝑡 −1
+
+> 2F
+
+
+
+≤ 2√𝜌 
+
+(1 − √𝜌 ) 
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+> 𝑡 −1
+
+∑︁ 
+
+> 𝑞 =0
+
+√𝜌 𝑡 −𝑞 𝐻 𝑞 = 2√𝜌 
+
+(1 − √𝜌 ) 
+
+> 𝑇 −2
+
+∑︁  
+
+> 𝑡 =0
+
+𝐻 𝑡 𝑇 −1−𝑡 ∑︁ 
+
+> 𝑞 =1
+
+√𝜌 𝑞 ≤ 2𝜌 
+
+(1 − √𝜌 )2 
+
+> 𝑇 −2
+
+∑︁ 
+
+> 𝑡 =0
+
+𝐻 𝑡 .
+
+(iv) Putting them together. 
+
+1
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+
+
+𝑿 (𝑡 ) (I − J) 2F
+
+
+
+≤ 6𝜂 2𝑠 2𝜎 2 𝜌  1 + 𝜅 2𝜂 2𝑠 2𝐿 2  1 − √𝜌 2 +
+
+ 𝜅 2𝜂 2𝑠 2𝐿 2
+
+2 + 1
+
+ 12 𝜂 2𝑠 2𝜌 𝑚𝑇  1 − √𝜌 2 
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+
+
+∇𝑭 (𝑡 ) 2F
+
+
+
++ 4𝜂 2𝜌𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2  1 − √𝜌 2 𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ 
+
+> (𝑒 )
+
+≤ 18 𝜌𝜂 2𝑠 2
+
+(1 − √𝜌 )2
+
+1
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+∇𝑭 (𝑡 ) 
+
+> F
+
++ 18 𝜌𝜂 2𝑠 2𝜎 2
+
+(1 − √𝜌 )2 + 4𝜂 2𝜌𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2  1 − √𝜌 2 𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ ,
+
+where we assume that 𝜂 ≤ 1 
+
+> 𝑠𝜅𝐿
+
+in inequality (𝑒 ). We know, from Lemma 5, that 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐶 2
+
+> 𝑡
+
+ ≤ 12 𝑚𝑠 2  𝜎 2 + 𝐺 2max 
+
+
+
+𝑐 2 .
+
+It follows that 
+
+
+
+1 − 54 
+
+(1 − √𝜌 )2
+
+ 1
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+
+
+𝑿 (𝑡 ) (I − J) 2F
+
+
+
+≤ 54 
+
+(1 − √𝜌 )2
+
+𝜌𝜂 2𝑠 2 (𝛽 2 + 1)
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 18 𝜌𝜂 2𝑠 2𝜎 2
+
+(1 − √𝜌 )2 + 48 𝜌𝑚𝜂 2𝑠 2𝑑𝜎 2 
+
+> 𝑧
+
+(𝜎 2 + 𝐺 2max )
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 .
+
+Choosing 𝜂 ≤ 1−√𝜌  
+
+> 632 𝑠𝐿 (𝜅 +1)
+
+√𝛽 2+1 , we have 1 − 54 𝜂 2𝑠 2𝐿 2
+
+(1 − √𝜌 )2 ≥ 1 − 12 = 12 .
+
+Rearrange the terms, we have 
+
+1
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+
+
+𝑿 (𝑡 ) (I − J) 2F
+
+
+
+≤ 108 𝜌𝜂 2𝑠 2 (𝛽 2 + 1)(1 − √𝜌 )2
+
+1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 36 𝜌𝜂 2𝑠 2𝜎 2
+
+(1 − √𝜌 )2 + 96 𝜌𝑚𝜂 2𝑠 2𝑑𝜎 2 
+
+> 𝑧
+
+(𝜎 2 + 𝐺 2max )
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 .
+
+## C.4 Proof of Theorem 1 
+
+In this proof, we combine all the above intermediate results to show the final theorem. (a) Taking expectation over the remaining randomness and a telescoping sum. 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐹 ( ¯𝒙 𝑡 +1) − 𝐹 ( ¯𝒙 𝑡 ) ≤ − 𝑠𝜂 
+
+31
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 6𝐿𝜂 2𝑠 2  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  + 𝜂𝑠 𝐿 2
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
+i
+
++ 𝜂 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2𝑚 2 E 𝐵 2
+
+> 𝑡
+
+ .
+
+(b) Plugging in Lemma 5. 
+
+𝐹 ★ − E 𝐹 ( ¯𝒙 0)
+
+𝑇 ≤ 6𝐿𝜂 2𝑠 2  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  + 𝜂𝑠𝐿 2
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
+i
+
++ 𝜂 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝛾 2𝑚 2
+
+1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E 𝐵 2
+
+> 𝑡
+
+ − 𝑠𝜂 
+
+31
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁  
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
+≤ 6𝐿𝜂 2𝑠 2  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  + 𝜂𝑠 𝐿 2
+
+𝑚𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+E
+
+h
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22
+
+i
+
+− 𝑠𝜂 
+
+31
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 12 𝜂 2𝑠 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2𝑚 
+
+ 𝜎 2 + 𝐺 2max 
+
+ .
+
+where the last inequality follows from 𝜅 2𝜂 2𝑠 2𝐿 2 ≤ 1. Over-the-Air Federated Learning in Heterogeneous Mobile Wireless Networks Conference acronym ’XX, June 03–05, 2026, Woodstock, NY 
+
+(c) Plugging in Lemma 6. 
+
+𝐹 ★ − E 𝐹 ( ¯𝒙 0)
+
+𝑇 ≤ 6𝐿𝜂 2𝑠 2  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  − 𝑠𝜂 
+
+3
+
+
+
+1 − 316 𝜌𝜂 2𝑠 2𝐿 2 (𝛽 2 + 1)(1 − √𝜌 )2
+
+ 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 36 𝜌𝜂 3𝑠 3𝐿 2𝜎 2
+
+(1 − √𝜌 )2 + 96 𝜌𝑚𝜂 3𝑠 3𝐿 2𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 (𝜎 2 + 𝐺 2max ) + 12 𝜂 2𝑠 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2𝑚 
+
+ 𝜎 2 + 𝐺 2max 
+
+ .
+
+We know from 𝜂 ≤ 1−√𝜌  
+
+> 632 𝑠𝐿 (𝜅 +1)
+
+√𝛽 2+1 that 316 𝜌𝜂 2𝑠 2𝐿 2 (𝛽 2 + 1)(1 − √𝜌 )2 ≤ 12 .
+
+It follows that 
+
+𝐹 ★ − E 𝐹 ( ¯𝒙 0)
+
+𝑇 ≤ 6𝐿𝜂 2𝑠 2  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  − 𝑠𝜂 
+
+61
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
++ 36 𝜌𝜂 3𝑠 3𝐿 2𝜎 2
+
+(1 − √𝜌 )2 + 96 𝜌𝑚𝜂 3𝑠 3𝐿 2𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 (𝜎 2 + 𝐺 2max ) + 12 𝜂 2𝑠 2𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2𝑚 
+
+ 𝜎 2 + 𝐺 2max 
+
+ .
+
+(26) Therefore, rearrange the terms in (26), it follows that 1
+
+𝑇  
+
+> 𝑇 −1
+
+∑︁ 
+
+> 𝑡 =0
+
+E
+
+h
+
+∇𝐹 ( ¯𝒙 𝑡 ) 22
+
+i
+
+≤ 6(E 𝐹 ( ¯𝒙 0) − 𝐹 ∗)
+
+𝜂𝑠𝑇 + 36 𝐿𝜂𝑠  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  + 216 𝜌𝜂 2𝑠 2𝐿 2𝜎 2
+
+(1 − √𝜌 )2 + 576 𝜌𝑚𝜂 2𝑠 2𝐿 2𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2 (1 − √𝜌 )2 (𝜎 2 + 𝐺 2max ) + 72 𝜂𝑠𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2𝑚 
+
+≤ 6(E 𝐹 ( ¯𝒙 0) − 𝐹 ∗)
+
+𝜂𝑠𝑇 + 36 𝐿𝜂𝑠  𝜅 2𝐿 2 + 1   𝜎 2 + 𝜁 2  + 216 𝜌𝜂 2𝑠 2𝐿 2𝜎 2
+
+(1 − √𝜌 )2 + 73 𝜂𝑠𝐿𝑑𝜎 2
+
+> 𝑧
+
+𝑐 2𝛾 2𝑚 
+
+ 𝜎 2 + 𝐺 2max 
+
+ .
+
+where the inequality holds because 𝜂 ≤ 1−√𝜌  
+
+> 632 𝑠𝐿𝑚 (𝜅 +1)
+
+√𝛽 2+1 .
+
+## D Auxiliary Lemmas 
+
+Lemma 7 ([39]) . Define the last active round of the link 𝑖 as 𝜏 𝑖 (𝑡 ) ≜ {𝑡 ′ | 𝑡 ′ < 𝑡, 𝑖 ∈ A 𝑡 ′
+
+}. Given Assumption 1 where 𝑝 𝑡 𝑖 ≥ 𝑐 , and 𝑐 is an absolute constant, we have 
+
+E[𝑡 − 𝜏 𝑖 (𝑡 )] ≤ 1
+
+𝑐 , and E[( 𝑡 − 𝜏 𝑖 (𝑡 )) 2] ≤ 2
+
+𝑐 2 .
+
+Lemma 7 captures the expected staleness of local updates amid highly uncertain and heterogeneous uplink availability. It can be readily checked that when 𝑝 𝑡 𝑖 ’s are identical, Lemma 7 trivially holds with E [𝑡 − 𝜏 𝑖 (𝑡 )] = 1 
+
+> 𝑐
+
+.
+
+Proposition 1 ([31, 38, 40]) . For any 𝑡 ∈ [ 𝑇 − 1], it holds that 
+
+1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+∇𝐹 𝑖 (𝒙 𝑡 𝑖 ) 22 ≤ 3𝐿 2
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝒙 𝑡 𝑖 − ¯𝒙 𝑡 22 + 3  𝛽 2 + 1 ∇𝐹 ( ¯𝒙 𝑡 ) 22 + 3𝜁 2.
+
+## E Additional Details of Numerical Experiments E.1 Experimental setups 
+
+Hardware and Software Setups. 
+
+• Hardware. The simulations are performed on a private cluster with 8 CPUs, 64 GB RAM, and one NVIDIA A30 GPU card. 
+
+• Software. We code our experiments based on PyTorch 2.8.0 and Python 3.9.1. 
+
+Neural Network and Hyper-parameter Specifications. 
+
+Table 2 specifies details of the structures of the convolutional neural network and training. We initialize CNNs using the Kaim-ing initialization. The initial local learning rate 𝜂 0 is searched based on the best performance after 100 global rounds, over two grids 
+
+{0.1, 0.03 , 0.01 , 0.003 , 0.001 , 0.0003 }.
+
+Datasets and Data Heterogeneity. The MNIST dataset [19] contains 10 classes of images. In total, there are 50000 train images and 10000 test images. Conference acronym ’XX, June 03–05, 2026, Woodstock, NY Xiang et al. 0 1 2 3 4 5 6 7 8 9Data (label) class 0246810 12 14 16 18 Client Index 
+
+Figure 4: An example of data heterogeneity using 
+
+Dirichlet (𝛼 = 0.1) distribution with 20 clients. 𝑥 -axis de-notes the categories of images, while 𝑦 -axis denotes the client index. The size of a circle refers to the proportion of pictures in a given class. The color of a circle distin-guishes images with different categories. Table 2: Neural network architecture, loss function, train-ing steps, and batch size specifications Dataset MNIST 
+
+Neural network MLP Model architecture ∗ L(784,1024) – R – L(10) Loss function Cross-entropy loss Number of local steps 𝑠 10 Number of global rounds 𝑇 800 Batch size 32   
+
+> ∗R: ReLU activation function; L: (# outputs): a fully-connected linear layer.
+
+## E.2 Baseline algorithms 
+
+We compare the proposed FedOAG with five baseline algorithms. (i) The ideal FedAvg algorithm [24] aggregates each device’s update without any receiver noise, (ii) the SCA algorithm [3] adopts a successive convex approximation framework to optimize the learning convergence bound based on the channel conditions, (iii) the BB-interior algorithm [49] schedules only devices within a fixed radius 𝑅 in by excluding distant devices, (iv) the BB-alternative algorithm [49] randomly alternates between full and interior-only scheduling to balance update reliability with full data utilization, and (v) the vanilla OTA [45] enforces channel inversion across all devices and is thus susceptible to deep-fading devices. In terms of the CDI knowledge, the vanilla OTA, BB-interior, and BB-alternative algorithms require the parameter server to know each device’s small-scale CDI ℎ𝑡 𝑖 ’s, which may incur substantial overhead. The SCA algorithm requires the small-scale CDI at the devices and the statistical CDI at the parameter server. In contrast, our FedOAG only requires the small-scale CDI at each device. Notably, we let the SCA algorithm optimize its convergence bound based only on the initial statistical CDIs, without accounting for the potential temporal variations in our setup. 
+
+## E.3 Additional results 
+
+Fig. 5 plots the complete test accuracy curves of FedOAG reported in Fig. 3. The observations are consistent with Section 6, where only 
+
+𝛾 = 10 −9 achieves the best balance between uplink availability and receiver noise amplification. 0 100 200 300 400 500 600 700 800   
+
+> round
+> 020 40 60 80
+> Test Accuracy (%)
+> FedOPI (1e-12) FedOPI (1e-08) FedOPI (1e-09) FedOPI (5e-09) FedOPI (1e-05) FedOPI (1e-15)
+> 760 780 800
+> round (Rounds)
+> 20 40 60 80
+> Test Accuracy (%)
+> Zoom-in
+
+Figure 5: Comparisons of the proposed FedOAG under different 𝛾 ’s on the MNIST dataset with 𝑚 = 30 devices in the stationary regime. The results are obtained over five repetitions. Smaller 𝛾 relates to lower truncation threshold and therefore leads to more active uplinks, but at the expense of higher receiver noise amplification, and vice versa. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009

@@ -1,0 +1,2122 @@
+Title: Adaptive Client Clustering and Coordination for Federated Learning Workflow Management in Edge Networks
+
+URL Source: https://arxiv.org/pdf/2609.33544v1
+
+Published Time: Tue, 29 Sep 2026 02:54:26 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> 1
+
+# Adaptive Client Clustering and Coordination for Federated Learning Workflow Management in Edge Networks 
+
+Jieping Luo, Qiyue Li, Student Member, IEEE , Yuxuan Chen, Hang Qi, Student Member, IEEE , Jiaying Yin, Jingjin Wu, Senior Member, IEEE , and Qian Wang, Senior Member, IEEE 
+
+Abstract —Federated learning (FL) is increasingly deployed as a managed learning service rather than as a set of isolated training jobs. In networked edge environments, dependent FL service flows must coordinate heterogeneous clients, non-IID data, fluctuating communication latency, and precedence-constrained tasks under service-level completion requirements. These coupled factors make participant management central to both time-to-target performance and learning stability. This paper proposes A-CoDa, an adaptive clustered coordination framework for man-aging dependent FL flows. A-CoDa first uses label-distribution divergence (LDD)-based greedy-balanced clustering to construct statistically coherent and size-aware client groups, which serve as a scalable management abstraction. Building on this structure, we design FedMIX, an uncertainty-aware intra-/inter-cluster partici-pation mechanism that ranks clients by a loss–latency–uncertainty utility and adaptively controls cross-cluster probing according to training progress and latency conditions. A dependency-aware DAG scheduler then orchestrates layer-wise task execution so that parallelism and precedence constraints are jointly respected. We further provide a convergence analysis that frames the result as a sufficient loss-domain design bound, explicitly relating the attain-able error floor and sufficient communication rounds to LDD-induced sampling mismatch, residual distribution shift, local-SGD drift, stochastic variance, and adaptive probing budgets. Experiments on handwriting, wearable-sensing, product-image, and medical-imaging tasks evaluate A-CoDa under dependent FL workflows and demonstrate its effectiveness in reducing end-to-end completion time while maintaining competitive accuracy. 
+
+Index Terms —Federated learning, network and service manage-ment, dependent learning flows, client participation management, task scheduling, label-distribution divergence, edge intelligence 
+
+I. I NTRODUCTION 
+
+Federated learning (FL) [1] enables distributed clients to collaboratively train models while keeping raw data local. Beyond single-model training, FL is increasingly used as 
+
+J. Luo is with the Department of Statistics, University of Oxford, 24–29 St Giles’, Oxford OX1 3LB, U.K. Email: jieping.luo@reuben.ox.ac.uk. Q. Li, Y. Chen, H. Qi, and J. Wu are with the Guangdong Provincial/Zhuhai Key Laboratory of IRADS, Beijing Normal-Hong Kong Baptist University, Zhuhai, China. Emails: t330005026@mail.bnbu.edu.cn, t330018009@mail.bnbu.edu.cn, t330202706@mail.bnbu.edu.cn, jj.wu@ieee.org. J. Yin is with the Institute of Precision Medicine, The First Affiliated Hospital, Sun Yat-Sen University, Guangzhou, Guangdong, 510080, P.R. China. Email:yinjy35@mail.sysu.edu.cn. Q. Wang is with the Institute of Cyberspace Security, Zhejiang University of Technology, Hangzhou 310023, China. Email:wangqian18@zjut.edu.cn. 
+
+Corresponding author: J. Wu. 
+
+part of managed networked services in which multiple learn-ing tasks must be executed with service-level requirements. Examples include privacy-preserving demand forecasting for supply-chain and retail operations [2], healthcare and medical-assistance workflows [3], mobile and wearable sensing analyt-ics [4], product-inspection services [5], and networked edge intelligence for satellite or remote-connectivity scenarios [6]. In these applications, the learning service is not only judged by final model accuracy, but also by whether all dependent tasks can finish within a reasonable wall-clock time while respecting privacy, communication, and resource constraints. Managing such FL service flows is challenging because statistical and system heterogeneity interact. Clients may hold different label distributions, collect task-specific data at differ-ent rates, and experience different communication and com-putation delays. A client with rare or difficult samples may be statistically valuable but slow, while a fast client may contribute redundant information. Therefore, client participation should be treated as an online management decision that jointly considers learning utility, latency cost, and exploration of under-sampled participants, instead of simply selecting the largest or fastest set of clients. Dependent FL workflows further complicate this decision. In a single FL job, a slow round only delays that job. In a directed acyclic graph (DAG) of FL tasks, however, the same delay may postpone downstream services on the critical execution path. For example, a downstream sensing, inspection, or diagnosis model may not start until an upstream representation, filter-ing, or pre-processing model has met its target. Static client selection or one-shot task-to-client matching is therefore inef-ficient when network states, local losses, and client availability evolve over time [7]. Client clustering can reduce the search complexity, but a purely static cluster assignment cannot react to changing training progress or cross-cluster sampling bias. We propose A-CoDa (Adaptive Cluster-oriented and Dependency-aware Hierarchical Client Selection for Federated Learning), a framework for managing dependent FL service flows under heterogeneous edge resources. A-CoDa combines LDD-based balanced clustering, uncertainty-aware intra-/inter-cluster participation control, and DAG-aware scheduling. The LDD-based clustering stage constructs statistically coherent and size-balanced client groups that serve as a stable low-complexity management abstraction. FedMIX then performs arXiv:2609.33544v1 [cs.DC] 27 Sep 2026 2
+
+in-cluster exploitation while adaptively probing external clus-ters when additional diversity is useful, ranking candidates with a loss–latency–uncertainty utility and controlling the external probing budget according to training progress and latency conditions. The DAG scheduler coordinates layer-wise execution so that task precedence and available parallelism are both respected. Existing FL client-selection schemes are mainly static, dy-namic, or cluster-based. Static methods reduce overhead but ignore time-varying system states [8]; dynamic methods exploit latency, computation, or loss feedback [9], [10], [11] but usually focus on a single job; and cluster-based methods exploit statistical or resource similarity [12], [13], [14], but are often static or require repeated re-clustering. Multi-job FL scheduling has been explored [15], [16], but most existing formulations assume independent jobs rather than precedence-constrained service flows. These limitations motivate a design that keeps the efficiency of clustered coordination while allowing round-level participation management under dependent tasks. Another limitation is that many selection rules optimize short-term utility, such as expected loss decrease or deadline feasibility, without explicitly tracking how repeated biased participation affects the aggregate update over multiple rounds. In heterogeneous learning services, this can cause a cluster to converge quickly on its dominant distribution while under-representing useful external data. A-CoDa addresses this by preserving an in-cluster backbone for efficiency and adding a bounded, adaptive external probing channel for controlled correction. The uncertainty term in FedMIX discourages stale participation estimates, while the adaptive budget reduces unnecessary probing under latency congestion. This work extends our prior conference paper [17], where client coordination remained largely static after initialization. The inherited components include the basic LDD clustering idea and the PPO-based dependency scheduler. The journal extension focuses on online flow management: it introduces the revised FedMIX participation rule with loss–latency– uncertainty scoring, adaptive inter-cluster probing budgets, a refined convergence analysis that treats the result as a suffi-cient design bound rather than a direct predictor of empirical accuracy thresholds, and a broader evaluation of dependent FL workflows. Our main contributions are summarized as follows.  
+
+> ∙
+
+We formulate dependent FL as a managed service-flow coordination problem, where client participation, task de-pendencies, and latency jointly determine the end-to-end completion time. A-CoDa integrates LDD-based balanced clustering with DAG-aware task execution to provide a scalable coordination architecture.  
+
+> ∙
+
+We design FedMIX, an uncertainty-aware intra-/inter-cluster participation mechanism. FedMIX ranks candidates using a loss–latency–uncertainty utility and adaptively controls cross-cluster probing according to training stag-nation, external uncertainty, and latency congestion.  
+
+> ∙
+
+We provide a sufficient convergence and completion-time analysis under PL-type objectives. The analysis explicitly separates sampling mismatch, residual distribution shift, local-SGD drift, stochastic variance, and adaptive prob-ing budgets, clarifying how FedMIX controls the bias– variance–latency trade-off without claiming to exactly predict measured accuracy thresholds.  
+
+> ∙
+
+We evaluate A-CoDa on a dependent multi-task FL suite involving handwriting, wearable sensing, product-image classification, and medical imaging, together with scala-bility tests up to 500 clients. The results show improved end-to-end completion time while maintaining competitive accuracy. The rest of this paper is organized as follows. Section II summarizes the related work. Section III describes the system model. Section IV provides the convergence and completion-time analysis. Section V presents the proposed coordination al-gorithms. Section VI reports the numerical results. Section VII concludes the paper. II. R ELATED WORK 
+
+A. Network and Service Management for Edge Intelligence 
+
+Network and service management traditionally emphasizes the coordinated management of resources, services, policies, reliability, and performance across networked systems. In modern edge-intelligence settings, learning tasks themselves become managed services: they consume communication and computation resources, interact with privacy constraints, and must satisfy time-to-target or service-completion requirements. This perspective is closely related to task-oriented communica-tion and edge-intelligence orchestration, where sensing, com-munication, computation, and learning objectives are jointly considered [18], [19], [20]. Unlike conventional resource-allocation studies that optimize a single offloading or com-munication objective, A-CoDa treats FL participation as a service-flow management action: the selected clients affect both learning progress and the completion time of downstream tasks. 
+
+B. Distribution-Divergence-Based Clustering in Federated Learning 
+
+Distributional discrepancy measures are widely used to quantify non-IID data heterogeneity in FL [21]. Optimal-transport and Wasserstein-style metrics capture structural dif-ferences when a ground metric is available [22], [23], [24], while simpler histogram divergences are often sufficient for label-skewed FL. Prior works used such discrepancies for personalization, divergence-aware aggregation, and cluster-ing [25], [26], [27], [28], [29]. Following our implementation, this paper uses an 𝓁 1 label-distribution divergence (LDD), rather than solving an optimal-transport problem. This choice keeps the clustering metric lightweight and aligned with em-pirical label histograms that can be obtained without collecting raw records. The lightweight nature of LDD is important for managed FL flows. A service manager can often obtain class-count 3
+
+Fig. 1: Adaptive cluster-based FL client selection in networked edge systems. summaries or coarse distribution statistics, whereas richer feature-distribution estimates may require additional inference, communication, or privacy-sensitive metadata. LDD is there-fore used as a low-overhead proxy for dominant label-skew heterogeneity, not as a universal substitute for feature-level distribution shift. 
+
+C. Dependent Task Scheduling and Multi-Job FL 
+
+Dependency-constrained edge workloads couple offload-ing, scheduling, latency, energy, and reliability [30]. Because precedence constraints make the resulting optimization diffi-cult [31], learning-based controllers such as federated deep Q-networks, Lyapunov methods, and bandit methods have been explored [20], [32]. Multi-job FL scheduling further shows that participant assignment should be treated as a system-level scheduling problem rather than a purely statistical choice [15], [16]. However, many multi-job FL studies assume independent jobs or parallel training without explicit service-flow depen-dencies. A-CoDa differs by considering a DAG of dependent FL tasks and measuring completion time through layer-wise critical execution, so delays in upstream tasks can propagate to downstream tasks. 
+
+D. Client Participation and Cluster-Based FL 
+
+Client selection has been studied from several complemen-tary perspectives. Deadline-aware selection, tier-based group-ing, and utility–speed scoring reduce stragglers and improve time-to-accuracy [7], [33], [11]. Recent dynamic selection methods also use loss, model updates, or distribution metrics to prioritize statistically useful clients [34], [35], [14]. Clustered FL manages statistical and resource heterogeneity by grouping clients with similar data or performance profiles [12], [13], [36]. These methods demonstrate the value of participation control, but they typically optimize a single FL job, an in-dependent multi-job setting, or a static clustered structure. A-CoDa treats the cluster structure as a stable low-complexity backbone and uses FedMIX for round-level flex-ibility. FedMIX extends loss–latency selection with an uncer-tainty bonus and an adaptive probing budget, making external exploration a controlled management resource rather than a fixed overhead. This is particularly relevant for dependent FL flows, where over-exploration may increase tail latency while under-exploration may increase sampling bias. 
+
+E. Summary 
+
+Prior studies have advanced non-IID modeling, edge scheduling, multi-job FL, and clustered participation control separately. A-CoDa integrates these directions by combining LDD-driven balanced clustering, FedMIX-based adaptive par-ticipation management, and DAG-aware execution. Its analysis links LDD-induced sampling mismatch, residual distribution shift, local-SGD drift, stochastic variance, and adaptive probing budgets to sufficient round and completion-time bounds, while the algorithmic design connects this guidance to practical loss– latency–uncertainty selection. III. S YSTEM MODEL 
+
+A. Multi-Task Federated Learning over IoT-Edge Systems 
+
+We consider a multi-task federated learning (FL) system deployed over an IoT-edge infrastructure, consisting of one edge server and 𝑈 client devices indexed by  = {1 , … , 𝑈 }.Client 𝑢 ∈  holds a local dataset 𝐷 𝑢 with size |𝐷 𝑢 |. A set of learning tasks is denoted by  = {1 , … , 𝑉 }. For task 𝑣 ∈ ,let 𝐷 𝑣,𝑢 ⊆ 𝐷 𝑢 be the subset of client 𝑢 ’s data associated with task 𝑣 . We define 
+
+𝑛 𝑣,𝑢 ≜ |𝐷 𝑣,𝑢 |, 𝑛 𝑣 ≜ ∑
+
+> 𝑢 ∈
+
+𝑛 𝑣,𝑢 , (1) and the task-eligible client pool as 
+
+𝑣 = { 𝑢 ∈  ∶ 𝑛 𝑣,𝑢 > 0} . (2) The normalized data weight of client 𝑢 for task 𝑣 is 
+
+𝑝 𝑣,𝑢 = 𝑛 𝑣,𝑢 
+
+𝑛 𝑣 
+
+, 𝑢 ∈ 𝑣 . (3) The tasks are organized as a directed acyclic graph (DAG) 
+
+ = ( , ), (4) 4
+
+where each node 𝑣 ∈  represents a learning task, and each directed edge (𝑣, 𝑞 ) ∈  indicates that task 𝑣 must be completed before task 𝑞 starts. To avoid notation conflict with the number of local SGD steps, we use  to denote the edge set of the DAG. The DAG is partitioned into 𝐿 execution layers, denoted by 
+
+ = { 1, … , 𝐿 }, (5) where tasks in the same layer can be executed in parallel, while different layers are executed sequentially. The execution proceeds from layer 1 to layer 𝐿 .All clients are partitioned into 𝑁 disjoint clusters 
+
+ = { 1, … , 𝑁 }, (6) where 𝑖 ⊆  , 𝑖 ∩ 𝑗 = ∅ for 𝑖 ≠ 𝑗 , and ⋃𝑁 𝑖 =1 𝑖 =  . Let 
+
+𝑖 (𝑢 ) denote the cluster index of client 𝑢 , i.e., 𝑢 ∈ 𝑖 (𝑢 ). For each task 𝑣 , the cluster assigned as its primary serving cluster is denoted by 
+
+𝜙 (𝑣 ) ∈ {1 , … , 𝑁 }. (7) For tasks executed in the same DAG layer, the cluster-task assignment satisfies 
+
+𝜙 (𝑣 ) ≠ 𝜙 (𝑞 ), ∀𝑣 ≠ 𝑞, 𝑣, 𝑞 ∈ 𝑙 , 𝑙 = 1 , … , 𝐿, (8) which means that one cluster serves at most one task at the same time. For task 𝑣 , the in-cluster eligible client pool is defined as 
+
+𝑣 = 𝑣 ∩ 𝜙 (𝑣 ), 𝑀 𝑣 = |𝑣 |. (9) The out-of-cluster eligible client pool is defined as 
+
+𝑣 = 𝑣 ⧵ 𝜙 (𝑣 ). (10) For task 𝑣 , the global loss function is defined as the weighted sum of local losses over its task-eligible client pool: 
+
+𝐹 𝑣 (𝑤 ) = ∑
+
+> 𝑢 ∈𝑣
+
+𝑝 𝑣,𝑢 𝐹 𝑣,𝑢 (𝑤 ), (11) where 𝐹 𝑣,𝑢 (𝑤 ) is the empirical loss of model parameter 𝑤 on client 𝑢 for task 𝑣 . The corresponding global minimizer and local minimizer are denoted by 
+
+𝑤 ∗ 
+
+> 𝑣
+
+= arg min  
+
+> 𝑤
+
+𝐹 𝑣 (𝑤 ), 𝑤 ∗ 
+
+> 𝑣,𝑢
+
+= arg min  
+
+> 𝑤
+
+𝐹 𝑣,𝑢 (𝑤 ). (12) Each task 𝑣 has an initial global model 𝑤 (0)  
+
+> 𝑣
+
+and a task-specific target requirement 𝜏 𝑣 . Let 𝑅 𝑣 denote the number of communication rounds required for task 𝑣 to meet its target requirement. At communication round 𝑟 = 1 , … , 𝑅 𝑣 , the edge server broadcasts 𝑤 (𝑟 −1)  
+
+> 𝑣
+
+to the selected active client set (𝑟 ) 
+
+> 𝑣
+
+.Each active client 𝑢 ∈ (𝑟 ) 
+
+> 𝑣
+
+initializes 
+
+𝑤 (𝑟, 0)  
+
+> 𝑣,𝑢
+
+= 𝑤 (𝑟 −1)  
+
+> 𝑣
+
+(13) and performs 𝐸 loc local SGD steps: 
+
+𝑤 (𝑟,𝑒 +1)  
+
+> 𝑣,𝑢
+
+= 𝑤 (𝑟,𝑒 ) 
+
+> 𝑣,𝑢
+
+− 𝜂 (𝑟 ) 
+
+> 𝑣
+
+𝑔 (𝑟,𝑒 ) 
+
+> 𝑣,𝑢
+
+, 𝑒 = 0 , … , 𝐸 loc − 1 , (14) where 𝜂 (𝑟 ) 
+
+> 𝑣
+
+is the learning rate and 𝑔 (𝑟,𝑒 ) 
+
+> 𝑣,𝑢
+
+is a stochastic gradient of 𝐹 𝑣,𝑢 .After local training, the server aggregates the uploaded local models using data-size-aware weights: 
+
+𝑤 (𝑟 ) 
+
+> 𝑣
+
+= ∑
+
+> 𝑢 ∈(𝑟 )
+> 𝑣
+
+𝛼 (𝑟 )
+
+> 𝑣,𝑢
+
+𝑤 (𝑟,𝐸 loc ) 
+
+> 𝑣,𝑢
+
+, (15) where 
+
+𝛼 (𝑟 ) 
+
+> 𝑣,𝑢
+
+= 𝑛 𝑣,𝑢 
+
+∑
+
+> 𝑗 ∈(𝑟 )
+> 𝑣
+
+𝑛 𝑣,𝑗 
+
+, 𝑢 ∈ (𝑟 ) 
+
+> 𝑣
+
+. (16) To use a unified notation for both theoretical analysis and numerical evaluation, we define the task progress metric 𝑄 (𝑟 ) 
+
+> 𝑣
+
+.In the loss-domain analysis, it is given by the relative loss reduction 
+
+𝑄 (𝑟 ) 
+
+> 𝑣
+
+= 1 − 𝐹 𝑣 (𝑤 (𝑟 ) 
+
+> 𝑣
+
+)
+
+𝐹 𝑣 (𝑤 (0)  
+
+> 𝑣
+
+) . (17) In the experiments, 𝑄 (𝑟 ) 
+
+> 𝑣
+
+is instantiated as the test classification accuracy of task 𝑣 after round 𝑟 . Task 𝑣 is regarded as completed when 
+
+𝑄 (𝑅 𝑣 ) 
+
+> 𝑣
+
+≥ 𝜏 𝑣 . (18) 
+
+B. Data Heterogeneity 
+
+In realistic IoT-edge FL systems, client data are generally non-IID. We characterize task-wise data heterogeneity using label-distribution divergence (LDD), defined as the 𝓁 1 distance between empirical label distributions. Let  = {1 , … , 𝑌 }
+
+denote the label space. For task 𝑣 , client 𝑢 induces an empirical label distribution 𝑃 (𝑣 ) 
+
+> 𝑢
+
+(𝑦 ) over .The global label distribution of task 𝑣 is 
+
+𝑃 (𝑣 ) 
+
+> 𝑔
+
+(𝑦 ) = ∑
+
+> 𝑢 ∈𝑣
+
+𝑝 𝑣,𝑢 𝑃 (𝑣 ) 
+
+> 𝑢
+
+(𝑦 ), 𝑦 ∈ . (19) The client-level LDD of client 𝑢 for task 𝑣 is 
+
+Δ(𝑣 ) 
+
+> 𝑢
+
+= ‖‖‖𝑃 (𝑣 ) 
+
+> 𝑢
+
+− 𝑃 (𝑣 )
+
+> 𝑔
+
+‖‖‖1 =
+
+> 𝑌
+
+∑
+
+> 𝑦 =1
+
+|||𝑃 (𝑣 ) 
+
+> 𝑢
+
+(𝑦 ) − 𝑃 (𝑣 ) 
+
+> 𝑔
+
+(𝑦 )||| . (20) For cluster 𝑖 , define the number of task-𝑣 samples in the cluster as 
+
+𝑛 𝑣, 𝑖 = ∑
+
+> 𝑢 ∈𝑖
+
+𝑛 𝑣,𝑢 . (21) When 𝑛 𝑣, 𝑖 > 0, the aggregated label distribution of cluster 𝑖 
+
+for task 𝑣 is 
+
+𝑃 (𝑣 ) 
+
+> 𝑖
+
+(𝑦 ) = 1
+
+𝑛 𝑣, 𝑖 
+
+∑
+
+> 𝑢 ∈𝑖
+
+𝑛 𝑣,𝑢 𝑃 (𝑣 ) 
+
+> 𝑢
+
+(𝑦 ), 𝑦 ∈ . (22) The cluster-level LDD is then defined as 
+
+Δ(𝑣 ) 
+
+> 𝑖
+
+= ‖‖‖𝑃 (𝑣 ) 
+
+> 𝑖
+
+− 𝑃 (𝑣 )
+
+> 𝑔
+
+‖‖‖1 =
+
+> 𝑌
+
+∑
+
+> 𝑦 =1
+
+|||𝑃 (𝑣 ) 
+
+> 𝑖
+
+(𝑦 ) − 𝑃 (𝑣 ) 
+
+> 𝑔
+
+(𝑦 )||| . (23) For client 𝑢 , the multi-task LDD aggregates task-wise dis-crepancies according to the client’s task data shares: 
+
+Δmt  
+
+> 𝑢
+
+= ∑
+
+> 𝑣 ∈
+
+𝑛 𝑣,𝑢 
+
+𝑛 𝑢 
+
+‖‖‖𝑃 (𝑣 ) 
+
+> 𝑢
+
+− 𝑃 (𝑣 )
+
+> 𝑔
+
+‖‖‖1 , 𝑛 𝑢 = ∑
+
+> 𝑣 ∈
+
+𝑛 𝑣,𝑢 . (24) 5
+
+Similarly, the multi-task LDD of cluster 𝑖 is 
+
+Δmt  
+
+> 𝑖
+
+= ∑
+
+> 𝑣 ∈
+
+𝑛 𝑣, 𝑖 
+
+𝑛 𝑖 
+
+‖‖‖𝑃 (𝑣 ) 
+
+> 𝑖
+
+− 𝑃 (𝑣 )
+
+> 𝑔
+
+‖‖‖1 , 𝑛 𝑖 = ∑
+
+> 𝑣 ∈
+
+𝑛 𝑣, 𝑖 . (25) The overall cluster-level multi-task LDD is ̄
+
+Δmt  
+
+> 
+
+=
+
+> 𝑁
+
+∑
+
+> 𝑖 =1
+
+𝑛 𝑖 
+
+∑𝑁 𝑗 =1 𝑛 𝑗 
+
+Δmt  
+
+> 𝑖
+
+. (26) Since the active client set may include both in-cluster and out-of-cluster clients, we further define the round-level active-set LDD. Let 
+
+𝑛 (𝑟 ) 
+
+> 𝑣, 𝑖
+
+= ∑ 
+
+> 𝑢 ∈(𝑟 )
+> 𝑣 ∩𝑖
+
+𝑛 𝑣,𝑢 , 𝑛 (𝑟 ) 
+
+> 𝑣
+
+= ∑
+
+> 𝑢 ∈(𝑟 )
+> 𝑣
+
+𝑛 𝑣,𝑢 . (27) The active-set LDD of task 𝑣 at round 𝑟 is ̄
+
+Δ(𝑟 ) 
+
+> 𝑣
+
+=
+
+> 𝑁
+
+∑
+
+> 𝑖 =1
+
+𝑛 (𝑟 )
+
+> 𝑣, 𝑖
+
+𝑛 (𝑟 )
+
+> 𝑣
+
+Δ(𝑣 ) 
+
+> 𝑖
+
+. (28) This quantity captures the heterogeneity level induced by the actual client participation decision at round 𝑟 .
+
+C. Transmission and Computation Time 
+
+In each FL round, the latency incurred by client 𝑢 for task 𝑣 
+
+consists of local computation time and uplink communication time. Let 𝜅 𝑣 denote the computational complexity coefficient of task 𝑣 , and let 𝑓 𝑢 denote the effective computing rate of client 𝑢 . The local computation time of client 𝑢 in round 𝑟 is 
+
+𝑡 (𝑟 ),comp  
+
+> 𝑢,𝑣
+
+= 𝐸 loc 𝑛 𝑣,𝑢 𝜅 𝑣 
+
+𝑓 𝑢 
+
+, (29) where 𝐸 loc is the number of local SGD steps. The effective computing rate is defined as 
+
+𝑓 𝑢 = 𝑓 clock 
+
+> 𝑢
+
+𝐶 𝑢 
+
+, (30) where 𝑓 clock  
+
+> 𝑢
+
+is the CPU clock frequency and 𝐶 𝑢 is the number of CPU cycles required to process one unit of data. To avoid conflict with the external probing budget, we use 
+
+𝑊 to denote the wireless channel bandwidth. According to Shannon’s capacity formula, the uplink transmission rate of client 𝑢 in round 𝑟 is 
+
+𝑅 (𝑟 ) 
+
+> 𝑢
+
+= 𝑊 log 2
+
+(
+
+1 + 𝑝 𝑢 ℎ(𝑟 )
+
+> 𝑢
+
+𝜎 2
+
+)
+
+, (31) where 𝑝 𝑢 is the transmission power of client 𝑢 , ℎ(𝑟 ) 
+
+> 𝑢
+
+is the instantaneous uplink channel gain, and 𝜎 2 is the receiver noise power. Let 𝑆 𝑣 be the model size of task 𝑣 in bits. The uplink communication time is 
+
+𝑡 (𝑟 ),comm  
+
+> 𝑢,𝑣
+
+= 𝑆 𝑣 
+
+𝑅 (𝑟 )
+
+> 𝑢
+
+. (32) Therefore, the total latency of client 𝑢 in round 𝑟 is 
+
+𝑡 (𝑟 ) 
+
+> 𝑢,𝑣
+
+= 𝑡 (𝑟 ),comp  
+
+> 𝑢,𝑣
+
++ 𝑡 (𝑟 ),comm  
+
+> 𝑢,𝑣
+
+= 𝐸 loc 𝑛 𝑣,𝑢 𝜅 𝑣 
+
+𝑓 𝑢 
+
++ 𝑆 𝑣 
+
+𝑅 (𝑟 )
+
+> 𝑢
+
+. (33) Since synchronous FL aggregation waits for all selected clients, the round latency of task 𝑣 is determined by the slowest active client: 
+
+𝑇 (𝑟 ) 
+
+> 𝑣
+
+= max 
+
+> 𝑢 ∈(𝑟 )
+> 𝑣
+
+𝑡 (𝑟 )
+
+> 𝑢,𝑣
+
+. (34) The total training time of task 𝑣 is 
+
+𝑇 𝑣 =
+
+> 𝑅 𝑣
+
+∑
+
+> 𝑟 =1
+
+𝑇 (𝑟 ) 
+
+> 𝑣
+
+. (35) 
+
+D. Dynamic Clustering and FedMIX-Based Client Selection 
+
+The proposed scheduling framework uses dynamic client participation to balance learning progress, system latency, exploration, and cross-cluster diversity. For each task 𝑣 , the active client set at round 𝑟 consists of two parts: 
+
+(𝑟 ) 
+
+> 𝑣
+
+= (𝑟 ) 
+
+> 𝑣
+
+∪ (𝑟 ) 
+
+> 𝑣
+
+, (36) where (𝑟 ) 
+
+> 𝑣
+
+is the intra-cluster selected set from the primary cluster 𝜙 (𝑣 ), and (𝑟 ) 
+
+> 𝑣
+
+is the inter-cluster recruited set from other clusters. 
+
+1) Intra-Cluster Candidate Selection: For task 𝑣 , the intra-cluster candidate pool is 𝑣 defined in (9). Given the intra-cluster participation ratio 𝜌 ∈ (0 , 1] and the per-round partic-ipation capacity 𝐾 cap , the number of intra-cluster participants is 
+
+𝐾 𝑣, in = min {⌈𝜌𝑀 𝑣 ⌉ , 𝐾 cap 
+
+} . (37) Thus, 
+
+(𝑟 ) 
+
+> 𝑣
+
+⊆ 𝑣 , |(𝑟 ) 
+
+> 𝑣
+
+| = 𝐾 𝑣, in . (38) At the beginning of round 𝑟 , the server maintains historical estimates for each candidate client, including an exponential moving average (EMA) of its observed loss and latency. Let ̂
+
+𝓁 (𝑟 ) 
+
+> 𝑣,𝑢
+
+and ̂ 𝑡 (𝑟 ) 
+
+> 𝑣,𝑢
+
+denote the EMA loss and EMA latency of client 
+
+𝑢 for task 𝑣 before round 𝑟 . After client 𝑢 participates in round 
+
+𝑟 , the server observes its local loss 𝓁 (𝑟 ) 
+
+> 𝑣,𝑢
+
+and latency 𝑡 (𝑟 )
+
+> 𝑢,𝑣
+
+, and updates ̂𝑥 (𝑟 +1)  
+
+> 𝑣,𝑢
+
+=
+
+{(1 − 𝛽 𝑥 )̂𝑥 (𝑟 ) 
+
+> 𝑣,𝑢
+
++ 𝛽 𝑥 𝑥 (𝑟 )
+
+> 𝑣,𝑢
+
+, 𝑢 ∈ (𝑟 ) 
+
+> 𝑣
+
+,̂ 𝑥 (𝑟 )
+
+> 𝑣,𝑢
+
+, 𝑢 ∉ (𝑟 ) 
+
+> 𝑣
+
+, 𝑥 ∈ { 𝓁 , 𝑡 },
+
+(39) where 𝛽 𝑥 ∈ (0 , 1] is the EMA smoothing factor. Let 𝑚 (𝑟 ) 
+
+> 𝑣,𝑢
+
+be the number of times client 𝑢 has participated in task 𝑣 before round 𝑟 :
+
+𝑚 (𝑟 ) 
+
+> 𝑣,𝑢
+
+=
+
+> 𝑟 −1
+
+∑
+
+> 𝑠 =1
+
+𝟏 {𝑢 ∈ (𝑠 ) 
+
+> 𝑣
+
+}. (40) The uncertainty bonus used for exploration is defined as 
+
+𝑏 (𝑟 ) 
+
+> 𝑣,𝑢
+
+=
+
+√ log( 𝑟 + 1) 
+
+𝑚 (𝑟 ) 
+
+> 𝑣,𝑢
+
++ 1 . (41) 6
+
+Let ̃ 𝓁 (𝑟 )
+
+> 𝑣,𝑢
+
+,̃ 𝑡 (𝑟 )
+
+> 𝑣,𝑢
+
+, and ̃ 𝑏 (𝑟 ) 
+
+> 𝑣,𝑢
+
+denote the normalized EMA loss, normalized EMA latency, and normalized uncertainty bonus, respectively. All three are normalized to [0 , 1] within the corresponding candidate pool. The FedMIX utility score of client 𝑢 for task 𝑣 at round 𝑟 is 
+
+𝑈 (𝑟 ) 
+
+> 𝑣,𝑢
+
+=̃ 𝓁 (𝑟 ) 
+
+> 𝑣,𝑢
+
+− 𝜆 𝑇 ̃ 𝑡 (𝑟 ) 
+
+> 𝑣,𝑢
+
++ 𝜆 𝑈 ̃ 𝑏 (𝑟 )
+
+> 𝑣,𝑢
+
+, (42) where 𝜆 𝑇 ≥ 0 controls the latency penalty and 𝜆 𝑈 ≥ 0 controls the exploration strength. A larger 𝑈 (𝑟 ) 
+
+> 𝑣,𝑢
+
+indicates that client 
+
+𝑢 is more preferred because it has higher potential learning contribution, lower latency cost, or larger uncertainty. The intra-cluster selected set (𝑟 ) 
+
+> 𝑣
+
+is chosen as the top-𝐾 𝑣, in 
+
+clients in 𝑣 according to 𝑈 (𝑟 )
+
+> 𝑣,𝑢
+
+:
+
+(𝑟 ) 
+
+> 𝑣
+
+= TopK 𝐾 𝑣, in 
+
+({ 
+
+𝑈 (𝑟 ) 
+
+> 𝑣,𝑢
+
+∶ 𝑢 ∈ 𝑣 
+
+}) 
+
+. (43) 
+
+2) Adaptive Inter-Cluster Recruitment: To mitigate resid-ual imbalance within the primary cluster and to improve exploration across clusters, the server may recruit a limited number of task-eligible clients from other clusters. The external candidate pool is 𝑣 defined in (10). The number of external clients is controlled by an adaptive probing budget 𝐵 (𝑟 ) 
+
+> 𝑣
+
+.Let the remaining task gap before round 𝑟 be 
+
+𝑔 (𝑟 ) 
+
+> 𝑣
+
+= [𝜏 𝑣 − 𝑄 (𝑟 −1) 
+
+> 𝑣
+
+] 
+
+> +
+
+, (44) where [𝑥 ]+ = max{ 𝑥, 0} . Let 𝐻 𝑝 be the progress-checking window. The recent progress of task 𝑣 is 
+
+𝑑 (𝑟 ) 
+
+> 𝑣
+
+= 𝑄 (𝑟 −1)  
+
+> 𝑣
+
+− 𝑄 (max{0 ,𝑟 −𝐻 𝑝 })  
+
+> 𝑣
+
+. (45) Given a stagnation threshold 𝛿 𝑣 ≥ 0, define 𝐼 (𝑟 )stag = 𝟏 {𝑑 (𝑟 ) 
+
+> 𝑣
+
+<𝛿 𝑣 }. Let 𝐼 (𝑟 )unc indicate high external-cluster uncertainty and let 𝐼 (𝑟 )cong indicate latency congestion. The probing demand is summarized as 
+
+𝜉 (𝑟 ) 
+
+> 𝑣
+
+= 𝐼 (𝑟 )stag min 
+
+{
+
+1, 𝑔 (𝑟 )
+
+> 𝑣
+
+𝜏 𝑣 
+
+}
+
+, (46) which is used together with uncertainty and congestion signals to adapt the external probing budget: 
+
+𝐵 (𝑟 ) 
+
+> 𝑣
+
+= clip 
+
+(
+
+𝐵 0 + 𝐼 (𝑟 )stag + 𝐼 (𝑟 )unc − 𝐼 (𝑟 )cong , 𝐵 min , 𝐵 max 
+
+)
+
+, (47) where 𝐵 min and 𝐵 max are the minimum and maximum external probing budgets. This notation distinguishes the probing budget 
+
+𝐵 (𝑟 ) 
+
+> 𝑣
+
+from the wireless bandwidth 𝑊 in (31). The recruited set satisfies 
+
+(𝑟 ) 
+
+> 𝑣
+
+⊆ 𝑣 , |(𝑟 ) 
+
+> 𝑣
+
+| ≤ 𝐵 (𝑟 ) 
+
+> 𝑣
+
+. (48) External clients are selected according to the same FedMIX utility score in (42), subject to the external budget. To prevent a small group of external clients from being repeatedly associated with the same task, we define the con-secutive external-recruitment counter 
+
+ℎ(𝑟 ) 
+
+> 𝑣,𝑢
+
+=
+
+{ℎ(𝑟 −1)  
+
+> 𝑣,𝑢
+
++ 1 , 𝑢 ∈ (𝑟 ) 
+
+> 𝑣
+
+,
+
+0, 𝑢 ∉ (𝑟 ) 
+
+> 𝑣
+
+. (49) The maximum consecutive recruitment length is constrained by 
+
+ℎ(𝑟 ) 
+
+> 𝑣,𝑢
+
+≤ 𝐻, ∀𝑢 ∈ 𝑣 , (50) where 𝐻 is a positive integer. Combining intra-cluster selection and inter-cluster recruit-ment, the overall active set satisfies 
+
+(𝑟 ) 
+
+> 𝑣
+
+= (𝑟 ) 
+
+> 𝑣
+
+∪ (𝑟 ) 
+
+> 𝑣
+
+, |(𝑟 ) 
+
+> 𝑣
+
+| ≤ 𝐾 cap . (51) 
+
+E. Optimization Problem Formulation 
+
+The overall objective is to minimize the total wall-clock training time required to complete all tasks in the DAG. Since tasks within the same layer can be executed in parallel, while layers are executed sequentially, the total completion time is the sum of the maximum task completion time in each layer. The joint scheduling, clustering, and client selection problem can be formulated as 
+
+min   
+
+> 𝜙, {(𝑟 )
+> 𝑣 ,(𝑟 )
+> 𝑣 }
+
+𝑇 total =
+
+> 𝐿
+
+∑
+
+> 𝑙 =1
+
+max 
+
+> 𝑣 ∈𝑙
+
+𝑇 𝑣 =
+
+> 𝐿
+
+∑
+
+> 𝑙 =1
+
+max 
+
+> 𝑣 ∈𝑙
+> 𝑅 𝑣
+
+∑
+
+> 𝑟 =1
+
+max 
+
+> 𝑢 ∈(𝑟 )
+> 𝑣
+
+𝑡 (𝑟 )
+
+> 𝑢,𝑣
+
+.
+
+(52) The problem is subject to the following constraints for all 𝑣 ∈
+
+ and 𝑟 = 1 , … , 𝑅 𝑣 :
+
+𝑄 (𝑅 𝑣 ) 
+
+> 𝑣
+
+≥ 𝜏 𝑣 , (53a) 
+
+𝜙 (𝑣 ) ∈ {1 , … , 𝑁 }, (53b) 
+
+𝜙 (𝑣 ) ≠ 𝜙 (𝑞 ), ∀𝑣 ≠ 𝑞, 𝑣, 𝑞 ∈ 𝑙 , 𝑙 = 1 , … , 𝐿, (53c) 
+
+(𝑟 ) 
+
+> 𝑣
+
+⊆ 𝑣 , |(𝑟 ) 
+
+> 𝑣
+
+| = 𝐾 𝑣, in , (53d) 
+
+(𝑟 ) 
+
+> 𝑣
+
+⊆ 𝑣 , |(𝑟 ) 
+
+> 𝑣
+
+| ≤ 𝐵 (𝑟 ) 
+
+> 𝑣
+
+, (53e) 
+
+(𝑟 ) 
+
+> 𝑣
+
+= (𝑟 ) 
+
+> 𝑣
+
+∪ (𝑟 ) 
+
+> 𝑣
+
+, (53f) 
+
+|(𝑟 ) 
+
+> 𝑣
+
+| ≤ 𝐾 cap , (53g) 
+
+ℎ(𝑟 ) 
+
+> 𝑣,𝑢
+
+≤ 𝐻, ∀𝑢 ∈ 𝑣 . (53h) The above formulation is combinatorial because it jointly involves DAG-aware task scheduling, cluster-task assignment, intra-cluster client selection, and adaptive inter-cluster recruit-ment. Therefore, the proposed algorithms solve it through a layered procedure: first assigning tasks and clusters according to the DAG structure, then performing FedMIX-based intra-cluster selection, and finally activating adaptive inter-cluster probing when task progress stagnates or the remaining task gap is large. IV. C ONVERGENCE BEHAVIOR UNDER SAMPLING BIAS ,VARIANCE , AND LATENCY 
+
+This section analyzes how dynamic participation affects the training time of a dependent FL flow. The purpose of the analysis is not to predict the exact accuracy-threshold rounds observed in Sec. VI. Instead, it provides a sufficient loss-domain design bound that clarifies how sampling mismatch, LDD, residual distribution shift, local-SGD drift, stochastic variance, and adaptive probing budgets enter the round and completion-time behavior. We first analyze one arbitrary task 𝑣 
+
+and then compose the task-wise bounds across the DAG layers. 7
+
+For notational simplicity, we omit the task index when no confusion arises and write 𝐹 ≡ 𝐹 𝑣 , 𝐹 𝑢 ≡ 𝐹 𝑣,𝑢 , 𝜋 𝑢 ≡ 𝑝 𝑣,𝑢 ,
+
+𝑃 𝑢 ≡ 𝑃 (𝑣 ) 
+
+> 𝑢
+
+, 𝑃 ≡ 𝑃 (𝑣 ) 
+
+> 𝑔
+
+, and Δ𝑢 ≡ ‖𝑃 𝑢 − 𝑃 ‖1. The target weights {𝜋 𝑢 }𝑢 ∈𝑣 form the data-weighted distribution of task 
+
+𝑣 . At round 𝑟 , the server selects an active set 𝑆 𝑟 = (𝑟 ) 
+
+> 𝑣
+
+. To account for data-size-aware aggregation, we define the induced aggregation distribution 
+
+𝑞 𝑟 (𝑢 ) = 𝔼 
+
+[
+
+𝛼 (𝑟 )
+
+> 𝑣,𝑢
+
+𝟏 {𝑢 ∈ 𝑆 𝑟 } ∣ 𝑤 (𝑟 )]
+
+, (54) where 𝛼 (𝑟 ) 
+
+> 𝑣,𝑢
+
+is given in (16). Thus 𝑞 𝑟 (𝑢 ) ≥ 0 and ∑𝑢 ∈𝑣 𝑞 𝑟 (𝑢 ) = 1. The selection law 𝑞 𝑟 is allowed to be time-varying and history-dependent because FedMIX uses EMA loss, EMA latency, uncertainty bonuses, and the adaptive probing budget in (42)–(47). Let  denote the admissible class of such aggre-gation distributions satisfying the participation constraints. 
+
+A. Assumptions 
+
+Assumption 1 ( 𝐿 -smoothness and 𝜇 -PL condition): Each local objective 𝐹 𝑢 is 𝐿 -smooth on an admissible parameter domain , and the global objective 𝐹 satisfies the Polyak– Łojasiewicz (PL) inequality with 𝜇 > 0:
+
+12 ‖∇𝐹 (𝑤 )‖2 ≥ 𝜇 (𝐹 (𝑤 ) − 𝐹 (𝑤 ∗)), 𝑤 ∈ . (55) 
+
+Assumption 2 (Distribution-gradient regularity with residual shift): 
+
+For every client 𝑢 and parameter 𝑤 ∈ , the client-gradient deviation admits 
+
+‖∇𝐹 𝑢 (𝑤 ) − ∇ 𝐹 (𝑤 )‖ ≤ 𝐶 𝑔 ‖𝑃 𝑢 − 𝑃 ‖1 + 𝜒 𝑢 (𝑤 ), (56) where 𝐶 𝑔 ≥ 0 captures the dominant label-marginal effect and 
+
+𝜒 𝑢 (𝑤 ) ≥ 0 is a residual term that accounts for covariate or feature-conditional shift not explained by label histograms. We assume ̄ 𝜒 ≜ sup 𝑞 ∈,𝑤 ∈
+
+∑𝑢 |𝑞 (𝑢 ) − 𝜋 𝑢 |𝜒 𝑢 (𝑤 ) < ∞.Assumption 2 is deliberately stated as a modeling regularity condition rather than as a claim that LDD fully determines gradient mismatch. Under a pure label-mixture model, the residual term can be small; under covariate shift, ̄ 𝜒 records the unmodeled component. This addresses the fact that LDD is a lightweight proxy used by the management layer, not a complete description of all data heterogeneity. 
+
+Assumption 3 (Loss-driven stochastic variance): For each client 𝑢 and each 𝑤 ∈ , the stochastic gradient noise satisfies 
+
+𝔼 ‖∇𝑓 (𝑤 ; 𝜉 ) − ∇ 𝐹 𝑢 (𝑤 )‖2 ≤ 𝛼 𝓁 𝑢 (𝑤 ) + 𝛽, (57) where 𝛼, 𝛽 ≥ 0. Moreover, 0 ≤ 𝓁 𝑢 (𝑤 ) ≤ 𝓁 max < ∞ on .
+
+Assumption 4 (Local-SGD drift and aggregate variance): 
+
+Selected clients perform 𝐸 loc local SGD steps. Let 𝑔 𝑟 be the aggregate update direction used by the server, and define 
+
+𝑑 (𝑟 ) ≜ 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )] − (∇𝐹 (𝑤 (𝑟 )) + 𝑏 (𝑟 )) , (58) where 𝑏 (𝑟 ) is the sampling-bias term defined in (62). We assume 
+
+‖∇𝐹 (𝑤 )‖2 ≤ 𝐺 2 on  and 
+
+‖𝑑 (𝑟 )‖2 ≤̄ 𝐷 𝐸 ,̄ 𝐷 𝐸 = 0 when 𝐸 loc = 1 . (59) The stochastic component around the conditional mean satisfies 
+
+𝔼 ‖𝑔 𝑟 − 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )]‖2 ≤ 𝑀 ‖∇𝐹 (𝑤 (𝑟 )) + 𝑏 (𝑟 ) + 𝑑 (𝑟 )‖2 +̄ Σ, (60) where 𝑀 ≥ 0 and ̄ Σ ≤ 𝛼 𝓁 max +𝛽 is a uniform additive variance bound. 
+
+B. Sampling Bias and FedMIX-Induced Mismatch 
+
+The conditional mean of the aggregate update can be de-composed as 
+
+𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )] = ∇ 𝐹 (𝑤 (𝑟 )) + 𝑏 (𝑟 ) + 𝑑 (𝑟 ), (61) where 
+
+𝑏 (𝑟 ) = ∑
+
+> 𝑢 ∈𝑣
+
+(𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 
+
+)∇𝐹 𝑢 (𝑤 (𝑟 )). (62) Since ∑𝑢 (𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 ) = 0 , Assumption 2 gives 
+
+‖𝑏 (𝑟 )‖ ≤ 𝐶 𝑔 
+
+∑
+
+> 𝑢
+
+|𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 |Δ𝑢 + ∑
+
+> 𝑢
+
+|𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 |𝜒 𝑢 (𝑤 (𝑟 ))
+
+≤ 𝐶 𝑔 ̄ 𝐵 +̄𝜒, (63) where ̄𝐵 ≜ sup 
+
+> 𝑞 ∈
+
+∑
+
+> 𝑢
+
+|𝑞 (𝑢 ) − 𝜋 𝑢 |Δ𝑢 . (64) For FedMIX, ̄ 𝐵 can be related to the intra-cluster ratio and the adaptive probing budget. Let 𝐾 𝑣, in = ⌈𝜌𝑀 𝑣 ⌉ and let 
+
+𝛿 𝑣 (𝜌 ) denote the worst-case LDD-weighted mismatch of the intra-only selection law. Because FedMIX recruits at most 𝐵 (𝑟 )
+
+> 𝑣
+
+new external clients in round 𝑟 , the external aggregation mass is upper bounded by 𝐵 (𝑟 ) 
+
+> 𝑣
+
+∕( 𝐾 𝑣, in + 𝐵 (𝑟 ) 
+
+> 𝑣
+
+). Hence the realized FedMIX mismatch obeys ̄𝐵 (𝑟 )FM (𝜌, 𝐵 (𝑟 ) 
+
+> 𝑣
+
+) = 𝛿 𝑣 (𝜌 ) + 2𝐵 (𝑟 )
+
+> 𝑣
+
+𝐾 𝑣, in + 𝐵 (𝑟 )
+
+> 𝑣
+
+Δmax ,𝑣 , (65) where Δmax ,𝑣 = max 𝑢 ∈𝑣 Δ𝑢 . Since 𝐵 (𝑟 ) 
+
+> 𝑣
+
+≤ 𝐵 max , a trajectory-independent bound is obtained by replacing 𝐵 (𝑟 ) 
+
+> 𝑣
+
+with 𝐵 max .The uncertainty term in FedMIX changes the realized law 𝑞 𝑟 
+
+by encouraging under-sampled clients and clusters; the bound above remains valid because it only requires the resulting 𝑞 𝑟 
+
+to satisfy the participation and probing constraints. Combining (63) with Assumption 4, the aggregate direction satisfies 
+
+‖∇𝐹 (𝑤 (𝑟 ))+ 𝑏 (𝑟 )+𝑑 (𝑟 )‖2 ≤̄ 𝐺 2agg ≜ 3 (𝐺 2 + ( 𝐶 𝑔 ̄ 𝐵 +̄𝜒 ) 2 +̄ 𝐷 𝐸 
+
+) .
+
+(66) Together with (60), this yields 
+
+𝜎 2 
+
+> 𝑟
+
+≜ 𝔼 ‖𝑔 𝑟 − 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )]‖2 ≤ 𝑀̄𝐺 2agg +̄ Σ. (67) 8
+
+C. One-Step Progress and Finite-Time Bound 
+
+By 𝐿 -smoothness of 𝐹 , the server update 𝑤 (𝑟 +1) = 𝑤 (𝑟 ) −𝜂𝑔 𝑟 
+
+satisfies 
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) ∣ 𝑤 (𝑟 )] ≤ 𝐹 (𝑤 (𝑟 )) − 𝜂 ⟨∇𝐹 (𝑤 (𝑟 )), 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )]⟩
+
++ 𝐿𝜂 2
+
+2 𝔼 ‖𝑔 𝑟 ‖2. (68) Using 
+
+𝔼 ‖𝑔 𝑟 ‖2 ≤ ‖∇𝐹 (𝑤 (𝑟 )) + 𝑏 (𝑟 ) + 𝑑 (𝑟 )‖2 + 𝜎 2 
+
+> 𝑟
+
+, (69) and applying Young’s inequality to the cross term yields, for 
+
+0 < 𝜂 ≤ 1∕(4 𝐿 ),
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) − 𝐹 (𝑤 ∗)] ≤
+
+(
+
+1 − 𝜂𝜇 
+
+2
+
+)
+
+𝔼 [𝐹 (𝑤 (𝑟 )) − 𝐹 (𝑤 ∗)] + 4 𝜂 ((𝐶 𝑔 ̄ 𝐵 +̄𝜒 ) 2 +̄ 𝐷 𝐸 
+
+)
+
++ 𝐿𝜂 2
+
+2
+
+(
+
+𝑀̄𝐺 2agg +̄ Σ
+
+)
+
+. (70) The complete derivation is given in Appendix A. 
+
+Proposition 1 (Sufficient loss-domain bound): Under Assumptions 1–4, suppose 0 < 𝜂 ≤ 1∕(4 𝐿 ). For any admissible selection sequence generated by FedMIX or by any other law in , the iterates satisfy, for all 𝑅 ≥ 1,
+
+𝔼 [𝐹 (𝑤 (𝑅 )) − 𝐹 (𝑤 ∗)] ≤
+
+(
+
+1 − 𝜂𝜇 
+
+2
+
+)𝑅 (𝐹 (𝑤 (0) ) − 𝐹 (𝑤 ∗)) + 𝐸 ∞,
+
+(71) where 
+
+𝐸 ∞ = 2
+
+𝜂𝜇 Ψ,
+
+Ψ = 4 𝜂 ((𝐶 𝑔 ̄ 𝐵 +̄𝜒 ) 2 +̄ 𝐷 𝐸 
+
+) + 𝐿𝜂 2
+
+2
+
+(
+
+𝑀̄𝐺 2agg +̄ Σ
+
+)
+
+. (72) Consequently, 
+
+lim sup 
+
+> 𝑅 →∞
+
+𝔼 [𝐹 (𝑤 (𝑅 )) − 𝐹 (𝑤 ∗)] ≤ 𝐸 ∞. (73) The result is a sufficient upper bound. It does not state that FedMIX attains the smallest possible number of rounds, nor that the analytical loss-reduction threshold is identical to the empirical classification-accuracy threshold used in Sec. VI. Its role is to expose the design trade-off: smaller LDD-induced mismatch ̄ 𝐵 , smaller residual shift ̄ 𝜒 , smaller local drift ̄ 𝐷 𝐸 ,and lower stochastic variance reduce the attainable floor, while larger selected cohorts or external probing can increase per-round latency. To achieve a target precision 𝜀 > 𝐸 ∞, it is sufficient that 
+
+𝑅 ≥ 2
+
+𝜂𝜇 log 𝐹 (𝑤 (0) ) − 𝐹 (𝑤 ∗)
+
+𝜀 − 𝐸 ∞
+
+. (74) 
+
+Corollary 1 (DAG-level completion bound): Suppose Assumptions 1–4 hold for every task 𝑣 , with task-specific constants and error floor 𝐸 ∞,𝑣 . For any target 𝜀 𝑣 > 𝐸 ∞,𝑣 , if 
+
+𝑅 𝑣 ≥ 2
+
+𝜂 𝑣 𝜇 𝑣 
+
+log 𝐹 𝑣 (𝑤 (0)  
+
+> 𝑣
+
+) − 𝐹 𝑣 (𝑤 ∗
+
+> 𝑣
+
+)
+
+𝜀 𝑣 − 𝐸 ∞,𝑣 
+
+, (75) then 𝔼 [𝐹 𝑣 (𝑤 (𝑅 𝑣 ) 
+
+> 𝑣
+
+)− 𝐹 𝑣 (𝑤 ∗
+
+> 𝑣
+
+)] ≤ 𝜀 𝑣 . For the layer-sequential DAG in (52), 
+
+𝑇 DAG ≤
+
+> 𝐿
+
+∑
+
+> 𝑙 =1
+
+max 
+
+> 𝑣 ∈𝑙
+
+𝑅 𝑣 ̄ 𝑇 𝑣 ,̄ 𝑇 𝑣 = sup 
+
+> 1≤𝑟 ≤𝑅 𝑣
+
+𝑇 (𝑟 ) 
+
+> 𝑣
+
+. (76) 
+
+Proof: Apply Proposition 1 to each task and use 𝑇 (𝑟 ) 
+
+> 𝑣
+
+≤̄ 𝑇 𝑣 .Since tasks in the same layer execute in parallel and layers execute sequentially, summing the maximum duration in each layer gives (76). 
+
+D. Design Implications for FedMIX 
+
+Equation (65) explains the role of the adaptive probing budget. In a realized round, increasing 𝐵 (𝑟 ) 
+
+> 𝑣
+
+can improve exploration and reduce stale in-cluster bias, but it also increases the worst-case perturbation term and may raise the tail latency 
+
+𝑇 (𝑟 ) 
+
+> 𝑣
+
+= max 𝑢 ∈(𝑟 )
+
+> 𝑣
+
+𝑡 (𝑟 )
+
+> 𝑢,𝑣
+
+. FedMIX therefore uses the budget rule in (47) to increase probing when recent progress stagnates or external uncertainty is high, and to reduce probing under latency congestion. The uncertainty bonus in (41) does not alter the proof structure; instead, it changes the realized selection law 
+
+𝑞 𝑟 toward under-sampled clients and clusters while remaining inside the admissible class .A practical choice of the in-cluster ratio 𝜌 should be made jointly with the maximum probing budget. Let 
+
+𝐾 max  
+
+> 𝑣
+
+(𝜌 ) = ⌈𝜌𝑀 𝑣 ⌉ + 𝐵 max ≤ 𝐾 cap . (77) Under conditionally independent client noise and near-uniform aggregation, a common variance scaling gives ̄
+
+Σ𝜌,𝐵 max ≤ 𝛼 𝓁 max + 𝛽 𝐾 max  
+
+> 𝑣
+
+(𝜌 ) . (78) Thus, larger 𝜌 or larger probing budgets may reduce variance and improve coverage, but also increase synchronous tail latency. This is why the bound should be read as guidance for balancing bias, variance, drift, and latency, rather than as a direct predictor of the empirical curves. 
+
+E. Relationship Between LDD and Loss 
+
+The finite-time bound shows that LDD enters the loss-domain analysis through the sampling-bias term ̄ 𝐵 . With residual shift included in Assumption 2, the analysis does not assume that label histograms fully determine client gradi-ents. Instead, LDD is a lightweight management proxy whose explanatory power is conditioned on the residual term ̄ 𝜒 . If label skew is the dominant source of heterogeneity, reducing intra-cluster LDD can tighten the bound; if covariate shift is strong, the residual term records the limitation of LDD-based coordination. Overall, the theory supports the design of statistically coherent clusters, adaptive exploration, and latency-aware participation, while keeping the claim appropriately framed as a sufficient analytical guideline for dependent FL flow management. 9
+
+V. C LUSTERED CLIENT COORDINATION AND 
+
+DEPENDENCY -A WARE SCHEDULING 
+
+Following the previous analysis, our design integrates three components. First, we use LDD-based clustering with greedy balancing to form statistically coherent and size-balanced client groups, reducing selection complexity and providing a sta-ble coordination backbone. Second, we propose FedMIX, an uncertainty-aware intra–inter cluster participation mechanism that refines client participation using loss, latency, and ex-ploration states. FedMIX preserves the efficiency of in-cluster exploitation while using adaptive inter-cluster probing to con-trol cross-cluster diversity and probing overhead. Finally, we adopt a PPO-based DAG scheduler to determine dependency-respecting task execution and reduce workflow-level latency. Together, these components provide a resource-aware and communication-efficient coordination framework for dependent multi-task FL. 
+
+A. LDD-based Clustering with Greedy Balancing 
+
+Motivated by the observation that convergence improves when intra-cluster LDD is small and cluster sizes are bal-anced, we group clients using LDD-based clustering and then apply a lightweight greedy balancing step to equalize cluster cardinalities while preserving statistical homogeneity. Beyond improving statistical coherence, balancing also serves a system-level role: in DAG-structured multi-task FL, highly unbalanced clusters may create load imbalance and unstable per-round latency. The resulting clusters provide a stable structure for the subsequent intra- and inter-cluster coordination. The full procedure is summarized in Algorithm 1. The algorithm is computationally efficient after its one-time initialization cost is amortized. Constructing the LDD dis-tance matrix and performing agglomerative clustering require 
+
+𝑂 (𝑈 2𝑄 +𝑈 2 log 𝑈 ) for 𝑈 clients with 𝑄 -class label histograms. Although this initialization cost is not eliminated by clustering, the benefit appears in subsequent coordination. A naive non-clustered approach repeatedly searches over the entire client pool, whereas the balanced cluster structure localizes most recurring selection operations within clusters. This reduces the effective post-clustering coordination cost and makes intra-/inter-cluster participation control scalable across rounds and tasks. 
+
+B. Multi-task Intra–Inter Cluster Exploration–Exploitation 
+
+FedMIX operates on the balanced LDD-based clusters pro-duced by Algorithm 1. It preserves the two-stage intra-/inter-cluster structure: the assigned cluster provides the main ex-ploitation backbone, while external clusters are selectively probed to provide controlled diversity. Compared with a pure loss–latency ranking rule, FedMIX makes the exploration– exploitation tradeoff explicit by adding an uncertainty bonus for under-sampled clients and clusters. It also replaces a fixed external probing budget with an adaptive task-round budget. For each task-client pair (𝑣, 𝑢 ), the server maintains the EMA loss ̂ 𝓁 (𝑟 )
+
+> 𝑣,𝑢
+
+, the EMA latency ̂ 𝑡 (𝑟 )
+
+> 𝑣,𝑢
+
+, and the selection count 𝑚 (𝑟 )
+
+> 𝑣,𝑢
+
+.
+
+Algorithm 1 LDD-based Clustering with Greedy Balancing 
+
+Require: Client label histograms {ℎ𝑢 }𝑈 𝑢 =1 , desired cluster number 𝐾  
+
+> 1:
+
+Normalize each histogram ℎ𝑢 to a probability vector 𝑝 𝑢 =
+
+ℎ𝑢 ∕ ∑𝑑 ℎ𝑢 [𝑑 ] 
+
+> 2:
+
+Compute pairwise LDD distance 𝐷 LDD  
+
+> 𝑢,𝑢 ′
+
+= ‖𝑝 𝑢 − 𝑝 𝑢 ′ ‖1 
+
+> 3:
+
+Agglomerative clustering on 𝐷 LDD ⇒ labels 𝓁 𝑢 ∈{1 , … , 𝐾 } 
+
+> 4:
+
+𝑖 ← {𝑢 ∶ 𝓁 𝑢 = 𝑖 }, 𝑡 low = ⌊𝑈 ∕𝐾 ⌋, 𝑡 high = ⌈𝑈 ∕𝐾 ⌉ 
+
+> 5:
+
+Assign per-cluster targets 𝑡 𝑖 ∈ { 𝑡 low , 𝑡 high } 
+
+> 6:
+
+while clusters not balanced do  
+
+> 7:
+
+Identify oversized clusters  = { 𝑖 ∶ |𝑖 | > 𝑡 𝑖 } and undersized clusters  = { 𝑗 ∶ |𝑗 | < 𝑡 𝑗 } 
+
+> 8:
+
+Compute cluster medoid 𝑚 𝑖 =arg min 𝑢 ∈𝑖 
+
+∑𝑢 ′∈𝑖 𝐷 LDD  
+
+> 𝑢,𝑢 ′
+> 9:
+
+for each 𝑖 ∈  and 𝑢 ∈ 𝑖 do  
+
+> 10:
+
+for each 𝑗 ∈  do  
+
+> 11:
+
+Evaluate cost gain Δ𝑢,𝑖 →𝑗 = 𝐷 LDD  
+
+> 𝑢,𝑚 𝑗
+
+− 𝐷 LDD  
+
+> 𝑢,𝑚 𝑖
+> 12:
+
+end for  
+
+> 13:
+
+end for  
+
+> 14:
+
+Move the client with the smallest Δ𝑢,𝑖 →𝑗 from 𝑖 to 𝑗 
+
+and update medoids  
+
+> 15:
+
+end while  
+
+> 16:
+
+return balanced clusters  = { 1, … , 𝐾 }
+
+FedMIX ranks in-cluster clients by the utility in (42), where the loss term captures statistical utility, the latency term pe-nalizes slow participants, and the uncertainty term encourages controlled exploration of less frequently selected clients. For inter-cluster probing, FedMIX applies the same principle at the external-cluster level and uses the adaptive budget 𝐵 (𝑟 ) 
+
+> 𝑣
+
+in (47). Thus, probing increases when recent task progress stagnates or external uncertainty is high, and decreases under latency congestion. The overall workflow is illustrated in Fig. 2. In each round, FedMIX ranks in-cluster clients, adaptively probes external clusters, merges the selected participants under the global cap 
+
+𝐾 cap , and updates EMA statistics after local training. This design keeps the clustered selection backbone while making external exploration a controlled resource rather than a fixed overhead. To complement local exploitation, FedMIX adaptively probes external clusters using representative loss, latency, and uncertainty signals. Only a bounded number of external clients are temporarily recruited, and their participation lifetime is capped by 𝐻 to avoid persistent cross-cluster assignment. Un-like fixed-budget probing, the adaptive budget 𝐵 (𝑟 ) 
+
+> 𝑣
+
+allows Fed-MIX to increase external exploration when training stagnates or external clusters are under-explored, while reducing probing under latency congestion. The procedure is summarized in Algorithm 3. 
+
+C. Dependency-Aware Scheduling 
+
+While FedMIX optimizes client participation at the learning layer, the overall training efficiency is fundamentally con-10 
+
+Fig. 2: Flowchart of FedMIX. The intra branch ranks in-cluster clients by a loss–latency–uncertainty utility, while the inter branch adaptively probes external clusters using the task-round probing budget 𝐵 (𝑟 ) 
+
+> 𝑣
+
+.
+
+Algorithm 2 Loss-, Latency-, and Uncertainty-aware Intra-cluster Selector 
+
+Require: Cluster 𝜙 (𝑣 ), model 𝑤 (𝑟 ) 
+
+> 𝑣
+
+, ratio 𝜌 , eval budget 𝐵 eval ,cap 𝐾 cap , weights (𝜆 𝑇 , 𝜆 𝑈 ), EMA params (𝜌 𝓁 , 𝜌 𝑔 , 𝜌 𝑇 ),externals (𝑟 ) 
+
+> 𝑣
+> 1:
+
+𝑣 ← {𝑢 ∈ 𝜙 (𝑣 ) ∶ |𝐷 𝑣,𝑢 | > 0} , 𝐾 intra ← ⌈𝜌 |𝑣 |⌉  
+
+> 2:
+
+for 𝑢 ∈ 𝑣 do  
+
+> 3:
+
+Estimate local loss ̂ 𝓁 (𝑟 ) 
+
+> 𝑢,𝑣
+
+← 1
+
+> 𝐵 eval
+
+∑𝐵 eval  
+
+> 𝑏 =1
+
+(𝑤 (𝑟 ) 
+
+> 𝑣
+
+; 𝑢,𝑏 ) 
+
+> 4:
+
+Update loss EMA and compute 𝑏 (𝑟 ) 
+
+> 𝑢,𝑣
+
+=√
+
+log( 𝑟 + 1)∕( 𝑚 (𝑟 ) 
+
+> 𝑣,𝑢
+
++ 1)  
+
+> 5:
+
+Compute utility 𝑈 (𝑟 ) 
+
+> 𝑢,𝑣
+
+=̃ 𝓁 (𝑟 ) 
+
+> 𝑢,𝑣
+
+− 𝜆 𝑇 ̃ 𝑡 (𝑟 ) 
+
+> 𝑢,𝑣
+
++ 𝜆 𝑈 ̃ 𝑏 (𝑟 ) 
+
+> 𝑢,𝑣
+> 6:
+
+end for  
+
+> 7:
+
+𝑆 (𝑟 ) 
+
+> 𝑣, intra
+
+← top-𝐾 intra clients in 𝑣 by 𝑈 (𝑟 ) 
+
+> 𝑢,𝑣
+> 8:
+
+(𝑟 ) 
+
+> 𝑣
+
+← dedup( 𝑆 (𝑟 ) 
+
+> 𝑣, intra
+
+∪ (𝑟 ) 
+
+> 𝑣
+
+) 
+
+> 9:
+
+while |(𝑟 ) 
+
+> 𝑣
+
+| > 𝐾 cap do  
+
+> 10:
+
+Remove one client with the lowest utility; ties are broken by larger latency  
+
+> 11:
+
+end while  
+
+> 12:
+
+for 𝑢 ∈ (𝑟 ) 
+
+> 𝑣
+
+do  
+
+> 13:
+
+Run local SGD, compute improvement, and update 
+
+𝑔 𝑢,𝑣 , 𝑡 EMA  
+
+> 𝑢,𝑣
+
+, and the selection count 𝑚 (𝑟 ) 
+
+> 𝑣,𝑢
+> 14:
+
+end for  
+
+> 15:
+
+return 𝑆 (𝑟 )
+
+> 𝑣, intra
+
+, (𝑟 )
+
+> 𝑣
+
+Algorithm 3 Adaptive Inter-cluster Probing and Recruitment 
+
+Require: Task 𝑣 , assigned cluster 𝜙 (𝑣 ), model 𝑤 (𝑟 ) 
+
+> 𝑣
+
+, clusters 
+
+{𝑖 }, active set (𝑟 ) 
+
+> 𝑣
+
+, lifetimes Ξ(𝑟 −1) , cap 𝐾 cap , budget parameters (𝐵 min , 𝐵 0, 𝐵 max ), horizon 𝐻 , weights (𝜆 𝑇 , 𝜆 𝑈 ),threshold 𝜅 , probe budget 𝐵 probe  
+
+> 1:
+
+Ξ(𝑟 ) ← Ξ(𝑟 −1) and remove expired clients from (𝑟 ) 
+
+> 𝑣
+> 2:
+
+ ← {𝑗 ≠ 𝜙 (𝑣 ) ∶ ∃ 𝑢 ∈ 𝑗 , |𝐷 𝑣,𝑢 | > 0}  
+
+> 3:
+
+for 𝑗 ∈  do  
+
+> 4:
+
+Pick representative 𝑢 𝑗 = arg max 𝑢 ∈𝑗 (|𝐷 𝑣,𝑢 |, −𝑡 EMA  
+
+> 𝑢,𝑣
+
+) 
+
+> 5:
+
+Estimate probing loss ̂ 𝓁 (𝑟 ) 
+
+> 𝑗,𝑣
+
+← 1
+
+> 𝐵 probe
+
+∑𝑏 (𝑤 (𝑟 ) 
+
+> 𝑣
+
+; 𝑢 𝑗 ,𝑏 ) 
+
+> 6:
+
+Update cluster loss EMA and compute 𝑏 (𝑟 ) 
+
+> 𝑗,𝑣
+
+=
+
+√
+
+log( 𝑟 + 1)∕( 𝑁 probe  
+
+> 𝑗,𝑣
+
++ 1)  
+
+> 7:
+
+Compute external score 𝑠 (𝑟 ) 
+
+> 𝑗,𝑣
+
+=̃ 𝓁 (𝑟 ) 
+
+> 𝑗,𝑣
+
+− 𝜆 𝑇 ̃ 𝑡 (𝑟 ) 
+
+> 𝑗,𝑣
+
++ 𝜆 𝑈 ̃ 𝑏 (𝑟 ) 
+
+> 𝑗,𝑣
+> 8:
+
+end for  
+
+> 9:
+
+if 𝜅 > 0 and | | > 1 then  
+
+> 10:
+
+Keep only clusters with ̂ 𝓁 (𝑟 ) 
+
+> 𝑗,𝑣
+
+≥ 𝜇 + 𝜅𝜎  
+
+> 11:
+
+if  = ∅ then return ((𝑟 ) 
+
+> 𝑣
+
+, Ξ(𝑟 )) 
+
+> 12:
+
+end if  
+
+> 13:
+
+end if  
+
+> 14:
+
+Compute 𝐵 (𝑟 ) 
+
+> 𝑣
+
+= clip( 𝐵 0 + 𝐼 (𝑟 )stag + 𝐼 (𝑟 )unc − 𝐼 (𝑟 )cong , 𝐵 min , 𝐵 max ) 
+
+> 15:
+
+𝐵 ef f ← min{ 𝐵 (𝑟 ) 
+
+> 𝑣
+
+, | |, max(0 , 𝐾 cap − |(𝑟 ) 
+
+> 𝑣
+
+|)}  
+
+> 16:
+
+𝐵 ← top-𝐵 ef f clusters in  by 𝑠 (𝑟 ) 
+
+> 𝑗,𝑣
+> 17:
+
+for 𝑗 ∈ 𝐵 do  
+
+> 18:
+
+Pick 𝑢 ∗ = arg max 𝑢 ∈𝑗 (|𝐷 𝑣,𝑢 |, −𝑡 EMA  
+
+> 𝑢,𝑣
+
+) 
+
+> 19:
+
+(𝑟 ) 
+
+> 𝑣
+
+← (𝑟 ) 
+
+> 𝑣
+
+∪{ 𝑢 ∗}, Ξ(𝑟 )[𝑢 ∗] ← 𝐻 , 𝑁 probe  
+
+> 𝑗,𝑣
+
+← 𝑁 probe  
+
+> 𝑗,𝑣
+
++1  
+
+> 20:
+
+end for  
+
+> 21:
+
+return ((𝑟 ) 
+
+> 𝑣
+
+, Ξ(𝑟 ))
+
+strained by the execution order of dependent tasks. To handle this complementary dimension, we adopt a PPO-based DAG scheduling algorithm from our prior conference work [17], which minimizes the total latency of dependent multi-task FL execution. The scheduler represents the system state us-ing each task’s readiness status, the real-time occupancy of all clusters, and a precomputed processing-time matrix for all task–cluster pairs. A PPO agent then maps this state to dependency-respecting cluster assignments that exploit avail-able parallelism, iteratively refining its policy to reduce the overall makespan. Here, we keep the dependency scheduler fixed across the compared methods and use the A-CoDa/Intra-FL/Inter-FL ablations to isolate the effect of FedMIX-style client coordination. More detailed discussions on the scheduler can be found in our prior work [17]. A custom callback tracks makespan evolution and records full schedules, ensuring that the learned policy minimizes total latency while satisfying the task completion requirements. VI. N UMERICAL EXPERIMENT 
+
+A. Experimental Setup 
+
+We consider four distinctive tasks on classification datasets. The tasks are organized into a three-layer DAG: MNIST 11 
+
+TABLE I: Default Experimental Configurations                                        
+
+> Items Value Client and System Settings
+> CPU frequency, 𝑓 𝑢 𝑓 𝑢 ∼(1 .2 GHz ,2.5 GHz)
+> Computation cost per bit, 𝐶 𝐷 𝑢 1000 cycles∕bit
+> Local model size, 𝑆 5 × 10 7bits System bandwidth, 𝐵 5 MHz
+> Receiver noise power, 𝜎 2−107 dBm
+> Transmit power, 𝑝 𝑢 0.05 W
+> Accuracy thresholds {𝜏 1,…, 𝜏 4}{0 .82 ,0.85 ,0.72 ,0.80}
+> Wireless Channel Settings
+> Large-scale channel gain, ̄ℎ𝑢 ̄ℎ𝑢 ∼ exp (𝜆 = 2 .5 × 10 −7 )
+> Small-scale fading gain, ℎ𝑢 ℎ𝑢 =̄ℎ𝑢 exp( 𝑧 ),𝑧 ∼(0 ,0.15 2)
+
+digit recognition (Task 1, Layer 1), UCI-HAR smartphone inertial-sensor activity recognition (Task 2, Layer 2) [37], FashionMNIST product-image classification (Task 3, Layer 2), and Pneumonia X-ray classification from MedMNIST (Task 4, Layer 3) [38], [39]. This suite incorporates lightweight vision, wearable sensing, product inspection, and medical-imaging workloads while preserving the same dependency structure. The choice is semantically aligned with IoT-edge deployments: MNIST represents lightweight handwritten-input recognition, UCI-HAR represents mobile and wearable sens-ing, FashionMNIST represents product-image inspection, and Pneumonia X-ray represents IoMT diagnostic imaging at edge clinics or hospital gateways. All methods use the same PyTorch CNN/GPU validation code path, non-IID data partitions, and wireless setting, so the comparison isolates client selection and dependency-aware scheduling rather than implementation dif-ferences. Values of key parameters are summarized in Table I. 
+
+B. Baselines 
+
+We compare the total time and convergence performance of our proposed A-CoDa with the following baseline approaches:  
+
+> ∙
+
+Cluster-oriented and Dependency-aware Client Selec-tion for FL (CoDa-FL) : The original framework proposed in our conference paper [17], which considers the data het-erogeneity across edge clients by performing LDD-based clustering to group clients with similar data distributions.  
+
+> ∙
+
+Intra-cluster Client Selection for FL (Intra-FL) : This is an ablated version of A-CoDa that dynamically selects clients within each cluster without any cross-cluster inter-action.  
+
+> ∙
+
+Inter-cluster Client Selection for FL (Inter-FL) : Inter-FL introduces cross-cluster collaboration and latency-awareness, serving as another ablation variant of A-CoDa that focuses on inter-cluster dynamics only.  
+
+> ∙
+
+Population Stability Index for Personalized FL (PSI-PFL) : The baseline is a static client selection framework that leverages the Population Stability Index to quantify and mitigate client-level data heterogeneity [35].  
+
+> ∙
+
+Training-based Dynamic Clustered FL (TDCFL) : It is a dynamic clustering framework that employs an Adaptive Distribution Similarity Metric combining data features and model updates, with a hierarchical scheduler to improve training efficiency [14]. 
+
+C. Numerical Results 
+
+We evaluate the federated setting with 100 clients, as illus-trated in Fig. 3–5. The results report target-reaching behavior over six seeds, with 95% confidence intervals shown in the timing, round, and accuracy figures. The analysis focuses on (1) overall training efficiency, (2) task-level convergence behavior, and (3) layer-wise performance across dependent tasks. For overall training efficiency, Fig. 3a shows that A-CoDa achieves the lowest end-to-end DAG completion time. Follow-ing the DAG execution model in (52), total time is computed as the Layer-1 completion time plus the slower Layer-2 task plus the Layer-3 completion time, rather than as a naive sum of all four task times. Across six seeds, A-CoDa completes the dependent workload in 83.9 s, compared with 91.6 s for the closest baseline Inter-FL, corresponding to an 8.4% reduction. Relative to CoDa-FL, Intra-FL, PSI-PFL, and TDCFL, A-CoDa reduces completion time by 23.4%, 12.4%, 25.0%, and 12.7%, respectively. Fig. 3b shows the task-level convergence behavior. All methods reach the four target thresholds. A-CoDa requires 28.5 rounds on MNIST, 24.7 rounds on UCI-HAR, 22.0 rounds on FashionMNIST, and 31.5 rounds on Pneumonia X-ray on average. Although Inter-FL and several baselines require fewer rounds on individual tasks, A-CoDa has a substantially lower target-reaching time because its loss- and latency-aware selection avoids slow selected-client cohorts while retaining useful cross-cluster diversity. Fig. 4a provides the layer-wise timing breakdown. A-CoDa is the fastest method in all three DAG layers under the six-seed mean, with especially large gains in the downstream Pneumonia X-ray layer. Relative to the closest baseline in each layer, A-CoDa reduces Layer-1, Layer-2, and Layer-3 completion time by 8.7%, 6.7%, and 11.2%, respectively. Fig. 4b further shows that the proposed selection policy reduces completion time through the latency of selected cohorts as well as through the number of rounds. Fig. 5 reports time-aligned accuracy trajectories, where the shaded bands denote 95% confidence intervals across the six seeds. A-CoDa reaches the required accuracy thresholds on all layers and maintains competitive final accuracy. Some static or dynamic baselines attain slightly higher final accuracy or fewer rounds on individual layers, but they do so with higher end-to-end latency. Overall, the results demonstrate that A-CoDa provides the best completion-time–accuracy tradeoff for the dependent IoT-edge workload. 
+
+D. Scalability Analysis 
+
+To evaluate scalability with respect to the number of par-ticipating edge clients, we rerun the scalability study with 
+
+| | ∈ {50 , 100 , 200 , 300 , 500} . The participation budget is scaled with the client pool size so that the selected-client 12 A             A  #! #!        
+
+> A   # # "
+>     
+
+(a) Total time of different approaches. T  T T    T  T         
+
+>    
+
+(b) Number of rounds per task of different approaches. 
+
+Fig. 3: Total time and the number of rounds to convergence. Bars report the mean over six seeds, and error bars denote 95% confidence intervals. A             L   L    L !     
+
+> L"       
+
+(a) Total time per layer of different approaches. L  L   ! L#       
+
+> $    # " !
+
+(b) Average time per layer of different methods. 
+
+Fig. 4: Layer-wise time performance. Bars report the mean over six seeds, and error bars denote 95% confidence intervals. A             0 10 20 30 40 50 60 
+
+Cumulative time (s) 
+
+0.2 0.4 0.6 0.8 
+
+> Accuracy
+
+Layer 1: MNIST 
+
+(a) Layer 1. 0 20 40 60 80 100 
+
+Cumulative time (s) 
+
+0.2 0.4 0.6 0.8 
+
+> Accuracy
+
+Layer 2: UCI-HAR / FashionMNIST (b) Layer 2. 0 20 40 60 80 
+
+Cumulative time (s) 
+
+0.60 0.65 0.70 0.75 0.80 0.85 
+
+> Accuracy
+
+Layer 3: Pneumonia X-ray (c) Layer 3. 
+
+Fig. 5: Accuracy vs. time for different model layers. Solid lines report six-seed mean accuracy, and shaded bands denote 95% confidence intervals. 13 
+
+fraction remains consistent across scales: MNIST uses a 50% cap and UCI-HAR, FashionMNIST, and Pneumonia X-ray use 75% caps. This avoids conflating scalability with an artificial reduction in participation rate at larger client counts. Because the middle-layer tasks are executed in parallel under the DAG, completion time is measured as the time for MNIST plus the slower of UCI-HAR and FashionMNIST plus Pneumonia X-ray, rather than as a simple sum over all tasks. Fig. 6 reports the target-reaching DAG completion time and total rounds for the scalability sweep. All methods reach the target thresholds at every client count over the six seeds. A-CoDa achieves the lowest mean DAG completion time at all client counts, with completion times of 147.4 s, 85.2 s, 51.9 s, 39.9 s, and 29.7 s for 50, 100, 200, 300, and 500 clients, respectively. Relative to the closest non-PSI baseline, the corresponding reductions are 9.7%, 0.6%, 12.3%, 13.9%, and 12.7%. Overall, the scalability results confirm that the proposed dependency-aware client selection remains effective as the client pool grows, and that A-CoDa’s latency-aware selection benefits remain most visible in the larger-client regimes. VII. C ONCLUSION 
+
+In this paper, we proposed A-CoDa, a unified and dy-namically adaptive framework for addressing client clustering and coordination challenges in latency-aware and dependency-aware federated learning workflows over heterogeneous edge networks. We first established a theoretical foundation that links convergence behavior to statistical heterogeneity, local-SGD drift, and loss-driven variance, revealing how these factors affect the sufficient round bound and the steady-state error floor. Guided by these insights, we developed an LDD-based balanced clustering scheme and FedMIX, a dynamic cluster participation mechanism that adapts to time-varying network conditions, client availability, and task dependen-cies. Experiments on handwriting, wearable-sensing, product-image, and medical-imaging tasks validated the effectiveness of A-CoDa, demonstrating reduced end-to-end completion time while maintaining competitive accuracy. Overall, this work pro-vides a principled framework for scalable, dependency-aware, and latency-efficient federated learning workflow management in heterogeneous edge networks. APPENDIX APROOF OF PROPOSITION 1Let 𝑒 (𝑟 ) ≜ 𝑏 (𝑟 ) + 𝑑 (𝑟 ) and abbreviate ∇𝐹 (𝑤 (𝑟 )) by ∇𝐹 . By the descent lemma for the 𝐿 -smooth objective 𝐹 and the update 
+
+𝑤 (𝑟 +1) = 𝑤 (𝑟 ) − 𝜂𝑔 𝑟 , we have 
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) ∣ 𝑤 (𝑟 )] ≤ 𝐹 (𝑤 (𝑟 )) − 𝜂 ⟨∇𝐹 , 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )]⟩ + 𝐿𝜂 2
+
+2 𝔼 ‖𝑔 𝑟 ‖2.
+
+(79) Using 𝔼 [𝑔 𝑟 ∣ 𝑤 (𝑟 )] = ∇ 𝐹 + 𝑒 (𝑟 ) and (69), 
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) ∣ 𝑤 (𝑟 )] ≤ 𝐹 (𝑤 (𝑟 )) − 𝜂 ‖∇𝐹 ‖2 − 𝜂 ⟨∇𝐹 , 𝑒 (𝑟 )⟩
+
++ 𝐿𝜂 2
+
+2 ‖∇𝐹 + 𝑒 (𝑟 )‖2 + 𝐿𝜂 2
+
+2 𝜎 2 
+
+> 𝑟
+
+. (80) Young’s inequality gives −⟨∇𝐹 , 𝑒 (𝑟 )⟩ ≤ 14 ‖∇𝐹 ‖2 + ‖𝑒 (𝑟 )‖2, and 
+
+‖∇𝐹 + 𝑒 (𝑟 )‖2 ≤ 2‖∇𝐹 ‖2 + 2 ‖𝑒 (𝑟 )‖2. Therefore, 
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) ∣ 𝑤 (𝑟 )] ≤ 𝐹 (𝑤 (𝑟 )) − 
+
+( 3𝜂 
+
+4 − 𝐿𝜂 2
+
+)‖∇𝐹 ‖2
+
++ ( 𝜂 + 𝐿𝜂 2)‖𝑒 (𝑟 )‖2 + 𝐿𝜂 2
+
+2 𝜎 2 
+
+> 𝑟
+
+. (81) Under 0 < 𝜂 ≤ 1∕(4 𝐿 ), we have 3𝜂  
+
+> 4
+
+−𝐿𝜂 2 ≥ 𝜂 ∕2 and 𝜂 +𝐿𝜂 2 ≤
+
+2𝜂 . Applying the PL condition and ‖𝑒 (𝑟 )‖2 ≤ 2‖𝑏 (𝑟 )‖2+2 ‖𝑑 (𝑟 )‖2
+
+gives 
+
+𝔼 [𝐹 (𝑤 (𝑟 +1) ) − 𝐹 (𝑤 ∗)] ≤
+
+(
+
+1 − 𝜂𝜇 
+
+2
+
+)
+
+𝔼 [𝐹 (𝑤 (𝑟 )) − 𝐹 (𝑤 ∗)] + 4 𝜂 𝔼 [‖𝑏 (𝑟 )‖2 + ‖𝑑 (𝑟 )‖2] + 𝐿𝜂 2
+
+2 𝜎 2 
+
+> 𝑟
+
+.
+
+(82) By Assumption 2 and ∑𝑢 (𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 ) = 0 ,
+
+‖𝑏 (𝑟 )‖ =
+
+‖‖‖‖‖∑
+
+> 𝑢
+
+(𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 )(∇𝐹 𝑢 (𝑤 (𝑟 )) − ∇ 𝐹 (𝑤 (𝑟 )))‖‖‖‖‖
+
+≤ 𝐶 𝑔 
+
+∑
+
+> 𝑢
+
+|𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 |Δ𝑢 + ∑
+
+> 𝑢
+
+|𝑞 𝑟 (𝑢 ) − 𝜋 𝑢 |𝜒 𝑢 (𝑤 (𝑟 ))
+
+≤ 𝐶 𝑔 ̄ 𝐵 +̄𝜒. (83) Assumption 4 gives ‖𝑑 (𝑟 )‖2 ≤̄ 𝐷 𝐸 , and (67) gives 
+
+𝜎 2 
+
+> 𝑟
+
+≤ 𝑀̄𝐺 2agg +̄ Σ. (84) Taking total expectation in (82) and substituting (83)–(84), we obtain 
+
+𝑋 𝑟 +1 ≤
+
+(
+
+1 − 𝜂𝜇 
+
+2
+
+)
+
+𝑋 𝑟 + Ψ , (85) where 𝑋 𝑟 = 𝔼 [𝐹 (𝑤 (𝑟 )) − 𝐹 (𝑤 ∗)] and 
+
+Ψ = 4 𝜂 ((𝐶 𝑔 ̄ 𝐵 +̄𝜒 ) 2 +̄ 𝐷 𝐸 
+
+) + 𝐿𝜂 2
+
+2
+
+(
+
+𝑀̄𝐺 2agg +̄ Σ
+
+)
+
+. (86) Let 𝜚 = 𝜂𝜇 ∕2 . Unrolling (85) gives 
+
+𝑋 𝑅 ≤ (1 − 𝜚 )𝑅 𝑋 0 + 1 − (1 − 𝜚 )𝑅 
+
+𝜚 Ψ
+
+≤ (1 − 𝜚 )𝑅 𝑋 0 + Ψ
+
+𝜚 . (87) Since 𝐸 ∞ = Ψ∕ 𝜚 = 2Ψ∕( 𝜂𝜇 ), this proves (71). Taking 𝑅 → ∞
+
+yields (73). Finally, solving (1 − 𝜚 )𝑅 𝑋 0 ≤ 𝜀 − 𝐸 ∞ and using 
+
+(1 − 𝜚 )𝑅 ≤ 𝑒 −𝜚𝑅 gives the sufficient round bound (74). This completes the proof. REFERENCES [1] Q. Yang, Y. Liu, T. Chen, and Y. Tong, “Federated machine learning: Concept and applications,” ACM Trans. Intell. Syst. Technol. , vol. 10, no. 2, pp. 1–19, 2019. [2] H. Qi, J. Luo, Q. Li, and J. Wu, “A comparative trade-off analysis on accuracy and efficiency for federated learning in demand forecasting,”   
+
+> Appl. Soft Comput. , vol. 182, p. 113561, 2025. [3] S. Datta and S. Namasudra, “Blockchain-based smart contract model for securing healthcare transactions by using consumer electronics and mobile-edge computing,” IEEE Trans. Consum. Electron. , vol. 70, no. 1, pp. 4026–4036, 2024.
+
+14 A             5    5   
+
+>     
+> 5  5 
+>      
+
+(a) DAG completion time with different numbers of clients. 5    5    
+
+>     
+>     
+>           
+
+(b) Total rounds to target with different numbers of clients. 
+
+Fig. 6: Scalability with different numbers of clients. The participation cap is scaled with client count, and error bars denote 95% confidence intervals over six seeds. 
+
+[4] K. Gu, J. Lei, J. Tan, and X. Li, “A verifiable federated learning scheme with privacy-preserving in mcs,” IEEE Transactions on Network and Service Management , vol. 23, pp. 862–879, 2026. [5] H. Li, X. Li, Q. Fan, Q. Xiong, X. Wang, and V. C. M. Leung, “Transfer learning for real-time surface defect detection with multi-access edge-cloud computing networks,” IEEE Transactions on Network and Service Management , vol. 21, no. 1, pp. 310–323, 2024. [6] H. Qi, J. Luo, Z. Xu, Q. Li, J. Yin, and J. Wu, “Energy efficient power control for over-the-air federated learning in satellite communications,” 
+
+IEEE Commun. Lett. , vol. 29, no. 7, pp. 1530–1534, 2025. [7] T. Nishio and R. Yonetani, “Client selection for federated learning with heterogeneous resources in mobile edge,” in Proc. IEEE Int. Conf. Commun. , 2019, pp. 1–7. [8] Y. J. Cho, J. Wang, and G. Joshi, “Towards understanding biased client selection in federated learning,” in Proc. Int. Conf. Artif. Intell. Stat. 
+
+PMLR, 2022, pp. 10 351–10 375. [9] Y. Jee Cho, S. Gupta, G. Joshi, and O. Yağan, “Bandit-based communication-efficient client selection strategies for federated learning,” in Asilomar Conf. Signals, Syst., Comput. , 2020, pp. 1066–1069. [10] F. Shi, C. Hu, W. Lin, L. Fan, T. Huang, and W. Wu, “VFedCS: Optimizing client selection for volatile federated learning,” IEEE Internet Things J. , vol. 9, no. 24, pp. 24 995–25 010, 2022. [11] F. Lai, X. Zhu, H. V. Madhyastha, and M. Chowdhury, “Oort: Efficient federated learning via guided participant selection,” in 15th USENIX Symp. Oper. Syst. Des. Implement. , 2021, pp. 19–35. [12] J. Wang, “FedCcs: Federated learning cluster-based client delection algorithm for Non-IID data,” in Int. Conf. Neural Netw., Inf. Commun. Eng. (NNICE) . IEEE, 2025, pp. 135–139. [13] S. Arisdakessian, O. A. Wahab, A. Mourad, and H. Otrok, “Towards instant clustering approach for federated learning client selection,” in 
+
+Int. Conf. Comput., Netw., Commun. , 2023, pp. 409–413. [14] T. Ren, S. Cheng, H. Zhang, and J. Liu, “Dynamic clustered feder-ated learning via adaptive distribution similarity computation,” Comput. Netw. , p. 111302, 2025. [15] C. Zhou, J. Liu, J. Jia, J. Zhou, Y. Zhou, H. Dai, and D. Dou, “Efficient device scheduling with multi-job federated learning,” in Proc. of the AAAI Conf. Artif. Intell. , vol. 36, no. 9, 2022, pp. 9971–9979. [16] Z. Cheng, M. Min, M. Liwang, Z. Gao, and L. Huang, “Joint client selection and task assignment for multi-task federated learning in MEC networks,” in 2021 IEEE Global Commun. Conf. , 2021, pp. 1–6. [17] J. Luo, Q. Li, Z. Liu, H. Qi, J. Yin, and J. Wu, “Cluster-based client selection for dependent multi-task federated learning in edge computing,” in Proc. IEEE GlobeCom 2025 Wkshps , 2025. [18] Y. He, M. Yang, Z. He, and M. Guizani, “Computation offloading and resource allocation based on DT-MEC-assisted federated learning framework,” IEEE Trans. Cogn. Commun. Netw. , vol. 9, no. 6, pp. 1707– 1720, 2023. [19] J. Zheng, K. Li, E. Tovar, and M. Guizani, “Federated learning for energy-balanced client selection in mobile edge computing,” in 2021 International Wirel. Commun. Mob. Com. (IWCMC) , 2021, pp. 1942– 1947. [20] Z. Tong, J. Deng, J. Mei, Y. Zhang, and K. Li, “Multi-objective DAG task offloading in MEC environment based on federated DQN with automated hyperparameter optimization,” IEEE Trans. Serv. Comput. , vol. 17, no. 6, pp. 3999–4012, 2024. [21] Z. Lu, H. Pan, Y. Dai, X. Si, and Y. Zhang, “Federated learning with Non-IID data: A survey,” IEEE Internet Things J. , vol. 11, no. 11, pp. 19 188–19 209, 2024. [22] Y. Rubner, C. Tomasi, and L. J. Guibas, “The Earth Mover’s Distance as a metric for image retrieval,” Int. J. Comput. Vis , vol. 40, pp. 99–121, 2000. [23] C. Zhang, Y. Cai, G. Lin, and C. Shen, “Deepemd: Differentiable Earth Mover’s Distance for few-shot learning,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 45, no. 5, pp. 5632–5648, 2022. [24] J. Shen, Y. Qu, W. Zhang, and Y. Yu, “Wasserstein distance guided representation learning for domain adaptation,” in Proc. AAAI Conf. Artif. Intell. , vol. 32, no. 1, 2018. [25] A. Chen, Y. Fu, Z. Sha, and G. Lu, “An emd-based adaptive client selec-tion algorithm for federated learning in heterogeneous data scenarios,” 
+
+Front. Plant. Sci. , vol. 13, p. 908814, 2022. [26] D. Lin, Y. Guo, H. Sun, and Y. Chen, “Fedcluster: A federated learning framework for cross-device private ECG classification,” in Proc. IEEE INFOCOM - IEEE Conf. Comput. Commun. Workshops , 2022, pp. 1–6. [27] J. Alekseenko, A. Karargyris, and N. Padoy, “Distance-aware Non-IID federated learning for generalization and personalization in medical imaging segmentation,” in Med. Imaging Deep Learn. , 2024. [28] G. Luo, T. Liu, J. Lu, X. Chen, L. Yu, J. Wu, D. Z. Chen, and W. Cai, “Influence of data distribution on federated learning performance in tumor segmentation,” Radiol. Artif. Intell. , vol. 5, no. 3, p. e220082, 2023. [29] Y. Zhang, D. Liu, M. Duan, L. Li, X. Chen, A. Ren, Y. Tan, and C. Wang, “FedMDS: An efficient model discrepancy-aware semi-asynchronous clustered federated learning framework,” IEEE Trans. Parallel Distrib. Syst. , vol. 34, no. 3, pp. 1007–1019, 2023. [30] S. Liu, Y. Yu, X. Lian, Y. Feng, C. She, P. L. Yeoh, L. Guo, B. Vucetic, and Y. Li, “Dependent task scheduling and offloading for minimizing 15 
+
+deadline violation ratio in mobile edge computing networks,” IEEE J. Sel. Areas Commun. , vol. 41, no. 2, pp. 538–554, 2023. [31] G. Zhao, H. Xu, Y. Zhao, C. Qiao, and L. Huang, “Offloading tasks with dependency and service caching in mobile edge computing,” IEEE Trans. Parallel Distrib. Syst. , vol. 32, no. 11, pp. 2777–2792, 2021. [32] X. Dai, Z. Xiao, H. Jiang, M. Lei, G. Min, J. Liu, and S. Dustdar, “Offloading dependent tasks in edge computing with unknown system-side information,” IEEE Trans. Serv. Comput. , vol. 16, no. 6, pp. 4345– 4359, 2023. [33] Z. Chai, A. Ali, S. Zawad, S. Truex, A. Anwar, N. Baracaldo, Y. Zhou, H. Ludwig, F. Yan, and Y. Cheng, “Tifl: A tier-based federated learn-ing system,” in Proc. 29th Int. Symp. High-Perform. Parallel Distrib. Comput. , 2020, pp. 125–136. [34] Q. Li, X. Li, L. Zhou, and X. Yan, “Adafl: Adaptive client selection and dynamic contribution evaluation for efficient federated learning,” in 
+
+2024 IEEE Int. Conf. Acoust., Speech, Signal Process. IEEE, 2024, pp. 6645–6649. [35] D.-M. Jimenez-Gutierrez, D. Solans, M. Elbamby, and N. Kourtellis, “PSI-PFL: Population stability index for client selection in Non-IID personalized federated learning,” arXiv preprint arXiv:2506.00440 , 2025. [36] H. Huang, W. Shi, Y. Feng, C. Niu, G. Cheng, J. Huang, and Z. Liu, “Active client selection for clustered federated learning,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 35, no. 11, pp. 16 424–16 438, 2024. [37] D. Anguita, A. Ghio, L. Oneto, X. Parra, and J. L. Reyes-Ortiz, “A public domain dataset for human activity recognition using smartphones,” in Proc. 21st Eur. Symp. Artificial Neural Networks, Computational Intelligence and Machine Learning , 2013, pp. 437–442. [38] J. Yang, R. Shi, D. Wei, Z. Liu, L. Zhao, B. Ke, H. Pfister, and B. Ni, “MedMNIST v2: A large-scale lightweight benchmark for 2d and 3d biomedical image classification,” Scientific Data , vol. 10, no. 1, p. 41, 2023. [39] D. S. Kermany et al. , “Identifying medical diagnoses and treatable diseases by image-based deep learning,” Cell , vol. 172, no. 5, pp. 1122– 1131.e9, 2018.

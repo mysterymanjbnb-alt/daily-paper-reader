@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-01</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-02</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 37 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>22</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-01 23:29:11 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-02 23:46:12 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日从25篇论文中精读10篇、速读15篇，重点覆盖智能体安全与长寿命智能体权限管理。最值得看的是两篇9分精读：一是智能体安全决策中系统一模型的可靠性、校准与选择性自动化，二是长期运行智能体中&quot;同意脱离上下文后的残余权限重放&quot;风险。普通读者可优先了解智能体权限过期与重放防护，再关注超图RAG的非对称动态路由等效率方向。</p>
+<p>今日精读22篇、速读15篇，共扫描37篇AI安全与隐私前沿研究。最值得关注联邦学习的可验证隐私保护（9.0分）与Windows恶意软件检测在问题空间对抗鲁棒性的系统评估（9.0分）；速读中LLM智能体权限修复和隐私感知语言模型也值得留意。普通读者可优先从联邦学习隐私和恶意软件对抗两条线入手，后续关注智能体权限治理的落地进展。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">22 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Evaluating System One Models for Agent Security Decisions: Reliability, Calibration, and Selective Automation">Evaluating System One Models for Agent Security Decisions: Reliability, Calibration, and Selective Automation</span></li><li><span class="dpr-home-dashboard-paper-title" title="When Consent Outlives Context: Residual Authority Replay in Long-Lived Agents">When Consent Outlives Context: Residual Authority Replay in Long-Lived Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="SPADE-DFL: Communication-Efficient Decentralized Federated Learning via Derivative-Free Linearized ADMM">SPADE-DFL: Communication-Efficient Decentralized Federated Learning via Derivative-Free Linearized ADMM</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Toward verifiably private learning from federated data">Toward verifiably private learning from federated data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Breaking Windows Malware Detection: A Comprehensive Evaluation of Problem-Space Adversarial Robustness">Breaking Windows Malware Detection: A Comprehensive Evaluation of Problem-Space Adversarial Robustness</span></li><li><span class="dpr-home-dashboard-paper-title" title="DecoyTrace: Toxic Decoys for Active Defense in Decentralized Federated Learning">DecoyTrace: Toxic Decoys for Active Defense in Decentralized Federated Learning</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>9</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>6</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Asymmetric Dynamic Routing: Balancing Reasoning Depth and Computational Efficiency in Hypergraph RAG">Asymmetric Dynamic Routing: Balancing Reasoning Depth and Computational Efficiency in Hypergraph RAG</span></li><li><span class="dpr-home-dashboard-paper-title" title="Toward verifiably private learning from federated data">Toward verifiably private learning from federated data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Agent System Search via Active Substructure-aware Policy Optimization">Multi-Agent System Search via Active Substructure-aware Policy Optimization</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ADF-EA: A Unified Execution Assurance System for Agent Device Foundation">ADF-EA: A Unified Execution Assurance System for Agent Device Foundation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Authorization Closure Graph: Minimal Repair for LLM Agents with Evolving User Instructions">Authorization Closure Graph: Minimal Repair for LLM Agents with Evolving User Instructions</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning to Refer: Client-Resolved Generation for Privacy-Aware Language Models">Learning to Refer: Client-Resolved Generation for Privacy-Aware Language Models</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>7</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span></div>
 </section>
 </div>
 
