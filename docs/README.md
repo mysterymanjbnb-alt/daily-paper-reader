@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-03</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-04</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-03 23:12:49 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-04 23:15:45 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日扫完 25 篇 AI 安全与检索论文，精读 10 篇、速读 15 篇，重点锁定后门攻击与 Agent 运行时风控。最值得看的是《Why Backdooring Neural Networks is so Easy?》和《HARDE》双双 9.0 分，直指神经网络后门易植入与 Agent 执行控制两大痛点。普通读者可优先从这两篇入手，再顺带了解 STITCH-RAG 与 SEAD 的工具型 Agent 攻防视角。</p>
+<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
+<p>精读：《OPFL: Optimistic Verification of Federated Learning via Empirical Boundary》（9.0/10）, 《Evaluating Language Model Safety Across Long Adversarial Conversations》（9.0/10）</p>
+<p>速读：《EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents》（8.0/10）, 《Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning》（8.0/10）, 《MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?》（8.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +77,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Why Backdooring Neural Networks is so Easy?">Why Backdooring Neural Networks is so Easy?</span></li><li><span class="dpr-home-dashboard-paper-title" title="HARDE: Optimizing Agent Harnesses for Runtime Risk Detection and Execution Control">HARDE: Optimizing Agent Harnesses for Runtime Risk Detection and Execution Control</span></li><li><span class="dpr-home-dashboard-paper-title" title="Faithful Dual-constrained Erasure for Robust LLM Safety Alignment">Faithful Dual-constrained Erasure for Robust LLM Safety Alignment</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="OPFL: Optimistic Verification of Federated Learning via Empirical Boundary">OPFL: Optimistic Verification of Federated Learning via Empirical Boundary</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evaluating Language Model Safety Across Long Adversarial Conversations">Evaluating Language Model Safety Across Long Adversarial Conversations</span></li><li><span class="dpr-home-dashboard-paper-title" title="Anchoring Adversarial Trajectories to Data Manifolds: A Bilevel Transfer Optimization Framework">Anchoring Adversarial Trajectories to Data Manifolds: A Bilevel Transfer Optimization Framework</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +90,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="STITCH-RAG: Spatio-Temporal Influence Tracing over Topic Hypergraphs for Multi-Hop Retrieval-Augmented Generation">STITCH-RAG: Spatio-Temporal Influence Tracing over Topic Hypergraphs for Multi-Hop Retrieval-Augmented Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="SEAD: A State-Based Perspective on Attack and Defense in Tool-Using Agents">SEAD: A State-Based Perspective on Attack and Defense in Tool-Using Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="When Do Model Internals Help? Exploring the Role of Representation Engineering in LLM Safety">When Do Model Internals Help? Exploring the Role of Representation Engineering in LLM Safety</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents">EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning">Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?">MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span></div>
 </section>
 </div>
 
