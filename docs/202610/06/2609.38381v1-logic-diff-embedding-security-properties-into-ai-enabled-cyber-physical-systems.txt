@@ -1,0 +1,2092 @@
+LOGIC-DIFF: EMBEDDING SECURITY PROPERTIES INTO
+AI-ENABLED CYBER-PHYSICAL SYSTEMS
+Ziyan An
+Department of Computer Science
+Vanderbilt University
+Nashville, TN
+ziyan.an@vanderbilt.edu
+John Stankovic
+Department of Computer Science
+University of Virginia
+Charlottesville, VA
+jas9f@virginia.edu
+Meiyi Ma
+Department of Computer Science
+Vanderbilt University
+Nashville, TN
+meiyi.ma@vanderbilt.edu
+ABSTRACT
+AI-enabled Cyber-Physical Systems (CPS) are highly vulnerable to adversarial and anomalous inputs,
+where small perturbations can induce cascading errors and unsafe control actions. Existing ap-
+proaches, such as rule-based filtering, training-time regularization, or diffusion-based reconstruction,
+either operate outside the model or lack mechanisms to incorporate formal security specifications
+into the prediction process. In this paper, we take the first step toward embedding security properties
+directly into AI-enabled CPS, enabling predictive models to enforce system-level constraints dur-
+ing inference rather than relying on external defenses. We introduce a logic-conditioned bi-stage
+diffusion framework that integrates Signal Temporal Logic (STL) specifications into forecasting.
+STL serves as a first-class conditioning signal that guides both an input repair stage and an output
+refinement stage, allowing the model to jointly mitigate adversarial perturbations and enforce desired
+temporal behaviors to satisfy security-critical properties. We evaluate our approach on two real-world
+multivariate CPS forecasting datasets under a diverse set of physical sensor and cyber attacks. Across
+sensor faults, gradient-based attacks, adaptive attacks, and varying attack strengths, our method
+consistently improves robustness and specification compliance, degrades more gracefully as attack
+strength increases, and generalizes better to unseen attacks. Ablation studies on specification coverage
+and quality further show that embedding logical security properties yields gains unattainable by
+reconstruction-based methods alone, highlighting a new direction for integrating formal methods
+with generative models in secure CPS.
+Keywords Cyber-Physical Systems · Signal Temporal Logic · Diffusion Models · Adversarial Robustness · Formal
+Specifications
+1
+Introduction
+AI-enabled cyber-physical systems (CPS), such as smart healthcare, smart cities, and autonomous mobility, rely heavily
+on deep learning-based forecasting models to support real-time monitoring and control [Yao et al., 2019, Wu, 2021,
+Sefati et al., 2023, Mengash et al., 2023]. However, these systems operate in high-stakes environments where failures
+can lead to unsafe or even catastrophic outcomes. A key vulnerability arises from data-level adversarial or anomalous
+inputs: even small ℓ2-bounded perturbations can distort sensor signals, propagate through forecasting pipelines, and
+ultimately trigger unsafe downstream control actions [Liu et al., 2022, Wu et al., 2022, Duo et al., 2022]. As a result,
+ensuring the robustness of forecasting models is critical to the safe deployment of AI-enabled CPS.
+At the core of this challenge is a fundamental limitation of current learning-based forecasting models. These models
+are largely data-driven and unconstrained, with no built-in guarantees of safety, temporal consistency, or adherence
+to system-level requirements. When inputs are corrupted, prediction errors can propagate and amplify across the
+pipeline, leading to cascading failures. This exposes a key gap: current forecasting models lack mechanisms to enforce
+system-level security properties during prediction. In this paper, we ask a central question: can system-critical security
+properties be embedded into learning-enabled CPS by design, so that models remain robust under adversarial attacks?
+arXiv:2609.38381v1  [cs.CR]  29 Sep 2026
+
+
+PRIME AI paper
+Existing defenses for CPS forecasting fall into two broad categories. The first focuses on improving robustness through
+learning-based reconstruction methods [Cai et al., 2021, Salman et al., 2020, Wu et al., 2023]. Early approaches such as
+Defense-GAN [Samangouei et al., 2018] detect or repair adversarial inputs by exploiting distributional discrepancies,
+while more recent diffusion-based models restore samples via learned reverse processes [Sohl-Dickstein et al., 2015,
+Ho et al., 2020]. Although these methods achieve strong empirical robustness, they rely solely on distributional
+reconstruction and lack an explicit notion of what constitutes safe or acceptable system behavior. As a result, they
+cannot enforce temporal or logical constraints on predictions.
+A complementary line of work incorporates rule-based properties to improve alignment with system requirements
+under nominal conditions [Ma et al., 2020, Hu et al., 2016, An et al., 2024]. These approaches encode semantic
+constraints—such as temporal ordering, persistence, and cross-feature consistency—using formal languages like Linear
+Temporal Logic [Pnueli, 1977], Metric Temporal Logic [Koymans, 1990], and Signal Temporal Logic (STL) [Maler
+and Nickovic, 2004]. In practice, such properties are applied as training-time regularizers or post-hoc monitoring and
+filtering mechanisms [Swaroop et al., 2024, Dmitry et al., 2022, Bartocci et al., 2018, Yang et al., 2022b]. However,
+these approaches are not designed as security mechanisms: they operate outside the predictive process, are reactive
+rather than preventative, and do not mitigate adversarial perturbations during inference. This limitation is exacerbated
+under structured perturbations, such as gradient-based attacks that shift inputs across fragile decision boundaries:
+once temporal dynamics are distorted before prediction, the model may apply a qualitatively different mapping to
+the corrupted data [Hein and Andriushchenko, 2017, Wesego and Rooshenas, 2025]. Indeed, post-hoc correction can
+enforce certain output constraints, but it cannot reliably recover information lost upstream, and the resulting forecast
+may still fail to reflect the true system dynamics.
+In this work, we take a step toward embedding security properties directly into the forecasting process. We propose a
+logic-conditioned bi-stage diffusion framework that integrates formal specifications into model inference. Specifically,
+we use Signal Temporal Logic (STL) to express system-critical properties and incorporate them as conditioning signals
+within a diffusion-based repair pipeline. This enables a new paradigm of specification-aware prediction, where forecasts
+are actively shaped to satisfy security constraints while maintaining robustness.
+Our work investigates repositioning prior secure system specifications, expressed as temporal logic, into two stages of
+the diffusion-based repair process, thereby enabling both pre-hoc and post-hoc defense. Specifically, we condition the
+diffusion-based repair model on a logic-informed signal obtained by projecting the data manifold, at different stages
+of the framework, onto the ℓ1 minimum-distance φ-feasible set. We then modulate the diffusion prediction with a
+learnable gating coefficient that balances the diffusion reconstruction and the projected signal in the final output. The
+framework is trained end-to-end under loss terms that cover each of our three defense desideratum.
+We evaluate our method on two real-world multivariate time-series CPS forecasting datasets, including a smart city
+dataset spanning Caltrans Chen [2002] and air quality and a UAV dataset Keipour et al. [2021]. The framework
+is evaluated against a comprehensive set of black-box sensor attacks and faults, gradient-based white-box attacks,
+adaptive and query-based attacks, sparse indirect attacks, and varying attack strengths. We further study cross-attack
+generalization, cross-domain transfer, and sensitivity to specification coverage and quality. Compared with a broad
+set of baselines spanning adversarial training, adversarial purification, randomized smoothing, and logic-regularized
+learning, our approach consistently reduces forecasting error and improves specification compliance and generalization
+across a range of attack strengths. Our ablation results further show that these gains depend strongly on the guidance
+provided by the embedded logic specifications.
+To our knowledge, this is the first work to embed formal security properties directly into CPS forecasting via logic-
+conditioned generative modeling. Contributions. (1) We formulate secure CPS forecasting as embedding STL-based
+specifications into learning-based prediction. (2) We propose a logic-conditioned bi-stage diffusion framework for input
+repair and output refinement. (3) We develop an STL-guided conditioning mechanism that enables specification-aware
+generative reconstruction under adversarial settings. (4) We conduct a comprehensive evaluation across two CPS
+domains and a diverse set of threat models, including physical sensor attacks, gradient-based and adaptive cyber
+attacks, varying attack strengths, sparse indirect attacks, and unseen attack settings. The results show that LOGIC-DIFF
+consistently improves robustness and specification compliance while demonstrating stronger generalization across
+attacks and domains.
+2
+Background and Problem Statement
+We introduce the key preliminaries underlying our approach, including DDPM models [Ho et al., 2020] for generative
+repair, Signal Temporal Logic (STL) [Maler and Nickovic, 2004] for formal specification, and the CPS security setting
+considered in this work.
+2
+
+
+PRIME AI paper
+Background: Diffusion Models for Data Repair.
+Diffusion models [Sohl-Dickstein et al., 2015, Song et al., 2020]
+learn a data distribution p(x) through gradual noising and denoising. In the forward process, clean data x0 are corrupted
+by Gaussian noise over N steps until xN ∼N(0, I). We build on DDPMs [Ho et al., 2020] as the basis of our input
+repair mechanism, where a reverse diffusion network ϵθ(xn, n) predicts the injected noise and denoises corrupted inputs
+back toward the clean data manifold.
+In forecasting settings with adversarial purification, a potentially corrupted input x∗= x + δ is treated as a noisy
+observation of an underlying clean sample x and is first injected with Gaussian noise during the forward diffusion step.
+In the reversing step, a denoiser ϵθ parameterized by θ guides the learned reverse process to produce the reconstructed
+data ˜x = Φθ(x∗), where Φθ denotes the forward-reverse denosing process. In the subsequent CPS forecasting step, a
+forecasting neural network Fω is applied to ˜x, with the goal that its prediction approximates the clean-input forecast
+Fω(x).
+Background: Signal Temporal Logic.
+STL is a real-valued, time-bounded formalism for specifying temporal
+properties over continuous signals. Given time-series data and a CPS specification, STL supports monitoring through
+qualitative semantics that describe Boolean satisfaction and quantitative semantics that measure the degree of satisfaction
+or violation [Donzé and Maler, 2010]. In this work, we use STL to formalize “secure” system behaviors, including
+temporal requirements such as event ordering and persistence, as well as relationships between multiple signal traces
+over specified time intervals.
+Consider an [a, b]-bounded time interval and an atomic predicate of the form µ ≡f(xt) ≥c, where f : Rd →R is a
+valuation function and c ∈R is a threshold. A formula φ is defined inductively as φ := µ | ¬φ | φ1 ∧φ2 | φ1U[a,b]φ2 |
+□[a,b]φ | ♢[a,b]φ. Here, the temporal operators include the “always” operator □[a,b], which requires that a time series
+satisfy φ at everywhere within the bounded interval; the “eventually” operator ♢[a,b], which requires that φ hold at least
+once within the bounded interval; and the “until” operator U[a,b], which requires that φ1 hold until φ2 is true within the
+bounded interval. The STL quantitative semantics function ρφ(x, t) ∈R measures the signed margin by which a signal
+satisfies or violates φ at time t. We refer the reader to App. C for the full definition of STL semantics and additional
+examples of logic rules.
+Threat Model.
+We consider a comprehensive set of runtime attacks for CPS spanning two attack families, both of
+them aim to corrupt the forecasting model’s output and adversely affect downstream system performance. The first
+family consists of black-box CPS physical system attacks, which we refer to as sensor attacks [Yu et al., 2023]. In this
+setting, the attacker has access to the physical or communication layer and can compromise sensor data by freezing,
+replaying, or spoofing sensor readings, as well as by applying randomized mixtures of these attack types [Duo et al.,
+2022].
+The second family consists of gradient-based white-box attacks to the cyber system, bounded by an ℓ2 budget ∥δ∥2 ≤ε,
+where δ is the added perturbation. These attacks leverage model gradients to generate the worst-case adversarial input
+within the allowed budget, which is typically formulated as x∗∈arg maxx′ L(x′, y; ω) s.t.∥x′ −x∥2 ≤ε, where L is
+the model’s training loss, (x, y) is a clean input-output pair, and ω denotes the model parameters [Goodfellow et al.,
+2014]. We consider specific attacks including PGD [Madry et al., 2018], MIM [Dong et al., 2018], CW [Carlini and
+Wagner, 2017], and AutoAttack [Croce and Hein, 2020].
+Defense Goal.
+Given a potentially attacked input trajectory x∗, our goal is to produce a repaired trajectory ˜x and
+subsequently a final forecast ˜y that are both accurate and semantically valid. Specifically, the defense should produce:
+(i) a repaired input trajectory ˜x that remains close to the clean input x and satisfies an input-side STL specification φ,
+and (ii) a final forecast ˜y that approximates the clean-input forecast Fω(x) and satisfies an output-side STL specification
+φ′. Formally, we have:
+Fω(˜x) ≈Fω(x),
+˜x ∈arg
+max
+¯x∈N (x∗) ρφ(¯x, t),
+˜y ∈arg
+max
+¯y∈N (Fω(˜x)) ρφ′(¯y, t),
+where N(·) denotes a projected neighborhood of the given point. Together, these objectives require a defense that
+produces outputs both likely under the clean data distribution and consistent with system-level security specifications.
+We describe how our bi-stage diffusion framework operationalizes these goals in the next section.
+3
+Method: LogiC-Diff
+We present our logic-guided bi-stage diffusion defense for secure CPS forecasting. At a high level, the method first
+projects STL specifications into a logic-consistent guidance signal, and then uses this signal to nudge the reconstruction
+process at two repair stages: an input-stage diffusion that preventatively reconstructs the attacked trajectory before
+3
+
+
+PRIME AI paper
+Figure 1: Overview of LogiC-Diff. Given a potentially attacked multivariate CPS time-series input, LogiC-Diff
+first constructs STL-guided signals from CPS security specifications. The framework then performs a repair and a
+refinement stage on input-side and an output-side, respectively. In both stages, the diffusion estimate is blended with
+the projection to encourage both data-plausible reconstruction and specification-consistent behavior. The framework is
+trained end-to-end.
+forecasting, and an output-stage diffusion that refines the forecast residual afterward. We refer to this pipeline as
+LOGIC-DIFF, short for STL-conditioned diffusion reconstruction, and use Φθ to denote the full end-to-end pipeline.
+Figure 1 depicts the overall workflow of our framework.
+3.1
+STL Guidance Signal
+In this section, we formalize how STL rules support defense against security attacks. We introduce CPS-oriented
+spatiotemporal logic formulas that encode safe global behavior and are also relevant to downstream control, then
+describe how an attacked signal is projected into a guidance signal. This signal is later used as the basis for an
+embedding to condition the diffusion model and as a reference trajectory in the final interpolation step, encouraging
+specification-compliant repair.
+Security Guidance: STL Rules.
+In Section 2, we introduced the formal definition of STL and its temporal operators.
+In our setting, an STL rule takes a form such as φ := □[t1,t2](xt ≥c), where the temporal operator □[t1,t2] may be
+replaced by ♢[t1,t2] depending on the desired requirement, and µ := (xt ≥c) denotes the atomic predicate that the
+temporal requirement is based on.
+Specifically, we define the following set of spatiotemporal logic formulas to support the security requirements of CPS
+operation. Let x(j)
+t
+denote the value of the j-th feature at time t in the forecasting dataset. We then apply the following
+coarse categories of logic rules, summarized in Table 1.
+More specific examples specifications are listed under App. H. In practice, multiple STL rules can be combined through
+logical conjunction. We use φ to denote the set of rules applied for input reconstruction, and φ′ to denote the set of rules
+applied for output-side residual repair and reconstruction. In many applications, these rules can be specified directly by
+system engineers; alternatively, several existing tools like TELEX and QUIVR can infer or construct such rules from
+sample data or query specifications [Jha et al., 2019, Mell et al., 2023].
+Guidance Signal Construction.
+We have established several categories of rules that define secure system behavior.
+We now describe how a logic specification is grounded into a guidance signal for diffusion-based reconstruction.
+Following prior work [Ma et al., 2020], we project the attacked signal x∗onto the φ-feasible set, yielding a logic-
+consistent reference trajectory. We define the projection operator as Pφ(x), such that it yields the closest satisfying
+trace in ℓ1 distance.
+The projection treats logical and temporal operators compositionally through the quantitative STL semantics. For
+an atomic predicate µ = (xt ≥c), the projection clamps each violating time point upward to the threshold, x′
+t =
+max(x∗
+t , c), while the satisfying points are unchanged. For □[a,b]µ operator, which requires µ to hold at every
+t ∈[a, b], we apply this clamping at every time point in the interval, x′
+t = max(x∗
+t , c) for all t ∈[a, b]. For the
+♢[a,b]µ operator, which requires µ to hold at some t ∈[a, b], we identify the time point already closest to satisfaction,
+4
+
+
+PRIME AI paper
+Table 1: STL-based CPS specifications. Each rule is parameterized by features and a time interval [t1, t2] and encodes a
+physically meaningful constraint on feature trajectories.
+STL-based Guidance Signal Construction Rules for Secure CPS
+φ1 := □[t1,t2]
+ (x(j)
+t
+≥c1) ∧¬(x(j)
+t
+≥c2)
+
+Stability(x(j), [t1, t2]) enforces physically valid ranges and prevents false high
+or low values outside feasible limits over time.
+φ2 := □[t1,t2]
+
+¬
+ (x(j)
+t
+≥c1) ∧¬(x(j+1)
+t
+≥c2)
+
+Associativity(x(j), x(j+1), [t1, t2]) encapsulates the correlational associativ-
+ity across features over time.
+φ3 := ¬(x(j)
+t
+≥c1) U[t1,t2] (x(j+1)
+t
+≥c2)
+Propagation(x(j), x(j+1), [t1, t2]) strengthens upstream and downstream sys-
+tem behavior between two sensor locations or across temporally related events.
+φ4 := □[t1,t2]
+
+¬
+ |¯x(j)
+[t−w1,t] −¯x(j)
+[t−w1−w2,t−w1]| ≥c1
+
+Smoothness(x(j), [t1, t2], w1, w2) bounds the change in mean between adjacent
+windows of widths w1 and w2, detecting persistent changes in feature behavior.
+φ5 := □[t1,t2]
+
+¬
+ (x(j)
+t
+≥c1) ∧¬♢[d1,d2](x(j+1)
+t
+≥c2)
+
+Latency(x(j), x(j+1), [t1, t2], [d1, d2]) enforces that whenever feature x(j)
+reaches level c1, feature x(j+1) reaches level c2 at some time within the future
+window [d1, d2].
+φ6 := ♢[t1,t2] □[0,d]
+ (x(j)
+t
+≥c1) ∧¬(x(j)
+t
+≥c2)
+
+Recovery(x(j), [t1, t2], d) requires the feature to eventually enter and remain
+within a safe operational band for a duration of at least d time units.
+ˆt = arg mint∈[a,b] | x∗
+t −c |, and clamp only that point, x′
+ˆt = max(x∗
+ˆt , c). For the µ1U[a,b]µ2 operator, which requires
+µ1 to hold up to some time ˆt ∈[a, b] at which µ2 holds, we select ˆt to minimize the joint projection distance, then
+enforce µ1 on [a, ˆt] and µ2 at ˆt via the projections above.
+For Boolean operators, the conjunction φ1 ∧φ2 requires both subformulas to hold and is projected by sequentially
+applying the projection of each conjunct, Pφ1∧φ2(x∗) = Pφ2(Pφ1(x∗)); the disjunction φ1 ∨φ2 requires either
+subformula to hold and is projected toward the cheaper of the two, Pφ1∨φ2(x∗) = arg mini∈{1,2} ∥Pφi(x∗) −x∗∥1.
+We obtain the final guidance signal xlogic = Pφ(x∗) by iteratively performing operator-level projections over the syntax
+tree of φ.
+3.2
+Logic-Conditioned Diffusion Reconstruction
+Once the specification-faithful projection of the corrupted input time-series signal x∗is obtained, we employ a diffusion
+reconstruction process to recover ˜x. We now describe this process under the discrete-time DDPM formulation.
+Forward Diffusion.
+We start from the attacked input x0 = x∗and gradually add Gaussian noise according to a
+β schedule over N steps, where x1, . . . , xN denote the intermediate latent variables. The forward diffusion process
+is then formulated as q(xn | xn−1) = N(xn; √1 −βn xn−1, βnI). This is equivalent to the closed-form expression
+q(xn | x0) = N(xn; √¯αn x0, (1 −¯αn)I), where αn = 1 −βn, and ¯αn is the cumulative product of noise retention at
+step n, ¯αn = Qn
+i=1 αi.
+Logic-Conditioned Reverse Diffusion.
+For the reverse diffusion process, standard DDPM defines pθ(xn−1 | xn) =
+N(xn−1; µθ(xn, n), σ2
+θ(xn, n)I). Following this formulation, we incorporate the conditioning signal cx and obtain
+pθ(xn−1 | xn, cx) = N(xn−1; µθ(xn, n, cx), σ2
+θ(xn, n)I). Here, the mean function µθ is parameterized through a
+noise predictor ϵθ(xn, n, cx) and the variance follows the standard DDPM schedule. Rather than iterating this transition
+over all N steps, we leverage the one-shot x0-estimate implicit in the noise-prediction parameterization:
+ˆx = xn −√1 −¯αn ϵθ(xn, n, cx)
+√¯αn
+= x∗+
+√1 −¯αn
+√¯αn
+(ϵ −ϵθ).
+Here, ˆx approximates the conditional mean E [x0 | xn, cx]. To further encourage the repaired sequence to be both
+data-plausible and specification-consistent, we form the input-side repair as ˜x = α ˆx + (1 −α) xlogic, where α ∈(0, 1)
+is a learnable weight.
+Logic-Conditioned Diffusion Refinement on Outputs.
+The repaired input ˜x is passed to the forecasting module
+Fω to produce an initial forecast ˆyinit = Fω(˜x). To refine ˆyinit and account for residual errors, we then apply a second
+logic-conditioned diffusion on ˆyinit.
+Mirroring the first diffusion behavior, we project ˆyinit onto the φ′-feasible set to obtain ylogic, and form the conditioning
+signal cy. The forward process noises ˆyinit over M steps following the same DDPM schedule as above. We use a
+5
+
+
+PRIME AI paper
+separate noise predictor ϵ′
+θ and conditioning encoder for the output stage. The conditioned reverse process yields a
+one-shot estimate of the underlying ground-truth forecast,
+ˆy = ym −√1 −¯αm ϵ′
+θ(ym, m, cy)
+√¯αm
+.
+We ˆy combine with ylogic to produce the final refined forecast ˜y = α′ ˆy + (1 −α′) ylogic, where α′ ∈(0, 1) is a learnable
+weight.
+3.3
+End-to-End Training and Inference
+We train the bi-stage pipeline end-to-end with a joint objective that directly instantiates the defense goal in Section 2. At
+the input stage, the objective encourages the repaired trajectory ˜x to remain close to the clean signal x while achieving
+high robustness with respect to the input-side STL specification φ. At the output stage, it encourages the final forecast ˜y
+to remain accurate relative to the target forecast and to achieve high robustness with respect to the output-side STL
+specification φ′.
+Each desideratum is realized through explicit loss terms. We supervise the induced clean estimates ˆx and ˆy via
+the reparameterization trick in Ho et al. [2020], which maps predicted noise to the corresponding x0-estimate. In
+practice, the reverse models are still parameterized through noise predictors ϵθ and ϵθ′. On the input side, a re-
+construction loss Lx
+diff = E∥x −ˆx∥2
+2 pulls the diffusion estimate toward the clean signal, while a smoothed STL
+penalty Lx
+stl = E [softplus(−˜ρφ(ˆx, 0))] discourages residual specification violations. On the output side, a recon-
+struction loss Ly
+diff = E∥y −ˆy∥2
+2 aligns the diffusion estimate with the ground-truth forecast, a smoothed STL
+penalty Ly
+stl = E [softplus(−˜ρφ′(ˆy, 0))] encourages output-side feasibility, and a forecasting loss Lpred = E∥y −˜y∥2
+2
+ensures that the final blended forecast remains accurate. Here, ˜ρ denotes the smooth surrogate of STL robust-
+ness [Leung et al., 2023], and the softplus function provides stable gradients. The full training objective is given
+by Ltotal = λxLx
+diff + λyLy
+diff + λpLpred + λx
+ρLx
+stl + λy
+ρLy
+stl, where the coefficients λ(·) balance reconstruction quality,
+forecasting accuracy, and specification compliance across the two stages.
+4
+Evaluation
+4.1
+Experimental Setup
+Datasets.
+We evaluate LOGIC-DIFF on two CPS domains. Our primary dataset is a smart city corpus constructed
+from the Caltrans PeMS system [Chen, 2002] for the Los Angeles region. It contains hourly traffic features, including
+total flow, average occupancy, and average speed, augmented with hourly air-quality and emissions measurements
+(NOx, NO2, ozone, and PMx) from the California Air Resources Board [California Air Resources Board, n.d.]. The
+data span 2024–2025 and contain d=7 features. Each sample uses m=24 hours of history to forecast the next H=6
+hours. We also consider the San Francisco region of PeMS to compare with the benchmark used by Liu et al. [2023] for
+sparse indirect attacks. Our second domain is UAV flight telemetry from the ALFA dataset [Keipour et al., 2021], which
+contains 47 fixed-wing flights with real mid-flight engine and actuator faults. We use seven channels that capture the
+closed-loop dynamics, including GPS groundspeed, altitude, measured and commanded roll and pitch, and throttle
+output.
+Forecaster and metrics.
+We use a multivariate time-series Transformer [Li et al., 2019] as the forecasting backbone
+(App. G). We report two metrics: mean squared error (MSE) over the forecast horizon and Sat%, the average percentage
+of logic specifications satisfied by each prediction: Sat% =
+1
+Ns
+PNs
+i=1 1[ρi ≥0] × 100, where Ns is the number of
+specifications and ρi is the robustness value of the i-th specification. MSE captures forecasting accuracy, while Sat%
+measures how well the forecast preserves the system level properties used to characterize secure behavior. The complete
+specification set is provided in App. H.
+Baselines.
+We compare LOGIC-DIFF with baselines representing several defense strategies. Default is the undefended
+forecaster [Vaswani et al., 2017]. Inherent (STL) is a logic-regularized model based on STLNet [Ma et al., 2020],
+which incorporates STL constraints during training but does not perform inference-time repair. Adversarial training
+includes AT (Madry) [Madry et al., 2018] and AT (TRADES) [Zhang et al., 2019]. Adversarial purification is
+represented by AP (DiffPure) [Nie et al., 2022], which denoises corrupted inputs through reverse diffusion without
+using system specifications. Randomized smoothing (RS) [Cohen et al., 2019, Liu et al., 2023] averages predictions
+over Gaussian-perturbed inputs. To separate the effect of logic conditioning from direct feasibility enforcement, we also
+include three projection-only variants that apply the STL projection Pφ to the model input (pre-hoc), after inference
+(post-hoc), or at both stages, without diffusion-based repair or logic conditioning.
+6
+
+
+PRIME AI paper
+Table 2: Robust performance under physical attacks. MSE and STL Sat% reported as mean±95% CI.
+Dropout
+FDI
+Replay
+Mixed
+Method
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+Default
+0.469±.017
+77.3±3.7
+0.197±.008
+84.2±2.2
+0.538±.021
+80.5±2.8
+0.283±.017
+84.5±2.2
+Inherent (STL)
+0.470±.017
+77.2±3.5
+0.207±.009
+84.3±2.2
+0.551±.023
+79.6±2.6
+0.295±.019
+84.4±2.0
+AT (Madry)
+0.484±.015
+78.2±3.5
+0.175±.007
+86.1±2.4
+0.459±.018
+80.7±2.9
+0.281±.016
+84.6±2.5
+AT (TRADES)
+0.489±.016
+78.7±3.7
+0.205±.008
+85.1±2.6
+0.438±.016
+80.8±3.2
+0.287±.013
+83.7±2.7
+AP (DiffPure)
+0.473±.017
+77.4±3.7
+0.186±.008
+84.5±2.2
+0.525±.021
+80.5±2.8
+0.276±.017
+84.3±2.3
+RS (Cohen)
+0.468±.017
+77.4±3.7
+0.201±.008
+84.3±2.3
+0.529±.021
+80.9±2.8
+0.290±.018
+84.7±2.2
+LogiC-Diff
+0.246±.010
+84.8±2.9
+0.162±.007
+87.9±2.2
+0.207±.009
+88.5±2.3
+0.187±.008
+87.6±2.2
+Threat model and attacks.
+We organize the attacks according to the CPS layer they target and the attacker’s level of
+knowledge. At the physical layer, attacks directly corrupt the sensor stream and do not require access to the forecasting
+model. We consider four sensor-level attacks, each controlled by an attack-specific scalar budget ε: Dropout (ε=5),
+which zeros a contiguous outage window for each sensor to simulate temporary disconnection; False Data Injection
+(FDI, ε=1), which adds a signed bias of up to ±1σ at each timestep; Replay (ε=0.5), which replaces the trailing half
+of the window with earlier genuine measurements; and Mixed (ε=2), which samples one of the three attacks for each
+input to model uncertainty in the fault type.
+At the cyber layer, attacks perturb the model input directly under an ℓ2 budget of ε=1.0. We consider white-box
+gradient attacks including PGD [Madry et al., 2018] with 20 iterations and relative step size α=0.25ε, MIM [Dong
+et al., 2018] with momentum decay 1.0, CW [Carlini and Wagner, 2017] with 200 Adam iterations and learning rate
+0.01, and APGD from AutoAttack [Croce and Hein, 2020], adapted to forecasting by using MSE as the objective while
+retaining its adaptive step-size schedule, 100 iterations, and 5 restarts. Because LOGIC-DIFF contains a projection
+Pφ, gradient-based attacks against the full pipeline use BPDA [Athalye et al., 2018] to approximate gradients through
+the projection. We further consider stronger defense-aware settings. Proj.-PGD assumes white-box access to Pφ and
+alternates loss-ascent steps with re-projection onto the logic-feasible set, while BPDA/EOT averages gradients over
+K=20 stochastic forward passes. We consider the query-only Square Attack [Andriushchenko et al., 2020], which
+removes gradient access entirely and is evaluated with 273, 500, and 1000 proposal steps (query accounting in App. F).
+Lastly, the sparse indirect attack of [Liu et al., 2023] perturbs correlated series rather than the target series itself.
+Clean performance.
+Before considering attacks, we first compare clean forecasting performance. Default achieves
+0.154±.006 MSE and 87.5±2.1% Sat; Inherent (STL) achieves 0.164±.006 / 88.1±1.9; AT (Madry) 0.172±.006 / 87.1±2.4;
+AT (TRADES) 0.200±.007 / 85.3±2.6; AP (DiffPure) 0.157±.006 / 87.3±2.1; RS 0.153±.006 / 87.7±2.1; and LOGIC-
+DIFF 0.155±.006 / 88.1±.2. Thus, LOGIC-DIFF preserves clean forecasting accuracy while tying for the highest clean
+Sat%. In contrast, both adversarial-training baselines incur some loss in clean forecasting accuracy. We next evaluate
+how these methods behave under attack.
+4.2
+Robustness Across Various CPS Attack Models
+We begin by evaluating whether LOGIC-DIFF improves robustness across the two attack surfaces considered in our
+CPS setting: physical-layer attacks that corrupt sensor measurements and cyber-layer attacks that directly manipulate
+the model input. For the cyber setting, we also consider adaptive attackers that explicitly account for the defense.
+Physical-layer attacks.
+We first evaluate robustness to four sensor-level attacks in Table 2. LOGIC-DIFF achieves the
+lowest MSE and highest Sat% across all four settings. The gain is modest under FDI, where adversarial training is
+already effective, but becomes much larger under Dropout and Replay, reducing MSE from 0.468 to 0.246 and from
+0.438 to 0.207, respectively. The advantage also persists under Mixed attacks, where the corruption type varies across
+samples. This result suggests that LOGIC-DIFF is less tied to a specific perturbation model than the competing defenses.
+Rather than targeting one attack mechanism, the embedded specifications provide a system-level prior over valid CPS
+behavior that remains useful across heterogeneous forms of sensor corruption. This is particularly helpful for temporally
+structured attacks, where individual sensor values may appear plausible while the overall trajectory violates expected
+temporal relationships.
+Cyber-layer attacks.
+We next evaluate ℓ2-bounded white-box attacks at ε=1.0 in Table 3. The main result is that
+LOGIC-DIFF consistently improves robustness over adversarial training across different gradient-based attack objectives,
+7
+
+
+PRIME AI paper
+Table 3: Robust performance under cyber attacks (ℓ2, ε=1.0). (a) Gradient-based white-box attacks. MSE and STL Sat%
+are reported as mean±95% CI for the main baselines; projection-based baselines added during the extended evaluation
+are reported using point estimates. (b) Defense-aware and query-based attacks (MSE): Proj.-PGD, BPDA/EOT, and the
+gradient-free Square Attack at 273, 500, and 1000 proposal steps (query accounting in App. F).
+(a) Gradient-based white-box attacks
+PGD
+MIM
+CW
+APGD
+Method
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+Default
+0.324±.011
+83.1±2.4
+0.320±.011
+82.9±2.4
+0.290±.012
+84.2±2.3
+0.325±.011
+83.0±2.4
+Inherent (STL)
+0.316±.012
+83.4±2.2
+0.312±.012
+83.5±2.2
+0.283±.013
+84.9±2.2
+0.317±.012
+83.4±2.2
+AT (Madry)
+0.226±.009
+85.3±2.5
+0.225±.009
+85.3±2.6
+0.186±.009
+86.6±2.4
+0.226±.009
+85.3±2.5
+AT (TRADES)
+0.244±.009
+84.4±2.7
+0.244±.009
+84.4±2.7
+0.210±.008
+85.1±2.6
+0.244±.009
+84.4±2.7
+AP (DiffPure)
+0.301±.011
+83.4±2.4
+0.297±.011
+83.4±2.4
+0.265±.012
+85.0±2.3
+0.300±.011
+83.5±2.4
+RS (Cohen)
+0.311±.011
+83.5±2.4
+0.307±.011
+83.5±2.4
+0.278±.012
+84.7±2.3
+0.311±.011
+83.6±2.4
+LogiC-Diff
+0.197±.008
+86.9±2.4
+0.197±.008
+86.9±2.4
+0.179±.008
+87.6±2.3
+0.197±.009
+86.9±2.4
+Projection-based Baselines
+Pre-hoc Projection
+0.277±.0.010
+88.0±2.4
+0.274±.0.010
+87.8±2.4
+0.239±.0.010
+88.8±2.3
+0.278±.0.010
+88.0±2.5
+Post-hoc Projection
+0.225±.0.011
+100.0
+0.222±.0.011
+100.0
+0.203±.0.011
+100.0
+0.228±.0.011
+100.0
+Pre-hoc & Post-hoc
+0.221±.0.011
+100.0
+0.218±.0.011
+100.0
+0.200±.0.011
+100.0
+0.224±.0.011
+100.0
+LogiC-Diff-Post-hoc
+0.173±.0.008
+100.0
+0.173±.0.008
+100.0
+0.162±.0.008
+100.0
+0.174±.0.008
+100.0
+(b) Defense-aware and query-based attacks
+Method
+Proj.-PGD
+BPDA/EOT
+Sq@273
+Sq@500
+Sq@1000
+Default
+0.3218±.011
+0.3551±.025
+0.2212±.0095
+0.2464±.0099
+0.2613±.0102
+AT (Madry)
+0.2393±.009
+0.2913±.019
+0.1935±.0080
+0.2029±.0081
+0.2103±.0084
+AT (TRADES)
+0.2304±.009
+0.2817±.018
+0.1972±.0080
+0.2041±.0080
+0.2092±.0082
+AP (DiffPure)
+0.2975±.011
+0.3388±.024
+0.1934±.0090
+0.2141±.0093
+0.2232±.0095
+RS (Cohen)
+0.3092±.011
+0.3468±.024
+0.2003±.0088
+0.2228±.0091
+0.2342±.0094
+LogiC-Diff
+0.2005±.008
+0.2375±.017
+0.1723±.0077
+0.1782±.0078
+0.1833±.0079
+while logic regularization or diffusion purification alone provides little protection. Compared with the strongest baseline,
+AT-Madry, LOGIC-DIFF reduces MSE from 0.226 to 0.197 under PGD, from 0.225 to 0.197 under MIM, and from
+0.226 to 0.197 under APGD, with a smaller improvement from 0.186 to 0.179 under CW. The similar gains across
+PGD, MIM, and APGD suggest that the improvement is not specific to a particular attack optimizer. LOGIC-DIFF also
+maintains slightly higher specification satisfaction than AT-Madry (86.9% vs. 85.3% under PGD), suggesting that the
+reduction in forecasting error also improves specification compliance in practice.
+Projection alone is less effective.
+Table 3 also shows that directly enforcing STL feasibility is not sufficient to obtain
+the robustness of LOGIC-DIFF. Under PGD, applying Pφ before inference, after inference, or at both stages yields
+0.320, 0.322, and 0.319 MSE, respectively, only marginally different from the undefended model. Applying a hard
+projection after diffusion-based input repair performs better, but does not compare with the full LOGIC-DIFF model.
+This suggests that feasibility is a necessary but insufficient condition for accurate reconstruction. Rather than only
+projecting predictions into the feasible set, LOGIC-DIFF uses the specifications to guide training and repair, steering the
+model toward accurate trajectories within that set and providing benefits beyond minimum feasibility enforcement.
+Adaptive and query-based attacks.
+We further evaluate stronger attackers that explicitly account for the defense
+(Table 3(b)). In particular, we design Proj.-PGD, a defense-aware variant of PGD that incorporates the STL projection
+Pφ into the attack loop by alternating gradient-ascent updates with re-projection onto the logic-feasible set and the
+ε-ball. LOGIC-DIFF remains the strongest method under this attack, achieving 0.2005 MSE compared with 0.2304 for
+the best baseline. We additionally strengthen BPDA with EOT over stochastic forward passes and evaluate the Square
+Attack; LOGIC-DIFF retains the lowest MSE in both settings. These results show that its advantage persists when the
+attacker explicitly accounts for the projection mechanism or avoids gradient information altogether. Finally, under the
+gradient-free Square Attack, LOGIC-DIFF remains best across all query budgets and degrades only modestly as the
+budget increases, from 0.1723 MSE at 273 proposal steps to 0.1833 at 1000.
+Sparse indirect attacks.
+Finally, we consider an attacker that cannot modify the target series directly. Following Liu
+et al. [2023], the attacker instead perturbs a sparse subset of correlated series and degrades the target forecast through
+the dependencies learned by the model. This setting is particularly relevant to LOGIC-DIFF, since the embedded
+specifications capture relationships across signals rather than treating each series independently. Table 4 reports results
+8
+
+
+PRIME AI paper
+Table 4: Robustness evaluation following the sparse indirect attack setting of Liu et al. (a) Sparse indirect attacks on
+our smart-city dataset under deterministic and probabilistic variants. (b) Evaluation on a seven-series subset of the
+traffic benchmark used by Liu et al. under the probabilistic attack. (a) reports MSE on the target series; (b) reports
+point-forecast normalized deviation of the target lane. Dataset and metric details are provided in App. E and App. F.
+Lower is better for both.
+(a) Sparse indirect attack on Caltrans PeMS (District 7)
+Deterministic
+Probabilistic
+Method
+κ = 2
+κ = 4
+κ = 2
+κ = 4
+Default
+0.2542±.016
+0.2755±.017
+0.2523±.016
+0.2757±.017
+Inherent (STL)
+0.2561±.016
+0.2745±.016
+0.2537±.016
+0.2748±.016
+AT (Madry)
+0.1754±.012
+0.1829±.012
+0.1738±.012
+0.1830±.012
+AT (TRADES)
+0.1750±.011
+0.1794±.011
+0.1737±.011
+0.1795±.011
+AP (DiffPure)
+0.2355±.016
+0.2491±.016
+0.2341±.016
+0.2516±.017
+RS (Cohen)
+0.2397±.016
+0.2570±.016
+0.2381±.016
+0.2575±.016
+LogiC-Diff
+0.1226±.008
+0.1286±.008
+0.1217±.008
+0.1287±.008
+(b) Sparse indirect attack on Caltrans PeMS
+(District 4 [Liu et al., 2022])
+κ
+Default
+AT (TRADES)
+LogiC-Diff
+–
+0.1505±.0110
+0.1511±.0092
+0.1392±.0096
+1/6
+0.2234±.0131
+0.1753±.0101
+0.1567±.0102
+2/6
+0.2336±.0134
+0.1852±.0105
+0.1644±.0104
+3/6
+0.2377±.0136
+0.1893±.0107
+0.1678±.0106
+5/6
+0.2454±.0138
+0.1980±.0109
+0.1748±.0108
+6/6
+0.2476±.0138
+0.2003±.0110
+0.1770±.0109
+Figure 2: LogiC-Diff achieves the lowest median MSE across all attack budgets and types. Left: median per-sample
+MSE versus attack budget ε for PGD and Mixed attacks. Right: cumulative distributions of per-sample MSE at four
+budgets per attack family. Annotations show LogiC-Diff’s median MSE and the percentage reduction relative to the
+best-performing baseline at each budget. Vertical dashed lines mark per-method medians.
+on both our smart-city dataset and the original benchmark of Liu et al. [2023]. LOGIC-DIFF achieves the lowest target
+error in every setting, across both deterministic and probabilistic variants and all sparsity levels, improving over the
+strongest baseline by 28–30% on our dataset and by 11–12% on the original benchmark, where it is also the most
+accurate method on clean data.
+4.3
+Generalizability Across Attack Severity, Access, and CPS Domains
+We next test how well this robustness carries beyond that setting along three dimensions: stronger attacks, unseen attack
+mechanisms, and a different CPS domain. Together, these experiments ask whether the advantage of LOGIC-DIFF
+depends on a particular perturbation budget, attack used during training, or dataset.
+Increasing attack strength.
+We first keep the attacks and dataset fixed while increasing the perturbation budget.
+Figure 2 evaluates PGD with ε ∈{1.5, 1.75, 2, 2.25} and Mixed physical attacks with ε ∈{1.5, 1.75, 2.25, 2.5}.
+LOGIC-DIFF achieves the lowest median MSE in all eight settings, outperforming the strongest baseline by 7.3%–
+28.8%. More importantly, its advantage does not disappear as the attack becomes stronger: the margin reaches 14.0%
+at the largest PGD budget and increases from 14.3% to 28.8% across the Mixed attacks. The effect is especially
+pronounced for Mixed attacks, where the median MSE of LOGIC-DIFF remains nearly flat while all baselines degrade.
+The CDFs show the same pattern across the test distribution, indicating that the improvement is not driven by a small
+subset of samples.
+9
+
+
+PRIME AI paper
+Table 5: Generalization of robustness. (a) Cross-attack generalization: each method is adversarially trained on the
+opposite attack within the same category. For cyber attacks, the training budget is ℓ∞with ε = 0.1; for physical attacks,
+we use the same budgets as in Tables 2 and 3. TRADES on MIM-ℓ∞is omitted as a non-standard configuration. Best
+per train scenario in bold. Metrics reported as mean ± 95% CI. (b) Cross-domain transfer: robust MSE on the ALFA
+UAV dataset across physical and cyber attacks; lower is better.
+(a) Cross-attack generalization (Caltrans PeMS Smart City)
+MIM-ℓ2
+PGD-ℓ2
+Replay
+Dropout
+Method
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+AT (Madry)
+0.245±.009
+84.4±2.6
+0.249±.009
+85.0±2.5
+0.582±.021
+77.0±3.1
+0.499±.019
+76.9±4.0
+AT (TRADES)
+0.232±.009
+85.1±2.5
+–
+–
+0.646±.027
+78.6±2.8
+0.550±.020
+76.5±3.8
+LogiC-Diff
+0.213±.009
+87.3±2.3
+0.205±.009
+86.5±2.4
+0.275±.014
+87.2±2.2
+0.276±.014
+85.4±2.9
+(b) Cross-domain transfer (ALFA UAV)
+Physical Attacks
+Cyber Attacks
+Method
+Dropout
+FDI
+Replay
+Mixed
+PGD
+MIM
+CW
+APGD
+Default
+0.3036±.0271
+0.2351±.0136
+1.2283±.0909
+0.6246±.0594
+0.5036±.0219
+0.4876±.0221
+0.3476±.0138
+0.5350±.0217
+Inherent (STL)
+0.2958±.0309
+0.2523±.0137
+1.2774±.0916
+0.7305±.0698
+0.5086±.0202
+0.4867±.0203
+0.3496±.0137
+0.5362±.0196
+AT (Madry)
+0.3663±.0334
+0.1549±.0107
+1.2051±.0871
+0.5780±.0590
+0.2554±.0147
+0.2534±.0147
+0.2040±.0142
+0.2560±.0147
+AT (TRADES)
+0.4304±.0312
+0.1727±.0143
+1.1387±.0822
+0.5542±.0562
+0.2637±.0172
+0.2627±.0172
+0.2213±.0175
+0.2639±.0172
+AP (DiffPure)
+0.3457±.0308
+0.2140±.0132
+1.2045±.0886
+0.5890±.0550
+0.4358±.0202
+0.4203±.0205
+0.3111±.0152
+0.4525±.0203
+RS (Cohen)
+0.3276±.0298
+0.2387±.0142
+1.2135±.0898
+0.6595±.0681
+0.4899±.0206
+0.4740±.0212
+0.3462±.0139
+0.5149±.0206
+LogiC-Diff
+0.1795±.0175
+0.1613±.0165
+0.3324±.0266
+0.2197±.0187
+0.2248±.0191
+0.2252±.0191
+0.2063±.0187
+0.2243±.0191
+Unseen attacks.
+We next ask whether robustness transfers when the attack at test time differs from the one used
+during adversarial training. Table 5(a) changes both the attack mechanism and, for cyber attacks, the perturbation norm:
+models trained on PGD-ℓ∞are evaluated on MIM-ℓ2 and vice versa, while physical models transfer between Dropout
+and Replay. The main finding is that LOGIC-DIFF transfers substantially better than conventional adversarial training.
+On cyber attacks, it reaches 0.213 MSE on MIM-ℓ2 and 0.205 on PGD-ℓ2, compared with 0.232 and 0.249 for the
+strongest AT baselines. The contrast is larger for physical attacks: LOGIC-DIFF reaches 0.275 under Replay and 0.276
+under Dropout, reducing MSE by 52.7% and 44.7%, respectively, relative to the best AT baseline. In fact, adversarial
+training on the mismatched physical attack performs worse than the undefended model. This difference reflects an
+important distinction between the two approaches: adversarial training learns robustness to a particular perturbation
+distribution, whereas the specifications in LOGIC-DIFF describe valid system behavior independently of how that
+behavior is corrupted.
+Cross-domain transfer.
+Finally, we evaluate whether the same mechanism remains useful in a physically different
+CPS. Table 5(b) repeats the evaluation on the ALFA UAV dataset using the same pipeline and rule families, with
+specification thresholds re-synthesized from clean flight data. Despite the change in signals, system dynamics, and data
+scale, LOGIC-DIFF achieves the lowest MSE in six of the eight attacked settings. The largest gains again occur under
+temporally structured corruption: MSE decreases from 1.139 to 0.332 under Replay, from 0.554 to 0.220 under Mixed
+attacks, and from 0.296 to 0.180 under Dropout. Under FDI and CW, the differences from AT-Madry are small and
+their confidence intervals overlap, showing that the advantage is not uniform across every attack. ALFA also contains
+roughly three orders of magnitude fewer training windows than the smart-city dataset; for this setting, we use per-sample
+input-bound calibration. The same qualitative pattern therefore appears in two very different CPS domains: the largest
+gains occur when attacks disrupt temporal behavior, while additive or optimization-based perturbations leave less room
+over strong adversarial-training baselines. This provides evidence that the benefit comes from specification-guided
+repair rather than from characteristics specific to the traffic dataset.
+4.4
+Understanding the Sources of Robustness
+We next examine which parts of LOGIC-DIFF contribute most to its robustness and how sensitive the framework is to
+specification quality. Table 6 reports the corresponding ablations.
+Pipeline components.
+The input-side repair mechanism has the largest effect. Removing it increases Dropout MSE
+from 0.246 to 0.496, Mixed MSE by 25%, and PGD MSE by 27%. Removing output-stage rule conditioning causes a
+smaller but consistent degradation, while removing the STL loss also hurts both forecasting accuracy and specification
+10
+
+
+PRIME AI paper
+Table 6: Component and logic-rule ablation of LogiC-Diff under Dropout, Mixed, PGD, and CW attacks. Each variant
+removes one mechanism or rule family from the full pipeline; metrics are reported as mean ± 95% CI.
+Dropout
+Mixed
+PGD
+CW
+Variant
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+MSE↓
+Sat%↑
+-Rule (Input)
+0.496±.020
+79.7±3.2
+0.234±.011
+86.5±2.2
+0.250±.010
+85.8±2.6
+0.210±.010
+87.3±2.4
+-Rule (Output)
+0.250±.010
+84.9±3.0
+0.194±.008
+87.2±2.2
+0.203±.008
+86.3±2.5
+0.185±.008
+87.0±2.4
+-Rule Loss Lstl
+0.260±.010
+84.6±3.1
+0.203±.008
+87.2±2.3
+0.219±.008
+86.4±2.5
+0.197±.008
+87.3±2.4
+-Stability
+0.269±.012
+85.1±3.0
+0.205±.008
+87.7±2.2
+0.224±.009
+87.1±2.3
+0.201±.009
+87.8±2.2
+-Associativity
+0.248±.010
+86.0±3.1
+0.193±.008
+88.0±2.3
+0.229±.008
+87.2±2.6
+0.211±.008
+87.7±2.5
+Full LogiC-Diff
+0.246±.010
+84.8±2.9
+0.187±.008
+87.6±2.2
+0.197±.008
+86.9±2.4
+0.179±.008
+87.6±2.3
+satisfaction. Together, these results suggest that robustness comes primarily from repairing the corrupted input, with
+training-time logic supervision and output refinement providing additional gains.
+Specification families.
+Different rule families contribute to different threats. Removing Stability degrades
+performance across all attacks, while removing relational rules such as Associativity has a larger effect on PGD and
+CW. This suggests that envelope constraints help detect implausible individual trajectories, while relational constraints
+are particularly useful when multiple signals are perturbed jointly or indirectly.
+Sensitivity to specification quality.
+The framework is relatively tolerant of loose or incomplete specifications, but
+much more sensitive to incorrect ones. Widening bounds or removing a moderate fraction of rules has little effect,
+whereas overly tight, mismatched, or contradictory specifications noticeably degrade performance. Very limited
+calibration data also hurts, although performance recovers quickly with more calibration samples. Overall, missing
+guidance is less harmful than misleading guidance.
+Discussion.
+Our evaluation demonstrates the performance of our method across four settings: fixed-budget physical
+and cyber attacks, increasing attack budgets, component and rule ablations, and cross-attack generalization under
+specification guidance, particularly compared with adversarial training baselines. We find that our bi-stage, logic-guided
+reconstruction and repair mechanism achieves significant performance gains over a wide range of baselines. More
+importantly, the embedded specifications and overall architecture allow the model to degrade less drastically under
+increasing attack strength and to generalize more robustly to unseen attacks. Each rule type contributes meaningfully to
+overall performance, which indicates that broad non-conflicting specification coverage is usually preferable to relying
+on any single logic family.
+Limitations.
+We further discuss a few potential limitations. First, our evaluation is limited to two important attack
+families. However, additional threat models, such as training time data poisoning or model extraction would provide
+more comprehensive security guarantees. Second, STL specifications used by our framework are learned from clean
+training data and reflect domain assumptions. However, miscalibrated or incomplete specifications could systematically
+bias predictions in ways that propagate to downstream control.
+5
+Related Work
+Adversarial Robustness for Forecasting and CPS. Prior research has shown that attacks can occur across the CPS
+sensing, communication, and learning pipeline [Liu et al., 2023, Wu et al., 2022, Siddiqui et al., 2020, Yu et al., 2023],
+including sensor tampering [Chen et al., 2023], surrogate-based attacks [Karim et al., 2020, Liu et al., 2023], and
+white-box adaptive attacks [Carlini and Wagner, 2017]. Existing defenses span CPS-level methods such as detection,
+resilient estimation, secure control, and fault-tolerant control [Dibaji et al., 2019], as well as ML defenses such as
+adversarial training [Madry et al., 2018, Zhang et al., 2019] and randomized smoothing [Cohen et al., 2019]. However,
+CPS deployments may face mixtures of physical and cyber attacks, making single-family defenses insufficient [Duo
+et al., 2022]. Our framework handles physical-layer sensor attacks and cyber-layer gradient attacks under a unified
+defense. Diffusion-Based Adversarial Defenses and Logic-Aware ML. Generative defenses repair corrupted inputs
+by moving them toward the clean data distribution, with diffusion models [Sohl-Dickstein et al., 2015, Ho et al., 2020]
+becoming especially effective. Methods such as Denoised Smoothing [Salman et al., 2020], DiffPure [Nie et al., 2022],
+AudioPure [Wu et al., 2023], and AAOpt [Wesego and Rooshenas, 2025] use diffusion priors or denoising to improve
+adversarial robustness, but rely mainly on distributional plausibility under p(x) rather than CPS semantics. Separately,
+11
+
+
+PRIME AI paper
+logic-aware methods incorporate prior knowledge through training regularization, output filtering, or verification [Scott
+et al., 2020, Yang et al., 2022a, Ma et al., 2020, Meng et al., 2022], and in security settings are often used to constrain
+training, verify outputs, or filter predictions [Nguyen et al., 2024, Chen et al., 2025]. Our work bridges these directions
+by using logic as semantic guidance within diffusion-based repair, steering reconstruction toward trajectories that are
+both data-plausible and consistent with CPS security specifications.
+6
+Conclusion
+In this paper, we propose a new bi-stage, logic-guided, diffusion-based framework for preventatively enhancing the
+security of CPS forecasting by embedding formal specifications directly into the prediction pipeline. We identify a
+broad set of security properties and show how they can be incorporated both before forecasting, through input-side
+repair, and after forecasting, through output-side refinement. Across more than one hundred specifications in our
+evaluation, we demonstrate the benefits of the proposed method from multiple perspectives, including forecasting
+accuracy, specification compliance, robustness under stronger attacks, component and rule ablations, and cross-attack
+generalization. Overall, the results suggest that the embedded rules provide three main benefits: they improve overall
+robustness and predictive performance, help the model degrade more gracefully as attack strength increases, and transfer
+better to unseen attacks. In future work, additional security properties can be formally specified and incorporated within
+the same framework. Therefore, this work represents an important step toward embedding security properties into
+CPS forecasting models and suggests that logic-guided repair has strong potential to extend to a broader range of CPS
+domains.
+References
+Ziyan An, Taylor T Johnson, and Meiyi Ma. Formal logic enabled personalized federated learning through property
+inference. In Proceedings of the AAAI Conference on Artificial Intelligence, volume 38, pages 10882–10890, 2024.
+Maksym Andriushchenko, Francesco Croce, Nicolas Flammarion, and Matthias Hein. Square attack: a query-efficient
+black-box adversarial attack via random search. In Computer Vision – ECCV 2020, pages 484–501. Springer, 2020.
+Anish Athalye, Nicholas Carlini, and David Wagner. Obfuscated gradients give a false sense of security: Circumventing
+defenses to adversarial examples. In International conference on machine learning, pages 274–283. PMLR, 2018.
+Ezio Bartocci, Jyotirmoy Deshmukh, Alexandre Donzé, Georgios Fainekos, Oded Maler, Dejan Niˇckovi´c, and Sriram
+Sankaranarayanan.
+Specification-based monitoring of cyber-physical systems: a survey on theory, tools and
+applications. In Lectures on Runtime Verification: Introductory and Advanced Topics, pages 135–175. Springer,
+2018.
+Zhipeng Cai, Zuobin Xiong, Honghui Xu, Peng Wang, Wei Li, and Yi Pan. Generative adversarial networks: A survey
+toward private and secure applications. ACM Computing Surveys (CSUR), 54(6):1–38, 2021.
+California Air Resources Board. Air quality and emissions data, n.d. URL https://ww2.arb.ca.gov/capp/cst/
+rdi/air-quality-and-emissions-data. Accessed: 2026-04-24.
+Nicholas Carlini and David Wagner. Towards evaluating the robustness of neural networks. In 2017 ieee symposium on
+security and privacy (sp), pages 39–57. Ieee, 2017.
+Chao Chen. Freeway performance measurement system (PeMS). University of California, Berkeley, 2002.
+Xuan Chen, Shiwei Feng, Zikang Xiong, Shengwei An, Yunshu Mao, Lu Yan, Guanhong Tao, Wenbo Guo, and Xiangyu
+Zhang. Temporal logic-based multi-vehicle backdoor attacks against offline rl agents in end-to-end autonomous
+driving. arXiv preprint arXiv:2509.16950, 2025.
+Zirong Chen, Isaac Li, Haoxiang Zhang, Sarah Preum, John A. Stankovic, and Meiyi Ma. Cityspec with shield:
+A secure intelligent assistant for requirement formalization. Pervasive and Mobile Computing, 92:101802, 2023.
+ISSN 1574-1192. doi: https://doi.org/10.1016/j.pmcj.2023.101802. URL https://www.sciencedirect.com/
+science/article/pii/S1574119223000603.
+Jeremy Cohen, Elan Rosenfeld, and Zico Kolter. Certified adversarial robustness via randomized smoothing. In
+international conference on machine learning, pages 1310–1320. PMLR, 2019.
+Francesco Croce and Matthias Hein. Reliable evaluation of adversarial robustness with an ensemble of diverse
+parameter-free attacks. In International conference on machine learning, pages 2206–2216. PMLR, 2020.
+Seyed Mehran Dibaji, Mohammad Pirani, David Bezalel Flamholz, Anuradha M Annaswamy, Karl Henrik Johansson,
+and Aranya Chakrabortty. A systems and control perspective of cps security. Annual reviews in control, 47:394–411,
+2019.
+12
+
+
+PRIME AI paper
+Namiot Dmitry, Ilyushin Eugene, and Chizhov Ivan. On a formal verification of machine learning systems. International
+Journal of Open Information Technologies, 10(5):30–34, 2022.
+Yinpeng Dong, Fangzhou Liao, Tianyu Pang, Hang Su, Jun Zhu, Xiaolin Hu, and Jianguo Li. Boosting adversarial
+attacks with momentum. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages
+9185–9193, 2018.
+Alexandre Donzé and Oded Maler. Robust satisfaction of temporal logic over real-valued signals. In Formal Modeling
+and Analysis of Timed Systems (FORMATS), pages 92–106. Springer, 2010.
+Wenli Duo, MengChu Zhou, and Abdullah Abusorrah. A survey of cyber attacks on cyber physical systems: Recent
+advances and challenges. IEEE/CAA Journal of Automatica Sinica, 9(5):784–800, 2022.
+Ian J Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and harnessing adversarial examples. arXiv
+preprint arXiv:1412.6572, 2014.
+Matthias Hein and Maksym Andriushchenko. Formal guarantees on the robustness of a classifier against adversarial
+manipulation. Advances in neural information processing systems, 30, 2017.
+Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. Advances in neural information
+processing systems, 33:6840–6851, 2020.
+Zhiting Hu, Xuezhe Ma, Zhengzhong Liu, Eduard Hovy, and Eric Xing. Harnessing deep neural networks with logic
+rules. In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long
+Papers), pages 2410–2420, 2016.
+Susmit Jha, Ashish Tiwari, Sanjit A Seshia, Tuhin Sahai, and Natarajan Shankar. Telex: learning signal temporal logic
+from positive examples using tightness metric. Formal Methods in System Design, 54(3):364–387, 2019.
+Fazle Karim, Somshubra Majumdar, and Houshang Darabi. Adversarial attacks on time series. IEEE transactions on
+pattern analysis and machine intelligence, 43(10):3309–3320, 2020.
+Azarakhsh Keipour, Mohammadreza Mousaei, and Sebastian Scherer. Alfa: A dataset for uav fault and anomaly
+detection. The International Journal of Robotics Research, 40(2-3):515–520, 2021.
+Ron Koymans. Specifying real-time properties with metric temporal logic. Real-Time Systems, 2(4):255–299, 1990.
+doi: 10.1007/BF01995674.
+Karen Leung, Nikos Aréchiga, and Marco Pavone. Backpropagation through signal temporal logic specifications:
+Infusing logical structure into gradient-based methods. The International Journal of Robotics Research, 42(6):
+356–370, 2023.
+Shiyang Li, Xiaoyong Jin, Yao Xuan, Xiyou Zhou, Wenhu Chen, Yu-Xiang Wang, and Xifeng Yan. Enhancing
+the locality and breaking the memory bottleneck of transformer on time series forecasting. Advances in neural
+information processing systems, 32, 2019.
+Fan Liu, Hao Liu, and Wenzhao Jiang. Practical adversarial attacks on spatiotemporal traffic forecasting models.
+Advances in Neural Information Processing Systems, 35:19035–19047, 2022.
+Linbo Liu, Youngsuk Park, Trong Nghia Hoang, Hilaf Hasson, and Luke Huan. Robust multivariate time-series
+forecasting: Adversarial attacks and defense mechanisms. In The Eleventh International Conference on Learning
+Representations, 2023.
+Meiyi Ma, Ji Gao, Lu Feng, and John Stankovic. Stlnet: Signal temporal logic enforced multivariate recurrent neural
+networks. Advances in Neural Information Processing Systems, 33:14604–14614, 2020.
+Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. Towards deep learning
+models resistant to adversarial attacks. In International Conference on Learning Representations, 2018.
+Oded Maler and Dejan Nickovic. Monitoring temporal properties of continuous signals. In Formal Techniques,
+Modelling and Analysis of Timed and Fault-Tolerant Systems (FORMATS), pages 152–166. Springer, 2004.
+Stephen Mell, Favyen Bastani, Steve Zdancewic, and Osbert Bastani. Synthesizing trajectory queries from examples.
+In International Conference on Computer Aided Verification, pages 459–484. Springer, 2023.
+Mark Huasong Meng, Guangdong Bai, Sin Gee Teo, Zhe Hou, Yan Xiao, Yun Lin, and Jin Song Dong. Adversarial
+robustness of deep neural networks: A survey from a formal verification perspective. IEEE Transactions on
+Dependable and Secure Computing, 2022.
+Hanan Abdullah Mengash, Lubna A Alharbi, Saud S Alotaibi, Sarab AlMuhaideb, Nadhem Nemri, Mrim M Alnfiai,
+Radwa Marzouk, Ahmed S Salama, and Mesfer Al Duhayyim. Deep learning enabled intelligent healthcare
+management system in smart cities environment. Computers, Materials & Continua, 74(2), 2023.
+13
+
+
+PRIME AI paper
+Dung Thuy Nguyen, Ziyan An, Taylor T Johnson, Meiyi Ma, and Kevin Leach. Formal logic-guided robust federated
+learning against poisoning attacks. arXiv preprint arXiv:2411.03231, 2024.
+Weili Nie, Brandon Guo, Yujia Huang, Chaowei Xiao, Arash Vahdat, and Anima Anandkumar. Diffusion models for
+adversarial purification. arXiv preprint arXiv:2205.07460, 2022.
+Amir Pnueli. The temporal logic of programs. In Proceedings of the 18th Annual Symposium on Foundations of
+Computer Science, pages 46–57. IEEE, 1977. doi: 10.1109/SFCS.1977.32.
+Hadi Salman, Mingjie Sun, Greg Yang, Ashish Kapoor, and J Zico Kolter. Denoised smoothing: A provable defense for
+pretrained classifiers. Advances in Neural Information Processing Systems, 33:21945–21957, 2020.
+Pouya Samangouei, Maya Kabkab, and Rama Chellappa. Defense-gan: Protecting classifiers against adversarial attacks
+using generative models. arXiv preprint arXiv:1805.06605, 2018.
+Joseph Scott, Maysum Panju, and Vijay Ganesh. Lgml: logic guided machine learning (student abstract). In Proceedings
+of the AAAI Conference on Artificial Intelligence, volume 34, pages 13909–13910, 2020.
+Seyed Salar Sefati, Bahman Arasteh, Simona Halunga, Octavian Fratu, and Asgarali Bouyer. Meet user’s service
+requirements in smart cities using recurrent neural networks and optimization algorithm. IEEE Internet of Things
+Journal, 10(24):22256–22269, 2023.
+Shoaib Ahmed Siddiqui, Andreas Dengel, and Sheraz Ahmed. Benchmarking adversarial attacks and defenses for
+time-series data. In International Conference on Neural Information Processing, pages 544–554. Springer, 2020.
+Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan, and Surya Ganguli. Deep unsupervised learning using
+nonequilibrium thermodynamics. In International conference on machine learning, pages 2256–2265. pmlr, 2015.
+Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Abhishek Kumar, Stefano Ermon, and Ben Poole. Score-based
+generative modeling through stochastic differential equations. arXiv preprint arXiv:2011.13456, 2020.
+Anand Swaroop, Abhishek Singh, Girish Chandra, Shiv Prakash, Sohan Kumar Yadav, Tiansheng Yang, and Rajku-
+mar Singh Rathore. A comprehensive overview of formal methods and deep learning for verification and optimization.
+In 2024 International Conference on Decision Aid Sciences and Applications (DASA), pages 1–6. IEEE, 2024.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia
+Polosukhin. Attention is all you need. Advances in neural information processing systems, 30, 2017.
+Daniel Wesego and Pedram Rooshenas. Adversary aware optimization for robust defense. In The Thirty-ninth Annual
+Conference on Neural Information Processing Systems, 2025.
+Shaofei Wu. Spatiotemporal dynamic forecasting and analysis of regional traffic flow in urban road networks using deep
+learning convolutional neural network. IEEE transactions on intelligent transportation systems, 23(2):1607–1615,
+2021.
+Shutong Wu, Jiongxiao Wang, Wei Ping, Weili Nie, and Chaowei Xiao. Defending against adversarial audio via
+diffusion model. arXiv preprint arXiv:2303.01507, 2023.
+Tao Wu, Xuechun Wang, Shaojie Qiao, Xingping Xian, Yanbing Liu, and Liang Zhang. Small perturbations are enough:
+Adversarial attacks on time series prediction. Information Sciences, 587:794–812, 2022.
+Yuan Yang, James C Kerce, and Faramarz Fekri. Logicdef: An interpretable defense framework against adversarial
+examples via inductive scene graph reasoning. In Proceedings of the AAAI Conference on Artificial Intelligence,
+volume 36, pages 8840–8848, 2022a.
+Zhuolin Yang, Zhikuan Zhao, Boxin Wang, Jiawei Zhang, Linyi Li, Hengzhi Pei, Bojan Karlaš, Ji Liu, Heng Guo,
+Ce Zhang, et al. Improving certified robustness via statistical learning with logical reasoning. Advances in Neural
+Information Processing Systems, 35:34859–34873, 2022b.
+Huaxiu Yao, Yiding Liu, Ying Wei, Xianfeng Tang, and Zhenhui Li. Learning from multiple cities: A meta-learning
+approach for spatial-temporal prediction. In The world wide web conference, pages 2181–2191, 2019.
+Zhenhua Yu, Hongxia Gao, Xuya Cong, Naiqi Wu, and Houbing Herbert Song. A survey on cyber–physical systems
+security. IEEE Internet of Things Journal, 10(24):21670–21686, 2023.
+Hongyang Zhang, Yaodong Yu, Jiantao Jiao, Eric Xing, Laurent El Ghaoui, and Michael Jordan. Theoretically
+principled trade-off between robustness and accuracy. In International conference on machine learning, pages
+7472–7482. PMLR, 2019.
+14
+
+
+PRIME AI paper
+A
+General Information
+Code availability.
+Code implementation is available at https://anonymous.4open.science/r/rpc-817A/.
+Computation resouces.
+All experiments were conducted on a machine equipped with 128 GB of RAM, an AMD
+Ryzen Threadripper Pro 7975WX CPU, and an NVIDIA RTX 6000 Ada GPU.
+Broader Impact.
+This paper develops methods for improving the security of forecasting models deployed in safety-
+critical CPS, with direct applications in transportation infrastructure, air-quality monitoring, and autonomous mobility,
+domains where prediction errors propagate to physical control actions and carry real-world consequences. By embedding
+formal Signal Temporal Logic specifications directly into a diffusion-based repair pipeline, LOGIC-DIFF reduces the
+risk of unsafe downstream behavior under both physical sensor faults (e.g., dropout, replay, false data injection) and
+adaptive cyber attacks, while degrading more gracefully than purely data-driven defenses as attack strength increases.
+The framework also generalizes substantially better than adversarial training to attacks not seen during training, which
+is operationally important for deployments where the threat landscape evolves faster than retraining cycles.
+We do not foresee direct negative societal impact from this work, as our contributions are defensive in nature. Two
+indirect risks merit acknowledgment, however. First, like all logic-guided methods, the framework’s behavior depends
+on the correctness and completeness of the specifications it enforces; miscalibrated or biased specifications could
+systematically distort predictions in ways that propagate to control decisions, especially in subpopulations underrep-
+resented in the training data used to calibrate feasibility bounds. Second, no defense provides absolute guarantees,
+and over-reliance on any single robustness mechanism in safety-critical deployments is itself a hazard. We encourage
+operators to combine logic-guided repair with continued monitoring, redundant sensing, and conventional CPS safety
+mechanisms.
+B
+Notations
+Table 7 contains core notations used in this paper.
+C
+Signal Temporal Logic Semantics
+This section provides additional background on STL, expanding on the inductive definition introduced in Section 2. We
+give the full qualitative (Boolean) and quantitative (robustness) semantics Donzé and Maler [2010], which together
+support both monitoring and gradient-based optimization over STL formulas.
+Throughout this section, x denotes a signal trace, µ an atomic predicate of the form f(xt) ≥c, and φ, φ1, φ2 denote
+STL formulas. Definition C.1 gives the qualitative semantics, where (x, t) |= φ reads “signal x satisfies φ at time t.”
+Definition C.1 (STL Qualitative Semantics).
+(x, t) |= µ
+⇔
+f(xt) ≥c
+(x, t) |= ¬φ
+⇔
+(x, t)̸ |= φ
+(x, t) |= φ1 ∧φ2
+⇔
+(x, t) |= φ1 and (x, t) |= φ2
+(x, t) |= ♢[a,b]φ
+⇔
+∃t′ ∈[t + a, t + b], (x, t′) |= φ
+(x, t) |= □[a,b]φ
+⇔
+∀t′ ∈[t + a, t + b], (x, t′) |= φ
+(x, t) |= φ1 U[a,b] φ2
+⇔
+∃t′ ∈[t + a, t + b], (x, t′) |= φ2
+and ∀t′′ ∈[t, t′], (x, t′′) |= φ1
+While the qualitative semantics provide a Boolean evaluation of property satisfaction, the quantitative semantics yield
+a real-valued measure of how strongly a signal satisfies or violates a formula. As introduced in Section 2, the STL
+robustness function ρφ(x, t) ∈R measures the signed margin by which x satisfies or violates φ at time t, with positive
+values denoting satisfaction and negative values denoting violation. Definition C.2 gives the inductive computation.
+15
+
+
+PRIME AI paper
+Table 7: Notations used in this paper.
+Symbol
+Description
+Signals and data
+x ∈Rm×d
+Clean input history window of d-dimensional signals over m timesteps.
+x(j)
+t
+Value of the j-th feature at time t.
+x∗
+Adversarially perturbed (attacked) input sequence, x∗= x + δ.
+˜x
+Repaired input after input-stage logic-conditioned diffusion.
+xn
+Forward-diffusion latent state at diffusion step n, with n ∈{0, . . . , N}.
+ˆx
+One-shot x0-estimate from the input-stage reverse diffusion.
+xlogic
+Input-stage logic projection, xlogic = Pφ(x∗).
+y
+Ground-truth forecast target.
+ˆyinit
+Initial forecast from Fω before output-stage refinement.
+ˆy
+One-shot y0-estimate from the output-stage reverse diffusion.
+ylogic
+Output-stage logic projection, ylogic = Pφ′(ˆyinit).
+˜y
+Final blended forecast after output-stage refinement.
+δ
+Adversarial perturbation, with ∥δ∥2 ≤ε for ℓ2-bounded attacks.
+STL specifications
+φ
+Single STL formula.
+φ, φ′
+Input-side and output-side STL specification sets, respectively.
+µ
+Atomic predicate of the form f(xt) ≥c.
+ρφ(x, t)
+STL robustness of signal x with respect to φ at time t.
+˜ρφ
+Smooth surrogate of STL robustness used during training.
+Pφ(·)
+STL projection operator returning the closest φ-feasible trace in ℓ1 distance.
+Models and diffusion process
+Fω(·)
+Forecasting model (transformer-based) with parameters ω.
+Φθ(·)
+Full end-to-end logic-conditioned diffusion repair pipeline with parameters θ.
+ϵθ(xn, n, cx)
+Input-stage noise predictor conditioned on cx.
+ϵ′
+θ(ym, m, cy)
+Output-stage noise predictor conditioned on cy.
+cx, cy
+Logic-derived conditioning signals for input and output stages, respectively.
+βn, αn, ¯αn
+DDPM noise schedule parameters at diffusion step n.
+α, α′
+Learnable blending coefficients for input- and output-stage repair.
+Training objective
+Lx
+diff, Ly
+diff
+Input- and output-side diffusion reconstruction losses.
+Lx
+stl, Ly
+stl
+Input- and output-side smoothed STL feasibility losses.
+Lpred
+Forecasting loss on the final blended forecast ˜y.
+λx, λy, λp, λx
+ρ, λy
+ρ
+Loss weighting coefficients.
+Definition C.2 (STL Robustness ρ).
+ρµ(x, t) = f(xt) −c
+ρ¬φ(x, t) = −ρφ(x, t)
+ρφ1∧φ2(x, t) = min
+
+ρφ1(x, t), ρφ2(x, t)
+	
+ρ♢[a,b]φ(x, t) =
+max
+t′∈[t+a, t+b] ρφ(x, t′)
+ρ□[a,b]φ(x, t) =
+min
+t′∈[t+a, t+b] ρφ(x, t′)
+ρφ1 U[a,b] φ2(x, t) =
+max
+t′∈[t+a, t+b] min
+n
+ρφ2(x, t′),
+min
+t′′∈[t, t′] ρφ1(x, t′′)
+o
+The robustness ρφ is non-differentiable due to the min and max operations. For gradient-based optimization, we use
+the smooth surrogate ˜ρφ, which replaces these with differentiable approximations (e.g., soft-min and soft-max) and is
+the form used in the STL training losses Lx
+stl and Ly
+stl.
+16
+
+
+PRIME AI paper
+D
+Background on Physical Attack Models
+We consider adversarial cyber-physical attacks Duo et al. [2022] that perturb multivariate spatiotemporal inputs.
+Following the formulation in Section 2, let x ∈Rm×d denote the clean input window of d-dimensional signals over m
+timesteps, and x∗= x + δ denote the adversarially perturbed input, where δ is a perturbation bounded in both pattern
+and magnitude. Under attack, the forecaster Fω produces an erroneous prediction Fω(x∗) over the horizon H.
+The attacker’s objective is to manipulate the input in a way that induces violations of task-specific logic constraints,
+thereby degrading both predictive accuracy and specification compliance. In multivariate settings, the attacker may
+perturb all features at a given timestamp or selectively target individual ones. Letting xt = [x(1)
+t , x(2)
+t , . . . , x(d)
+t ] denote
+the d-dimensional observation at time t, we distinguish two perturbation modes:
+• Feature-wise attacks, which perturb each feature independently, x∗(j)
+t
+= x(j)
+t
++ δ(j)
+t , targeting specific sensor
+channels (e.g., a compromised speed sensor while flow remains untouched).
+• Global attacks, which apply coordinated perturbations across all features, x∗
+t = xt + δt, affecting the full
+observation simultaneously.
+E
+Dataset Preparation
+We describe the construction of the forecasting windows used in Section 4.1. All three prepared datasets contain d = 7
+channels, with an input length of m = 24, a forecast horizon of H = 6, and a sliding-window stride of one. The saved
+arrays have shape (Ns, m, d) for inputs and (Ns, H, d) for targets; the evaluation code transposes them to channel-first
+tensors. Unless otherwise stated, forecasting errors and attack budgets are measured in standardized feature coordinates.
+Smart-City Traffic and Air Quality.
+The smart-city data combine hourly Caltrans PeMS District 7 measurements
+with air-quality observations for the Los Angeles region over 2024–2025 [Chen, 2002, California Air Resources Board,
+n.d.]. The feature order is total flow, average occupancy, average speed, NO2, NOx, ozone, and PM2.5; the last
+channel is denoted PMx in the main text. Traffic stations are matched to the nearest air-quality site within 50 km
+using geographic distance, and records are joined by site and timestamp. In the window-generation script, missing
+traffic values are filled with station-specific hour-of-day means. Missing air-quality values are forward-filled and
+backward-filled within station, with station-specific hour-of-day means used for remaining missing entries.
+Windows are constructed independently for each station within each monthly source file. The temporal split boundaries
+are the 70th and 85th percentiles of the source timestamps, and each window is assigned according to the timestamp of
+its final forecast target. The prepared arrays contain 12,191,904, 2,653,074, and 2,650,293 training, validation, and
+test windows, respectively. The current preprocessing script fits a feature-wise standardizer over all imputed source
+files before assigning windows to splits. Consequently, this preprocessing uses aggregate statistics beyond the training
+period; moreover, assigning windows by their final target timestamp does not impose a gap between adjacent splits.
+These details distinguish the current offline protocol from a strictly training-only, temporally disjoint preprocessing
+protocol.
+UAV Flight Telemetry.
+The ALFA dataset [Keipour et al., 2021] contains 47 fixed-wing flight sequences. We use
+GPS groundspeed, relative altitude, measured and commanded roll, measured and commanded pitch, and throttle PWM
+output. The asynchronous channels are aligned to a 4 Hz grid using the most recent observation at or before each
+grid time, with a maximum staleness of 1.5 s. Rows with an unavailable or stale channel are removed. Windows are
+formed from consecutive retained rows; their nominal input and output durations are 6 s and 1.5 s, respectively, although
+removing invalid rows can introduce temporal gaps.
+The earliest recorded failure-status timestamp defines fault onset. A window is classified as clean only when its
+final target precedes this onset, or when no onset is recorded. Recording sessions, identified by their common flight
+timestamp, are assigned wholly to one split so that subsequences of the same physical flight cannot appear in different
+splits. The assignment is deterministic and stratified by fault family, yielding 34/5/8 sequences and 10,634/1,625/2,907
+clean windows for training/validation/test. Standardization is fitted on the clean training input windows and applied
+unchanged to targets and other splits. Validation and test windows are shuffled with seed 0 before selecting evaluation
+subsets. The 840 test windows reaching or following a recorded fault onset are stored separately from the clean-window
+synthetic-attack evaluation.
+Traffic Benchmark for Sparse Indirect Attacks.
+For Table 4(b), we use a seven-series adaptation of the GluonTS
+traffic dataset used by Liu et al. [2023], rather than reproducing their complete forecasting setup. The source contains
+17
+
+
+PRIME AI paper
+862 hourly lane-occupancy series, truncated to their common length of 14,036 observations. We select seven correlated
+series using the first 5,000 hours: start with the series of greatest mean correlation to the others, then greedily add the
+series of greatest mean correlation to the selected set. The resulting zero-based series indices are 39, 165, 669, 775, 821,
+834, and 835; these identifiers indicate selected correlated series, not a verified spatial ordering of neighboring lanes.
+The selected multivariate sequence is split chronologically into 70%/15%/15% segments before windowing. A
+standardizer fitted on the training segment is reused for validation and test. Windows do not cross segment boundaries,
+giving 9,796, 2,076, and 2,077 windows, respectively. Validation and test windows are shuffled with seed 0. The sparse
+attack targets the first selected series, lane_039, while perturbing a subset of the other six series.
+Evaluation Subsets and Specification Calibration.
+The extended attack evaluations use the first 1,000 saved test
+windows for Proj.-PGD, Square Attack, and each sparse indirect experiment, and the first 150 for the BPDA/EOT
+comparison. Thus, attack columns with different subset sizes should not be interpreted as a controlled ranking of
+attack strength. For these evaluations, the input-side repair bounds are calibrated separately from each unperturbed test
+input, using two-step windows. Output-side bounds and auxiliary thresholds are pooled from the first 2,000 test target
+windows. Proj.-PGD additionally constructs a shared attacker-side specification from the first 2,000 clean test inputs.
+These specifications are held fixed during attack optimization. The per-sample input bounds require a clean reference,
+and the pooled output calibration uses held-out target information; this is an offline reference-calibrated evaluation, not
+a training-only specification or an assumption that clean reference signals are available under deployment-time attack.
+F
+Attack Implementation and Settings
+All attacks operate on input tensors of shape (B, d, m), where B denotes the batch size, d the number of features,
+and m the input window length. Each attack is parameterized by a scalar ε that controls attack strength; the precise
+interpretation of ε varies by attack family. All attacks preserve tensor shape and are applied independently per batch. We
+group the attacks into two families: (i) black-box physical-layer attacks that simulate sensor faults and do not require
+model gradients, and (ii) white-box gradient-based attacks that require gradient access to the evaluated forecasting
+pipeline. For a defended method, the attacked function includes its inference-time defense, with BPDA used for
+non-differentiable repair operations. We additionally describe sparse indirect and query-only attacks below.
+Physical-Layer Attacks.
+• False Data Injection (FDI). An ℓ0-bounded additive bias attack. For each (sample, sensor) trace, naff =
+max
+ 1, ⌈min(ε, 1) m⌉
+
+timesteps are chosen uniformly at random without replacement and perturbed by
+s · u, where s ∈{−1, +1} is a random sign and u ∼U(0, αmax) with αmax = ε ˆσ(x) and ˆσ(x) denoting the
+standard deviation over the input batch. The parameter ε jointly controls the attacked support (saturating at
+100% of the window for ε ≥1) and the per-step magnitude ceiling (e.g., ε = 1.0 corresponds to all timesteps
+perturbed at ±1σ).
+• Temporal Replay. A causal record-and-replay attack. The first ℓ= clip
+ ⌈εm⌉, 1, m/2
+
+timesteps of each
+(sample, sensor) trace are copied verbatim onto the trailing ℓtimesteps; the middle of the sequence is left
+unmodified. The replay length is capped at m/2 to avoid degenerate full-sequence shifts, so ε ∈(0, 0.5] is the
+meaningful range.
+• Data Dropout. Simulates a sensor disconnect or communication-loss failure. For each (sample, sensor)
+trace, independently with probability pout = min(1, ε/3), a single contiguous outage of length ℓout =
+clip
+ ⌈4ε⌉, 1, m
+
+is placed at a uniformly random start position, and the affected timesteps are set to zero. The
+parameter ε thus controls both the per-sensor failure probability and the outage duration; ε ≥3 saturates the
+failure probability so that every sensor fails.
+• Mixed. A randomized ensemble used both at evaluation time and as a physical-layer adversarial-training
+mode. For each sample in the batch, one attack is drawn uniformly from {FDI, Temporal Replay, Dropout}
+and applied at the shared ε. This setting evaluates robustness under unknown attack-type distributions.
+Gradient-Based Attacks.
+All four attacks below maximize the per-sample MSE between the forecaster’s prediction
+and the ground-truth horizon, subject to a hard ℓp budget ∥δ∥p ≤ε. The target model is held in evaluation mode. Both
+ℓ2 and ℓ∞variants are provided for PGD, MIM, and APGD; CW is implemented for ℓ2 only. Unless stated otherwise,
+perturbations are initialized uniformly at random inside the ε-ball.
+18
+
+
+PRIME AI paper
+• PGD. Projected gradient descent on δ with 20 iterations and relative step size α = 0.25 ε. The ℓ2 variant uses
+normalized-gradient steps δ ←δ + α ∇δL/∥∇δL∥2; the ℓ∞variant uses sign-gradient steps. After every step,
+δ is hard-projected onto the ε-ball.
+• MIM. Momentum Iterative Method. Identical outer loop to PGD, but the gradient at each step is ℓ1-normalized
+and accumulated as an exponential moving average gn = µ gn−1 + ∇δL/∥∇δL∥1 with decay µ = 1.0. The
+step direction is gn/∥gn∥2 for ℓ2 and sign(gn) for ℓ∞. We use 20 iterations.
+• CW-ℓ2. The Carlini–Wagner ℓ2 attack: minimize ∥δ∥2
+2 + c · f(x + δ, y) with Adam (learning rate 0.01,
+c = 10) for 200 iterations, where f is the negative regression MSE for the untargeted setting. To remain
+budget-comparable with PGD and MIM, δ is hard-projected onto the ε-ball after each Adam step. The best
+adversarial δ encountered along the trajectory (largest MSE under the budget, per sample) is returned.
+• APGD. Auto-PGD with adaptive step size, momentum-blended updates
+xn+1 = 0.75 · projε(xn + αn gn) + 0.25 · (xn −xn−1),
+and restart-from-best on plateau detection. The step size is initialized at 2ε and halved whenever the loss fails
+to improve over a sliding window. We use 100 iterations and 5 random restarts; the worst-case (largest-MSE)
+adversarial example across restarts is reported.
+BPDA Wrapping for the LogiC-Diff Pipeline.
+The full LOGIC-DIFF pipeline Φθ contains a non-differentiable STL
+projection operator Pφ. To attack the full pipeline rather than a differentiable surrogate, all gradient-based attacks above
+are wrapped in the BPDA approximation: the forward pass uses the true Pφ, while the backward pass treats it as the
+identity. This is the same protocol used to report the robust-MSE results in Table 3.
+EOT Variants for Stochastic Defenses.
+For models with stochastic inference (e.g., diffusion-based purification
+with noise re-injection), each gradient-based attack has an Expectation-over-Transformations variant that averages
+the gradient over K independent stochastic forward passes before each PGD, MIM, APGD update. For deterministic
+models the K gradients are identical and the EOT variant reduces to the base attack.
+BPDA/EOT Evaluation Protocol.
+The BPDA/EOT column of Table 3(b) uses PGD with an ℓ2 budget ε = 1.0, 20
+iterations, step size 0.25ε, one random initialization, and K = 20 gradient samples per update. Let G(x; ξ) denote the
+complete evaluated predictor with inference randomness ξ. The attack uses
+gk = 1
+K
+K
+X
+r=1
+∇δL
+ G(x + δk; ξr), y
+
+,
+δk+1 = Πε
+
+δk + 0.25ε
+gk
+∥gk∥2
+
+,
+where Πε projects each sample’s complete perturbation onto the ℓ2 ball. Both LogiC-Diff repair hooks use the true
+repair in the forward pass and an identity backward approximation. When stochastic passes are evaluated as a tiled
+batch, the per-sample input bounds are repeated in the same order, preserving each replica’s conditioning.
+LogiC-Diff is evaluated with deterministic one-shot inference and no injected diffusion noise in this comparison; EOT
+therefore reduces to its base gradient attack. DiffPure uses fresh purification noise with scale 0.1, while randomized
+smoothing averages 10 forecasts with Gaussian input noise of standard deviation 0.25 per predictor call. Their final
+errors are averaged over 20 independent predictor calls, computing the expectation of MSE rather than the MSE of
+an averaged forecast. The attack initialization is seeded with 0. The comparison uses 150 test windows, with the
+calibration protocol in App. E.
+Projection-Aware PGD.
+Proj.-PGD alternates loss ascent with input-side logic repair and perturbation-budget
+projection. Let Pφg denote the shared attacker-side repair operator, distinct from the per-sample input bounds used by
+LogiC-Diff. Starting from a random point in the ℓ2 ball, each iteration computes
+uk = δk + 0.25ε
+∇δL(G(x + δk), y)
+∥∇δL(G(x + δk), y)∥2
+,
+δk+1 = Πε
+ Pφg(x + uk) −x
+
+.
+We use ε = 1.0, 20 iterations, one random initialization, and the final iterate. The outer logic repair is applied outside
+the gradient graph; BPDA remains active inside the defended predictor. Applying the budget projection last enforces
+the norm constraint, but can undo logic feasibility, so the procedure does not guarantee that the final input belongs to
+the intersection of both constraint sets. The shared attacker-side specification contains 186 compiled constraints in the
+saved experiment. Table 3(b) uses 1,000 test windows.
+19
+
+
+PRIME AI paper
+Query-Based Square Attack.
+We adapt the score-based random search of Andriushchenko et al. [2020] to forecasting
+by maximizing per-sample MSE without using gradients. Each proposal modifies a contiguous block of one feature
+channel. Initialization assigns an independent random sign to each channel, constant over its input history, then projects
+the full perturbation onto the ℓ2 ball of radius ε = 1.0. For a block of length h, the proposal replaces its perturbation by
+a Gaussian vector normalized to length 0.5ε, followed by projection of the complete perturbation onto the budget ball.
+Each sample accepts a proposal only if its queried loss exceeds its incumbent loss. This is a time-series adaptation with
+budget projection, rather than the original image attack’s exact ℓ2 budget-transfer procedure.
+The block length is h = max(1, round(pm)), initially p = 0.3; p is halved after 5%, 20%, 40%, 60%, and 80% of the
+proposal budget. Each budget is evaluated independently with proposal seed 0 and no additional restarts. The saved
+runs use 273, 500, and 1000 proposal steps on the same 1,000 test windows. There is one additional initialization query
+and a separate final evaluation call; the proposal budget therefore excludes these two calls.
+For DiffPure and randomized smoothing, each query averages 20 independently sampled predictor outputs before
+computing the MSE used for acceptance, and final evaluation uses the same averaged predictor. Randomized smoothing
+itself uses 10 noisy backbone forecasts per predictor call. Thus, one averaged query requires 20 predictor calls for
+DiffPure and 200 backbone forecasts for randomized smoothing; the table’s budgets count proposals, not individual
+backbone forward passes. Deterministic methods, including the LogiC-Diff configuration above, use one predictor call
+per query.
+Sparse Indirect Attack: Threat Model.
+Following Liu et al. [2023], the attacker perturbs auxiliary series to corrupt
+the forecast of protected target series. Let I be the target-channel set and s(δ) = |{j : ∥δ(j)∥2 > 0}| count perturbed
+channels. Our untargeted regression adaptation solves
+max
+δ
+LI
+ G(x + δ), y
+
+s.t.
+δ(j) = 0 (j ∈I),
+s(δ) ≤κ,
+∥δ∥2 ≤1,
+where LI is MSE averaged over the forecast horizon and target channels only. Sparsity is imposed over entire feature
+histories, not individual timestamps. The attack is constructed separately against each evaluated method; LogiC-Diff
+includes both repair stages with BPDA, and its specifications remain fixed during optimization.
+Sparse Indirect Attack: Solvers.
+We implement two support-selection procedures inspired by Liu et al. [2023]:
+• Deterministic. Initialize a random perturbation inside the ℓ2 ball, zero the protected channels, and perform
+20 normalized-gradient ascent steps with step size 0.25. Retain the κ eligible channels of greatest temporal
+perturbation norm, project back to the budget ball, and refine for 10 additional steps on this fixed support.
+Protected channels are zeroed and the norm budget is enforced after every update. One initialization is used,
+and the final refined perturbation is returned.
+• Probabilistic. Jointly optimize a raw perturbation v and per-channel logits γj with Adam for 100 iterations
+at learning rate 0.05. A relaxed mask is sampled as aj = sigmoid((γj + log uj −log(1 −uj))/τ), with
+uj ∼U(0, 1) and τ = 0.5. Protected channels are masked out, and v ⊙a is projected onto the budget ball
+before each forward pass. The minimized objective is −LI + 10 max(0, P
+j /∈I sigmoid(γj) −κ). Logits start
+at zero and v starts from Gaussian noise with standard deviation 0.001. At termination, keep the κ eligible
+channels with the greatest learned probabilities, apply this hard mask to v, and project onto the budget ball.
+The hard mask enforces the final channel budget even though the relaxed optimization uses a soft sparsity
+penalty.
+Here, “probabilistic” refers to the attack’s support-selection mechanism, not to a probabilistic forecasting model. Both
+solvers maximize target-channel error; they do not use an attacker-specified target trajectory.
+Sparse Indirect Attack: Dataset-Specific Settings.
+In Table 4(a), I comprises flow, occupancy, and speed, which
+remain unmodified. The attacker can perturb at most κ ∈{2, 4} of the four air-quality channels. We report target-
+channel MSE on 1,000 standardized test windows. In Table 4(b), the protected target is lane_039, and the probabilistic
+solver can perturb k ∈{1, 2, 3, 5, 6} of the other six selected traffic series. The displayed sparsity fractions are k/6; the
+clean row uses k = 0. This experiment also uses 1,000 test windows and the same ℓ2 budget and probabilistic-solver
+settings.
+For the traffic benchmark, predictions and targets are inverse-standardized before scoring. With pit and yit denoting the
+target-series prediction and observation in original units, the reported normalized deviation is
+ND =
+PNs
+i=1
+PH
+t=1 |yit −pit|
+PNs
+i=1
+PH
+t=1 |yit|
+.
+20
+
+
+PRIME AI paper
+Table 8: Attack types targeting smart-city and cyber-physical predictive pipelines. We focus on adversarial manipulations
+of inputs to prediction models and organize attacks by increasing operational complexity.
+Attack and Description
+Affected Components
+Temporal Pattern
+Representative
+Techniques
+Data (Input) Level Attacks
+Data Suppression. Suppress or delay
+genuine events by selectively dropping
+measurements or interrupting data streams.
+Sensors, gateways, edge
+aggregators, and time
+synchronization services.
+Periodic gaps or
+bursty outages aligned
+with critical events.
+Selective packet loss, jitter
+injection, induced clock
+drift.
+Data Replay. Reinject previously valid
+measurements to misrepresent the current
+system state.
+Sensors and data ingestion
+pipelines feeding prediction
+models.
+Event-triggered (e.g.,
+congestion or demand
+spikes).
+Timestamp-consistent
+replay, sliding-window or
+delayed injection.
+False Data Injection. Inject fabricated or
+biased sensor values to systematically
+mislead predictions.
+Loop detectors, CCTV counts,
+floating-car data, air-quality
+sensors, communication links.
+Single-shot, periodic,
+adaptive, or
+event-driven.
+Value biasing,
+context-aware perturbations
+constrained to nominal
+ranges.
+GNSS Spoofing. Manipulate physical
+sensing modalities to distort perceived
+system state.
+GNSS receivers, Bluetooth and
+Wi-Fi probes, radar or
+loop-based traffic sensors.
+Adaptive, often
+synchronized with
+traffic peaks.
+RF spoofing, reflective
+interference, density
+inflation or deflation.
+Model-Level Attacks
+Sequential Adversarial Examples. Craft
+structured perturbations over input
+sequences to maximize downstream
+prediction error.
+Sequence predictors (e.g.,
+LSTM, Transformer) and
+feature normalization layers.
+Inference-time, per
+prediction window.
+Gradient-based sequence
+attacks, constraint-aware
+perturbations.
+Backdoor Poisoning. Corrupt training data
+to induce targeted misbehavior when a
+trigger pattern is present.
+Training pipelines, federated
+learning clients and aggregators,
+historical datasets.
+Training-time
+insertion, with trigger
+activated at inference.
+Label manipulation, trigger
+stamping, gradient or
+parameter perturbation.
+This is the point-forecast normalized absolute error, equal to weighted quantile loss at quantile 0.5; no distinct predictive
+quantiles are estimated in this adaptation. For Table 4(a), the reported interval is 1.96 times the standard error of
+per-window target MSE. For Table 4(b), we resample the 1,000 windows with replacement 2,000 times using seed 0,
+recompute the ratio of sums, and report 1.96 times its bootstrap standard deviation. These are window-level intervals
+and do not account for dependence between overlapping windows.
+G
+Framework Implementation Notes
+We describe the full architecture and hyperparameter settings of LOGIC-DIFF used in all experiments. Following the
+formulation in Section 3, the pipeline Φθ consists of three components: (i) an input-stage diffusion U-Net ϵθ that purifies
+the (possibly attacked) input window x∗∈RB×m×d into a repaired signal ˜x; (ii) a sequence-to-sequence forecaster Fω
+that produces an initial horizon prediction ˆyinit ∈RB×H×d; and (iii) an output-stage diffusion U-Net ϵ′
+θ that refines the
+forecast residual. STL-guided correction is applied at both diffusion stages through the ℓ1-projection operator Pφ (input
+side) and Pφ′ (output side), which produce the conditioning signals cx and cy (Section 3). Throughout the experiments
+we use d = 7 features (flow, occupancy, average speed, NOx, NO2, ozone, PMx), input window length m = 24, and
+forecast horizon H = 6.
+Diffusion U-Net.
+Both diffusion stages instantiate the same 1D U-Net (DDPM-style ϵ-predictor). When logic
+conditioning is enabled, the noisy latent and the conditioning signal cx (or cy) are concatenated along the channel
+dimension before the input projection.
+• Input channels: d = 7 (or 2d = 14 when conditioned)
+• Hidden channels: C = 32
+• Number of levels: L = 2, channel multipliers (1, 2)
+• Time embedding: 256-dim sinusoidal →MLP
+• Conv kernel: 3, padding 1; activation: SiLU; normalization: GroupNorm
+21
+
+
+PRIME AI paper
+• Down/up sampling: strided convolution (down), nearest-neighbor upsampling (up)
+The input-stage U-Net operates on temporal length m = 24; the output-stage U-Net operates on horizon length H = 6.
+Both follow the standard DDPM encoder–bottleneck–decoder structure with residual blocks and skip connections at
+every level. The input-stage U-Net (conditioned, m = 24) maps (B, 14, 24) through an initial Conv1D (14 →32), two
+downsampling stages (32 →32 at length 12; 32 →64 at length 6), a residual bottleneck at (B, 64, 6), two upsampling
+stages with skip connections (64+64 →32; 32+32 →32), and a final Conv1D (32 →7) producing (B, 7, 24). The
+output-stage U-Net follows the same channel topology applied to the horizon-shaped tensor (B, 14, 6) →(B, 7, 6).
+Diffusion Process.
+We use a discrete-time DDPM formulation:
+• Number of diffusion steps: N = 10 (input stage), M = 10 (output stage)
+• Linear β schedule: βn ∈[10−4, 2 × 10−2]
+• Forward: q(xn | x0) = N(√¯αn x0, (1 −¯αn)I)
+• Inference: a single-step x0-estimate at a fixed step n⋆= N/2 = 5, recovered from one noise prediction via
+the closed-form
+ˆx = xn⋆−√1 −¯αn⋆ϵθ(xn⋆, n⋆, cx)
+√¯αn⋆
+.
+The output stage uses the analogous formula with m⋆= M/2 and ϵ′
+θ.
+The U-Nets are trained with the standard ϵ-prediction objective. The choice of fixed inference step is examined in the
+ablation study (Section 4), which sweeps n⋆∈{1, 3, 5, 7, 9} on the same trained model.
+STL-Guided Logic Correction.
+At each diffusion call, the U-Net produces the one-shot estimate ˆx (or ˆy on the
+output side), which is passed through the STL projection operator Pφ (or Pφ′) to produce the logic-feasible signal
+xlogic (or ylogic). These projected signals serve as both the conditioning input to the diffusion stage and as the reference
+trajectory for the final blend ˜x = αˆx + (1 −α)xlogic. Since Pφ is non-differentiable, gradients are propagated through
+it via straight-through estimation during adversarial-training inner loops, following the BPDA convention Athalye et al.
+[2018].
+Sequence-to-Sequence Forecaster.
+The forecaster Fω is an encoder–decoder transformer that consumes the repaired
+input ˜x ∈RB×m×d and produces an initial forecast ˆyinit ∈RB×H×d.
+• Model dimension: dmodel = 128
+• Encoder layers: 3
+• Decoder layers: 3
+• Attention heads: 4
+• Feed-forward dimension: 512
+• Dropout: 0.1
+Each block uses RMSNorm, multi-head self-attention, optional cross-attention in the decoder, and a SiLU-activated
+feed-forward sub-block. Sinusoidal positional encodings are added at the encoder and decoder inputs. The decoder
+is initialized with a learned start token and unrolled auto-regressively over H steps with a causal self-attention mask.
+Total trainable parameters are approximately 2M, dominated by the transformer; each U-Net contributes roughly 50K
+parameters.
+End-to-End Forward Pass.
+For an input x∗, the full pipeline Φθ executes the following steps:
+1. Input-stage repair: ˜x ←α ˆx + (1 −α) xlogic, where ˆx is the U-Net’s one-shot estimate and xlogic = Pφ(x∗).
+2. Forecasting: ˆyinit ←Fω(˜x).
+3. Output-stage refinement: ˜y ←α′ ˆy + (1 −α′) ylogic, where ˆy is the output U-Net’s one-shot estimate of y
+from ˆyinit and ylogic = Pφ′(ˆyinit).
+The blending coefficients α, α′ ∈(0, 1) are learnable.
+22
+
+
+PRIME AI paper
+H
+Security-Oriented Logic Formulas
+We formalize security-relevant attack patterns and system consistency constraints using STL, expressed in the same
+notation as the main-paper templates in Table 1. All formulas are defined over bounded temporal intervals [t1, t2]
+and use the atomic predicate form x(j)
+t
+≥c from Section 2, where x(j)
+t
+denotes the value of the j-th feature at time t.
+We use the implication shorthand p →q ≡¬(p ∧¬q) for readability; all formulas are equivalent to compositions of
+operators in our defined grammar.
+Adversarial Behavior Models.
+The following formulas characterize the attack patterns in our threat model (Sec-
+tion 2.3). They are not enforced as constraints but used to describe and reason about adversarial signal manipulations.
+• Data suppression. Periodic suppression of feature values over fixed durations: whenever the sampling phase
+aligns with the suppression schedule, the feature stays below the operational floor c1 for at least τ time units,
+formalized as □[t1,t2]
+ (t ≡0(mod ∆)) →□[0,τ](¬(x(j)
+t
+≥c1))
+
+.
+• Replay attack. Reuse of stale measurements following a triggering condition on feature x(k): when the
+trigger fires at time t, the feature value at t matches its value τ steps prior within tolerance c2, formalized as
+□[t1,t2]
+ (x(k)
+t
+≥c1) →¬(|x(j)
+t
+−x(j)
+t−τ| ≥c2)
+
+.
+• False data injection. Periodic injection of bounded perturbations relative to the clean signal x(j)∗
+t
+: at
+injection times, the deviation from the clean signal stays below c1, formalized as □[t1,t2]
+ (t ≡0(mod ∆)) →
+¬(|x(j)
+t
+−x(j)∗
+t
+| ≥c1)
+
+.
+• Sensor spoofing. Substitution of measurements with crafted values s(j)
+t
+when detection confidence on feature
+x(k) is low: whenever confidence falls below c1, the feature matches the spoofed signal within c2, formalized
+as □[t1,t2]
+ ¬(x(k)
+t
+≥c1) →¬(|x(j)
+t
+−s(j)
+t | ≥c2)
+
+.
+• Adversarial perturbation (inference-time). Bounded perturbations applied during high-uncertainty win-
+dows: when the model uncertainty ut exceeds c1, the perturbation magnitude stays below c2, formalized as
+□[t1,t2]
+ (ut ≥c1) →¬(|x(j)
+t
+−x(j)∗
+t
+| ≥c2)
+
+.
+• Backdoor poisoning. Conditional manipulation activated by a trigger feature pt: when the trigger fires, the
+input matches the manipulated signal ˜x(j)
+t
+within c2, formalized as □[t1,t2]
+ (pt ≥c1) →¬(|x(j)
+t
+−˜x(j)
+t | ≥
+c2)
+
+.
+System Consistency Specifications.
+The following formulas instantiate the rule families from Table 1 for specific
+CPS domains and serve as guidance signals during logic-conditioned repair. Each is annotated with the rule family it
+belongs to.
+• Physical validity (Stability).
+Feature values remain within feasible physical ranges [c1, c2]:
+□[t1,t2]((x(j)
+t
+≥c1) ∧¬(x(j)
+t
+≥c2)).
+• Capacity constraint (Stability). Traffic flow cannot exceed physical capacity c1: □[t1,t2](¬(x(j)
+t
+≥c1)).
+• Queue storage limit (Stability). Queue length stays within storage bound c1: □[t1,t2](¬(x(j)
+t
+≥c1)).
+• Zone-based speed regulation (Stability, conditional). Speed in zone z respects limit c2 whenever the
+vehicle is in-zone: □[t1,t2]((x(k)
+t
+≥c1) →¬(x(j)
+t
+≥c2)).
+• Bounded temporal variation (Smoothness, first order).
+Consecutive values cannot change abruptly:
+□[t1,t2](¬(|x(j)
+t+1 −x(j)
+t | ≥c1)).
+• Travel-time progression (Smoothness, first order). Travel time changes between adjacent samples stay
+within c1: □[t1,t2](¬(|x(j)
+t+1 −x(j)
+t | ≥c1)).
+• Temporal smoothness (second order) (Smoothness). Acceleration and trend changes remain bounded:
+□[t1,t2](¬(|x(j)
+t+1 −2x(j)
+t
++ x(j)
+t−1| ≥c1)).
+• Cross-sensor consistency (Associativity, value-level). Co-located sensors agree within tolerance c1:
+□[t1,t2](¬(|x(j)
+t
+−x(k)
+t
+| ≥c1)).
+23
+
+
+PRIME AI paper
+• Flow conservation (Associativity, value-level).
+Inflow and outflow stay balanced within c1:
+□[t1,t2](¬(|x(j)
+t
+−x(k)
+t
+| ≥c1)).
+• Upstream-downstream correlation (Associativity, value-level). Connected segments remain correlated
+within c1: □[t1,t2](¬(|x(u)
+t
+−x(d)
+t | ≥c1)).
+• Spillback constraint (Propagation). Upstream flow stays bounded by c2 until downstream congestion
+clears: ¬(x(u)
+t
+≥c2) U[t1,t2] ¬(x(d)
+t
+≥c1).
+• Sampling consistency (Liveness).
+A valid measurement arrives within every interval of length ∆t:
+□[t1,t2](♢[0,∆t](x(j)
+t
+≥c1)).
+• Post-disturbance recovery (Recovery). After a transient excursion, the feature returns to and remains within
+a safe band [c1, c2] for at least d time units: ♢[t1,t2] □[0,d]((x(j)
+t
+≥c1) ∧¬(x(j)
+t
+≥c2)).
+I
+Training Configurations and Hyperparameters
+We document the training configuration for all evaluated models, covering optimization, schedules, adversarial-training
+protocols, and early stopping. The settings below are the script defaults used to reproduce all reported results.
+Optimizer and Schedule.
+All models (LOGIC-DIFF and transformer baselines) are trained with AdamW, initial
+learning rate 2 × 10−4, and weight decay 1 × 10−4. The learning rate is held constant throughout training.
+Batch Size and Epochs.
+Default batch size is 128 on CUDA-enabled devices and 64 on CPU. The default training
+budget is 50 epochs on CUDA and 20 on CPU. More training epochs can be used by setting the corresponding training
+option.
+Loss Weights.
+The total training loss follows Section 3:
+Ltotal = λxLx
+diff + λyLy
+diff + λpLpred + λx
+ρLx
+stl + λy
+ρLy
+stl.
+Default coefficients: λx = λy = 0.5, λp = 1.0, λx
+ρ = λy
+ρ = 0.1. The two diffusion losses Lx
+diff, Ly
+diff supervise ˆx and ˆy
+via the reparameterization trick; the two STL losses Lx
+stl, Ly
+stl apply a softplus penalty to negative robustness ˜ρφ(ˆx, 0)
+and ˜ρφ′(ˆy, 0); and Lpred is the MSE on the final blended forecast ˜y.
+Early Stopping.
+We monitor validation MSE and stop training when no improvement is observed for 10 consecutive
+epochs. The checkpoint with the lowest validation MSE is used for all reported evaluations.
+Adversarial Training.
+The adversarial mode is selected from {data-level, PGD-AT, MIM-AT, TRADES}. Default
+attack injection probability per step is 1.0 for the gradient-based modes and 0.5 for the data-level mode. Default
+inner-loop budgets are ε = 0.1 (PGD/MIM, ℓ∞), 7 inner steps with relative step size 0.3, and TRADES β = 6.0 with
+10 steps. The data-level mode samples from the physical-attack suite described in Section 2 (FDI, replay, dropout,
+mixed) with the same ε schedule.
+Baselines.
+Transformer-based baselines (AT-Madry, AT-TRADES, AP-DiffPure, undefended) share the same opti-
+mizer settings, batch size, epoch budget, and early-stopping policy as LOGIC-DIFF. The undefended transformer is
+trained on clean data only; AT-Madry and AT-TRADES use the inner-loop budgets above; AP-DiffPure is trained on
+clean data and purifies at inference. For the cross-attack generalization experiment (Table 5(a)), LOGIC-DIFF is trained
+with the same adversarial-training recipe as AT methods.
+24

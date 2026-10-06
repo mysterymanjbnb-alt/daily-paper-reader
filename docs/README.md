@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-04</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 25 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-04 23:15:45 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-06 00:51:07 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,10 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 25 篇推荐（精读 10 篇，速读 15 篇）</p>
-<p>精读：《OPFL: Optimistic Verification of Federated Learning via Empirical Boundary》（9.0/10）, 《Evaluating Language Model Safety Across Long Adversarial Conversations》（9.0/10）</p>
-<p>速读：《EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents》（8.0/10）, 《Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning》（8.0/10）, 《MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?》（8.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>2026-10-06 日报完成：共筛 25 篇（精读 10、速读 15），重点集中在安全对齐与联邦微调两条线。</p>
+<p>最值得看的是两篇 9.0 精读——《Constitutional adapters》（推理期干预）和《WBAG》（视觉-语言-动作操作安全）；速读里 CF-LoRA、FedLAFP、Inference-Layer Security（均 8.0）补充了联邦 LoRA 与推理层防护视角。</p>
+<p>普通读者可先从两篇 9.0 精读入手，再按兴趣从速读三篇里挑一篇延伸。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -77,9 +76,9 @@
     <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="OPFL: Optimistic Verification of Federated Learning via Empirical Boundary">OPFL: Optimistic Verification of Federated Learning via Empirical Boundary</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evaluating Language Model Safety Across Long Adversarial Conversations">Evaluating Language Model Safety Across Long Adversarial Conversations</span></li><li><span class="dpr-home-dashboard-paper-title" title="Anchoring Adversarial Trajectories to Data Manifolds: A Bilevel Transfer Optimization Framework">Anchoring Adversarial Trajectories to Data Manifolds: A Bilevel Transfer Optimization Framework</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Constitutional adapters: Inference-time interventions for misalignment and misuse">Constitutional adapters: Inference-time interventions for misalignment and misuse</span></li><li><span class="dpr-home-dashboard-paper-title" title="WBAG: A Whole-Body and Attached-Geometry Safety Framework for Vision-Language-Action Manipulation">WBAG: A Whole-Body and Attached-Geometry Safety Framework for Vision-Language-Action Manipulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evaluating and Improving the Robustness of Large Language Models to Input Sequence Variations">Evaluating and Improving the Robustness of Large Language Models to Input Sequence Variations</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -90,9 +89,9 @@
     <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents">EP-Mem: Elastic Privacy Memory for Social Relationship-Aware LLM Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning">Similarity Is Not Validity: Defending LLM Semantic Caches Against Poisoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?">MMSkillRisk: Can Agents Stay Safe When Multimodal Skills Become Traps?</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CF-LoRA: Decoupled Factor Aggregation and Adaptation-Aware Client Clustering for Federated LoRA Fine-Tuning">CF-LoRA: Decoupled Factor Aggregation and Adaptation-Aware Client Clustering for Federated LoRA Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning">FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Inference-Layer Security: Defending Against Adversarial Inference and Infrastructure Abuse">Inference-Layer Security: Defending Against Adversarial Inference and Infrastructure Abuse</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span></div>
 </section>
 </div>
 
