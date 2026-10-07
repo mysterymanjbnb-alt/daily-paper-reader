@@ -1,0 +1,596 @@
+Title: Dagger: Decoupling-based Model Stealing Attack against Graph Neural Networks
+
+URL Source: https://arxiv.org/pdf/2609.37972v1
+
+Published Time: Wed, 30 Sep 2026 02:32:27 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Dagger: Decoupling-based Model Stealing Attack against Graph Neural Networks 
+
+Ying Song 
+
+University of Pittsburgh 
+
+yis121@pitt.edu 
+
+Xiaowei Jia 
+
+Rutgers University 
+
+xiaowei.jia@rutgers.edu 
+
+Balaji Palanisamy 
+
+University of Pittsburgh 
+
+bpalan@pitt.edu 
+
+Abstract —As Graph Neural Networks (GNNs) are widely deployed as Machine Learning-as-a-Service (MLaaS) APIs, model stealing attacks have emerged as a critical security threat. By querying a victim model’s black-box API, an adversary can construct a functionally equivalent surrogate model, compromis-ing proprietary intellectual property and downstream security. Existing GNN stealing attacks, however, rely on overly permissive assumptions, such as soft-label outputs, large query budgets, full-graph query access, and prior knowledge of victim back-bones that rarely hold in real-world deployments. In this work, we formalize a strictly constrained black-box, hard-label and backbone-agnostic threat model for GNN stealing attacks under a tight query budget. Given these realistic restrictions, we identify four fundamental challenges: sparse local structures and isolated nodes that degrade victim label quality, insufficient supervision signals, systematic imbalance with incomplete class coverage, and backbone mismatch. To address these interlocking barriers, we propose Dagger, a novel two-phase decoupling-based attack framework. Specifically, in Phase 1, Dagger pre-trains a surrogate using decoupled information propagation to preserve structural context over sparse local subgraphs while handling isolated nodes, combined with manifold-level node mixup to synthesize continuous supervision signals and smooth decision boundaries. In Phase 2, Dagger freezes the encoder and fine-tunes the classifier head via class-balanced sampling paired with logit adjustment to rectify severe query imbalance without requiring extra victim queries. Extensive experiments across four benchmark graphs and four GNN backbones demonstrate that Dagger consistently outperforms state-of-the-art GNN stealing attacks, achieving up to 18.16% higher fidelity while only utilizing 12.23 × fewer queries than the strongest baseline. Furthermore, Dagger consistently bypasses state-of-the-art query-monitoring and backdoor-based watermarking defenses, underscoring the urgent need for defense paradigms tailored to such realistic GNN stealing threats. 
+
+Keywords —Graph Neural Network, Model Stealing Attack 
+
+I. INTRODUCTION 
+
+Graph Neural Networks (GNNs) have showcased remark-able performance across diverse real-world applications, rang-ing from drug discovery [2] and fraud detection [12] to rec-ommendation systems [25]. Since training proprietary GNNs demands expensive data curation, computational resources and domain expertise, model providers increasingly commercialize their models via black-box Machine Learning-as-a-Service (MLaaS) APIs. However, their economic value renders GNNs attractive targets for model stealing attacks, where adversaries issue queries to extract functionally equivalent surrogate mod-els, compromising proprietary intellectual property. Moreover, such stolen GNNs can serve as a springboard for subsequent adversarial attacks, such as backdoor injection and privacy inference attacks, thereby threatening broader system security. Despite a growing body of work on model stealing attacks against GNNs [1], [5], [16], [18], [23], [24], [29], existing methods suffer from five critical limitations that severely hinder their practical applicability. (1) Over-reliance on rich information leakage: prior works assume APIs return full pos-terior probability or node embeddings [16], [18], [23], whereas model providers often restrict outputs to hard labels due to strict security and privacy policies in reality. (2) Topological over-privilege: current hard-label attacks still perform queries implicitly on the full graph or multi-hop neighborhoods beyond legitimate access [1], [5], [24], granting structural information that would be unavailable in a realistic black-box setting. (3) Large query budgets and detection risks: even data-free attacks that avoid using any real data still resort to synthetic data generation techniques, such as generative adversarial network (GAN)-based graph generation [29]. These approaches always incur high computational overhead, training instability, and statistically anomalous query patterns that can be readily detected by query-monitoring defenses [9]. (4) Victim back-bone dependency: the vast majority of GNN stealing attacks heavily depend on specific victim architectures or assume prior knowledge of the target backbone, which rarely holds in real-world deployments. Under a true black-box setting, backbone misalignment may severely degrade surrogate performance due to divergent information propagation dynamics. (5) Evaluation inconsistency: while prior works claim to operate under re-stricted black-box threat models [23], [24], their open-source implementations implicitly grant the adversary access to the full graph during inference. This privilege inflates reported attack performance, suggesting that the practical severity of GNN stealing attacks under strict black-box constraints has been systematically underestimated and motivating a rigorous re-examination under a more faithful threat model. To uncover the true vulnerabilities of GNNs under realistic MLaaS deployments, we formalize a strictly constrained black-box, hard-label, and backbone-agnostic threat model for GNN stealing attacks under a tight query budget. Specifically, each query is strictly executed on the local subgraph induced by the adversary’s query node set, preventing access to the global topological context. Under this threat model, we identify four fundamental challenges that existing methods fail to address. 
+
+• Sparse local structures and isolated nodes : queries over induced subgraphs frequently collapse into sparse topolo-gies or isolated nodes, particularly on sparse or small-scale graphs. Standard GNNs, which rely on multi-hop neighborhood aggregation, degrade significantly under arXiv:2609.37972v1 [cs.CR] 29 Sep 2026 such degenerative structures, producing unreliable victim predictions that corrupt the surrogate’s training signals. 
+
+• Insufficient supervision signals: Discrete hard labels discard inter-class confidence distributions, leaving the surrogate with insufficient supervision to learn smooth decision boundaries under a strict query budget. Unre-liable victim predictions further propagate label noise into surrogate training, severely distorting the surrogate’s decision boundaries across class margins. 
+
+• Systematic imbalance and incomplete class cover-age: Structural dominance in sparse subgraphs yields systematic biases, where majority classes receive a dis-proportionate share of labels while the minority remain severely under-represented or even uncovered by victim predictions. 
+
+• Victim Backbone Mismatch: The misalignment between the unknown victim and surrogate backbones further amplifies the aforementioned issues. To tackle these interlocking challenges, we propose anovel decoupling-based model stealing attack against graph neural networks (Dagger). This framework consists of two phases, namely Decoupling-based Surrogate Pre-training and 
+
+Imbalance-aware Classifier Tuning . In the first phase, moti-vated by APPNP [4] to decouple feature transformation from graph propagation, we pretrain a topology-adaptive surrogate using a decoupled architecture to preserve structural context over sparse local subgraphs while maintaining meaningful representations for isolated nodes. To compensate for hard-label coarseness and incomplete class coverage, we perform manifold-level node mixup, which interpolates hidden rep-resentations across class boundaries. In the second phase, to rectify severe query-induced class imbalance, we freeze the surrogate encoder and only fine-tune the classifier head through class-balanced sampling paired with logit adjustment [14], providing complementary calibrations at both gradient and prediction levels to improve surrogate fidelity on minority classes without requiring extra victim queries. We evaluate Dagger across four representative benchmark graph datasets and four victim GNN backbones, demonstrat-ing both superior stealing effectiveness and query efficiency. Notably, with 12.23 × fewer queries than the strongest baseline [24], Dagger still achieves up to 18.16% higher fidelity. With the same query budget, Dagger outperforms the rest baselines by up to 45.27% in fidelity, particularly on sparse and class-imbalanced graphs. Furthermore, we assess Dagger against two state-of-the-art defense paradigms: a query-monitoring detec-tor [9] and a backdoor-based watermarking mechanism [26]. Since Dagger issues queries via real local subgraphs, its query patterns exhibit no distribution-level anomalies. Additionally, the strict yet realistic constraints prevent watermark triggers from being transferred to the surrogate. The experimental validation confirms that Dagger consistently bypasses both de-fenses, underscoring the urgent need for defense mechanisms tailored to realistic GNN stealing threats. We summarize our contributions as follows: 
+
+• Realistic Threat Formalization : We systematically un-cover five critical bottlenecks of existing stealing methods and formalize a strictly constrained black-box, hard-label, and backbone-agnostic threat model for GNN stealing attacks under a tight query budget. 
+
+• Novel Decoupled Framework : We propose Dagger, a two-phase decoupling-based attack framework that lever-ages decoupled information propagation to handle struc-tural sparsity, applies manifold-level node mixup to en-hance representation diversity and class coverage, and employs class-balanced sampling paired with logit adjust-ment to resolve severe query imbalance. 
+
+• Extensive Empirical Validation : We conduct compre-hensive evaluations across diverse graph datasets, vic-tim backbones, and defense mechanisms. The empirical results confirm Dagger’s superior effectiveness and effi-ciency, while demonstrating its resistance to both query-monitoring and watermarking defenses. II. BACKGROUND AND RELATED WORK 
+
+A. Node Classification 
+
+Given an undirected attributed graph G = ( V, E, X ), V
+
+denotes a node set with |V| nodes and each node v is associated with a feature vector Xv ∈ R 1×d, where d is the dimension of node features, E represents an edge set with |E| edges, GNNs 
+
+Φ( G) aggregate each node v ∈ V ’s information from its local neighborhood N (v) and further update its node embedding Hlv
+
+at the l-th layer. Formally, this process can be expressed as: 
+
+Hlv = U P D l(Hl−1 
+
+> v
+
+, AGG l−1({Hl−1 
+
+> u
+
+: u ∈ N (v)})) (1) where H0 
+
+> v
+
+= Xv , l ∈ { 1, . . . , L } with L denoting the total number of layers. U P D and AGG are two arbitrary differen-tiable functions to design diverse GNN backbones. For node classification tasks, generally, HLv is fed into a linear classifier 
+
+f with a softmax function to obtain the final prediction ˆY .
+
+B. Model Stealing Attacks against GNNs 
+
+Existing model stealing attacks against GNNs can be broadly divided into two categories: query-based and data-free attacks. Query-based attacks assume the adversary can interactively query the victim GNN with partial or full pub-licly available graphs to receive model responses, while data-free attacks restrict the adversary’s access to any real data, she/he relies on sophisticated data synthesis and optimization techniques to ceaselessly query the victim with crafted graphs. 
+
+Query-based attacks. Based on the type of query response accessible to the adversary, existing attacks operate under ei-ther soft-label settings, where the victim returns full probability distributions over classes, or hard-label settings, where only the top-1 predicted labels are available. Shen et al. [18] propose the first systematic study of model stealing attacks against inductive GNNs, where the adversary queries the victim with shadow graphs from the same distribution as the training graph and exploits posterior probabilities, node embeddings, and t-SNE projections to train the surrogate. Their follow-up work [16] further introduces graph contrastive learning and spectral data augmentation to enhance attack performance. However, both methods require access to a substantial shadow dataset, i.e., 30% of the victim training graph, and assume the availability of rich intermediate outputs that are rarely accessible in real-world MLaaS deployments. CEGA [23] proposes an iterative node selection framework that adaptively queries nodes over multiple cycles using historical feedback. 2While CEGA reduces query cost, its multi-cycle active query-ing paradigm requires global graph topology to compute PageRank-based centrality [15], relies on K-means over global node embeddings to measure diversity, and depends on soft-label outputs to estimate prediction uncertainty. Furthermore, its sequential and high-frequency query patterns can easily trigger system-level anomaly detectors [9]. Under the strict hard-label setting, DeFazio et al. [1] pioneer GNN model stealing attacks by introducing graph perturbation techniques on 2-hop subgraphs of each target node to synthesize queries. They empirically find that training the surrogate model with top-1 hard labels yields even higher fidelity than utilizing soft-label outputs. Wu et al. [24] fur-ther leverage diverse background knowledge, such as partial features or topologies, or full shadow graphs to synthesize missing information for inaccessible nodes. Guan et al. [5] additionally introduce an edge prediction module to mitigate noise propagation from incorrect predicted labels. However, their method still assumes the presence of relatively connected graph topologies and requires 25% of the training graph. 
+
+Data-free attacks. Zhuang et al. [29] train a GAN-style graph generator to synthesize query graphs, which are subsequently used to query the victim and train the surrogate. Despite being data-free, this GAN-style attack framework introduces substantial computational overhead, training instability and high detection risks, while still requiring a massive query budget through iterative generator-victim interactions. 
+
+Limitations of prior work. Despite significant progress, exist-ing GNN stealing attacks share several critical bottlenecks that hamper their real-world applicability: (1) Data dependency: 
+
+most methods assume access to large amounts of or even full victim training graphs even under soft-label settings; (2) Structural over-reliance: acquiring complete multi-hop subgraphs for each target node is often impractical, as it causes unintended topological and feature leakage that exceeds real-istic API access permissions; (3) High query overhead and detection risks: query budgets remain prohibitively high for strict black-box deployments, where excessive queries not only incur significant monetary costs but also risk triggering query-based anomaly detection deployed by MLaaS providers; (4) 
+
+Backbone Reliance: existing GNN stealing attacks commonly assume prior knowledge of the victim’s backbone, which rarely holds in realistic black-box deployments as such knowledge is proprietary and closely guarded by service providers; (5) 
+
+Evaluation inconsistency: with few exceptions in inductive settings, open-source implementations of the remaining meth-ods indicate that they implicitly query the victim with the full graph while only returning the query responses of target nodes, creating a fundamental discrepancy between claimed threat models and experimental evaluations. In contrast, our work operates under a strictly more constrained yet realistic threat model: black-box hard-label access only , queries restricted to the induced subgraphs of target nodes without full-graph access or complete subgraph information, and with a limited budget of only 5% of the victim training graph .III. THREAT MODEL AND EMPIRICAL STUDIES 
+
+In this section, we first formalize the threat model and problem statement, establishing a more restricted yet realistic attack setting than prior GNN stealing work. We then conduct three empirical studies to reveal the unique challenges arising from this restricted attack setting. Together, these challenges motivate the holistic design of our framework in Section IV. 
+
+A. Threat Model 1) Attack Goals : In line with the standard taxonomy [8], [16], [18], we consider two adversarial objectives: theft and reconnaissance. A theft adversary aims to construct a surrogate model ΦS that achieves comparable task accuracy to the victim model ΦV , thereby compromising intellectual property and confidentiality. A reconnaissance adversary instead seeks to replicate the victim’s model behaviors. Ideally, ΦS should agree with ΦV on any given input, including cases where both models make incorrect predictions. This alignment is quantified by fidelity, where a high-fidelity surrogate serves as a springboard for downstream exploitation, such as crafting transferable adversarial examples. 
+
+2) Attacker’s Knowledge and Capabilities : We consider a strict yet realistic black-box and hard-label attack setting. The adversary can interact with the victim solely through a query interface, such as a remotely accessible API, and receive hard-label responses. No inner parameters, backbone prior knowledge, architectural configurations, training procedures or intermediate representations are available. Unlike prior work that explicitly or implicitly relies on querying full graphs, we strictly restrict query access to the target nodes and their induced subgraph. To align with standard settings that mirror real-world MLaaS deployments [1], [16], [18], [24], the adversary can submit k-hop local subgraphs of target nodes as query inputs. However, distinct from prior formulations where adversaries can acquire complete multi-hop subgraphs derived from the full victim training graph, our adversary can only construct query graphs within the induced subgraph. On sparse or small-scale graphs, such queries fre-quently collapse into sets of isolated nodes. This constraint not only prevents the adversary from exploiting global graph structure or cross-boundary neighborhood information that would be inaccessible in practice, but also reduces the risk of triggering rate limits or anomaly detectors [9]. The attack budget is strictly bounded by 5% of the victim training graph. We further prohibit data synthesis to expand queries, as synthetic samples lie outside the natural data mani-fold and are more vulnerable to distribution-aware defenses [9]. In contrast, querying only real training nodes renders queries indistinguishable from legitimate usage. 
+
+3) Attack Scenarios : We outline three representative real-world attack scenarios as follows: 
+
+(1) Commercial MLaaS Model Theft: A competitor com-pany/institution queries a commercial GNN API to replicate its underlying functionality at minimal cost, bypassing proprietary data collection and intensive model training. 
+
+(2) Low-footprint Adversarial Transfer: An adversary first extracts a surrogate under a strict query budget to evade rate-limiting and anomaly defenses, then crafts transferable adversarial examples to attack the victim [18]. 3(3) Intellectual Property Audit: An auditor extracts a surrogate model under harsh constraints to assess model vul-nerability or verify unauthorized IP infringement, providing critical insights for downstream defense mechanisms. 
+
+B. Problem Statement 
+
+Based on the threat model described above, we now formalize our problem as follows. Given G = ( V, E, X ), a victim GNN ΦV : G → R|V|× C
+
+is trained on G for the node classification task over C classes and deployed as a black-box service. The adversary has access to the target node set Vq ⊆ V subject to a budget constraint: 
+
+|V q | ≤ β · |V| (2) where β is the graph access ratio, we set β = 5% .Notably, the induced subgraph Gq only covers inner con-nections among these target nodes Vq , and it can be largely unconnected with many isolated nodes: 
+
+Gq = G[Vq ] =  Vq , E ∩ (Vq × V q ), X Vq
+
+ (3) For each queried node v ∈ V q , the adversary submits its k-hop local subgraph within the induced subgraph, i.e., Gkv ⊆ G q
+
+(with k = 2 throughout) as the query input, and the victim returns the hard-label prediction ˆyVv for the target node. 
+
+Gkv = Gq
+
+h
+
+N k 
+
+> Gq
+
+(v) ∪ { v}
+
+i
+
+(4) 
+
+ˆyVv = arg max 
+
+> c∈C
+
+ΦV
+
+ Gkv
+
+  
+
+> v,c
+
+(5) Given only the query-response pairs D = {(Gkv , ˆyVv )}v∈V q
+
+collected under the above constraints, the adversary seeks to train a surrogate model ΦS that simultaneously achieves theft and reconnaissance goals against ground-truth and predicted labels on unseen nodes Vnew :Acc (Φ S ) = 1
+
+|V new |
+
+X
+
+> v∈V new
+
+1[ˆ ySv = yv ] (6) Fid (Φ S ) = 1
+
+|V new |
+
+X
+
+> v∈V new
+
+1[ˆ ySv = ˆ yVv ] (7) where yv is the ground-truth label of node v. The inherent bottleneck is that the surrogate ΦS must generalize to unseen nodes, despite being trained only on hard labels derived from the potentially sparse and small-scale induced subgraph Gq .
+
+C. Empirical Studies 
+
+Before detailing our attack design, we conduct three empir-ical studies to investigate the unique challenges imposed by our strict threat model across four representative real-world graph datasets: Cora, PubMed [27], Amazon-Computer (Computer, hereinafter) and Physics [17]. Cora and PubMed are computer science and biomedical citation networks, respectively, where each node denotes a document with a bag-of-words repre-sentation, and each edge represents a citation link. Computer and Physics are built upon Amazon co-purchase and academic collaboration networks, where each node signifies a product or an author, each node feature vector encodes a product review or paper keywords, and each edge indicates co-purchases or co-authorship. Dataset statistics are summarized in Table I. TABLE I: Statistics of the Graph Datasets                               
+
+> Dataset # of Nodes # of Edges # of Features # of Classes Avg. Degree Node Homophily (%) Cora 2,708 10,556 1,433 73.90 82.52
+> PubMed 19,717 88,651 500 34.50 79.24
+> Computer 13,752 491,722 767 10 35.76 78.53
+> Physics 34,493 495,924 8,415 514.38 91.53
+
+1) Label Quality Degradation: Under the threat model defined above, the adversary’s query access is doubly con-strained: the query budget is strictly limited, and queries are fully restricted to the induced subgraph of the target nodes rather than the complete subgraph in the victim training graph. As a result, the compound effect of these two constraints gives rise to highly sparse subgraphs and even isolated nodes, particularly on sparse or small-scale graphs. This raises a natural question: can GNNs reliably perform inference on such degenerate graph structures? To investigate this, we evaluate GNN prediction quality on 5% randomly sampled target nodes under four topology conditions: isolated nodes (features only), 1-hop and 2-hop induced subgraphs, and the full graph, across all benchmark graphs and diverse GNN backbones. 
+
+Fig. 1: Label Quality Changes across Multi-hop Expansion 
+
+Empirical Results. Figure 1 shows that label accuracy gener-ally degrades as the available topology decreases. On relatively sparse graphs such as Cora and PubMed, incrementally ex-panding topological information does not consistently improve label quality. In fact, 2-hop induced subgraphs occasionally yield lower label accuracy than isolated nodes, which indicates that most 1-hop and 2-hop neighbors within the induced sub-graphs belong to different classes, thereby introducing noise that distorts victim predictions. 
+
+Takeaways. The above empirical results reveal two fundamen-tal challenges imposed by the strict threat model to design GNN stealing attacks: (1) C1: Poor Surrogate: the highly sparse induced sub-graph with a large number of isolated nodes severely degrades standard GNN message passing mechanism, with few or no neighbors to aggregate, GNNs fail to learn informative node representations that should encapsulate both topological and feature context. This representation collapse fundamentally misaligns with the latent space of the victim model trained on the full graph, leaving the surrogate incapable of faithfully approximating the victim’s behaviors. (2) C2: Insufficient Supervision: hard-label queries inher-ently discard inter-class similarity information encoded in soft probabilities, leaving the surrogate with insufficient training signals for generalization. To make matters worse, the victim predictions on isolated nodes and incomplete subgraphs are 4substantially less accurate than under full-graph inference, further compromising supervision reliability. Together, these factors render the query-response pairs both informationally encapsulated and noisy, posing a fundamental obstacle to surrogate model training. 
+
+2) Class Imbalance and Absence: Beyond degrading pre-diction quality, the sparse structures and isolated nodes identi-fied above introduce a further complication: the resulting label distribution is highly imbalanced, and certain classes may be absent entirely from the queried nodes. We refer to this as the class imbalance and absence problem, and investigate its impact on GNN stealing performance below. To quantify class imbalance, we define the imbalance ratio as the proportion of samples in the most frequent relative to the least frequent class over ground-truth or predicted labels. 
+
+Empirical Results. As illustrated in Figure 2 and 3, victim predictions on the induced subgraphs systematically amplify class imbalance relative to the ground-truth distribution, with imbalance ratios up to 45 × on Cora and 70 × on Computer when using GAT as the victim backbone, far exceeding the ground-truth baselines. In contrast, PubMed displays a rela-tively balanced prediction distribution, where victim imbalance ratios remain slightly below the ground-truth baseline across all backbones. While variations among victim backbones retain minor on Physics, they become substantial on other graphs with larger class space. More critically, when using APPNP as the victim backbone on Cora, class 6 is missing and class 1 only contains a single target node. Such extreme class imbal-ance and missing classes severely bias the surrogate model toward majority classes, leaving sparse or absent training signals for minority classes. 
+
+Takeaways. These empirical findings highlight another funda-mental challenge– C3: Class Imbalance and Absence . Query-ing hard labels on sparse induced subgraphs inherently exac-erbates class imbalance: structurally dominant classes capture a disproportionate share of target predictions, while minority classes remain severely under-represented or entirely absent from the query set. This systematic bias consequently skews the surrogate model’s classifier toward majority classes, further degrading stealing performance beyond what structural sparsity alone would cause. 
+
+Fig. 2: Class Imbalance Ratio 
+
+3) Backbone Disagreement: Existing GNN model stealing attacks typically assume that the adversary masters the knowl-edge of victim backbone [1], [18], [23], [24]. However, this information is rarely available in practice due to commercial intellectual property protection and the black-box nature of MLaaS APIs. To understand the impact of victim backbone misalignment, we evaluate the pairwise prediction agreement 
+
+Fig. 3: Per-class Label Distribution across different victim backbones under our strict setting and present the results in Figure 4. 
+
+Empirical Results. We observe that the victim prediction agreement is substantially lower on sparse induced subgraphs than on the full graph, with off-diagonal entries as low as 0.51 on Computer for isolated nodes. This indicates that different backbones exhibit divergent behaviors as structural information decreases, making cross-backbone model stealing inherently more challenging under our restricted threat model. The progressive increase in agreement from isolated to full graphs confirms that topology serves as the primary driver of backbone divergence. 
+
+Takeaways. These observations underscore a key challenge– 
+
+C4: Backbone Mismatch. Backbone mismatch further com-pounds the aforementioned challenges, as different backbones exhibit varying degrees of prediction degradation under the same induced subgraph queries. However, our threat model as-sumes a practical black-box adversary with no prior knowledge of the victim’s backbone, necessitating an attack framework that remains strictly backbone-agnostic. IV. ATTACK FRAMEWORK DESIGN 
+
+In this section, we propose Dagger, a novel decoupling-based attack framework tailored to the four challenges identi-fied in Section III. Specifically, C1 (Poor Surrogate) demands that an effective surrogate must remain topology-adaptive, preserving rich semantic context for isolated nodes while extracting structural information across subgraphs of varying scale and density; C2 (Insufficient Supervision) requires maximizing the utility of collected query-response pairs while filtering or smoothing unreliable predictions to prevent error propagation; C3 (Class Imbalance and Absence) necessitates incorporating class-aware recalibration to mitigate systematic biases and ensure balanced classifier optimization across mi-nority classes; and C4 (Backbone Mismatch) calls for the attack framework to remain strictly backbone-agnostic. As illustrated in Figure 5, Dagger proceeds in two phases. In Phase 1 , to tackle C1 and C2, we train a surrogate encoder via decoupling-based feature propagation and manifold-level mixup. This design mitigates the structural collapse of sparse induced subgraphs and enriches context-deficient node repre-sentations without over-relying on message passing. In Phase 
+
+5Fig. 4: Pairwise Prediction Agreement Changes across Multi-hop Expansion Phase 1 — Surrogate Pretraining             
+
+> MLP Transform PPR Diffusion
+> Manifold-level Node Mixup
+> ca
+> hi
+> λ
+> h"
+> 1-λ cb
+> hj
+> ↑ label coverage ↑ decision boundary smoothing
+> Full Graph G
+> Vq
+> V\Vq
+> Query-Response Set D= {( Gvk,ŷvV)} v∈Vq
+> Labels:
+> ⚠imbalanced · ?: missing classes hard labels · budget: | Vq| ≤ 0.05·| V|
+> Phase 2 — Classifier Tuning Class-balanced sampling
+> before a@er equalizes gradient contribuCon per class
+> Logit Adjustment
+> Bayes-opCmal correcCon Threshold calibraCon
+> Induced Subgraph Gq=G[Vq]
+> isolated ↑
+> sparse · isolated nodes
+> Local Query Subgraph { Gvk}v∈Vq
+> isolated ↑
+> sparse · broken neighbors · k-hop
+> Access Query Induce
+> Return
+> head τ·log π tail Black-box MLaaS API ?
+
+Fig. 5: The Overview of Dagger 
+
+2, to overcome C3, we freeze the pre-trained encoder and tune only the classifier head using class-balanced sampling paired with logit adjustment, rectifying predicted-label class imbal-ance and ensuring backbone-agnostic generalization. Notably, by decoupling the encoder from the classifier and avoiding any assumption about the victim’s backbone knowledge throughout both phases, Dagger inherently satisfies the backbone-agnostic requirement imposed by C4. 
+
+A. Phase 1: Decoupling-based Surrogate Pretraining 1) Topology-adaptive Surrogate (C1): Due to the dou-ble constraints of query access under our threat model, the query subgraphs {G kv }v∈V q suffer from three compounding structural deficiencies. First, they can be highly sparse and frequently unconnected, particularly on sparse or small-scale graphs, causing standard message-passing GNNs trained on such degenerative structures to degrade towards Multi-Layer Perceptrons (MLPs). Second, nodes with originally high de-grees may become isolated once their neighbors are excluded from the target node set, causing GNNs to lose the ability to extract information from their multi-hop neighbors. Third, even among connected nodes within {G kv }v∈V q , their scope of information propagation is confined to a small local range, which makes it difficult to integrate broader structural context. These structural deficiencies motivate a topology-adaptive surrogate that simultaneously handles both isolated nodes and highly-sparse local structures without over-relying on message passing. To this end, we adopt the decoupling design of APPNP [4]: predict and then propagate, separating feature transformation from graph propagation into two explicit steps. For each target node v, we first utilize an MLP to extract the initial representation H(0) 
+
+v from raw features in local subgraphs 
+
+Gkv , independent of its local topology. This prediction step obtains a meaningful representation for isolated nodes rather than collapsing to uninformative embeddings while laying the foundation for subsequent structural information propagation among connected ones. 
+
+H(0) 
+
+v = MLP (XGkv ) (8) We then leverage Personalized PageRank (PPR) [4], [21] to propagate H(0) 
+
+v across K steps, retaining an α fraction of the original representation at each step to adaptively incorporate local structural context while prevent over-smoothing: 
+
+H(k)
+
+v = (1 − α) ˆAv H(k−1) 
+
+v + αH (0) 
+
+v , k = 1 , . . . , K (9) where ˆAv is the adjacency matrix of Gkv with self-loops. Mech-anistically, H(k)
+
+v acts as an information origin while α serves as a restart probability to avoid diluting personalized repre-sentations over multiple hops, thereby effectively mitigating over-smoothing and enabling deep information propagation. Standard message-passing GNNs implicitly rely on the node homophily assumption that connected nodes tend to share similar features and structural patterns [13]. To accommodate isolated nodes during PPR diffusion, we explicitly add self-loops to these nodes. Since a node exhibits maximum similarity with itself, the addition of self-loops transforms the diffusion mechanism into a self-reinforcing process that guarantees stable feature propagation and prevents representation collapse. 
+
+2) Knowledge Distillation Loss: Given the query-response pairs D = {(Gkv , ˆyVv )}v∈V q , we train the surrogate by minimiz-ing the cross-entropy loss between its predictions on the target node v and the victim’s hard-label predictions: 
+
+Ldistill = − 1
+
+|V q |
+
+X
+
+v∈V q
+
+log exp 
+
+ΦS (Gkv )
+
+v, ˆyVv
+
+P
+
+c∈C exp 
+
+
+
+[Φ S (Gkv )] v, c 
+
+ (10) where ΦS (Gkv )
+
+v denotes the logit vector of the center node 
+
+v in the output of the surrogate ΦS .
+
+3) Manifold Mixup Regularization (C2): A further chal-lenge arises from incomplete class coverage: queries restricted to local subgraphs {G kv }v∈V q may fail to elicit predictions for all |C| classes from the victim model, particularly on sparse or small-scale graphs with multiple classes. Beyond this, hard-label supervision discards inter-class relationships encoded in the victim’s soft-label predictions. Training on such 6sparse supervision forces the surrogate to overfit to the limited query space and learn spurious decision boundaries, severely hampering its generalization to unseen nodes. To bridge these gaps, we apply manifold-level node mixup to synthesize continuous interpolated representations across class boundaries. We finally smooth the decision boundary in the manifold rather than the input space. Interpolating raw node features is ill-defined for graph-structured data: node features are typically sparse and discrete (e.g., bag-of-words), rendering their linear combinations semantically meaningless, while input-space interpolation disregards the underlying non-Euclidean graph topology. In contrast, manifold interpolation directly operates on a continuous latent space that inherits the structural context encoded by PPR propagation and encourages the surrogate to learn more transferable representations. We then formalize the manifold-level node mixup. For each query node vi with predicted-label ˆyVvi = ca, we sample another query node vj with a different predicted-label ˆyVvj = cb, where 
+
+(vi,c a) and (vj ,c b) both belong to the query-response pairs 
+
+D = {(Gkv , ˆyVv )}v∈V q , i̸ = j, c a̸ = cb, and interpolate their focal-node hidden representations Hvi and Hvj :
+
+˜Hvij = λ · Hvi + (1 − λ) · Hvj , λ ∼ Uniform (0 , 1) (11) Unlike the feature-level node mixup [22] which employs Beta distributions to concentrate mixing ratios near the original samples, we adopt λ ∼ Uniform (0 , 1) to uniformly explore the full interpolation spectrum between class boundaries. This setup particularly aligns with our attack setting: since node rep-resentations reside on a continuous semantic manifold rather than a discrete input space, dense and uniform sampling across 
+
+(0 , 1) synthesizes a richer variety of intermediate representa-tions, providing more comprehensive coverage of the decision boundary between ca and cb.The mixed representation ˜Hvij is trained against a paired soft label ˜yij = λ · eca + (1 − λ) · ecb via KL divergence: 
+
+Lmix = 1
+
+|V q |
+
+X
+
+> vi∈V q
+
+DKL 
+
+
+
+˜yij softmax 
+
+
+
+fS ( ˜Hvij )
+
+ 
+
+(12) where e is a one-hot vector and fS denotes the linear classifier head of ΦS . The soft labels ˜yij further complement inter-class relationships that are discarded by hard-label supervision. 
+
+4) Phase Objective: The final objective of Phase 1 is: 
+
+LPhase 1 = Ldistill + wmix · L mix (13) where the coefficient wmix controls the contribution of manifold-level node mixup. 
+
+B. Phase 2: Imbalance-aware Classifier Tuning 
+
+After pretraining in Phase 1, the surrogate has learned a representation space that captures the victim’s functional behaviors. While manifold-level node mixup mitigates the class imbalance by implicitly augmenting minority class rep-resentations, it operates at the representation level and does not directly correct the skewed decision boundaries induced by majority-class dominance in the training distribution. As a result, the classifier head remains systematically biased towards majority-class nodes, leaving minority classes under-represented and consequently eroding the overall fidelity of the surrogate. To rectify this bias, Phase 2 freezes the surrogate en-coder Enc S (·) to preserve the learned representations and only fine-tunes the linear classifier head fS with two complementary corrections: class-balanced sampling and logit adjustment [14]. 
+
+1) Class-balanced Sampling (C3): To counteract the ma-jority class dominance in the query-response pairs D, we oversample minority classes with replacement such that each class provides exactly the same number of nodes per epoch as the majority class. The sampling probability is defined as: 
+
+p(v) = 1
+
+|C| · nc
+
+, v ∈ V (c) 
+
+> q
+
+(14) where nc = |V (c) 
+
+> q
+
+| is the number of query nodes for class c.This sampling strategy balances per-class gradient contri-butions, preventing the classifier from collapsing to majority-class predictions and ensuring that minority classes receive sufficient gradient signals throughout fine-tuning. 
+
+2) Logit Adjustment (C3): Class-balanced sampling equal-izes per-class gradient contributions and stabilizes optimiza-tion. However, oversampling minority classes inherently alters the class prior from the skewed query distribution to a uniform one, inevitably introducing a distribution shift. To mitigate this discrepancy without resorting to complex optimization, we adopt a simple-yet-effective technique called logit adjustment [14] to calibrate the classifier logits proportional to log πc:
+
+˜fS (H)c = fS (H)c − τ · log πc (15) where πc = nc/|V q |, c ∈ C denotes the empirical class prior estimated from the victim-predicted label distribution, while 
+
+τ > 0 is a temperature parameter controlling the strength of the adjustment. This technique is theoretically grounded: Menon et al. [14] show that under the adjusted loss, the optimal classifier recovers the Bayes-optimal decision rule for the balanced distribution, effectively redistributing decision boundaries from majority to minority classes without requiring additional queries to the victim. 
+
+3) Phase Objective: The Phase 2 training objective is: 
+
+LPhase 2 = − 1
+
+|V q |
+
+X
+
+> v∈V q
+
+log exp 
+
+ ˜fS (HSv )ˆyVv
+
+PCc=1 exp 
+
+ ˜fS (HSv )c
+
+ (16) where HSv = Enc S (v) denotes the frozen focal-node embedding from Phase 1. These two corrections are complementary by de-sign: class-balanced sampling stabilizes training by equalizing per-class gradient contributions, while logit adjustment restores proper calibration during inference by explicitly compensating for the prior shift induced by rebalancing. V. EXPERIMENTS 
+
+In this section, we conduct empirical experiments to inves-tigate the following key research questions: 
+
+RQ1 : How effective and efficient is Dagger to launch model stealing attacks against GNNs? 
+
+RQ2 : Can Dagger flexibly adapt to different GNN backbones? 
+
+RQ3 : How Dagger performs under diverse mismatched archi-tecture configurations? 7RQ4 : What factors affect the attack performance of Dagger? 
+
+RQ5 : How does each component contribute to Dagger? 
+
+RQ6 : Can Dagger bypass diverse defense mechanisms? 
+
+A. Setups 
+
+GNN Backbones We employ four GNN backbones: GCN [10], GAT [20], APPNP [4], and GraphSAGE [6], and report their benign performance across aforementioned four graphs in Table V in Appendix B. 
+
+Baselines. To quantify the contribution of real graph structural information to attack performance, we introduce a synthetic graph baseline (Rand.) that requires no access to real graph data. We generate a Stochastic Block Model (SBM) graph with 
+
+|C| equal-sized blocks, intra-block edge probability pintra = 0 .3,and inter-block edge probability pinter = 0 .05 , with the total number of nodes matching the 5% query budget of each dataset. Node features are constructed by randomly sampling rows from the real graph’s feature matrix with replacement and adding small Gaussian perturbations N (0 , 0.01 2), preserving the marginal feature distribution of the target dataset while decoupling the feature-topology correlations present in the real graph. We further compare Dagger with the state-of-the-art (SOTA) GNN stealing attacks, under the same access to 5% of the victim training graph, including 1) MEA-Attack0 [24]: to align with its setting, the adversary can obtain 2-hop neighbors of each target node. She/he then synthesizes the neighboring attributes via homophily-based neighbor expansion. 2) Ad-vMEA [1]: the adversary constructs fully-connected synthetic subgraphs by sampling node features from per-class empirical distributions from the whole graph. 3) CEGA [23]: the adver-sary employs an iterative active learning strategy that adap-tively selects informative nodes based on structural centrality, uncertainty, and diversity across multiple query cycles. We additionally replace its soft-label setting with hard labels. 4) DFEAII-Real [29]: since the original data-free variant suffers from prediction collapse, we follow the benchmarking protocol of [28] and instead query the victim on real induced subgraphs under the black-box hard-label setting. Please note that except for DFEAII-Real, MEA-Attack0 requires substantially higher query budgets than Dagger, whereas AdvMEA and CEGA rely on access to global information that are unavailable in practice. 
+
+Implementations. Experiments are conducted on four Nvidia A100 GPUs. Please see Appendix A for more details. 
+
+Metrics. Except for accuracy and fidelity defined in Section III-B, we also consider 1) Macro F1 that evaluates all classes with equal weight, making it highly sensitive to performance degradation on minority classes; 2) Boundary fidelity that measures the prediction agreement between the surrogate and the victim on boundary nodes, defined as nodes where the victim’s margin between its top two predicted probabilities falls below a threshold δ = 0 .2. We empirically select 0.2 as it achieves a better trade-off between the boundary space and number of samples located in this area. This metric captures the surrogate’s ability to replicate the victim’s decisions in the most challenging regions, where small perturbations can flip the predicted labels. 3) Number of queries, which is different from the number of accessible nodes. The adversary can adopt active learning or data synthesis and augmentation methods to reduce or expand the query node set. 
+
+B. Attack Performance (RQ1 and RQ2) 
+
+TABLE II: The Performance of Dagger on Cora and Computer. Unit of Top 4 metrics: 1e-2 . Arrow indicates the direction of better performance and the bold font denotes the 
+
+‘best’ results.                                                                                                                                                                                                                                                        
+
+> Dataset Backbone Baseline Metrics
+> ACC FID Macro F1 Boundary Fid. Query
+> Cora
+> GCN Rand 26.57 ±0.00 27.31 ±0.00 6.00 ±0.00 10.00 ±0.00 135 MEA 61.50 ±2.63 64.33 ±2.30 53.08 ±2.37 37.62 ±4.10 686 AdvMEA 40.22 ±3.95 42.19 ±5.77 28.47 ±6.43 19.05 ±7.59 315 CEGA 28.66 ±5.15 28.41 ±5.25 19.32 ±3.13 13.33 ±2.69 133 DFEAII-Real 29.64 ±3.87 29.64 ±4.11 13.87 ±3.51 10.48 ±0.67 135 Dagger 71.83 ±0.46 73.68 ±0.17 59.22 ±1.20 32.86 ±1.17 135 GAT Rand 28.78 ±3.13 29.52 ±3.65 8.43 ±3.31 11.11 ±3.93 135 MEA 59.66 ±2.44 62.85 ±3.22 51.99 ±2.97 31.94 ±1.96 686 AdvMEA 21.40 ±5.74 23.49 ±5.70 9.93 ±1.12 20.83 ±6.13 315 CEGA 36.29 ±7.36 38.25 ±8.45 21.88 ±8.14 22.22 ±9.67 133 DFEAII-Real 32.23 ±1.91 33.83 ±2.85 16.76 ±4.94 15.28 ±8.39 135 Dagger 74.28 ±1.25 76.26 ±0.70 67.08 ±1.25 36.11 ±0.98 135 APPNP Rand 26.57 ±0.00 30.26 ±0.00 6.00 ±0.00 16.22 ±0.00 135 MEA 49.57 ±6.94 56.83 ±6.65 34.15 ±9.24 38.74 ±2.78 686 AdvMEA 27.31 ±1.09 31.00 ±1.09 7.64 ±1.47 15.77 ±0.64 315 CEGA 26.94 ±9.64 31.49 ±10.80 11.87 ±5.86 20.72 ±8.57 133 DFEAII-Real 31.73 ±5.52 35.18 ±6.51 15.93 ±3.29 18.47 ±2.30 135 Dagger 67.40 ±0.92 74.29 ±1.06 51.69 ±0.74 41.89 ±1.91 135 GraphSAGE Rand 26.57 ±0.00 26.20 ±0.00 6.00 ±0.00 17.14 ±0.00 135 MEA 64.58 ±1.83 67.28 ±2.72 57.30 ±2.48 42.86 ±4.67 686 AdvMEA 31.24 ±8.44 32.23 ±8.14 22.40 ±8.42 20.95 ±4.86 315 CEGA 45.26 ±2.26 45.26 ±2.05 38.87 ±5.55 26.67 ±11.74 133 DFEAII-Real 50.68 ±3.31 51.91 ±3.22 39.54 ±2.37 28.57 ±2.33 135 Dagger 76.51 ±0.92 76.01 ±1.09 71.91 ±1.53 39.05 ±1.35 135
+> Computer
+> GCN Rand 41.13 ±0.00 43.31 ±0.00 5.83 ±0.00 28.21 ±0.00 687 MEA 76.24 ±1.61 82.66 ±1.81 47.60 ±3.91 47.86 ±5.37 8401 AdvMEA 62.52 ±4.39 67.61 ±5.36 43.50 ±6.25 42.74 ±7.72 480 CEGA 70.18 ±0.77 73.16 ±0.84 69.95 ±1.20 42.74 ±6.97 690 DFEAII-Real 77.96 ±1.89 84.38 ±1.93 67.26 ±4.38 50.43 ±5.16 687 Dagger 81.73 ±0.71 87.40 ±0.71 67.52 ±1.42 60.26 ±3.63 687 GAT Rand 35.76 ±3.15 36.00 ±2.87 9.96 ±1.01 20.67 ±7.36 687 MEA 52.57 ±1.52 54.68 ±1.93 21.81 ±3.27 32.00 ±1.63 8401 AdvMEA 33.48 ±11.20 34.81 ±11.42 10.05 ±2.12 23.33 ±7.36 480 CEGA 54.29 ±5.74 55.60 ±5.45 40.11 ±6.37 26.67 ±3.77 690 DFEAII-Real 50.12 ±3.72 52.42 ±3.89 18.11 ±5.63 33.33 ±0.94 687 Dagger 71.46 ±0.22 72.84 ±0.24 50.19 ±1.31 31.33 ±0.94 687 APPNP Rand 52.01 ±0.30 53.15 ±0.33 14.37 ±0.13 19.44 ±0.49 687 MEA 74.61 ±1.21 79.75 ±1.22 47.81 ±9.98 43.06 ±1.30 8401 AdvMEA 55.79 ±5.41 57.19 ±5.59 45.71 ±8.80 29.17 ±3.07 480 CEGA 51.09 ±12.42 50.85 ±12.91 51.65 ±10.61 28.82 ±4.28 690 DFEAII-Real 64.17 ±5.32 67.71 ±6.62 33.85 ±1.23 38.54 ±3.71 687 Dagger 84.33 ±0.36 88.61 ±0.35 77.75 ±2.04 44.10 ±1.30 687 GraphSAGE Rand 41.13 ±0.00 41.86 ±0.00 5.83 ±0.00 27.42 ±0.00 687 MEA 76.11 ±3.13 80.01 ±3.62 59.54 ±5.41 45.70 ±3.31 8401 AdvMEA 48.96 ±20.16 49.78 ±21.37 40.31 ±19.11 33.87 ±3.95 480 CEGA 75.24 ±3.81 76.84 ±3.78 72.62 ±5.15 38.71 ±4.75 690 DFEAII-Real 61.17 ±14.23 64.00 ±15.71 37.87 ±22.66 39.78 ±8.77 687 Dagger 80.62 ±0.33 86.36 ±0.48 72.36 ±1.21 47.31 ±2.01 687
+
+1) Effectiveness: Due to space limitations, we put attack results of the rest two datasets in Appendix C. As shown in Table II and VI, Dagger consistently outperforms all baselines in nearly every metric under the most stringent threat model, demonstrating the effectiveness of our framework. It even surpasses or achieves comparable attack performance against MEA, which usually submits queries 3.87-12.23 × than Dag-ger. In terms of graph datasets, when using a similar number of queries, Dagger largely improves accuracy and fidelity over the SOTA baselines by up to 43.17% and 45.27%, respectively. It excels in graph datasets with much larger class spaces, like Cora and Computer. As for victim backbones, there is no single backbone inherently weaker or stronger against Dagger. When using APPNP as the victim backbone and trained on Cora, the query nodes cannot cover all classes, yielding relatively lower but still effective attack performance. When using GAT as the victim backbone trained on Computer, the query nodes are extremely imbalanced, causing all the baselines and Dagger to degrade compared to other victim backbones. These two anomalies are also reflected in macro F1 scores. Regard-ing boundary performance, Dagger also achieves outstanding boundary fidelity across most settings, indicating that the surrogate not only replicates the victim’s confident predictions but also approximates its behaviors near decision boundaries. This is particularly relevant for downstream reconnaissance tasks such as crafting transferable adversarial examples [18]. 82) Efficiency: A key advantage of Dagger lies in its query efficiency. Dagger strictly requires 5% nodes of the full graph and the number of queries is the exactly the same as the number of accessible nodes. MEA demands many more queries than all other baselines. Random generation and DFEAII-Real maintain the same query budgets as Dagger. The number of queries of AdvMEA and CEGA vary, AdvMEA possesses a larger query budget on Cora while a smaller budget than Dagger on the remaining graph datasets; CEGA owns the similar query budget to Dagger, it only increases queries compared to Dagger on Computer. Overall, Dagger is not only more attack-effective but also substantially more query-efficient. This efficiency is critical in practice, as a lower query footprint reduces the risk of detection by query-monitoring defenses [9]. 
+
+C. Impact Factors (RQ3 to RQ5) 1) GNN Architectures: Unlike existing stealing attacks, Dagger imposes no restrictions on requiring the same/similar GNN backbones or architecture configurations. Given that other graph datasets are relatively less prone to imbalance and class coverage issues while attaining compelling attack performance, we select Cora as the representative dataset for architecture sensitivity studies. In addition, GNNs typically employ shallow architectures to mitigate over-smoothing, a phenomenon where node representations become indistin-guishable after multiple-round information propagation. Fol-lowing standard settings [10], [20], [29], we set the number of layers as 2 or 3. As the computational complexity of GNN backbones scales linearly or quadratically with the hidden dimension and excessively large dimension might lead to over-fitting problems especially on small-scale and sparse induced subgraphs obtained under limited query budgets, we evaluate the surrogate performance under compact hidden dimensions 
+
+d ∈ { 16 , 32 , 64 }.From Figure 6, Dagger remains stable to victim back-bones and architecture configurations across all metrics, with performance variations remaining within approximately 1-4%, confirming that the framework does not rely on a carefully tuned surrogate capacity to achieve competitive results. Com-paring 2-layer and 3-layer configurations at the same hidden dimension, deeper architectures consistently perform on par with or slightly below their 2-layer counterparts. This suggests that additional depth does not provide meaningful benefit under the 5% budget constraint. Increasing hidden dimension from 16 to 64 within the same depth also yields marginal changes, further indicating that the bottleneck lies in the quality and quantity of victim-predicted labels rather than model capacity. The default configuration [2 , 16] achieves attack performance comparable to all larger architectures, even outperforming several specific victim backbones, such as GCN and APPNP. These empirical findings indicate a desirable attack prop-erty in practice: the adversary does not need prior knowledge of victim backbones or capacities, and a minimal architecture suffices to launch powerful GNN stealing attacks. 
+
+2) Manifold: As shown in Figure 7, Dagger demonstrates strong robustness to the manifold coefficient wmix across the range [0 .1, 2.0] , with performance fluctuations varying across graph datasets and victim backbones. On Physics and PubMed, performance curves are nearly flat across all victim back-bones, indicating that the manifold regularization strength has negligible impact on larger and denser graphs with relatively smaller classes. On Cora, mild fluctuations are observed par-ticularly in boundary fidelity, consistent with the fact that the induced subgraph is sparser and decision boundary regions are harder to approximate. Computer exhibits a moderate pattern, remaining largely stable with only a slight decline at larger coefficients. Consistent with previous findings, APPNP on Cora and GAT on Computer degrade due to class coverage and heavy imbalance issues. In all, there is no specific optimal manifold coefficient range, we accordingly tune this coefficient on different graph-backbone combinations. 
+
+3) Query Budget: Figure 8 demonstrates that the attack performance of Dagger consistently improves as the query budget increases from 1% to 20% across all datasets and victim backbones, confirming that more query nodes provide richer supervision for the surrogate. Notably, Dagger already achieves competitive performance at the 5% budget used in our main experiments, with diminishing returns beyond 10% on most datasets. On Physics and PubMed, 1% query budgets already yield competitive attack performance. Their accuracy, fidelity and F1 curves flatten around 5-10% and remain stable through 20%, suggesting that even a small fraction of training nodes is sufficient to capture the victim’s inner behaviors on these datasets. On Cora and Computer, the improvement from 1% to 5% is more pronounced, reflecting the greater difficulty introduced by sparser induced subgraphs and more severe class imbalance at lower budgets. The boundary fidelity curves are more unstable than the other metrics, particularly on Computer, PubMed and Physics, we attribute this higher variance to the small number of boundary nodes in these datasets, where the victim model achieves higher overall confidence, leaving fewer nodes near the decision boundary and making the metric more susceptible to statistical fluctuation. Nevertheless, a clear upward trend is observed on Cora as budget increases. 
+
+4) Balance and Its Impact Factors: Due to space limita-tions, details are provided in Appendix D. 
+
+5) Ablation Studies: To systematically assess the contribu-tion of each component in Dagger, we conduct a series of ab-lation studies across graph datasets and victim backbones. The ablation results confirm the effectiveness of each component in Dagger, and the full model achieves the best or near-best performance in the majority of graph-backbone combinations. In the Decoupling-based Surrogate Training phase, since the knowledge distillation loss is indispensable for model stealing attacks, we instead remove the manifold mixup reg-ularization module (No Manifold). In the Imbalance-aware Classifier Tuning phase, where rebalancing is essential, we retain the class-balanced sampling and remove logit adjustment (No LA). We also evaluate a variant that retains only Phase 1 while omitting Phase 2 (No Tuning). The ablation results are presented in Table III and VII. No Manifold consistently degrades performance across Cora and Computer, with the most noticeable drops observed in GAT and GraphSAGE. The degradation on PubMed and Physics is less pronounced, where the larger and relatively balanced query set, denser graph structure, and smaller class space already provide sufficient supervision signals, making 9Fig. 6: GNN Architecture Configuration Sensitivity 
+
+Fig. 7: Manifold Coefficient Sensitivity 10 Fig. 8: Query Budget Sensitivity the additional mixup regularization less critical. No LA leads to persistent performance drops, particularly on Cora and Computer, where class imbalance is most severe under the strict 5% budget. On PubMed and Physics, where the class distribution is more balanced and the victim exhibits higher confidence, the contribution of LA is smaller yet still measurable. Consistent with prior findings, when the query set distribution is balanced, enforcing LA may introduce overfitting and cause slight performance drops. Similar to No LA, No Tuning still results in substantial performance degradation across all victim backbones on Cora and Computer while yielding a slight decline on PubMed and Physics. Under severe imbalance, No Tuning consistently performs worse than No LA, implying that class-balanced sampling plays a fundamental role in stabilizing classifier tuning under skewed query distributions. 
+
+D. Defense (RQ6) 
+
+To evaluate Dagger’s robustness under SOTA defense mechanisms, we adopt two distinct defenses, namely, PRADA [9] and BackdoorWM [26]. PRADA monitors the statistical distribution of consecutive queries to identify deviations from a normal distribution, achieving a claimed perfect detection rate against model stealing attacks. Its core assumption is that legitimate queries follow a natural data distribution, whereas model stealing attacks generate statistically anomalous query patterns. BackdoorWM trains a watermarked GNN model to enable post-hoc black-box ownership verification. Specifically, 11 TABLE III: Ablation Studies across Graph Datasets and GNN backbones 
+
+Dataset Backbone Baseline Metrics 
+
+ACC FID Macro F1 Boundary Fid. 
+
+Cora 
+
+GCN No manifold 65.81 ±0.46 68.14 ±0.92 51.25 ±0.47 30.95 ±1.35 No LA 70.36 ±0.46 72.94 ±0.17 54.24 ±0.37 29.05 ±0.67 No Tuning 70.60 ±0.63 72.94 ±0.70 54.22 ±0.59 29.05 ±1.35 Dagger 71.83 ±0.46 73.68 ±0.17 59.22 ±1.20 32.86 ±1.17 
+
+GAT No manifold 55.10 ±1.66 57.44 ±1.36 45.69 ±1.31 27.78 ±0.98 No LA 66.42 ±0.80 68.76 ±0.46 55.29 ±1.25 31.25 ±2.95 No Tuning 60.76 ±2.22 62.85 ±2.63 51.34 ±2.48 30.56 ±1.96 Dagger 74.28 ±1.25 76.26 ±0.70 67.08 ±1.25 36.11 ±0.98 
+
+APPNP No manifold 63.96 ±0.35 71.59 ±0.30 48.09 ±0.54 40.09 ±2.55 No LA 65.44 ±0.70 73.06 ±1.09 48.85 ±0.82 40.99 ±2.30 No Tuning 62.61 ±0.87 68.02 ±0.46 46.89 ±0.71 32.88 ±3.37 Dagger 67.40 ±0.92 74.29 ±1.06 51.69 ±0.74 41.89 ±1.91 
+
+GraphSAGE No manifold 62.85 ±0.17 62.36 ±0.30 52.12 ±0.04 25.71 ±0.00 No LA 70.85 ±0.30 69.50 ±0.17 61.77 ±0.61 32.38 ±3.56 No Tuning 64.70 ±1.71 63.59 ±1.66 53.07 ±1.66 28.57 ±2.33 Dagger 76.51 ±0.92 76.01 ±1.09 71.91 ±1.53 39.05 ±1.35 Computer 
+
+GCN No manifold 80.35 ±0.36 85.51 ±0.55 62.33 ±1.67 53.85 ±2.77 No LA 80.86 ±0.72 86.63 ±0.77 65.38 ±0.81 55.13 ±3.63 No Tuning 80.21 ±0.36 85.59 ±0.50 64.43 ±1.48 57.26 ±3.36 Dagger 81.73 ±0.71 87.40 ±0.71 67.52 ±1.42 60.26 ±3.63 
+
+GAT No manifold 64.97 ±0.27 66.72 ±0.54 34.80 ±0.74 31.33 ±0.94 No LA 67.30 ±0.33 68.48 ±0.69 39.62 ±0.52 30.00 ±1.63 No Tuning 65.60 ±0.27 67.42 ±0.38 35.61 ±1.02 32.67 ±0.94 
+
+Dagger 71.46 ±0.22 72.84 ±0.24 50.19 ±1.31 31.33 ±0.94 APPNP No manifold 81.32 ±0.33 86.36 ±0.33 62.53 ±2.61 43.75 ±1.70 No LA 83.33 ±0.45 88.03 ±0.24 73.37 ±0.66 44.44 ±2.14 
+
+No Tuning 82.82 ±0.39 87.96 ±0.28 71.24 ±0.33 43.06 ±0.98 Dagger 84.33 ±0.36 88.61 ±0.35 77.75 ±2.04 44.10 ±1.30 GraphSAGE No manifold 77.62 ±1.23 82.80 ±1.47 62.29 ±3.05 47.31 ±2.74 No LA 79.17 ±0.42 84.84 ±0.42 68.48 ±0.52 47.31 ±3.31 No Tuning 77.18 ±0.62 82.68 ±0.91 64.01 ±0.83 47.85 ±1.52 
+
+Dagger 80.62 ±0.33 86.36 ±0.48 72.36 ±1.21 47.31 ±2.01 for node classification tasks, a fixed trigger pattern is injected into a small subset of training nodes associated with a target label. Any surrogate inheriting the victim’s decision boundaries is expected to replicate this backdoor behavior on triggered inputs, facilitating near-perfect ownership verification. We follow the default parameter setting in defense bench-marking [28] and report their defense results in Table IV. We observe that Dagger remains highly effective against both PRADA and BackdoorWM across all graph datasets and victim backbones, achieving attack performance comparable to the undefended setting. Under most graph-backbone combina-tions, Dagger evaluated against BackdoorWM (short for Back-doorWM, hereinafter) outperforms the one against PRADA (short for PRADA, hereinafter), which aligns with imbalance trends reflected by macro F1. Notably, on challenging graphs such as Cora and Computer, BackdoorWM even obtains better attack performance than the undefended setting, this variation can be attributed to subtle differences between the clean and the backdoor-injected victims, as the backdoor injection slightly alters the victim’s prediction distribution. PRADA is ineffective. PRADA achieves 100% prediction fidelity relative to the original victim model, suggesting that it fails to trigger an alarm and treats every query as legitimate during initial model evaluation. Although PRADA eventually activates in the subsequent querying phase and corrupts a portion of the victim-predicted labels with Gaussian noise, Dagger’s attack performance remains comparable to the un-defended setting. One plausible explanation is that the trigger occurs in the late query phase, Dagger has already accumulated sufficient clean supervision signals from early queries, and its manifold mixup confers inherent robustness against label noise by interpolating latent representations. BackdoorWM provides negligible protection. As for Back-doorWM, fidelity drops to between 76.75% and 99.25% across datasets and backbones, indicating that the watermark is only partially inherited by the surrogate. More importantly, Back-doorWM yields slightly higher attack performance than or comparable to the undefended setting across all configurations, confirming that BackdoorWM fails to degrade the functional quality of the stolen surrogate model. TABLE IV: Dagger’s Attack Performance against Defense Mechanisms across Graph Datasets and GNN Backbones                                                                                                                                                                                                                         
+
+> Dataset Backbone Defense Pred Acc Pred Fid Metrics
+> ACC FID Macro F1 Boundary Fid.
+> Cora
+> GCN PRADA 83.03 100.00 68.88 ±0.17 72.45 ±0.63 55.80 ±0.64 33.33 ±1.78 BackdoorWM 85.98 84.87 75.15 ±1.36 75.77 ±0.97 69.79 ±1.42 41.43 ±1.17 GAT PRADA 80.81 100.00 72.69 ±1.38 74.91 ±0.60 65.61 ±2.25 40.97 ±2.60 BackdoorWM 85.98 84.87 74.66 ±0.97 76.01 ±1.68 68.96 ±1.08 41.67 ±5.10 APPNP PRADA 80.44 100.00 68.02 ±0.46 73.55 ±0.35 53.95 ±0.63 45.95 ±1.10 BackdoorWM 88.19 76.01 77.98 ±0.46 76.63 ±0.63 73.28 ±0.70 49.10 ±1.69 GraphSAGE PRADA 87.45 100.00 69.13 ±0.35 69.74 ±0.80 61.92 ±0.16 26.67 ±1.35 BackdoorWM 89.30 92.25 72.82 ±0.46 72.69 ±0.52 69.38 ±0.51 39.05 ±1.35
+> PubMed
+> GCN PRADA 84.28 100.00 83.81 ±0.10 91.60 ±0.20 82.75 ±0.13 55.26 ±1.64 BackdoorWM 85.09 96.60 84.58 ±0.31 91.85 ±0.05 83.54 ±0.31 55.12 ±0.55 GAT PRADA 84.84 100.00 83.62 ±0.18 92.00 ±0.29 82.53 ±0.20 54.92 ±1.47 BackdoorWM 85.04 97.77 83.92 ±0.25 92.22 ±0.35 82.87 ±0.17 56.82 ±0.65 APPNP PRADA 85.60 100.00 83.23 ±0.21 93.61 ±0.07 82.24 ±0.21 61.67 ±0.76 BackdoorWM 87.27 95.28 84.62 ±0.17 94.81 ±0.25 83.63 ±0.17 67.48 ±1.94 GraphSAGE PRADA 86.00 100.00 83.76 ±0.38 92.93 ±0.58 82.70 ±0.29 56.41 ±3.02 BackdoorWM 86.82 95.99 83.77 ±0.26 92.21 ±0.51 82.75 ±0.25 52.82 ±2.33
+> Computer
+> GCN PRADA 89.97 100.00 81.61 ±0.66 87.48 ±0.81 66.88 ±1.77 59.40 ±3.02 BackdoorWM 89.03 95.20 80.21 ±0.73 86.07 ±0.39 71.69 ±1.46 53.85 ±1.81 GAT PRADA 88.59 100.00 69.57 ±0.45 70.59 ±0.29 45.04 ±0.68 32.67 ±2.49 BackdoorWM 90.41 92.30 77.59 ±0.30 77.28 ±0.19 59.76 ±1.22 44.00 ±4.32 APPNP PRADA 89.39 100.00 84.23 ±0.21 88.35 ±0.30 77.75 ±1.49 40.62 ±2.55 BackdoorWM 88.74 93.02 81.73 ±0.55 83.50 ±0.45 71.35 ±2.51 36.46 ±1.70 GraphSAGE PRADA 90.12 100.00 80.77 ±0.19 86.43 ±0.35 72.71 ±1.32 48.39 ±2.28 BackdoorWM 88.81 94.84 78.75 ±0.65 82.95 ±0.06 70.09 ±1.63 37.10 ±1.32
+> Physics
+> GCN PRADA 96.26 100.00 95.60 ±0.17 97.18 ±0.03 94.07 ±0.27 56.30 ±1.05 BackdoorWM 95.91 97.86 95.20 ±0.07 96.77 ±0.05 93.58 ±0.07 50.37 ±2.10 GAT PRADA 94.99 100.00 95.16 ±0.04 94.82 ±0.08 93.42 ±0.07 54.55 ±1.86 BackdoorWM 95.22 95.42 95.36 ±0.09 94.71 ±0.04 93.57 ±0.09 55.30 ±2.14 APPNP PRADA 96.70 100.00 95.66 ±0.08 97.92 ±0.07 94.13 ±0.10 56.86 ±2.77 BackdoorWM 96.81 98.84 95.44 ±0.08 97.17 ±0.13 93.94 ±0.02 54.25 ±0.92 GraphSAGE PRADA 95.83 100.00 95.65 ±0.09 96.45 ±0.05 94.18 ±0.12 45.74 ±2.90 BackdoorWM 95.71 99.25 95.36 ±0.04 96.65 ±0.10 93.65 ±0.06 44.96 ±2.19
+
+Limitations and Future Work. First, our analysis reveals that extreme minority classes with near-zero class coverage represent a fundamental limitation, motivating the develop-ment of adaptive query strategies that allocate budget more effectively. Second, despite operating under a strict query budget, further reducing the number of queries through active learning methods remains a key priority. Third, while we focus on mainstream message-passing GNNs that implicitly assume homophily, tailoring model stealing attacks to heterogeneous graphs and GNNs represents a promising future direction. Finally, designing robust defenses against Dagger under such highly constrained threat model represents a critical open problem for the research community. VI. CONCLUSION 
+
+In this work, we propose Dagger, a novel model steal-ing attack against GNNs under a strictly constrained black-box, hard-label, query-limited, and backbone-agnostic threat model. We identify four fundamental challenges specific to this setting: poor surrogate performance, insufficient supervi-sion, class imbalance with class coverage issues, and back-bone mismatch. Motivated by these systematic limitations, we design a two-phase decoupling-based attack framework. The first phase leverages decoupled information diffusion to incorporate isolated nodes and mitigate structural sparsity, and manifold-level node mixup to compensate for the incomplete and imbalanced supervision signals. The second phase applies a decoupled classifier fine-tuned with class-balanced sampling and logit adjustment to recover minority-class performance without requiring extra victim queries. Extensive experiments demonstrate that Dagger consistently outperforms state-of-the-art baselines across diverse graph datasets and victim back-bones. Moreover, our defense evaluations reveal that Dagger is inherently resistant to both query-monitoring and backdoor 12 watermarking defenses, highlighting the urgent need for more robust GNN defense mechanisms. OPEN SCIENCE 
+
+To comply with the CFP’s Open Science guidelines, we release the source code along with implementation details and evaluation pipeline to reproduce our experiments and conduct the attacks. As the datasets used in our paper are all downloadable from Pytorch Geometric [3], we direct users to the downloading links and provide processing scripts in our artifacts. To preserve anonymity during review, these materials are hosted in an anonymous repository https://anonymous. 4open.science/r/Dagger-1D14, and will be migrated to a public GitHub repository upon acceptance. This artifact release is intended to facilitate more in-depth adversarial investigation on graph neural networks and to motivate future work on more robust and effective defense mechanisms. LLM U SAGE CONSIDERATIONS 
+
+We use Claude only for editorial assistance in this manuscript, and all outputs were inspected by the authors to ensure accuracy and originality. ETHICAL CONSIDERATIONS 
+
+This study investigates the vulnerability of graph neural networks (GNNs) through the lens of model stealing attacks and the empirical results demonstrate GNNs are highly sus-ceptible to such attacks even under a more restricted threat model than existing GNN stealing attacks. We recognize the inherent dual-use risk in publishing attack methodologies. However, we contend that the benefits to the research community outweigh this risk. First, the threat model we explore reflects realistic deployments that existing defenses have not adequately addressed, and our findings underscore the practical severity of GNN stealing attacks and motivate the urgent development of corresponding defense mechanisms. Second, the primary beneficiaries of this work are defenders. By characterizing the attack surface, we enable model develop-ers and deployment teams to proactively harden their systems before adversarial exploitation occurs in the wild. Third, as a red team, we conduct all experiments on local devices using publicly available graph datasets. The testing environment does not interact with real-world third-party systems, collect personal data, or involve human subjects. Finally, our public artifact release is scoped to the code and scripts necessary to reproduce the reported results. We do not release components that would trivially enable large-scale exploitation beyond the experimental setup described in this paper. REFERENCES [1] D. DeFazio and A. Ramesh, “Adversarial model extraction on graph neural networks,” no. arXiv:1912.07721, Dec. 2019, arXiv:1912.07721 [cs, stat]. [Online]. Available: http://arxiv.org/abs/1912.07721 [2] Z. Fang, X. Zhang, A. Zhao, X. Li, H. Chen, and J. Li, “Recent developments in gnns for drug discovery,” 2025. [Online]. Available: https://arxiv.org/abs/2506.01302 [3] M. Fey and J. E. Lenssen, “Fast graph representation learning with PyTorch Geometric,” in ICLR Workshop on Representation Learning on Graphs and Manifolds, 2019. [4] J. Gasteiger, A. Bojchevski, and S. G¨ unnemann, “Combining neural networks with personalized pagerank for classification on graphs,” in International Conference on Learning Representations, 2019. [Online]. Available: https://openreview.net/forum?id=H1gL-2A9Ym [5] F. Guan, T. Zhu, H. Tong, and W. Zhou, “A realistic model extraction attack against graph neural networks,” Know.-Based Syst., vol. 300, no. C, Nov. 2024. [Online]. Available: https: //doi.org/10.1016/j.knosys.2024.112144 [6] W. L. Hamilton, R. Ying, and J. Leskovec, “Inductive representation learning on large graphs,” in Proceedings of the 31st International Conference on Neural Information Processing Systems, ser. NIPS’17. Red Hook, NY, USA: Curran Associates Inc., 2017, p. 1025–1035. [7] W. Hu, B. Liu, J. Gomes, M. Zitnik, P. Liang, V. Pande, and J. Leskovec, “Strategies for pre-training graph neural networks,” in International Conference on Learning Representations, 2020. [Online]. Available: https://openreview.net/forum?id=HJlWWJSFDH [8] M. Jagielski, N. Carlini, D. Berthelot, A. Kurakin, and N. Papernot, “High accuracy and high fidelity extraction of neural networks,” in Proceedings of the 29th USENIX Conference on Security Symposium, ser. SEC’20. USA: USENIX Association, 2020. [9] M. Juuti, S. Szyller, S. Marchal, and N. Asokan, “ PRADA: Protecting Against DNN Model Stealing Attacks ,” in 2019 IEEE European Symposium on Security and Privacy (EuroS&P). Los Alamitos, CA, USA: IEEE Computer Society, Jun. 2019, pp. 512– 527. [Online]. Available: https://doi.ieeecomputersociety.org/10.1109/ EuroSP.2019.00044 [10] T. N. Kipf and M. Welling, “Semi-supervised classification with graph convolutional networks,” in International Conference on Learning Representations, 2017. [Online]. Available: https://openreview.net/ forum?id=SJU4ayYgl [11] C. Lin, G. J. Sun, K. C. Bulusu, J. R. Dry, and M. Hernandez, “Graph neural networks including sparse interpretability,” 2020. [Online]. Available: https://arxiv.org/abs/2007.00119 [12] Y. Liu, X. Ao, Z. Qin, J. Chi, J. Feng, H. Yang, and Q. He, “Pick and choose: a gnn-based imbalanced learning approach for fraud detection,” in Proceedings of the web conference 2021, 2021, pp. 3168–3177. [13] S. Luan, C. Hua, M. Xu, Q. Lu, J. Zhu, X.-W. Chang, J. Fu, J. Leskovec, and D. Precup, “When do graph neural networks help with node classification? investigating the homophily principle on node distinguishability,” in Advances in Neural Information Processing Systems, A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, Eds., vol. 36. Curran Associates, Inc., 2023, pp. 28 748–28 760. [Online]. Available: https://proceedings.neurips.cc/paper files/paper/ 2023/file/5ba11de4c74548071899cf41dec078bf-Paper-Conference.pdf [14] A. K. Menon, S. Jayasumana, A. S. Rawat, H. Jain, A. Veit, and S. Kumar, “Long-tail learning via logit adjustment,” in International Conference on Learning Representations, 2021. [Online]. Available: https://openreview.net/forum?id=37nvvqkCo5 [15] L. Page, S. Brin, R. Motwani, and T. Winograd, “The pagerank citation ranking : Bringing order to the web,” in The Web Conference, 1999. [Online]. Available: https://api.semanticscholar.org/CorpusID:1508503 [16] M. Podhajski, J. Dubi´ nski, F. Boenisch, A. Dziedzic, A. P. Michalak, and Tomasz, “Efficient model-stealing attacks against inductive graph neural networks,” no. arXiv:2405.12295, Aug. 2024, arXiv:2405.12295 [cs]. [Online]. Available: http://arxiv.org/abs/2405.12295 [17] O. Shchur, M. Mumme, A. Bojchevski, and S. G¨ unnemann, “Pitfalls of graph neural network evaluation,” 2019. [Online]. Available: https://arxiv.org/abs/1811.05868 [18] Y. Shen, X. He, Y. Han, and Y. Zhang, “Model stealing attacks against inductive graph neural networks,” in 2022 IEEE Symposium on Security and Privacy (SP), May 2022, p. 1175–1192. [Online]. Available: https://ieeexplore.ieee.org/abstract/document/9833607 [19] S. Suresh, V. Budde, J. Neville, P. Li, and J. Ma, “Breaking the limit of graph neural networks by improving the assortativity of graphs with local mixing patterns,” in Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining, ser. KDD ’21. New York, NY, USA: Association for Computing Machinery, 2021, p. 1541–1551. [Online]. Available: https://doi.org/10.1145/3447548.3467373 
+
+13 [20] P. Veliˇ ckovi´ c, G. Cucurull, A. Casanova, A. Romero, P. Li` o, and Y. Bengio, “Graph attention networks,” in International Conference on Learning Representations, 2018. [Online]. Available: https: //openreview.net/forum?id=rJXMpikCZ [21] H. Wang, Z. Wei, J. Gan, S. Wang, and Z. Huang, “Personalized pagerank to a target node, revisited,” in Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining, ser. KDD ’20. New York, NY, USA: Association for Computing Machinery, 2020, p. 657–667. [Online]. Available: https://doi.org/10.1145/3394486.3403108 [22] Y. Wang, W. Wang, Y. Liang, Y. Cai, and B. Hooi, “Mixup for node and graph classification,” in Proceedings of the Web Conference 2021, ser. WWW ’21. New York, NY, USA: Association for Computing Machinery, 2021, p. 3663–3674. [Online]. Available: https://doi-org.pitt.idm.oclc.org/10.1145/3442381.3449796 [23] Z. Wang, M. Lin, B. Shen, K. Anderson, M. Liu, T. Cai, and Y. Dong, “CEGA: A cost-effective approach for graph-based model extraction and acquisition,” in Forty-second International Conference on Machine Learning, 2025. [Online]. Available: https: //openreview.net/forum?id=HnXElKZdEh [24] B. Wu, V. Profile, X. Yang, V. Profile, S. Pan, V. Profile, X. Yuan, and V. Profile, “Model extraction attacks on graph neural networks,” Proceedings of the 2022 ACM on Asia Conference on Computer and Communications Security, p. 337–350, May 2022. [25] S. Wu, F. Sun, W. Zhang, X. Xie, and B. Cui, “Graph neural networks in recommender systems: a survey,” ACM computing surveys, vol. 55, no. 5, pp. 1–37, 2022. [26] J. Xu, S. Koffas, O. Ersoy, and S. Picek, “Watermarking graph neural networks based on backdoor attacks,” in 2023 IEEE 8th European Symposium on Security and Privacy (EuroS&P), 2023, pp. 1179–1197. [27] Z. Yang, W. W. Cohen, and R. Salakhutdinov, “Revisiting semi-supervised learning with graph embeddings,” in Proceedings of the 33rd International Conference on International Conference on Machine Learning - Volume 48, ser. ICML’16. JMLR.org, 2016, p. 40–48. [28] K. Zhao, B. Shen, Y. Dai, S. Chakraborty, and Y. Dong, “Graphip-bench: How hard is it to steal a graph neural network, and can we stop it?” 2026. [Online]. Available: https://arxiv.org/abs/2605.12827 [29] Y. Zhuang, C. Shi, M. Zhang, J. Chen, L. Lyu, P. Zhou, and L. Sun, “Unveiling the secrets without data: Can graph neural networks be exploited through Data-Free model extraction attacks?” 2024, p. 5251–5268. [Online]. Available: https://www.usenix.org/conference/ usenixsecurity24/presentation/zhuang 
+
+APPENDIX 
+
+A. Implementation 
+
+We follow the standard training/validation/test splits of 80%/10%/10% [7], [11], [19] across four graph datasets. As for victim GNN training, we adopt the learning rate as 0.001 ,weight decay as 5e − 4 and training epochs as 600 . Adam is used as the optimizer. The hidden dimension is 16 and the number of layers is 2. In terms of GNN stealing attacks, we choose the learning rate from {0.01 , 0.001 }, weight decay as 5e − 4 and training epochs as 600 . K ∈ { 5, 10 , 15 , 20 },
+
+α ∈ { 0.1, 0.15 , 0.2, 0.25 , 0.3} and wmix ∈ { 0.1, 0.5, 1, 1.5} for surrogate pre-training; We set the learning rate as 0.01 , training epochs as 200 and τ = 0 .5 for imbalance-aware fine-tuning. Re-garding baselines, we leverage the same training configurations for fair comparison and other customized parameters strictly follow the default setting in [28]. We further restrict node selection to training node sets for two reasons, first, test nodes are inaccessible to the adversary in realistic deployments; second, covering test nodes in the query set would introduce data leakage into the evaluation, artificially inflating the attack performance of the surrogate model. Notably, even under these restrictions, the baselines operate under more favorable conditions than Dagger as their victim-surrogate backbones are aligned while Dagger is backbone-agnostic. We finally report the average results of 3 trials. All experiments are conducted on a 64 -bit machine with 4 Nvidia A 100 GPUs. 
+
+B. Benign GNN Performance 
+
+Table V reports the benign classification performance of each victim GNN backbone. All backbones achieve strong pre-dictive performance across graph datasets, confirming that they represent valuable stealing targets. Among these, GraphSAGE generally outperforms other backbones on Cora, PubMed and Computer, while APPNP excels on Physics. TABLE V: Benign Performance across GNN Backbones 
+
+Dataset GNN Metrics 
+
+Acc F1 
+
+Cora 
+
+GCN 83.03 79.61 GAT 80.81 73.26 APPNP 80.44 67.30 GraphSAGE 87.45 85.48 PubMed 
+
+GCN 84.28 83.18 GAT 84.84 83.63 APPNP 86.00 84.44 GraphSAGE 86.00 85.01 Computer 
+
+GCN 89.97 88.64 GAT 88.59 86.88 APPNP 89.39 86.94 GraphSAGE 90.12 88.76 Physics 
+
+GCN 96.26 95.00 GAT 94.99 93.34 APPNP 97.00 95.72 
+
+GraphSAGE 95.83 94.48 
+
+C. Attack Performance D. Balance and Its Impact Factors 
+
+Balance To investigate the effect of class balance on attack performance, we construct four balance-level query node sets on Cora, the representative of the most imbalanced graphs. We subsample the full training nodes in the victim graph according to different target distributions. Specifically, let nc
+
+denote the number of training nodes whose victim-predicted label is class c, and |G t| represents the number of training nodes. The four levels are defined by the following sampling proportions, pvery  
+
+> c
+
+∝ nc 
+
+> |G t|
+
+; pimb  
+
+> c
+
+∝
+
+q nc 
+
+> |G t|
+
+; pslight  
+
+> c
+
+∝
+
+ nc
+
+> |G t|
+
+1/3
+
+;and pbalanced  
+
+> c
+
+= 1 
+
+> |C|
+
+. Each balance level is normalized to sum to one, and the largest-remainder allocation method is used to ensure a fixed query budget across all levels, where each class is first assigned its integer quota of query nodes and the remaining unallocated spots are then sequentially distributed to classes with the largest fractional remainders. The very imbalanced level preserves the heavily skewed distribution of victim predictions on the induced subgraph; imbalanced and slightly imbalanced levels progressively mitigate imbalance issues; and the balanced level enforces strict equality across classes. This design enables a controlled study of class balance effects while maintaining a fixed total query budget. 14 TABLE VI: The Performance of Dagger on PubMed and Physics. Unit: 1e-2 . Arrow indicates the direction of better performance and the bold font denotes the ‘best’ results. 
+
+Dataset Backbone Baseline Metrics 
+
+ACC FID Macro F1 Boundary Fid. Query 
+
+PubMed 
+
+GCN Rand 40.67 ±0.00 39.15 ±0.00 19.27 ±0.00 39.04 ±0.00 985 MEA 82.44 ±0.57 93.93 ±1.48 81.26 ±0.65 63.74 ±1.03 3810 AdvMEA 50.91 ±5.15 53.23 ±5.90 44.38 ±10.17 51.52 ±3.48 150 CEGA 50.68 ±1.21 54.36 ±1.18 47.83 ±2.72 42.54 ±0.62 984 DFEAII-Real 49.15 ±2.47 52.18 ±2.35 42.51 ±3.44 39.04 ±1.29 985 Dagger 83.81 ±0.06 91.72 ±0.17 82.80 ±0.14 54.53 ±0.55 985 GAT Rand 40.67 ±0.00 38.74 ±0.00 19.27 ±0.00 39.90 ±0.00 985 MEA 82.49 ±0.31 94.32 ±0.53 81.33 ±0.42 60.28 ±3.12 3810 AdvMEA 33.67 ±9.90 32.59 ±8.70 16.50 ±3.92 34.54 ±7.57 150 CEGA 76.17 ±2.29 84.99 ±2.12 75.48 ±2.12 50.43 ±2.33 984 DFEAII-Real 78.06 ±0.77 86.76 ±1.90 76.32 ±1.78 50.43 ±3.79 985 Dagger 83.54 ±0.32 92.29 ±0.27 82.41 ±0.33 56.65 ±1.29 985 APPNP Rand 50.19 ±13.46 51.20 ±16.76 30.09215.30 45.48 ±4.20 985 MEA 81.36 ±0.91 89.54 ±1.65 79.37 ±0.83 62.62 ±1.91 3810 AdvMEA 41.84 ±0.90 42.49 ±1.29 24.18 ±2.59 38.60 ±2.67 150 CEGA 60.09 ±8.94 62.90 ±9.64 59.45 ±8.48 41.70 ±2.01 984 DFEAII-Real 64.37 ±4.60 67.44 ±6.38 54.58 ±9.96 49.12 ±0.83 985 Dagger 83.27 ±0.15 93.68 ±0.13 82.29 ±0.14 62.48 ±1.16 985 GraphSAGE Rand 40.67 ±0.00 39.86 ±0.00 19.27 ±0.00 48.72 ±0.00 985 MEA 82.45 ±0.47 92.92 ±0.38 81.36 ±0.53 60.34 ±3.89 3810 AdvMEA 46.40 ±6.23 46.18 ±6.32 34.27 ±12.78 40.85 ±8.23 150 CEGA 81.80 ±1.56 83.87 ±1.15 81.64 ±1.39 49.91 ±3.03 984 DFEAII-Real 82.72 ±1.04 84.58 ±0.58 82.42 ±0.98 48.89 ±2.31 985 Dagger 84.01 ±0.09 93.44 ±0.24 82.95 ±0.07 57.78 ±1.89 985 
+
+Physics 
+
+GCN Rand 50.58 ±0.00 50.55 ±0.00 13.44 ±0.00 26.67 ±0.00 1724 MEA 95.34 ±0.11 97.64 ±0.21 93.64 ±0.15 60.00 ±4.80 16072 AdvMEA 91.61 ±0.33 93.19 ±0.51 88.04 ±0.54 53.33 ±4.80 250 CEGA 91.92 ±0.49 93.67 ±0.55 89.49 ±0.55 45.93 ±2.77 1720 DFEAII-Real 92.46 ±0.50 93.94 ±0.55 89.62 ±0.84 40.74 ±3.78 1724 Dagger 95.51 ±0.09 97.23 ±0.05 93.94 ±0.10 59.26 ±2.77 1724 GAT Rand 50.58 ±0.00 50.26 ±0.00 13.44 ±0.00 25.00 ±0.00 1724 MEA 88.98 ±0.81 89.94 ±0.72 85.74 ±0.67 46.97 ±2.14 16072 AdvMEA 79.46 ±0.46 80.01 ±0.45 72.60 ±1.46 42.42 ±4.29 250 CEGA 88.54 ±1.52 88.93 ±1.22 84.99 ±1.31 50.76 ±2.83 1720 DFEAII-Real 88.41 ±1.65 88.95 ±1.64 83.39 ±2.234 48.48 ±7.03 1724 Dagger 95.22 ±0.05 94.98 ±0.04 93.55 ±0.06 56.06 ±2.14 1724 APPNP Rand 69.76 ±0.29 70.97 ±0.36 50.14 ±0.16 36.60 ±3.33 1724 MEA 95.54 ±0.20 98.02 ±0.14 93.93 ±0.33 59.48 ±4.03 16072 AdvMEA 92.81 ±0.46 94.93 ±0.52 89.86 ±0.86 60.78 ±2.77 250 CEGA 70.73 ±21.49 71.62 ±21.77 73.10 ±15.06 42.48 ±7.39 1720 DFEAII-Real 78.25 ±3.13 78.84 ±3.46 59.96 ±6.02 39.87 ±6.67 1724 Dagger 95.46 ±0.09 97.60 ±0.09 93.86 ±0.12 54.90 ±1.60 1724 GraphSAGE Rand 50.58 ±0.00 50.55 ±0.00 13.44 ±0.00 27.91 ±0.00 1724 MEA 94.71 ±0.18 96.13 ±0.26 92.79 ±0.25 47.29 ±2.90 16072 AdvMEA 91.35 ±0.24 92.41 ±0.18 87.83 ±0.31 49.61 ±2.19 250 CEGA 92.76 ±1.49 92.81 ±1.31 91.17 ±1.38 39.53 ±0.00 1720 DFEAII-Real 93.39 ±0.13 92.41 ±0.18 87.83 ±0.31 49.61 ±2.19 1724 Dagger 95.42 ±0.06 96.42 ±0.05 93.96 ±0.07 51.94 ±2.19 1724 Contrary to the intuition that perfectly balanced queries should always yield the best surrogate, gradually enforc-ing balance constraints does not consistently improve attack performance across all victim backbones, sometimes even degrading it. Under high imbalance, the gap between the settings with and without class-balanced sampling and logit adjustment is largest across victim backbones. As the balance level increases, the two curves converge, indicating that re-balancing provides marginal benefit as the query distribution becomes more uniform. Sometimes they might cause a slight performance degradation, one plausible explanation is that excess resampling and calibration enforcements might cause overfitting. 
+
+Impact Factors We then investigate this finding with three factors interlinked with balance, namely label accuracy, iso-lated ratio and average degree in Figure 9. As the balance level increases, these three factors exhibit victim-dependent and non-monotonic trends across balance levels, suggesting that the relationship between query balance and data quality is more nuanced than a simple trade-off. Label accuracy shows inconsistent trends across victim backbones: it first increases then decreases for GCN, decreases then stably increases for GAT and APPNP, and steadily increases for GraphSAGE as the balance level rises. This suggests that the label quality effect of more balanced node selection is highly dependent on the victim’s prediction behav-iors. For some backbones, selectively including minority-class nodes can eventually improve the overall label accuracy of the query set, while for others it introduces noise. Isolated ratio is similarly non-monotonic: it decreases then rises for GCN, decreases then partially recovers for GAT, decreases monotonically for APPNP, and first increases then decreases for GraphSAGE. This indicates a complex interplay between query class balance and the structural sparsity of local subgraphs, where enforcing class balance does not guarantee structural integrity in the query set. Average degree also exhibits victim-specific patterns: it rises then falls for GCN, rises with a slight dip then rises again for GAT, slightly decreases then sharply increases for APPNP, and remains stable before rising for GraphSAGE, which showcases that the structural richness of the query set does not vary predictably with query balance level. 
+
+E. Ablation Studies 
+
+TABLE VII: Ablation Studies across Graph Datasets and GNN Backbones 
+
+Dataset Backbone Ablation Metrics 
+
+ACC FID Macro F1 Boundary Fid. 
+
+PubMed 
+
+GCN No manifold 83.67 ±0.08 91.48 ±0.23 82.50 ±0.18 52.78 ±0.21 No LA 84.18 ±0.11 91.77 ±0.42 83.12 ±0.18 53.65 ±1.61 No Tuning 83.54 ±0.71 91.21 ±0.48 82.11 ±0.98 52.78 ±1.09 Dagger 83.81 ±0.06 91.72 ±0.17 82.80 ±0.14 54.53 ±0.55 
+
+GAT No manifold 84.08 ±0.43 92.11 ±0.16 82.83 ±0.50 59.07 ±0.42 No LA 83.89 ±0.06 92.26 ±0,17 82.75 ±0.11 57.34 ±1.49 No Tuning 83.81 ±0.19 92.33 ±0.53 82.60 ±0.17 60.45 ±2.48 
+
+Dagger 83.54 ±0.32 92.29 ±0.27 82.41 ±0.33 56.65 ±1.29 APPNP No manifold 83.54 ±0.23 94.46 ±0.49 82.56 ±0.17 63.97 ±1.75 
+
+No LA 83.42 ±0.17 94.34 ±0.12 82.39 ±0.17 63.43 ±1.01 No Tuning 83.35 ±0.25 94.15 ±0.53 82.31 ±0.18 63.16 ±1.72 Dagger 83.27 ±0.15 93.68 ±0.13 82.29 ±0.14 62.48 ±1.16 GraphSAGE No manifold 84.30 ±0.20 93.36 ±0.47 83.15 ±0.12 59.32 ±2.85 No LA 84.31 ±0.38 93.31 ±0.37 83.25 ±0.31 57.78 ±1.47 No Tuning 84.48 ±0.35 93.54 ±0.67 83.33 ±0.27 59.66 ±3.75 
+
+Dagger 84.01 ±0.09 93.44 ±0.24 82.95 ±0.07 57.78 ±1.89 
+
+Physics 
+
+GCN No manifold 94.33 ±0.05 95.46 ±0.09 92.21 ±0.11 42.96 ±1.05 No LA 95.04 ±0.23 96.44 ±0.15 93.40 ±0.34 49.63 ±2.10 No Tuning 94.86 ±0.18 96.53 ±0.12 93.26 ±0.26 47.41 ±4.57 Dagger 95.51 ±0.09 97.23 ±0.05 93.94 ±0.10 59.26 ±2.77 
+
+GAT No manifold 93.68 ±0.21 93.54 ±0.12 91.58 ±0.30 48.48 ±2.14 No LA 94.80 ±0.18 94.36 ±0.21 93.08 ±0.18 52.27 ±1.86 No Tuning 94.96 ±0.05 94.53 ±0.01 93.30 ±0.09 51.52 ±2.14 Dagger 95.22 ±0.05 94.98 ±0.04 93.55 ±0.06 56.06 ±2.14 
+
+APPNP No manifold 94.87 ±0.00 96.68 ±0.04 92.92 ±0.03 54.90 ±0.00 No LA 95.70 ±0.12 97.89 ±0.11 94.28 ±0.18 58.17 ±0.92 
+
+No Tuning 95.77 ±0.06 97.82 ±0.03 94.39 ±0.04 58.17 ±2.45 
+
+Dagger 95.46 ±0.09 97.60 ±0.09 93.86 ±0.12 54.90 ±1.60 GraphSAGE No manifold 94.89 ±0.08 95.65 ±0.10 92.74 ±0.11 42.96 ±1.05 No LA 95.04 ±0.23 96.44 ±0.15 93.40 ±0.34 49.63 ±2.10 No Tuning 95.08 ±0.05 95.74 ±0.05 93.34 ±0.08 44.96 ±1.10 Dagger 95.42 ±0.06 96.42 ±0.05 93.96 ±0.07 51.94 ±2.19 
+
+15 Fig. 9: Balance Level Sensitivity and Other Factors 16

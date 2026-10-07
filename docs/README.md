@@ -44,14 +44,14 @@
       <span class="dpr-home-dashboard-kicker">2026-10-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 41 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>17</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>24</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-06 00:51:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-07 00:07:54 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-06 日报完成：共筛 25 篇（精读 10、速读 15），重点集中在安全对齐与联邦微调两条线。</p>
-<p>最值得看的是两篇 9.0 精读——《Constitutional adapters》（推理期干预）和《WBAG》（视觉-语言-动作操作安全）；速读里 CF-LoRA、FedLAFP、Inference-Layer Security（均 8.0）补充了联邦 LoRA 与推理层防护视角。</p>
-<p>普通读者可先从两篇 9.0 精读入手，再按兴趣从速读三篇里挑一篇延伸。</p>
+<p>2026-10-06 日报共处理 41 篇论文，精读 17 篇、速读 24 篇，重点关注 LLM 智能体的安全与对齐问题。最值得看的是两篇 9 分精读：Constitutional adapters 提出推理时干预以应对模型失配与滥用，OverAct 则聚焦工具调用智能体的主动越权测量与缓解。普通读者可优先了解这两项工作，再按兴趣浏览 AnyAct、FedLAFP 等 8 分速读论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">17 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Constitutional adapters: Inference-time interventions for misalignment and misuse">Constitutional adapters: Inference-time interventions for misalignment and misuse</span></li><li><span class="dpr-home-dashboard-paper-title" title="WBAG: A Whole-Body and Attached-Geometry Safety Framework for Vision-Language-Action Manipulation">WBAG: A Whole-Body and Attached-Geometry Safety Framework for Vision-Language-Action Manipulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evaluating and Improving the Robustness of Large Language Models to Input Sequence Variations">Evaluating and Improving the Robustness of Large Language Models to Input Sequence Variations</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Constitutional adapters: Inference-time interventions for misalignment and misuse">Constitutional adapters: Inference-time interventions for misalignment and misuse</span></li><li><span class="dpr-home-dashboard-paper-title" title="OverAct: Measuring and Mitigating Proactive Over-Authorization in LLM Tool-Calling Agents">OverAct: Measuring and Mitigating Proactive Over-Authorization in LLM Tool-Calling Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Intent-Hiding Jailbreaks: An Information-Theoretic Framework for Compositional Attacks">Intent-Hiding Jailbreaks: An Information-Theoretic Framework for Compositional Attacks</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>8</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">15 篇</strong>
+    <strong class="dpr-home-dashboard-count">24 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CF-LoRA: Decoupled Factor Aggregation and Adaptation-Aware Client Clustering for Federated LoRA Fine-Tuning">CF-LoRA: Decoupled Factor Aggregation and Adaptation-Aware Client Clustering for Federated LoRA Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning">FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Inference-Layer Security: Defending Against Adversarial Inference and Infrastructure Abuse">Inference-Layer Security: Defending Against Adversarial Inference and Infrastructure Abuse</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="AnyAct: Universal Action for Self-Evolving Agents">AnyAct: Universal Action for Self-Evolving Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning">FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="WayFinder: Hierarchical Visual-Language-Action for Zero-Shot Waypoint Generation and Low-Level Kinematic Control">WayFinder: Hierarchical Visual-Language-Action for Zero-Shot Waypoint Generation and Low-Level Kinematic Control</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">large-language-models <strong>8</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span></div>
 </section>
 </div>
 
