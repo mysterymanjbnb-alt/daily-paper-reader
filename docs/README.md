@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-06</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-08</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 41 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 29 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>17</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>24</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>14</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-07 00:07:54 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-08 00:31:17 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-06 日报共处理 41 篇论文，精读 17 篇、速读 24 篇，重点关注 LLM 智能体的安全与对齐问题。最值得看的是两篇 9 分精读：Constitutional adapters 提出推理时干预以应对模型失配与滥用，OverAct 则聚焦工具调用智能体的主动越权测量与缓解。普通读者可优先了解这两项工作，再按兴趣浏览 AnyAct、FedLAFP 等 8 分速读论文。</p>
+<p>今天共处理29篇论文，精读14篇、速读15篇，重点聚焦对抗训练与黑盒模型抽取防御。</p>
+<p>最值得看的是两篇9分工作：概率对抗训练，以及跨攻击场景下的LLM抽取防御生命周期基准，前者关乎鲁棒性，后者提醒防御效果可能因攻击而异。</p>
+<p>普通读者可先读这两篇9分论文的摘要与结论，再顺带浏览8分的可信AI安全、去中心化多智能体编排与协作自改进方向。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">17 篇</strong>
+    <strong class="dpr-home-dashboard-count">14 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Constitutional adapters: Inference-time interventions for misalignment and misuse">Constitutional adapters: Inference-time interventions for misalignment and misuse</span></li><li><span class="dpr-home-dashboard-paper-title" title="OverAct: Measuring and Mitigating Proactive Over-Authorization in LLM Tool-Calling Agents">OverAct: Measuring and Mitigating Proactive Over-Authorization in LLM Tool-Calling Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="Intent-Hiding Jailbreaks: An Information-Theoretic Framework for Compositional Attacks">Intent-Hiding Jailbreaks: An Information-Theoretic Framework for Compositional Attacks</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Probabilistic Adversarial Training">Probabilistic Adversarial Training</span></li><li><span class="dpr-home-dashboard-paper-title" title="Do Defenses Against LLM Extraction Work Across Attacks? A Lifecycle Benchmark of Black-Box Model Extraction">Do Defenses Against LLM Extraction Work Across Attacks? A Lifecycle Benchmark of Black-Box Model Extraction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Sleeping Secrets: How Fine-Tuning Reawakens Privacy Risks in Language Models">Sleeping Secrets: How Fine-Tuning Reawakens Privacy Risks in Language Models</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>8</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +86,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">24 篇</strong>
+    <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="AnyAct: Universal Action for Self-Evolving Agents">AnyAct: Universal Action for Self-Evolving Agents</span></li><li><span class="dpr-home-dashboard-paper-title" title="FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning">FedLAFP: Low-Rank Aggregation Meets Full-Rank Personalization in Federated Fine-Tuning</span></li><li><span class="dpr-home-dashboard-paper-title" title="WayFinder: Hierarchical Visual-Language-Action for Zero-Shot Waypoint Generation and Low-Level Kinematic Control">WayFinder: Hierarchical Visual-Language-Action for Zero-Shot Waypoint Generation and Low-Level Kinematic Control</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SURE: Framework for Safety to Construct Trustworthy AI">SURE: Framework for Safety to Construct Trustworthy AI</span></li><li><span class="dpr-home-dashboard-paper-title" title="PANDA: A Decentralized Architecture with Flexible Orchestration for Scalable, Fault-Tolerant Multi-Agent Systems">PANDA: A Decentralized Architecture with Flexible Orchestration for Scalable, Fault-Tolerant Multi-Agent Systems</span></li><li><span class="dpr-home-dashboard-paper-title" title="CollabFlow: Recursive Self-Improvement of Agent Collaboration">CollabFlow: Recursive Self-Improvement of Agent Collaboration</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">large-language-models <strong>8</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>5</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>4</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>7</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
 </section>
 </div>
 

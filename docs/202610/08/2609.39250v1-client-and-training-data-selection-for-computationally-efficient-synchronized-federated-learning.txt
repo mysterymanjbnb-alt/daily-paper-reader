@@ -1,0 +1,402 @@
+Title: Client and Training Data Selection for Computationally Efficient Synchronized Federated Learning
+
+URL Source: https://arxiv.org/pdf/2609.39250v1
+
+Published Time: Thu, 01 Oct 2026 01:13:38 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Client and Training Data Selection for Computationally Efficient Synchronized Federated Learning 
+
+Muzaffer Citir †, Hiroki Nishikawa †† , Sangyoung Park †
+
+> †
+
+Smart Mobility Systems, Technical University of Berlin, Germany 
+
+> ††
+
+Graduate School of Information Science and Technology, The University of Osaka, Japan 
+
+> †
+
+{muzaffer.citir, sangyoung.park }@tu-berlin.de, †† nishikawa.hiroki@ist.osaka-u.ac.jp 
+
+Abstract —Federated learning (FL) is a promising paradigm of machine learning, which preserves user privacy by enabling learning without sharing raw data with a cloud server. Straggling clients have been a problem for FL as they introduce delays in aggregating the local models and hence, the convergence of the global model. Therefore, it is important to have a mechanism that ensures fast convergence of the global model as well as good FL participation rate. Another issue for the convergence of a model in FL is the non-independent and identically distributed (non-iid) data across the clients. Prior approaches based on probabilistic client selection do not work well under non-iid data especially when the number of clients is small. We show scenarios where such approaches fail and propose a joint client-training data selection algorithm for fast convergence of FL models. Our experiments on CIFAR-100 dataset show that convergence of the FL model can be significantly improved over prior works that can consider non-iid data and heterogeneous computation and higher model accuracy. 
+
+Index Terms —federated learning, client selection, non-IID data, probabilistic scheduling, real-time systems 
+
+I. I NTRODUCTION 
+
+Federated learning (FL) has emerged as a paradigm, en-abling a multitude of edge devices to engage in distributed learning while upholding user privacy and data security [1]. The concept involves edge devices training local ML models on their own data and periodically sharing model parameters with each other, thus maintaining data privacy [2]–[4]. Despite its advantages in data privacy, parallel processing, and reduc-ing data transmission delays to cloud servers (CS), FL still faces challenges in time-sensitive ML applications [5]. First, model training is performed on heterogeneous edge devices where computing and communication resources are limited. Therefore, overall model training could take an indefinitely long time if model aggregation is delayed due to a few stragglers [6]–[8]. Second, data is often non-independent and identically distributed (non-iid) across the edge devices. In case of classification problems, the model accuracy could be undermined if certain classes are not represented well 
+
+Accepted for publication in the 29th Euromicro Conference on Digital System Design (DSD 2026). Author’s accepted manuscript. © 2026 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or reuse of any copyrighted component of this work in other works. 
+
+in the training dataset because they are located in resource-constrained devices, and therefore, cannot participate in FL well. Fig. 1 depicts how stragglers could impact the performance of FL training. Here, we assume synchronous update of the model where a CS waits for all participants in the FL round before aggregating the model. Local training on edge devices is generally regarded as a best-effort service, which can be interrupted by higher-priority tasks. This results in straggling edge devices, worsening the performance of model training and slowing the convergence of the FL model [6], [9]. We also assume a deadline (or timeout) by which local training must finish, as the CS cannot indefinitely wait for stragglers in an FL iteration. Fig. 1(a) shows how a lack of computing capacity and interruptions can lead to deadline misses in such an FL setting. In contrast, if an FL system is aware of the computation capacity and has stochastic information about potential causes of delay such as interruptions, it could ask the edge device to train on fewer data samples to ensure completion before the deadline (Fig. 1(b)). Apart from meeting the FL timing constraints, which is mainly concerned with computing capacity and the amount of training data, the quality of training data is also crucial for the accuracy of the global model. Although prior works proposed client selection and resource management schemes for FL under a deadline [10], [11], most of them assume iid data, where the convergence of the model performance is less tricky [12]. Even if edge devices are able to complete the training and send the model to the CS in time, the convergence of the global model will be slow unless the training dataset is sufficiently balanced. To address such issues, this paper proposes a device selection and data allocation algorithm for edge FL that minimizes the overall model training time under a timing constraint per FL iteration and non-iid data across the edge devices. It is assumed that the CS cannot predict exactly when the training on participating devices finishes due to the uncertainty in training and interruptions by other tasks, the algorithm takes a probabilistic approach and tries to maximize the expected value of the training data that can contribute to model aggregation each FL round. The algorithm also tries to achieve a balanced class distribution during the client selection and when it is determining the training dataset arXiv:2609.39250v1 [cs.LG] 30 Sep 2026 Fig. 1. (a) A deadline miss example of FL devices scheduling, and (b) avoiding it with proper data allocation. 
+
+size. The contributions of this paper are as follows:  
+
+> •
+
+We show the impact of the training dataset size and class distribution on the training times and model accuracy  
+
+> •
+
+We incorporate a probabilistic approach for estimating training times and task interruptions  
+
+> •
+
+A joint device and non-iid-aware training data selection algorithm for determining the training data size and balance between classes. The rest of this paper is organized as follows: Section II summarizes the related work. Section III describes the prob-abilistic system model backed by measurements. Section IV proposes the joint client and data selection algorithm for fast FL model convergence. Section V shows the experimental results and a comparison with the state of the art. Finally, Section VI concludes this paper with future remarks. II. R ELATED WORK 
+
+Numerous studies on FL looked into optimization of com-munication and computational resources to boost system effi-cacy. Wang et al. introduced algorithms to enhance resource utilization and diminish energy expenditure in 5G edge net-works by modulating the frequency of global aggregation at edge servers [13]. Broadening this scope, Wadu et al. exam-ined client scheduling and resource allocation, introducing a strategy that employs Gaussian process regression for channel prediction to mitigate accuracy loss in FL [14]. This strategy was subsequently enhanced to incorporate the computational resources of clients, presenting a more integrated perspective on resource optimization [15]. In a similar fashion, Li et al. devised SmartPC, a system with dual-level controllers designed to optimize the FL learning process, showing the potential efficiency gains from device selection and configu-ration adjustments [11]. These works, however, consider iid data across the clients, which means the data quality does not change significantly depending on client selection. In a related research direction, Amiri et al. tackled the opti-mization of communication resources through device schedul-ing policies that consider both channel conditions and the significance of local model updates under non-iid data [16]. This work was further elaborated with a convergence analysis and a model update compression strategy [17]. Furthermore, to address latency issues, Xia et al. and Xu et al. proposed client scheduling methodologies grounded in multi-armed bandit theory, aimed at reducing training latency—a crucial aspect that highlights the complex nature of efficiency in FL sys-tems [18], [19]. A heuristic method to select computationally efficient (powerful hardware) and statistically efficient (useful data) [20] has been proposed based on the loss value after local training. Such methods use metrics, which are available only after the local training, therefore wasting precious computation resources even though the client is not selected in that FL round. Wang et al. later introduced Fed-LBAP and FedMinAvg methods designed to regulate workload distribution to min-imize computational time and accuracy loss during FL model training [21]. They also presented an algorithm, MinCost, to tackle the optimization challenge [22], and proposed OLAR [23], an optimal greedy solution to reduce computational time in FL training. Furthering this line of research, subsequent work developed scheduling algorithms for FL aimed at reduc-ing energy consumption by managing workload distribution [24], predicated on the notion that training’s computational latency can be modulated by workload allocation [25]. An approach that modifies the client selection probability based on the gradient value has proven to be effective [26]. Unlike these approaches, in our method, clients that do not participate in FL do not waste any computation resources, and that most 
+
+helpful clients are deterministically selected. Our work is distinguished from other works in that i) it considers non-iid data and explicitly balances class distribution for an FL round, ii) it does not require local training to complete for client selection, and iii) deterministically selects the most helpful clients. To the best of the authors’ knowledge, no other works have simultaneously considered all these points. The details and effectiveness of the proposed approach are elaborated in the rest of the paper. III. S YSTEM MODEL 
+
+A. Overall FL Architecture 
+
+The FL system consists of a single Cloud Server (CS) and 
+
+M edge devices, denoted as M = {1, 2, . . . , M }. Each device 
+
+i possesses a local dataset Di = {xi,n ∈ Rs, y i,n ∈ R}|Di|
+
+> n=1
+
+.This paper assumes that each device i uses a part of Di for training, denoted as di, to meet the deadline of an iteration, 
+
+T dead . Here, xi,n denotes n-th s-dimensional input data vector at device i, and yi,n the corresponding labeled output for xi,n . Here we also make similar assumption to existing FL papers such that the amount of dataset size as well as the class information is known to the device [1]. The primary objective of FL training is to determine the model parameter w that minimizes a loss function to the entire dataset, which is given by: 
+
+min  
+
+> w
+
+F (w) := min 
+
+> w
+
+1
+
+M
+
+X
+
+> i∈M
+
+fi(w), (1) where the local loss function fi(w) on the dataset di is defined as fi(w) = 1
+
+> |di|
+
+P 
+
+> n∈di
+
+f (w, x i,n , y i,n ), and f (w, x i,n , y i,n )
+
+captures the error of the model parameter w on the input-output pair {xi,n , y i,n }.Our FL uses an iterative approach to solve Equation (1). Each round, indexed by k, contains the following three steps: (1) The CS broadcasts a global model wk to a number of edge devices, which are assumed to be under randomly selection (RS) by the CS and participate in the round. (2) Each device 
+
+i updates its local model by a gradient descent algorithm on the local dataset (i.e., wik+1 = wk − η∇fi(wk), where 
+
+η is a learning rate), and uploads the updated model wik+1 
+
+to the CS until a deadline. If a device misses the deadline, the updated model is disposed. (3) The CS aggregates all the models uploaded until the deadline to generate a new global model wk+1 = 1 
+
+> |Πk|
+
+P 
+
+> i∈Πk
+
+wik+1 .
+
+B. Probabilistic Modeling of Time-sensitive FL 
+
+Hereafter, we consider an arbitrary round k in this paper and omit the index without loss of generality. We model the total latency as the sum of three components: computation latency (tcp ), interruption latency ( tintr ), and communication latency (tcomm ). The cumulative probability that the total latency satisfies a given deadline, Tdead , is expressed as: 
+
+P (tcp + tintr + tcomm ≤ Tdead ). (2) The CS determines the training dataset size di for each edge device to improve the learning rate while ensuring this prob-abilistic constraint is satisfied. Below, we detail the modeling of each latency component. 
+
+Computational Latency: The computation latency tcp of local training on an edge device, given a dataset size di, is modeled using a shifted exponential distribution: 
+
+P (tcp ≤ t) = 1 − exp 
+
+
+
+− μi
+
+di
+
+(t − aidi)
+
+
+
+, (3) where ai > 0 represents the device’s maximum computation capacity, and μi > 0 indicates the fluctuation in computation capacity. The minimum computation time is given by aidi,and the probability increases as t grows. The parameters ai
+
+and μi are determined by the performance of the edge device and the characteristics of the FL application. The mean and variance of tcp are: 
+
+E[tcp ] = aidi + di
+
+μi
+
+, Var [tcp ] = d2
+
+> i
+
+μ2
+
+> i
+
+. (4) 0 1 2 3 4 5         
+
+> Number of images 10 4
+> 010 20 30 40 50
+> Training time (s)
+> Fig. 2. Training time vs dataset size for CIFAR-10 dataset. 4.2 4.3 4.4 4.5 4.6 4.7
+> Training time (s)
+> 00.1 0.2 0.3 0.4 0.5
+> Probability
+> Fig. 3. Time distribution with 5 ×10 3images of CIFAR-10.
+
+In order to validate the presented computation latency model, we have conducted preliminary experiments that mea-sure the training times of CIFAR-10 dataset [27] using the hardware specified in Table I. In the validation, we have run 660 times of training with CIFAR-10 on the environment and measured the training times. Fig. 2 shows the result, where x-and y-axes show the number of images used to training and the measured training time (secs), respectively. This measurement indicates that we have observed the linear relationship between the training dataset size and training time. Next, we depict a histogram with 120 runs to yield the probability distribution of training times, which roughly follows the exponential distribution, as shown in Fig. 3. An example μi and ai values for our setup as a result of curve fitting is also shown in the graph. In conclusion, it has been observed that the results of the model are well aligned with the outcomes of empirical experiments although it cannot be overlooked that the selected model may not perfectly mimic computation delay in every aspect. Throughout this paper, we assume that the CS is aware of the computation capabilities of edge devices, i.e., different versions of smartphones, infrastructure monitoring sensors, etc., and the application characteristics that dictate μi and ai.
+
+Interruption Latency: The interruption latency tintr arises due to preemption by other tasks on edge devices, such as a smartphone user launching an application [28]. This is modeled using an M/M/ 1 queuing system: 
+
+P (tintr ≤ t) = 1 − exp( −λintr t), (5) where λintr represents the rate of interruptions (Poisson pro-cess), and the service rate follows an exponential distribution with parameter μintr ≥ λintr , where μintr represents the service rate of interruptions, i.e., how quickly interruption tasks are TABLE I HARDWARE SPECIFICATIONS FOR FL T RAINING      
+
+> Component Specification
+> CPU Intel i9-12900KF 3,2 GHz GPU NVIDIA GeForce RTX 4090 24 GB (CUDA 12.2) RAM 64 GB DDR5-SDRAM 4800 MHz Operating System Ubuntu 22.04.3 LTS
+
+handled by the edge device. The mean and variance of tintr 
+
+are: 
+
+E[tintr ] = 1
+
+μintr − λintr 
+
+, Var [tintr ] = 1(μintr − λintr )2 (6) 
+
+Communication Latency: Communication latency tcomm 
+
+occurs when devices upload locally trained parameters to the CS. We model this latency as a Gaussian distribution: 
+
+P (tcomm ≤ t) = Φ 
+
+ t − μcomm 
+
+σcomm 
+
+
+
+, (7) where μcomm and σcomm are the mean and standard deviation of the communication latency, respectively. The mean and variance of tcomm are: 
+
+E[tcomm ] = μcomm , Var [tcomm ] = σ2
+
+> comm
+
+. (8) The weak dependency between training latency and commu-nication latency allows us to approximate them as independent; thus assuming independence among the three components for simplicity, the cumulative probability can be expressed as: 
+
+P (ttotal ≤ Tdead ) = P (tcp ≤ Tdead )·
+
+P (tintr ≤ Tdead ) · P (tcomm ≤ Tdead ) (9) 
+
+C. Problem Formulation 
+
+To ensure the deadline constraint is satisfied, the CS opti-mizes the dataset size di for each device. The optimization problem is formulated as: 
+
+max 
+
+> di
+
+X
+
+> i
+
+Ui(di), (10) subject to: 
+
+Ui(di) = P (ttotal ≤ Tdead ) · di, (11) 
+
+P (ttotal ≤ Tdead ) ≥ 1 − ϵ, (12) where Ui(di) represents the utility of training that is expressed as the expected value of the probability of the total latency with dataset size di, α is a parameter to consider the trade-off between the accuracy and latency, and ϵ is the acceptable probability of exceeding the deadline that depends on the requirement for a real-time application. Furthermore, we proceed under the assumption that latency to aggregate models on the CS is negligible thanks to its stronger computation capability. 
+
+Algorithm 1 Joint client and data selection algorithm 
+
+Input: A set of clients K, disjoint local dataset Dk = Dk, 1 ∪Dk, 2 ∪· · · ∪ Dk,m where Dk,i is the set of images of class i in client 
+
+k, computational capability ak , fluctuation μk , and interruption parameters λk and μintr,k and average number of times an image has been used for training navg,k per client. 
+
+Output: Subset of clients l ∈ K, training dataset size per class 
+
+|T D k,i |∀ k ∈ l, ∀i 
+
+> 1:
+
+for all k ∈ K do  
+
+> 2:
+
+|T D k | ← argmax |T D |(|T D | · Pk (tcp + titr + tcm ≤ T dead ))  
+
+> 3:
+
+|T D k,i |∀ i ← assignEven (Dk , |T D k |) 
+
+> 4:
+
+end for  
+
+> 5:
+
+uk ← w1 ·(1 −navg,k )|T D k |+w2 ·min (|T D k, 1|, |T D k, 2|, · · · ),
+
+∀k ∈ K 
+
+> 6:
+
+l ← ϕ 
+
+> 7:
+
+Dcur ← ϕ 
+
+> 8:
+
+while |l| < n target do  
+
+> 9:
+
+k ← max uk (K) 
+
+> 10:
+
+l ← l ∪ k 
+
+> 11:
+
+navg,k ← navg,k + |T D k ||Dk | 
+
+> 12:
+
+T D cur ← T D cur ∪ T D k 
+
+> 13:
+
+K ← K − k 
+
+> 14:
+
+i ← argmin i(|T D cur,i |) 
+
+> 15:
+
+cc m ← classCoverage( T D cur , m )∀m 
+
+> 16:
+
+um ← w1 · exp (−navg,m /10) · | T D m| + w2 · | Dk,i | + w3 ·
+
+cc m, ∀m ∈ K 
+
+> 17:
+
+end while  
+
+> 18:
+
+return l, |T D k,i |∀ k ∈ l,∀ i, navg,k ∀k ∈ K
+
+IV. J OINT CLIENT AND DATA SELECTION ALGORITHM 
+
+Before describing the joint client and data selection algo-rithm in detail, we make the following assumptions supporting the logic of the algorithm. 
+
+Assumption 1: A larger training datasize contributes to faster convergence of the FL model accuracy. 
+
+Assumption 2: Using unseen data contributes to higher model accuracy over FL iterations. If a few clients are repeatedly selected due to higher computing capacity, their local data might be re-used for training. Many prior works do not have to consider this as the participating clients are probabilistically selected every FL round. As the proposed algorithm determin-istically selects clients, it should avoid re-using the same data simply to maximize the training dataset size. 
+
+Assumption 3: Impact of unbalanced collective class dis-tribution significantly reduces the test accuracy of under-represented classes. Based on the assumptions, we design the as described in Algorithm 1. We assume that the algorithm is running on the CS and is aware of the set of all clients K, sizes of local datasets and their class distribution on each client |Dk,i | where 
+
+k ∈ K and i is the class index, parameters characterizing the computing capacity ak and μk, interruption parameters λk and 
+
+μintr,k , and navg,k denoting the average number of times an image has been used for training over the FL rounds. The output of the algorithm is l ⊂ K a set of clients selected for this FL iteration, |T D k,i | number of images per class in the selected clients, and updated navg,k for the next FL iteration. In line 2, the algorithm determines the size of the training dataset, |T D k| that maximizes the expected dataset size for all client k, i.e., dataset size multiplied by the probability the training finishes within the deadline. In line 3, training dataset sizes per class |T D k,i | are derived by assignEven() function. The function is a heuristic for determining |T D k,i | for all 
+
+i such that the distribution is as even as possible while the sum is equal to |T D k| = P 
+
+> i
+
+|T D k,i |. If there is enough data from all classes, |T D k,i | = |T D k|/N classes . If the number of images for certain classes is smaller than |T D k|/N classes ,then all images from the classes are used for training and the rest of the classes are assigned the same number of images such that the training dataset size is equal to |T D k|.Lines 8 to 16 describe the essence of the algorithm, where clients are greedily selected based on the usefulness metric 
+
+uk, which is defined as follows. 
+
+uk ← w1·exp (−navg,k /10) |T D k|+w2·| Dk,i |+w3·cc k, ∀k ∈ K, 
+
+(13) where i = argmin i(|T D cur,i |) is the index of the class that has the least amount of training data allocated so far, |T D cur |,in this FL round. The usefulness metric of a client k is a weighted sum of three elements, where the first is the training dataset size multiplied by a decreasing exponential function of the average number of times an image has been used in that client. The reasoning behind this is that the convergence of the FL model is faster when a larger training dataset is used (assumption 1), but still want to prevent using the data likely from high computing capacity devices over and over again. Eventually, uk forces FL to select other clients through the term navg,k . The second term is used to give preference to clients, which have images belong to the class that are in this FL round. This effectively balances the class distribution of the training dataset to be used in this FL round (assumption 2). The third term is a supplementary term ensuring the class coverage at the warm up phase of the loop (lines 8-16) before the second term starts to effectively work. Until the target number of clients is reached, the client with largest uk is selected in the while loop. The client k is added to the set l (line 10), navg,k is updated (line 11) for the next FL round, and T D cur is updated with the newly selected client’s data (line 12), k is removed from candidate client set K in this FL round (line 13), the class with the fewest amount of images is identified (line 14), and finally, the usefulness metric is updated for every client still in K. Before the while loop at line 8, T D cur is empty, and the class with the least number of images cannot be determined. Therefore, the second term of uk is instead initialized with the number of images from the class that has the fewest samples in each respective client (line 5). The outputs l, the client selection, |T D k,i |∀ k ∈ l, ∀i,the training dataset are derived, and navg,k will be used in subsequent FL iterations. Actual training dataset is selected randomly, i.e., random selection of |T D k,i | images out of Dk,i .V. E XPERIMENTS 
+
+In this section, we present the experimental results and compare with existing works. The two baselines we consider are MinCost [22] and probPart based on [26], which can deal with non-iid data and computation heterogeneity. The algorithms in the work do not assume a fixed deadline like our work, but aim at minimizing the time required for global model convergence. Regarding MinCost algorithm, the sum of the training dataset across clients should be D, which is an input to the algorithm. The algorithm uses parameter α to address the non-iidness when assigning data. Higher value discourages clients with fewer number of classes to participate in the FL rounds. We used the value of 2.5 as it is in the middle of the range the work has suggested. As for probPart algorithm, the usefulness of a client under non-iid data is characterized in the Gi parameter. The values of Gi for client i have been calculated using a training on a small batch of the training data. Our version of probPart is simplified that selection probability is set just to be proportional to Gi, but preserves the essence of the algorithm. Here, we evaluate the performance of our proposed FL scheduling algorithm on the CIFAR-100 dataset [27], which is used for evaluation and consists of 50,000 training and 10,000 test images for the experiments. In local training, we employ MobileNetV2 [29], a lightweight CNN architec-ture with depthwise separable convolutions, inverted residual blocks, batch normalization, and ReLU6 activation functions. This configuration results in a total of 3.5M parameters. The training utilizes the AdamW optimizer with weight decay and cross-entropy loss function. Additionally, we configure the federated system to operate without data compression. 
+
+A. Performance of Data Allocation Algorithm 
+
+In this subsection, we present the convergence patterns of the aforementioned FL schemes. We assumed a hardware setup where five types of devices are participating in FL each having different computation capacities. For example, clients are assumed to have on average the computation capability of completing the training for 500 data points in 15 seconds with an 85% probability, where a coefficient of variation (CV) is 75%. 
+
+Model convergence speed and test accuracy: Fig. 4 shows the experimental results for the three FL scenarios where each client is assumed to have disjoint pre-allocated 1000 images. In order to generate non-iid data across clients, i.e., classes being unevenly distributed, we use label-skewed Dirichlet partitioning scheme often used in similar studies [30]. The parameter determining the degree of non-iidness, α, is set to 0.3. We assume a total of 50 clients and for each FL round, the algorithm selects 10 clients. The number of local epochs inside an FL iteration is set to be 5. Deadline per FL iteration for the proposed algorithm is set to be 15 seconds. One FL iteration for the baseline algorithms may take longer than 15 seconds or 15 seconds depending on which clients are selected. The two baseline algorithms are synchronous FL, but not deadline-based like the proposed algorithm, i.e., they wait 0510 15 20 25 30 35       
+
+> Test accuracy (%)
+> Proposed ProbPart MinCost 02000 4000 6000 8000 10000
+> Training time (s)
+> 0123
+> Total samples
+> 1e6 Fig. 4. Test accuracy over time for the proposed, probPart and MinCost algorithms for CIFAR-100 dataset distributed across 50 clients. Shaded area denotes 1 std range over 6 experiments with random seeds for data distribution.
+
+for the slowest device to complete the training before model aggregation using FedAvg. The two baseline models require pre-defined training dataset sizes, which is set to 500. To make the comparison fair among the algorithms, we compare absolute times required for training not the number of FL iterations as shown in Figure 4. The proposed algorithm outperforms the two baselines i) because of the large training dataset it is capable of process-ing per unit time as our algorithm prefers computationally powerful devices as long as they are not used too many times as indicated by Equation (13), and ii) because of higher utilization as clients minimize the slack time by adjusting the training dataset size while the baseline algorithms inevitably wait for other clients to finish. Moreover, compared to MinCost algorithm, the proposed method outperforms it as our method explicitly balances the class distribution in the FL round, where MinCost algorithm mostly looks at simply whether or not certain class is repre-sented. The number of images from a class may be insufficient to ensure test accuracy of the class. This shows that client selection and resulting collective distribution of data is of paramount concern when it comes to convergence of the model. Compared to probPart algorithm, the performance is slightly better than MinCost algorithm, but a random selection of clients results do not guarantee every class being repre-sented in each FL iteration, and catastrophic forgetting for the classes lowers the overall test accuracy. To characterize the results beyond the aggregate accuracy, we examine how evenly the accuracy is distributed across the 100 classes, since a model that sacrifices under-represented classes is undesirable even at a similar mean accuracy. We quantify this with two standard, complementary measures of dispersion: the coefficient of variation (CV), i.e., the standard deviation of the per-class accuracies divided by their mean,                               
+
+> TABLE II PER -CLASS FAIRNESS ON THE CIFAR-100 TEST SET AT α= 0 .3FOR EACH METHOD ’S FINAL TRAINED MODEL (SINGLE RUN ): OVERALL ACCURACY ,TAIL -CLASS ACCURACY (MEAN OF THE 10
+> LOWEST -ACCURACY CLASSES ), AND THE DISPERSION OF THE PER -CLASS ACCURACIES (COEFFICIENT OF VARIATION AND GINI COEFFICIENT ;
+> LOWER IS MORE UNIFORM ).
+> Method Overall Tail-10 CV Gini acc. (%) acc. (%)
+> Proposed (full) 42.3 15.3 0.43 0.24
+> probPart 38.0 6.8 0.49 0.28 MinCost 31.2 3.5 0.62 0.35
+
+which reflects how consistent the accuracy is across classes (lower is more uniform); and the Gini coefficient, which reflects how equally the accuracy is shared among classes (0 denotes perfect equality, while larger values indicate that accuracy is concentrated in fewer classes). We additionally report the tail-class accuracy, i.e., the mean accuracy of the 10 lowest-performing classes, which are the ones most exposed to forgetting. As summarized in Table II, the proposed method more than doubles the tail-class accuracy of probPart (15.3% versus 6.8%) and quadruples that of MinCost (3.5%), while attaining both the lowest CV and the lowest Gini. Hence, explicitly balancing the collective class distribution in each FL round keeps the accuracy both consistent (low CV) and equitably distributed (low Gini) across classes, so that the gain of the proposed algorithm is concentrated on the under-represented classes that the baselines tend to forget. 
+
+B. Ablation and Sensitivity Analysis of the Usefulness Metric 
+
+To address the individual contribution of each component of the usefulness metric (Eq. 13), we conduct an ablation study on the weights w1, w2, and w3. Since the w1 term is, by construction, a product of two distinct factors, i.e., a preference for a larger trainable dataset size |T D k| and a freshness penalty exp (−navg,k /10) that discourages data reuse, we further decouple these two sub-factors to isolate their individual effect. Each variant disables exactly one component while keeping the rest unchanged, and is evaluated under the same deadline-based, equal-time protocol as in Fig. 4, for two degrees of non-iidness ( α = 0 .3 and a more extreme α = 0 .1). As shown in Fig. 5, the freshness penalty is the single most influential component: disabling it prevents the model from reaching a useful accuracy at both severities, plateauing well below every other variant, and the degradation deepens as the data becomes more skewed ( α = 0 .1). The remaining terms, i.e., the dataset-size factor, the class-balance term w2,and the coverage term w3, each contribute a smaller and complementary gain, so that the full metric attains the highest accuracy. The ordering of the variants is preserved across 
+
+α = 0.3 and α = 0.1, indicating that no single weight dominates in a way that would make the metric fragile to its exact values, and that the design generalizes across the degree of non-iidness. 0 60 120 180 240 300 
+
+Cumulative simulated time (min) 
+
+010 20 30 40 
+
+> Test accuracy (%)
+
+0 60 120 180 240 300 
+
+Cumulative simulated time (min) 
+
+010 20 30 40 
+
+(a) α = 0.3 (b) α = 0.1     
+
+> Proposed (Full) w/o w1(entire)
+> ⊢w/o freshness
+> ⊢w/o client-size w/o balance ( w2)w/o coverage ( w3)ProbPart (baseline) MinCost (baseline)
+
+Fig. 5. Component ablation of the usefulness metric (Eq. 13) as test accuracy over training time, under two degrees of non-iid severity: (a) α = 0 .3 and (b) 
+
+α = 0 .1. Each variant disables one term of uk ; for w1, its two sub-factors (the freshness penalty and the client dataset-size preference) are disabled separately. 
+
+Proposed keeps all terms, while probPart and MinCost are shown for reference. The experiments use the same client, model, and deadline configuration as Fig. 4, and are reported for a single random seed. 
+
+VI. C ONCLUSIONS 
+
+The paper proposed a joint client and training data selection algorithm for edge FL fast convergence of FL models. The work puts emphasis on estimating training times, which is largely impacted by the training dataset size, and proposes an algorithm, which balances training datasize, class distri-bution per FL iteration and data staleness. The experimental results display that our joint client selection and training data allocation algorithm achieves better FL convergence compared to other client and training dataset selection schemes by addressing the heterogeneity in computing capacities and non-iid data more explicitly. In future, we plan to bring the work closer to real world by considering more concrete interruption models for selected applications and investigating dynamic aspects of FL applica-tions. We also plan to extend the study of the usefulness metric beyond the per-term ablation presented here, by examining how different combinations of the weights w1, w2, and w3
+
+jointly affect the accuracy, and by evaluating the algorithm under different client-pool distributions and selection ratios, as the current experiments consider a single setting of 10 out of 50 clients. ACKNOWLEDGMENTS 
+
+This work was partly supported by Einstein Center Digital Future, by Turkish Ministry of Education, and by JSPS KAKENHI Grant Number 23K16858. 
+
+REFERENCES [1] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Artificial intelligence and statistics . PMLR, 2017, pp. 1273– 1282. [2] K. Bonawitz, H. Eichner, W. Grieskamp, D. Huba, A. Ingerman, V. Ivanov, C. Kiddon, J. Koneˇ cn` y, S. Mazzocchi, B. McMahan et al. ,“Towards federated learning at scale: System design,” Proceedings of machine learning and systems , vol. 1, pp. 374–388, 2019. [3] W. Y. B. Lim, N. C. Luong, D. T. Hoang, Y. Jiao, Y.-C. Liang, Q. Yang, D. Niyato, and C. Miao, “Federated learning in mobile edge networks: A comprehensive survey,” IEEE Communications Surveys & Tutorials ,vol. 22, no. 3, pp. 2031–2063, 2020. [4] R. Gu, C. Niu, F. Wu, G. Chen, C. Hu, C. Lyu, and Z. Wu, “From server-based to client-based machine learning: A comprehensive survey,” ACM Computing Surveys (CSUR) , vol. 54, no. 1, pp. 1–36, 2021. [5] Y. Xiao, X. Zhang, Y. Li, G. Shi, M. Krunz, D. N. Nguyen, and D. T. Hoang, “Time-sensitive learning for heterogeneous federated edge intelligence,” IEEE Transactions on Mobile Computing , 2023. [6] Y. Cui, K. Cao, J. Zhou, and T. Wei, “Helcfl: High-efficiency and low-cost federated learning in heterogeneous mobile-edge computing,” in 
+
+2022 Design, Automation & Test in Europe Conference & Exhibition (DATE) . IEEE, 2022, pp. 1227–1232. [7] A. Reisizadeh, I. Tziotis, H. Hassani, A. Mokhtari, and R. Pedarsani, “Straggler-resilient federated learning: Leveraging the interplay between statistical accuracy and system heterogeneity,” IEEE Journal on Selected Areas in Information Theory , vol. 3, no. 2, pp. 197–205, 2022. [8] J. Zhao, R. Han, Y. Yang, B. Catterall, C. H. Liu, L. Y. Chen, R. Mortier, J. Crowcroft, and L. Wang, “Federated learning with heterogeneity-aware probabilistic synchronous parallel on edge,” IEEE Transactions on Services Computing , vol. 15, no. 2, pp. 614–626, 2021. [9] Z. Gao, A. Li, Y. Gao, B. Li, Y. Wang, and Y. Chen, “Fedswap: a federated learning based 5g decentralized dynamic spectrum access system,” in 2021 IEEE/ACM International Conference On Computer Aided Design (ICCAD) . IEEE, 2021, pp. 1–6. [10] L. Yu, R. Albelaihi, X. Sun, N. Ansari, and M. Devetsikiotis, “Jointly optimizing client selection and resource management in wireless feder-ated learning for internet of things,” IEEE Internet of Things Journal ,vol. 9, no. 6, pp. 4385–4395, 2021. [11] L. Li, H. Xiong, Z. Guo, J. Wang, and C.-Z. Xu, “Smartpc: Hierarchical pace control in real-time federated learning system,” in 2019 IEEE Real-Time Systems Symposium (RTSS) . IEEE, 2019, pp. 406–418. [12] X. Ma, J. Zhu, Z. Lin, S. Chen, and Y. Qin, “A state-of-the-art survey on solving non-iid data in federated learning,” Future Generation Computer Systems , vol. 135, pp. 244–258, 2022. [13] S. Wang, T. Tuor, T. Salonidis, K. K. Leung, C. Makaya, T. He, and K. Chan, “Adaptive federated learning in resource constrained edge computing systems,” IEEE journal on selected areas in communications ,vol. 37, no. 6, pp. 1205–1221, 2019. [14] M. M. Wadu, S. Samarakoon, and M. Bennis, “Federated learning under channel uncertainty: Joint client scheduling and resource allocation,” in 2020 IEEE Wireless Communications and Networking Conference (WCNC) . IEEE, 2020, pp. 1–6. [15] ——, “Joint client scheduling and resource allocation under channel un-certainty in federated learning,” IEEE Transactions on Communications ,vol. 69, no. 9, pp. 5962–5974, 2021. [16] M. M. Amiri, D. G¨ und¨ uz, S. R. Kulkarni, and H. V. Poor, “Update aware device scheduling for federated learning at the wireless edge,” in 2020 IEEE International Symposium on Information Theory (ISIT) . IEEE, 2020, pp. 2598–2603. [17] ——, “Convergence of update aware device scheduling for federated learning at the wireless edge,” IEEE Transactions on Wireless Commu-nications , vol. 20, no. 6, pp. 3643–3658, 2021. [18] W. Xia, T. Q. Quek, K. Guo, W. Wen, H. H. Yang, and H. Zhu, “Multi-armed bandit-based client scheduling for federated learning,” 
+
+IEEE Transactions on Wireless Communications , vol. 19, no. 11, pp. 7108–7123, 2020. [19] B. Xu, W. Xia, J. Zhang, T. Q. Quek, and H. Zhu, “Online client scheduling for fast federated learning,” IEEE Wireless Communications Letters , vol. 10, no. 7, pp. 1434–1438, 2021. [20] F. Lai, X. Zhu, H. V. Madhyastha, and M. Chowdhury, “Oort: Efficient federated learning via guided participant selection,” in USENIX Symposium on Operating Systems Design and Implementation (OSDI 21) . USENIX Association, Jul. 2021, pp. 19–35. [Online]. Available: https://www.usenix.org/conference/osdi21/presentation/lai [21] C. Wang, X. Wei, and P. Zhou, “Optimize scheduling of federated learn-ing on battery-powered mobile devices,” in 2020 IEEE International Parallel and Distributed Processing Symposium (IPDPS) . IEEE, 2020, pp. 212–221. [22] C. Wang, Y. Yang, and P. Zhou, “Towards efficient scheduling of feder-ated mobile devices under computational and statistical heterogeneity,” 
+
+IEEE Transactions on Parallel and Distributed Systems , vol. 32, no. 2, pp. 394–410, 2020. [23] L. L. Pilla, “Optimal task assignment for heterogeneous federated learning devices,” in 2021 IEEE International Parallel and Distributed Processing Symposium (IPDPS) . IEEE, 2021, pp. 661–670. [24] ——, “Scheduling algorithms for federated learning with minimal energy consumption,” IEEE Transactions on Parallel and Distributed Systems , vol. 34, no. 4, pp. 1215–1226, 2023. [25] W. Shi, S. Zhou, and Z. Niu, “Device scheduling with fast convergence for wireless federated learning,” in ICC 2020-2020 IEEE International Conference on Communications (ICC) . IEEE, 2020, pp. 1–6. [26] X. Chen, X. Zhou, H. Zhang, M. Sun, and H. Vincent Poor, “Client selection for wireless federated learning with data and latency hetero-geneity,” IEEE Internet of Things Journal , vol. 11, no. 19, pp. 32 183– 32 196, 2024. [27] A. Krizhevsky, G. Hinton et al. , “Learning multiple layers of features from tiny images,” 2009. [28] Y. Kim, F. Parterna, S. Tilak, and T. S. Rosing, “Smartphone analysis and optimization based on user activity recognition,” in IEEE/ACM International Conference on Computer-Aided Design (ICCAD) , 2015, pp. 605–612. [29] M. Sandler, A. Howard, M. Zhu, A. Zhmoginov, and L.-C. Chen, “Mobilenetv2: Inverted residuals and linear bottlenecks,” in Proceedings of the IEEE conference on computer vision and pattern recognition ,2018, pp. 4510–4520. [30] T.-M. H. Hsu, H. Qi, and M. Brown, “Measuring the effects of non-identical data distribution for federated visual classification,” arXiv preprint arXiv:1909.06335 , 2019.

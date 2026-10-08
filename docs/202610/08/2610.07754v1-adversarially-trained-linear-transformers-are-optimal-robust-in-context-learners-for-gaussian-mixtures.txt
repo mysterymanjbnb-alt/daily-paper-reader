@@ -1,0 +1,2409 @@
+Title: Adversarially Trained Linear Transformers Are Optimal Robust In-Context Learners for Gaussian Mixtures
+
+URL Source: https://arxiv.org/pdf/2610.07754v1
+
+Published Time: Wed, 07 Oct 2026 00:50:43 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+# ADVERSARIALLY TRAINED LINEAR TRANSFORMERS 
+
+# ARE OPTIMAL ROBUST IN-C ONTEXT LEARNERS FOR 
+
+# GAUSSIAN MIXTURES 
+
+Soichiro Kumano 
+
+LY Corporation 
+
+sokumano@lycorp.co.jp 
+
+# ABSTRACT 
+
+Adversarial training is one of the most reliable defenses against adversarial attacks, but its high computational cost must generally be paid anew for each task. Robust foundation models offer a promising alternative: adversarially pretrain a model once and then transfer its robustness to downstream tasks through lightweight adap-tation. However, a fundamental question remains open: can robustness acquired during pretraining transfer to unseen tasks without further adversarial training? In this study, we answer this question affirmatively. A single model adversarially pretrained at scale can achieve optimal robustness on new tasks without additional task-specific training. Specifically, we show that, for a family of Gaussian-mixture classification tasks, a sufficiently deep linear transformer adversarially trained across tasks can asymptotically attain the robust Bayes error on previously unseen tasks through in-context learning from clean demonstrations. By contrast, a stan-dardly trained model cannot. We further analyze convergence under gradient flow, an accuracy–robustness trade-off, and demonstration complexity. 
+
+# 1 INTRODUCTION 
+
+Adversarial examples, inputs that are slightly perturbed to cause machine learning models to make incorrect predictions, expose a fundamental vulnerability of deep learning systems (Szegedy et al., 2014). Adversarial training is one of the most reliable defenses against adversarial attacks (Goodfellow et al., 2015; Madry et al., 2018). It improves robustness by minimizing the loss under worst-case perturbations. However, the resulting min–max optimization makes adversarial training substantially more expensive than standard training. While many cheaper defenses have been proposed, some offer only apparent robustness that disappears under stronger attacks (Carlini & Wagner, 2017a;b; Athalye et al., 2018; Croce & Hein, 2020; Tramer et al., 2020). Consequently, obtaining reliable robustness generally requires paying the cost of adversarial training anew for each task. Meanwhile, foundation models have transformed how models are developed and deployed. Rather than training a separate model for each task, practitioners pretrain a single model at scale and adapt it to downstream tasks using lightweight methods. This paradigm suggests a compelling possibility: robust foundation models. Adversarial training would be performed only once during pretraining, and the resulting robustness could then be transferred to downstream tasks at little additional cost. Although adversarial pretraining incurs an initial cost, model developers (typically large organizations) could recoup it by licensing the model. The fundamental question here is: Can an adversarially pretrained model adapt to unseen downstream tasks while retaining robustness, without further adversarial training? 
+
+Kumano et al. (2026) provided the first theoretical evidence that such transfer might be possible. They showed that an adversarially pretrained single-layer transformer with linear attention can adapt robustly to unseen classification tasks through in-context learning. In-context learning is a particularly lightweight adaptation method that enables transformers to learn from demonstrations in the prompt without updating their parameters (Brown et al., 2020). This result suggests that robustness acquired during pretraining can transfer to new tasks without additional training. However, their analysis is limited to a restricted data model and a single-layer architecture. Moreover, they provided only 1arXiv:2610.07754v1 [cs.LG] 6 Oct 2026 bounds on the expected robust margin. Thus, it does not provide direct guarantees on robust accuracy or evaluate robust optimality. Consequently, our central question remains open in broader settings. In this study, we provide a stronger affirmative answer to this question under substantially more general conditions. We consider multilayer linear transformers adversarially pretrained on a family of Gaussian-mixture classification tasks. We focus on the robust zero-one error of these transformers on tasks not encountered during pretraining. In particular, we investigate whether this error approaches the robust Bayes error, which is the minimum robust error attainable by any classifier, even one with full knowledge of the task distribution. Specifically, we show that, through in-context learning from clean demonstrations, a sufficiently deep linear transformer can asymptotically attain the robust Bayes error on every task in this Gaussian family, including tasks unseen during pretraining. In other words, using only standard samples and without task-specific adversarial training or access to adversarial examples, a single linear transformer can asymptotically serve as an optimal robust predictor for each task. We should note that the transformer’s parameters remain fixed and shared across all downstream tasks. Nevertheless, the transformer can adapt to each task and implement its optimal robust prediction rule. Moreover, we show that a standardly pretrained transformer cannot achieve optimal robustness, even with infinite pretraining tasks and in-context demonstrations. This result indicates that optimal robust in-context learning cannot be attributed solely to model capacity or task diversity; rather, it stems from an inherent advantage of adversarial pretraining. We further investigate several properties of robust in-context learning. Whereas the discussion above focuses on empirical-risk minimizers, we also prove that gradient flow in a two-layer architecture converges to a predictor that attains robust Bayes optimality. We also identify two fundamental challenges in developing robust transformers. The first is an inherent accuracy–robustness trade-off: adversarial pretraining can degrade clean accuracy even in the infinite-data limit. The second is greater demonstration complexity: even at the same Bayes excess risk, robust prediction requires more demonstrations than standard prediction. In summary, we prove the following: • A sufficiently deep linear transformer asymptotically achieves optimal robustness across a family of Gaussian-mixture classification tasks through in-context learning from clean demonstrations. • Adversarial pretraining makes the transformer an optimal robust in-context learner, whereas standard pretraining does not, even with unlimited data. • Under mild conditions, (i) gradient flow leads the transformer to become such an in-context learner, (ii) an accuracy–robustness trade-off arises, and (iii) robust in-context prediction requires more demonstrations than standard prediction. 
+
+# 2 RELATED WORK 
+
+Adversarial training. Numerous defenses against adversarial examples (Szegedy et al., 2014) have been proposed, but many have subsequently been circumvented by stronger attacks (Carlini & Wagner, 2017a;b; Athalye et al., 2018; Croce & Hein, 2020; Tramer et al., 2020). Although adversarial training (Goodfellow et al., 2015; Madry et al., 2018) is one of the most reliable defenses against a wide range of strong attacks, its computational cost is high due to multiple additional backpropagation steps beyond those needed for standard training. Prior work has sought to reduce this cost by approximating multi-step backpropagation (Shafahi et al., 2019; Zhang et al., 2019; Zheng et al., 2020), reducing the number of backpropagation steps (Andriushchenko & Flammarion, 2020; Wong et al., 2020; Kim et al., 2021; Park & Lee, 2021; Jia et al., 2022), or adversarially finetuning models after standard training (Jeddi et al., 2021; Hou et al., 2022; Suzuki et al., 2023; Gowda et al., 2024). Nevertheless, all these approaches still require adversarial training to be performed separately for each task. In contrast, we adversarially pretrain a linear transformer once and adapt it to downstream tasks through in-context learning from clean demonstrations. This approach requires neither new adversarial examples nor adversarial training during downstream-task adaptation. 
+
+In-context learning. In-context learning enables a transformer to learn a task from demonstrations in the prompt, without updating its parameters (Brown et al., 2020). Existing theoretical work on 2in-context learning has largely focused on the algorithms that transformers can implement in context. For example, appropriately parameterized transformers can implement one gradient descent step per layer in context, so that propagation through multiple layers corresponds to multiple gradient descent steps (Ahn et al., 2023; Bai et al., 2023; Cheng et al., 2024; Gatmiry et al., 2024; Mahankali et al., 2024; Zhang et al., 2024). In-context learning can also simulate second-order optimization (Fu et al., 2024; Giannou et al., 2024), reinforcement learning algorithms (Lee et al., 2023; Lin et al., 2024), and Bayesian inference (Xie et al., 2022; Zhang et al., 2025). Unlike these studies, we do not seek to identify the algorithms that in-context learning can simulate. Instead, we study the ability of in-context learning to transfer robustness acquired in adversarial pretraining to downstream tasks. 
+
+Adversarial robustness of in-context learning. The adversarial robustness of in-context learning remains relatively underexplored from a theoretical perspective. Anwar et al. (2025) studied context hijacking and showed that modifying in-context tokens can cause a transformer to output an arbitrary value for a clean query. Li et al. (2025) showed that deeper transformers are more robust to context hijacking. Fu et al. (2025) showed that adversarial training with short adversarial suffixes in the context and clean queries can improve robustness to longer adversarial suffixes at test time. Fu & Wang (2026) used the theory of in-context learning to analyze continuous adversarial training (Xhonneux et al., 2024). Both our work and that of Kumano et al. (2026) differ from these studies in terms of problem setting and objective. Specifically, we ask whether a transformer can learn in context from clean demonstrations to make robust predictions on adversarially perturbed queries. Following our theoretical results, we provide a detailed comparison with Kumano et al. (2026) in Section 3.5. 
+
+# 3 THEORETICAL RESULTS 
+
+Notation. For each n ∈ N, define [n] := {1, . . . , n }. We denote the i-th element of a vector a by ai
+
+and the entry in row i and column j of a matrix A by Ai,j . For m, n ∈ N, let 0n, 0m,n , and In denote the n-dimensional zero vector, the m × n zero matrix, and the n × n identity matrix, respectively. For d ∈ N, define the real orthogonal group in dimension d by O(d) := {R ∈ Rd×d : R⊤R = Id}.We write ∥ · ∥ 2 for the Euclidean norm and ∥ · ∥ F for the Frobenius norm. Let (Xn)n∈Nm be nonnegative random variables and (an)n∈Nm be positive deterministic values; we write Xn ≲P an
+
+if, for every δ ∈ (0 , 1) , there exists cδ > 0 such that P(Xn ≤ cδ an) ≥ 1 − δ for all n ∈ Nm.3.1 PROBLEM SETTING 
+
+Overview. We consider pretraining an L-layer linear transformer f on T tasks. For each t ∈ [T ],the t-th task consists of N in-context demonstrations Dt,N := {(xt,n , y t,n )}Nn=1 and a test pair 
+
+(xt,N +1 , y t,N +1 ). Given the clean demonstrations Dt,N , the transformer uses in-context learning to predict the binary label of the adversarially perturbed query xt,N +1 + ∆. The adversary chooses 
+
+∆ subject to ∥∆∥2 ≤ ϵ√d. We train the transformer parameters ΘL by minimizing the empirical risk Rϵ,T,N (ΘL). We then evaluate the resulting predictor on a freshly sampled test task using the taskwise zero-one error Eϵ, U (f ( · ; ΘL, DN )) , where U denotes the task-specific variable. Our main interest is the excess error Eϵ, U (f ( · ; ΘL, DN )) − E ⋆ϵ, U , where E⋆ϵ, U denotes the corresponding taskwise Bayes error. 
+
+Task structure. Let T, N ∈ N denote the number of pretraining tasks and the number of in-context demonstrations per task, respectively. For each t ∈ [T ], the t-th task consists of N
+
+demonstrations Dt,N := {(xt,n , y t,n )}Nn=1 ⊂ Rd × {± 1} and a test pair (xt,N +1 , y t,N +1 ). Let 
+
+Ut := [ ut, 1, . . . , ut,d ] ∈ O (d) denote an orthogonal matrix whose columns form a task-specific orthonormal basis. For each (t, n ) ∈ [T ] × [N + 1] , let at,n := [ at,n, 1, . . . , a t,n,d ]⊤ ∈ Rd denote the coefficient vector for the n-th sample of the t-th task, and define the corresponding input vector as 
+
+xt,n := yt,n Utat,n = yt,n (at,n, 1ut, 1 + · · · + at,n,d ut,d ). (1) 
+
+Task distribution. The matrices {Ut}Tt=1 are independently drawn according to the normalized Haar measure on O(d). In other words, the columns of each Ut form an orthonormal basis chosen uniformly at random. The labels {yt,n }t∈[T ],n ∈[N +1] are independently drawn from the uniform distribution on {± 1}. The coefficient vectors {at,n }t∈[T ],n ∈[N +1] are independently drawn from the multivariate normal distribution with mean μ ∈ Rd and covariance Σ ∈ Rd×d. These three collections are mutually independent. The parameters μ and Σ are common across tasks. 3Dimension of the Krylov subspace. Let r ∈ [d] denote the dimension of Kd(Σ, μ), the order-d
+
+Krylov subspace generated by Σ and μ. More precisely, define 
+
+Kd(Σ, μ) := span( μ, Σμ, Σ2μ, . . . , Σd−1μ), r := dim Kd(Σ, μ). (2) Equivalently, r is the largest integer k ∈ [d] such that the vectors μ, Σμ, . . . , Σk−1μ are linearly independent. Consequently, Kd(Σ, μ) = Kr (Σ, μ). Moreover, r equals the number of distinct eigenvalues of Σ for which μ has a nonzero projection onto the corresponding eigenspace. If Σ = Id,so that the Gaussian coordinates are mutually independent and have unit variance, then r = 1 . If μ is the all-ones vector and Σ is diagonal, then r equals the number of distinct diagonal entries of Σ. In general, r characterizes the representational complexity of the Bayes classifier for the Gaussian data 
+
+z := ya. Without adversarial perturbations, this classifier is (Σ−1μ)⊤z. Its weight vector Σ−1μ
+
+belongs to Kr (Σ, μ), and r is the smallest Krylov order required to represent this vector. 
+
+Input sequence. Given the clean in-context demonstrations DN and a possibly perturbed query 
+
+z ∈ Rd, we define the input sequence Z(0) for a linear transformer as 
+
+Z(0) := 
+
+x1 x2 · · · xN z
+
+y1 y2 · · · yN 0
+
+
+
+∈ R(d+1) ×(N +1) . (3) The bottom-right entry serves as a placeholder for the query prediction. 
+
+Linear transformer. In this study, we focus on transformers with linear self-attention, which are commonly used in recent theoretical work (Ahn et al., 2023; Mahankali et al., 2024; Gatmiry et al., 2024; Cheng et al., 2024; Zhang et al., 2024; Kumano et al., 2026). Let L ∈ N denote the number of layers. For each ℓ ∈ [L], we recursively define 
+
+Z(ℓ) := Z(ℓ−1) + 1
+
+N PℓZ(ℓ−1) M Z (ℓ−1) ⊤QℓZ(ℓ−1) , M := 
+
+IN 0N
+
+0⊤ 
+
+> N
+
+0
+
+
+
+, (4) where Pℓ, Qℓ ∈ R(d+1) ×(d+1) are, respectively, the trainable value and key–query matrices in layer 
+
+ℓ. As in prior work on in-context learning (Ahn et al., 2023; Gatmiry et al., 2024; Cheng et al., 2024; Kumano et al., 2026), we use the masking matrix M to prevent the tokens from attending to the query token. The resulting scalar predictor and the collection of trainable parameters are defined as 
+
+f (z; ΘL, DN ) := 
+
+h
+
+Z(L)i 
+
+> d+1 ,N +1
+
+, ΘL := {(Pℓ, Qℓ)}Lℓ=1 . (5) 
+
+Training objective. Let L : R → [0 , ∞) be a loss function. Based on prior work (Bai et al., 2023; Ahn et al., 2023; Mahankali et al., 2024; Zhang et al., 2024; Kumano et al., 2026), we define the empirical risk over T pretraining tasks, each with N demonstrations, as follows: 
+
+Rϵ,T,N (ΘL) := 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+max 
+
+> ∥∆∥2≤ϵ√d
+
+L
+
+
+
+yt,N +1 f (xt,N +1 + ∆; ΘL, Dt,N )
+
+
+
+. (6) Minimizing R0,T,N corresponds to standard training, whereas minimizing Rϵ,T,N for ϵ > 0 corre-sponds to adversarial training. Training the transformer on multiple tasks with a single shared set of parameters encourages it to adaptively infer the task-specific structure from the demonstrations and generalize across tasks, rather than specialize in any particular task. 
+
+Taskwise zero-one error. For each fixed U ∈ O (d), let (x, y ) be a fresh test pair independently drawn from the same task-conditional distribution as the pretraining samples. We define the taskwise robust zero-one error of a predictor g : Rd → R by 
+
+Eϵ, U (g) := P(x,y )|U inf 
+
+> ∥∆∥2≤ϵ√d
+
+yg (x + ∆) ≤ 0
+
+!
+
+. (7) Setting ϵ = 0 yields the taskwise standard zero-one error E0,U .
+
+Taskwise Bayes error. Let G denote the class of all measurable functions g : Rd → R. For each 
+
+U ∈ O (d), we define the taskwise robust Bayes error by E⋆ϵ, U := inf g∈G Eϵ, U (g). Setting ϵ = 0 
+
+yields the taskwise standard Bayes error E⋆ 
+
+> 0,U
+
+.
+
+Assumptions. The assumptions used in this study are as follows: 4Assumption 3.1. 
+
+(a) The mean vector μ is nonzero, and the covariance matrix Σ is symmetric and positive definite; 
+
+μ̸ = 0d and Σ = Σ⊤ ≻ 0d,d .(b) The perturbation radius ϵ√d is smaller than the norm of the mean vector μ; 0 ≤ ϵ√d < ∥μ∥2.(c) The number of layers L is at least the dimension r of the Krylov subspace; L ≥ r.(d) The loss function L : R → [0 , ∞) is twice differentiable and satisfies L′(z) < 0 and L′′ (z) > 0
+
+for every z ∈ R, and sup z∈R{|L ′(z)| + L′′ (z)} < ∞.Condition (a) rules out degenerate classification problems. Condition (b) prevents an adversary from completely canceling the mean signal. The role of Condition (c) is explained in the next section. Condition (d) ensures that the empirical risk minimization problem is well-posed. The logistic loss is an example satisfying Condition (d). 3.2 A S INGLE LINEAR TRANSFORMER CAN REPRESENT ROBUST BAYES CLASSIFIERS 
+
+ACROSS TASKS 
+
+In this section, we first show that, given sufficient depth, a single linear transformer can asymptotically achieve the taskwise robust Bayes error through in-context learning. At this stage, we do not address whether the required parameters can be learned by empirical risk minimization. 
+
+Theorem 3.2 (A single linear transformer can be Bayes optimal across tasks) . Suppose that (a) to (c) in Assumption 3.1 hold. Then, there exists a parameter ΘL such that, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f ( · ; ΘL, DN )
+
+
+
+− E ⋆ϵ, U ≲P
+
+1
+
+N . (8) 
+
+The implied constant may depend on d, ϵ, μ, and Σ.
+
+The proof is given in Section B. The theorem establishes that a single linear transformer with a shared parameter asymptotically attains the robust Bayes error for every task as the number of demonstrations grows. In other words, without any task-specific parameter updates, the same linear transformer can adapt to every task through in-context learning and match the performance of the corresponding task-specific robust Bayes classifier. This uniform guarantee demonstrates the expressive capacity of linear transformers for in-context adaptation across tasks. Moreover, the excess error decays at a rate of N −1. The rate is consistent with empirical observations of strong few-shot performance in in-context learning. Recall that r reflects the complexity of the Gaussian mixture model and the resulting difficulty of representing its robust Bayes classifier. Accordingly, the condition L ≥ r suggests that more complex data models call for deeper linear transformers to achieve Bayes optimality. We next provide intuition about how a linear transformer can attain the Bayes error and why the depth condition L ≥ r arises. 
+
+Lemma 3.3 (Proof sketch of Theorem 3.2) . Suppose that (a) and (b) in Assumption 3.1 hold. Suppose also that N → ∞ ; write D∞ := DN . Let τ ≥ 0 be the unique solution of 
+
+τ ∥(Σ + τ Id)−1μ∥2 = ϵ√d. (9) 
+
+(Bayes classifier) For every U ∈ O (d),
+
+g(x) := {(Σ + τ Id)−1μ}⊤U ⊤x, Eϵ, U (g) = E⋆ϵ, U . (10) 
+
+(Krylov order of the optimal direction) Let K0(Σ, μ) := {0}. Then, 
+
+(Σ + τ Id)−1μ ∈ K r (Σ, μ) \ K r−1(Σ, μ). (11) 
+
+(Effective weights of a linear transformer) There exists a parameter family {ΘL,ξ : ξ ∈ R} whose corresponding effective weights θ(ΘL,ξ ) satisfy, for every ξ ∈ R, U ∈ O (d), and x ∈ Rd,
+
+f (x; ΘL,ξ , D∞) = θ(ΘL,ξ )⊤U ⊤x. (12) 
+
+(Span of the effective weights) For the same parameter family, 
+
+span {θ(ΘL,ξ ) : ξ ∈ R} = KL(Σ, μ). (13) 5The proof is given in Section B. Although this lemma does not constitute a complete proof of Theorem 3.2, it provides a roadmap for the proof. 
+
+Bayes classifier. The first part of the lemma gives the Bayes classifier for (x, y ) generated according to Eq. (1). The form of this function provides two insights into this classifier. 1
+
+First, the optimal weight is the solution to the following regularized mean–variance problem: 
+
+argmin 
+
+> w∈Rd
+
+ 12 V(x,y )|U [yw⊤x] − E(x,y )|U [yw⊤x] + τ
+
+2 ∥w∥22
+
+
+
+= U (Σ + τ Id)−1μ. (14) The regularization parameter τ is determined by the perturbation level ϵ: it is zero when ϵ = 0 
+
+and increases monotonically with ϵ. This ℓ2 regularization controls the sensitivity to adversarial perturbations, since |w⊤∆| ≤ ∥ w∥2∥∆∥2. The taskwise Bayes classifier minimizing Eϵ, U is a linear classifier obtained from a perturbation-dependent ℓ2-regularized optimization problem. Second, the classifier makes predictions while accounting for both variance and the effects of adversarial attacks. Substituting x = yU a gives 
+
+g(x) := (Σ + τ Id)−1μ ⊤U ⊤x = y(Σ + τ Id)−1μ ⊤a. (15) For simplicity, suppose that Σ = diag( λ1, . . . , λ d) for λ1, . . . , λ d > 0. Then the i-th term in the inner product, for i ∈ [d], can be expressed as μiai/(λi + τ ). When the perturbation level is small and hence τ is small, this term can be approximated by μiai/λ i. Thus, components with large variance have less influence on the prediction, whereas components with small variance have greater influence. In contrast, when τ is large, g(x) ≈ yμ⊤a/τ . The classifier relies more directly on strong features in the data without accounting for their variances. 
+
+Krylov order of the optimal direction. The second part of the lemma shows that the optimal direction belongs to the order-r Krylov subspace generated by Σ and μ. This vector cannot belong to the order-(r − 1) Krylov subspace. The proof uses the Cayley–Hamilton theorem. This result suggests that, to attain the taskwise Bayes error for arbitrary Σ and μ, a linear transformer must be expressive enough to internally represent weight vectors in the order-r Krylov subspace. 
+
+Effective weights of a linear transformer. The third part of the lemma shows that a suitable parameter family makes a linear transformer behave as a context-dependent linear classifier. We restrict Pℓ,ξ and Qℓ,ξ for ℓ ∈ [L] as follows, and, under N → ∞ , the context matrix is as follows: 
+
+Pℓ,ξ := 
+
+0d,d 0d
+
+0⊤ 
+
+> d
+
+1
+
+
+
+, Qℓ,ξ := 
+
+ξId 0d
+
+0⊤ 
+
+> d
+
+0
+
+
+
+, Z(0) M Z (0) ⊤
+
+N =
+
+U (Σ + μμ ⊤)U ⊤ U μ μ⊤U ⊤ 1
+
+
+
+. (16) The outputs after the first, second, and third layers are 
+
+Z(1) =
+
+
+
+Id+1 + 1
+
+N P1,ξ Z(0) M Z (0) ⊤Q1,ξ 
+
+
+
+Z(0) =
+
+ Id 0d
+
+ξμ⊤U ⊤ 1
+
+
+
+Z(0) , (17) 
+
+Z(2) =
+
+ Id 0d
+
+{2ξμ⊤ + ξ2μ⊤(Σ + μμ ⊤)}U ⊤ 1
+
+
+
+Z(0) , (18) 
+
+Z(3) =
+
+ Id 0d
+
+{3ξμ⊤ + 3 ξ2μ⊤(Σ + μμ ⊤) + ξ3μ⊤(Σ + μμ ⊤)2}U ⊤ 1
+
+
+
+Z(0) . (19) Consequently, the three-layer model’s output on a query x and its effective weight are 
+
+f (x; Θ3,ξ , D∞) = θ(Θ3,ξ )⊤U ⊤x, θ(Θ3,ξ ) := 3 ξμ+3 ξ2(Σ+μμ ⊤)μ+ξ3(Σ + μμ ⊤)2μ. (20) The same construction shows inductively that, with suitable parameters, a linear transformer of any depth can act as a context-dependent linear classifier whose effective weight θ is independent of U .
+
+Span of the effective weights. The fourth part of the lemma states that, as ξ varies, the effective weights associated with this parameter family span the order-L Krylov subspace. The equations above illustrate this mechanism: stacking L layers yields effective weights that are linear combinations of 
+
+> 1Closely related characterizations of the Bayes classifier were previously established by Bhagoji et al. (2019); Dan et al. (2020), and we therefore do not claim this characterization as a novel contribution. Here, it serves only as an intermediate result in the proof of Theorem 3.2.
+
+6μ, Σμ, . . . , ΣL−1μ. As shown in the second part, the optimal direction lies in the order-r Krylov subspace. Hence, when L ≥ r, the optimal direction lies in the span of the effective weights. These results explain how linear transformers achieve Bayes optimality and why the depth condition is required. Note that, even when L ≥ r, this lemma alone does not establish that an effective weight θ
+
+can exactly match the optimal direction (Σ + τ Id)−1μ. See Section B for the complete proof. 3.3 ADVERSARIAL TRAINING ENABLES LINEAR TRANSFORMERS TO ACHIEVE ROBUST 
+
+BAYES OPTIMALITY ACROSS TASKS ; S TANDARD TRAINING DOES NOT 
+
+The preceding section establishes that sufficiently deep linear transformers have the expressive capacity to asymptotically attain robust Bayes optimality across tasks. However, this existence result does not show whether such parameters can be learned by a training procedure. We address this question by analyzing empirical risk minimization under adversarial and standard training. 
+
+Theorem 3.4 (Adversarial training yields robust linear transformers) . Suppose that Assumption 3.1 holds. For sufficiently large B > 0, choose any empirical risk minimizer 
+
+bΘL,ϵ,T,N ∈ argmin 
+
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+Rϵ,T,N (ΘL). (21) 
+
+Then, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f
+
+
+
+· ; bΘL,ϵ,T,N , DN
+
+
+
+− E ⋆ϵ, U ≲P
+
+1
+
+√T + 1
+
+N . (22) 
+
+The implied constant may depend on d, B, L, L, ϵ, μ, and Σ.
+
+The proof is given in Section C. This theorem complements the representability result in Theorem 3.2 by showing that adversarial training can produce a transformer that asymptotically achieves robust Bayes optimality across tasks. For d ≥ 2, a test-task basis U differs almost surely from every pretraining basis under the Haar measure on O(d), even when there are countably infinitely many pretraining tasks. Thus, the theorem establishes robust generalization to previously unseen tasks, which cannot be attributed to exact memorization of the pretraining bases. Moreover, the excess-error bound decomposes into a term depending on T and a term depending on N , rather than taking a joint form such as 1/(T N ). This decomposition isolates the contributions of cross-task learning from pretraining and within-task inference from in-context demonstrations. The bound converges to zero only as both the number of pretraining tasks and the number of in-context demonstrations grow; increasing either one alone might be insufficient for the convergence to Bayes optimality. We next contrast this result with standard training. 
+
+Theorem 3.5 (Standard training does not yield robust linear transformers) . Suppose that Assump-tion 3.1 holds. Suppose also that T, N → ∞ ; write D∞ := DN and R0,∞,∞ := R0,T,N . For sufficiently large B > 0, choose any population risk minimizer 
+
+bΘL, 0,∞,∞ ∈ argmin 
+
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+R0,∞,∞(ΘL). (23) 
+
+Then, there exists a constant C > 0 such that, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f
+
+
+
+· ; bΘL, 0,∞,∞, D∞
+
+
+
+− E ⋆ϵ, U =
+
+0 (ϵ = 0 or r = 1) 
+
+C (ϵ > 0 and r ≥ 2) . (24) 
+
+The constant C may depend on d, ϵ, μ, and Σ.
+
+The proof is given in Section C. In contrast to Theorem 3.4, this theorem establishes an impossibility result for standard training: when ϵ > 0 and r ≥ 2, standard training cannot produce a linear transformer whose predictions attain robust Bayes optimality. This impossibility is not due to a finite amount of training data; it persists in the population limit, even when both the number of pretraining tasks and the number of demonstrations per task tend to infinity. These results reveal a fundamental difference between standard and adversarial training and suggest that, at least for linear transformers, adversarial training is necessary to obtain adversarially robust in-context learners. 7L = 10 L = 1 L = 2 L = 10 0.20.40.6                    
+
+> Robust zero-one error Std. Adv. training
+> T= 40 ,000, N= 100 ,000 0.5163 0.2923 0.2286 0.2217
+> 10 30 50 70100 300 500 1,000
+> Pretraining task size T
+> 0.20 0.25 0.30 0.35
+> Adv. training ( L= 10, N= 1 ,000)
+> 10 30 50 70100 300 500 1,000
+> In-context demonstration size N
+> 0.25 0.30
+> Adv. training ( L= 10, T= 1 ,000)
+> Mean ±sample std. dev. Bayes error (0.2216)
+
+Figure 1: Robust zero-one errors for d = 100 , r = 10 , and ϵ = 0 .08 . Means and sample standard deviations are shown over three runs in the left panel and five runs in the other panels. 3.4 OTHER THEORETICAL RESULTS 
+
+Gradient flow to Bayes optimality. The preceding sections show that global minimizers of the adversarial empirical risk asymptotically achieve taskwise Bayes optimality. However, practical optimization algorithms such as gradient descent are not guaranteed to find a global minimizer. To bridge this gap, Theorem D.1 analyzes the case L = 2 and r ≤ 2, in which only the final key–query matrix is trained. We show that gradient flow yields predictors whose robust errors converge to the corresponding Bayes errors. 
+
+Accuracy–robustness trade-off. Robustness often comes at the cost of clean accuracy. In particular, adversarially trained models may be less accurate on unperturbed samples than their standardly trained counterparts (Su et al., 2018; Tsipras et al., 2019; Ilyas et al., 2019). In Theorem E.1, we establish that the same trade-off arises in our setting. Moreover, the trade-off persists even with infinitely many pretraining tasks and infinitely many demonstrations per task. This result highlights a fundamental challenge in developing robust foundation models. 
+
+Demonstration complexity. Achieving a target level of robust accuracy often requires more training samples than achieving the corresponding level of standard accuracy (Schmidt et al., 2018; Dan et al., 2020). In Theorem F.1, we establish an analogous gap in the number of in-context demonstrations. Attaining the same fixed excess error relative to the respective Bayes errors requires only one demonstration for standard prediction but Θ( √d) demonstrations for robust prediction. This result reveals another fundamental challenge in developing robust foundation models. 3.5 COMPARISON WITH PRIOR WORK 
+
+Compared to Kumano et al. (2026), we substantially relax their assumptions on the data distribution and the model architecture while establishing stronger robustness guarantees for linear transformers. 
+
+Data distribution. Their data model restricts feature scales to two discrete levels, such as yx =[α, . . . , α, β, . . . , β ], where α, β > 0 represent large and small values, respectively. This is a major limitation they acknowledge. Our framework allows arbitrary feature scales. They also consider only the standard basis, which roughly corresponds to fixing U to a particular value in our framework. In contrast, our theory applies to any orthonormal basis. Although they allow a broader class of coefficient distributions than our Gaussian family, they impose strong constraints on the covariance structure, whereas we do not. Overall, our framework broadens the class of admissible data models. 
+
+Architecture. Theoretically, their analysis is limited to single-layer linear transformers, whereas ours applies to multilayer linear transformers. Their experiments are also limited to single-layer linear transformers trained on relatively small datasets, including MNIST (Deng, 2012), Fashion-MNIST (Xiao et al., 2017), and CIFAR-10 (Krizhevsky, 2009). By contrast, we conduct experiments with multilayer transformers equipped with softmax attention on larger datasets, including CIFAR-100 (Krizhevsky, 2009), Tiny ImageNet (Le & Yang, 2015), and Caltech-256 (Griffin et al., 2007), thereby evaluating the effectiveness of robust foundation models in more realistic settings. 
+
+Robustness guarantees. Although differences in assumptions make direct comparisons difficult, our results provide more direct and comprehensive robustness guarantees. First, they establish only 8Table 1: Clean/robust accuracy (%) of six-layer transformers with softmax attention on real-world data, reported as mean ± sample standard deviation across five independent runs. Training CIFAR-100 Tiny ImageNet Caltech-256 Standard 79.1 ± 2.0 / 26.8 ± 3.4 77.4 ± 3.4 / 27.6 ± 7.6 78.0 ± 3.6 / 23.8 ± 6.5 Adversarial 77.9 ± 1.7 / 63.2 ± 1.8 67.0 ± 6.0 / 52.8 ± 2.2 74.6 ± 3.9 / 62.4 ± 4.6 
+
+bounds on the expected robust margin E[yf (x + ∆)] . Because the expected robust margin does not generally determine robust accuracy, these bounds alone do not provide a direct guarantee of robustness. By contrast, we prove that the robust zero-one error converges to the taskwise robust Bayes error, thereby directly guaranteeing transformer robustness. Second, their analysis does not determine whether linear transformers are robust or vulnerable in certain data regimes. As they acknowledge, their single-layer restriction limits model capacity and prevents their analysis from capturing the full robustness potential of linear transformers. By considering a multilayer model, we show that linear transformers asymptotically achieve taskwise robust Bayes optimality when they are sufficiently deep relative to the data complexity (i.e., L ≥ r). Overall, our analysis provides more definitive guarantees and more fully characterizes the robustness of linear transformers. 
+
+# 4 EXPERIMENTAL RESULTS 
+
+Detailed experimental settings and additional results are provided in Section A. 
+
+Synthetic datasets. We first empirically validate our theoretical results using synthetic datasets generated according to Eq. (1). We set d = 100 , r = 10 , and ϵ = 0 .08 . We train the linear transformer in Eq. (5) by minimizing the logistic loss with Adam. Each model is evaluated on 40 ,000 test tasks with 200 queries per task. The left panel of Fig. 1 compares robust zero-one errors for T = 40 ,000 
+
+and N = 100 ,000 . Under adversarial training, the robust zero-one error decreases with depth, and the depth-10 model essentially attains the robust Bayes error, supporting Theorems 3.2 and 3.4. The near-optimal performance of the depth-2 model does not contradict the theorem because L ≥ r is a sufficient but not necessary condition. In contrast, despite having sufficient depth and being trained on abundant data, the depth-10 model obtained by standard training remains far from optimal, consistent with Theorem 3.5. The center and right panels show that the depth-10 adversarially trained model approaches the robust Bayes error as T and N increase, respectively, supporting Theorem 3.4. 
+
+Real-world datasets. We then evaluate six-layer transformers with softmax attention on binary classification tasks from CIFAR-100, Tiny ImageNet, and Caltech-256. The pretraining, validation, and test classes are mutually disjoint. Clean and robust test accuracies are shown in Tab. 1. Adversarial training substantially improves robust accuracy, albeit at the cost of lower clean accuracy. 
+
+# 5 CONCLUSION AND LIMITATIONS 
+
+We showed that adversarial pretraining can enable a sufficiently deep linear transformer to adapt to unseen Gaussian-mixture classification tasks through in-context learning from clean demonstrations and asymptotically attain the taskwise robust Bayes error. By contrast, standard pretraining does not, even in the population limit. We further established convergence under gradient flow and identified two challenges in robust in-context learning. These results provide theoretical evidence that robustness acquired once during pretraining can transfer to downstream tasks without additional adversarial training, supporting the feasibility of robust foundation models. Our analysis is restricted to Gaussian-mixture tasks that share a common latent mean and covariance, so the unseen tasks considered in our theory still belong to a structured task family. Although such cross-task sharing is common in theoretical analyses of in-context learning (Ahn et al., 2023; Mahankali et al., 2024; Kumano et al., 2026), extending our guarantees to settings with task-dependent means or covariances and to non-Gaussian inputs is an important direction for future theoretical work. Moreover, the practical utility of robust foundation models remains unknown at the scale of modern foundation-model pretraining. We hope that our theoretical results will motivate large-scale empirical studies by large organizations with the computational resources required to conduct them. 9AI U SE STATEMENT 
+
+In this work, we used generative AI tools to formulate mathematical claims, provide critical ingre-dients for proving mathematical claims, assist in the writing of proofs, implement methods, and assist with translation. We have not used generative AI tools to generate synthetic data sets, help develop theoretical models or conceptual frameworks, propose or refine hypotheses, design or pro-vide feedback on research methodology or experiments, and interpret results. Dataset cleaning and reformatting, and support for qualitative or thematic data analysis are not applicable to this work. Additionally, we used generative AI tools to create or edit software code, draft parts of a research paper, summarize or analyze existing literature, brainstorm, source or search for information, edit a research paper to improve readability, identify relevant literature, and suggest a structure for a research paper. We did not use generative AI tools to create or modify scientific figures or images, suggest experimental parameters, create artifacts, discover research topics or identify gaps, format references, and propose a title or keywords for a research paper. Formulating questions for surveys or interviews and transcribing recordings of research materials are not applicable to this work. We have reviewed all AI-assisted work. We independently checked all proofs for mathematical correctness, tested all experimental code, and read and evaluated every cited work. We take responsibility for the final content of this work, including text, claims, or artifacts produced with the aid of generative AI. ETHICS STATEMENT 
+
+This work is a theoretical study of adversarial robustness supported by experiments on synthetic and real-world benchmark datasets. We use only publicly available datasets and do not collect new data or involve human participants. Our experiments do not interact with deployed systems. REPRODUCIBILITY STATEMENT 
+
+We state all assumptions explicitly in the main text and provide complete proofs of all theoretical results in the appendix. Detailed experimental settings are provided in Section A. The supplementary material contains the code to reproduce the reported experimental results. 
+
+# REFERENCES 
+
+Kwangjun Ahn, Xiang Cheng, Hadi Daneshmand, and Suvrit Sra. Transformers learn to implement preconditioned gradient descent for in-context learning. In NeurIPS , volume 36, pp. 45614–45650, 2023. Maksym Andriushchenko and Nicolas Flammarion. Understanding and improving fast adversarial training. In NeurIPS , volume 33, pp. 16048–16059, 2020. Usman Anwar, Johannes Von Oswald, Louis Kirsch, David Krueger, and Spencer Frei. Understanding in-context learning of linear models in transformers through an adversarial lens. TMLR , 2025. ISSN 2835-8856. Anish Athalye, Nicholas Carlini, and David Wagner. Obfuscated gradients give a false sense of security: Circumventing defenses to adversarial examples. In ICML , pp. 274–283, 2018. Yu Bai, Fan Chen, Huan Wang, Caiming Xiong, and Song Mei. Transformers as statisticians: Provable in-context learning with in-context algorithm selection. In NeurIPS , volume 36, pp. 57125–57211, 2023. Arjun Nitin Bhagoji, Daniel Cullina, and Prateek Mittal. Lower bounds on adversarial robustness from optimal transport. In NeurIPS , volume 32, 2019. Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. Language models are few-shot learners. In NeurIPS , volume 33, pp. 1877–1901, 2020. Nicholas Carlini and David Wagner. Towards evaluating the robustness of neural networks. In SP , pp. 39–57, 2017a. 10 Nicholas Carlini and David Wagner. Adversarial examples are not easily detected: Bypassing ten detection methods. In ACM Workshop , pp. 3–14, 2017b. Xiang Cheng, Yuxin Chen, and Suvrit Sra. Transformers implement functional gradient descent to learn non-linear functions in context. In ICML , 2024. Francesco Croce and Matthias Hein. Reliable evaluation of adversarial robustness with an ensemble of diverse parameter-free attacks. In ICML , pp. 2206–2216, 2020. Chen Dan, Yuting Wei, and Pradeep Ravikumar. Sharp statistical guaratees for adversarially robust gaussian classification. In ICML , pp. 2345–2355, 2020. Li Deng. The MNIST database of handwritten digit images for machine learning research. Signal Processing Magazine , 29(6):141–142, 2012. Deqing Fu, Tian-qi Chen, Robin Jia, and Vatsal Sharan. Transformers learn to achieve second-order convergence rates for in-context linear regression. In NeurIPS , volume 37, pp. 98675–98716, 2024. Shaopeng Fu and Di Wang. Understanding and improving continuous LLM adversarial training via in-context learning theory. In ICLR , 2026. Shaopeng Fu, Liang Ding, Jingfeng Zhang, and Di Wang. Short-length adversarial training helps LLMs defend long-length jailbreak attacks: Theoretical and empirical evidence. In NeurIPS ,volume 38, pp. 64351–64391, 2025. Khashayar Gatmiry, Nikunj Saunshi, Sashank J Reddi, Stefanie Jegelka, and Sanjiv Kumar. Can looped transformers learn to implement multi-step gradient descent for in-context learning? In 
+
+ICML , 2024. Angeliki Giannou, Liu Yang, Tianhao Wang, Dimitris Papailiopoulos, and Jason D Lee. How well can transformers emulate in-context newton’s method? arXiv:2403.03183 , 2024. Ian J. Goodfellow, Jonathon Shlens, and Christian Szegedy. Explaining and harnessing adversarial examples. In ICLR , 2015. Shruthi Gowda, Bahram Zonooz, and Elahe Arani. Conserve-update-revise to cure generalization and robustness trade-off in adversarial training. In ICLR , pp. 15465–15485, 2024. Gregory Griffin, Alex Holub, and Pietro Perona. Caltech-256 object category dataset. Technical report, 2007. Trevor Hastie, Robert Tibshirani, and Jerome Friedman. The elements of statistical learning: data mining, inference, and prediction . Springer, 2 edition, 2009. Pengyue Hou, Ming Zhou, Jie Han, Petr Musilek, and Xingyu Li. Adversarial fine-tune with dynamically regulated adversary. In IJCNN , pp. 1–8, 2022. Andrew Ilyas, Shibani Santurkar, Dimitris Tsipras, Logan Engstrom, Brandon Tran, and Aleksander Madry. Adversarial examples are not bugs, they are features. In NeurIPS , volume 32, pp. 125–136, 2019. Ahmadreza Jeddi, Mohammad Javad Shafiee, and Alexander Wong. A simple fine-tuning is all you need: Towards robust deep learning via adversarial fine-tuning. In CVPR Workshop , 2021. Xiaojun Jia, Yong Zhang, Xingxing Wei, Baoyuan Wu, Ke Ma, Jue Wang, and Xiaochun Cao. Prior-guided adversarial initialization for fast adversarial training. In ECCV , pp. 567–584, 2022. Hoki Kim, Woojin Lee, and Jaewook Lee. Understanding catastrophic overfitting in single-step adversarial training. In AAAI , volume 35, pp. 8119–8127, 2021. Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical report, University of Toronto, 2009. Soichiro Kumano, Hiroshi Kera, and Toshihiko Yamasaki. Adversarially pretrained transformers may be universally robust in-context learners. In ICLR , pp. 124615–124659, 2026. 11 Ya Le and Xuan Yang. Tiny ImageNet visual recognition challenge. CS231N course report, Stanford University, 2015. Jonathan Lee, Annie Xie, Aldo Pacchiano, Yash Chandak, Chelsea Finn, Ofir Nachum, and Emma Brunskill. Supervised pretraining can learn in-context reinforcement learning. In NeurIPS ,volume 36, pp. 43057–43083, 2023. Tianle Li, Chenyang Zhang, Xingwu Chen, Yuan Cao, and Difan Zou. On the robustness of transformers against context hijacking for linear classification. In NeurIPS , volume 38, pp. 69373– 69411, 2025. Licong Lin, Yu Bai, and Song Mei. Transformers as decision makers: Provable in-context reinforce-ment learning via supervised pretraining. In ICLR , 2024. Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. Towards deep learning models resistant to adversarial attacks. In ICLR , 2018. Arvind Mahankali, Tatsunori B Hashimoto, and Tengyu Ma. One step of gradient descent is provably the optimal in-context learner with one layer of linear self-attention. In ICLR , 2024. Geon Yeong Park and Sang Wan Lee. Reliably fast adversarial training via latent adversarial perturbation. In ICCV , pp. 7758–7767, 2021. Ludwig Schmidt, Shibani Santurkar, Dimitris Tsipras, Kunal Talwar, and Aleksander Madry. Adver-sarially robust generalization requires more data. In NeurIPS , volume 31, 2018. Ali Shafahi, Mahyar Najibi, Amin Ghiasi, Zheng Xu, John Dickerson, Christoph Studer, Larry S Davis, Gavin Taylor, and Tom Goldstein. Adversarial training for free! In NeurIPS , volume 32, 2019. Dong Su, Huan Zhang, Hongge Chen, Jinfeng Yi, Pin-Yu Chen, and Yupeng Gao. Is robustness the cost of accuracy?–a comprehensive study on the robustness of 18 deep image classification models. In ECCV , pp. 631–648, 2018. Satoshi Suzuki, Shin’ya Yamaguchi, Shoichiro Takeda, Sekitoshi Kanai, Naoki Makishima, Atsushi Ando, and Ryo Masumura. Adversarial finetuning with latent representation constraint to mitigate accuracy-robustness tradeoff. In ICCV , pp. 4367–4378, 2023. Christian Szegedy, Wojciech Zaremba, Ilya Sutskever, Joan Bruna, Dumitru Erhan, Ian Goodfellow, and Rob Fergus. Intriguing properties of neural networks. In ICLR , 2014. Florian Tramer, Nicholas Carlini, Wieland Brendel, and Aleksander Madry. On adaptive attacks to adversarial example defenses. In NeurIPS , volume 33, pp. 1633–1645, 2020. Dimitris Tsipras, Shibani Santurkar, Logan Engstrom, Alexander Turner, and Aleksander Madry. Robustness may be at odds with accuracy. In ICLR , 2019. Eric Wong, Leslie Rice, and J Zico Kolter. Fast is better than free: Revisiting adversarial training. In 
+
+ICLR , 2020. Sophie Xhonneux, Alessandro Sordoni, Stephan G¨ unnemann, Gauthier Gidel, and Leo Schwinn. Efficient adversarial training in llms with continuous attacks. In NeurIPS , volume 37, pp. 1502– 1530, 2024. Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-MNIST: a novel image dataset for bench-marking machine learning algorithms. arXiv:1708.07747 , 2017. Sang Michael Xie, Aditi Raghunathan, Percy Liang, and Tengyu Ma. An explanation of in-context learning as implicit bayesian inference. In ICLR , 2022. Dinghuai Zhang, Tianyuan Zhang, Yiping Lu, Zhanxing Zhu, and Bin Dong. You only propagate once: Accelerating adversarial training via maximal principle. In NeurIPS , volume 32, 2019. Ruiqi Zhang, Spencer Frei, and Peter L Bartlett. Trained transformers learn linear models in-context. 
+
+JMLR , 25(49):1–55, 2024. 12 Yufeng Zhang, Fengzhuo Zhang, Zhuoran Yang, and Zhaoran Wang. What and how does in-context learning learn? bayesian model averaging, parameterization, and generalization. In AISTATS ,2025. Haizhong Zheng, Ziqi Zhang, Juncheng Gu, Honglak Lee, and Atul Prakash. Efficient adversarial training with transferable adversarial examples. In CVPR , pp. 1178–1187, 2020. 13 A Additional Experimental Results 14 
+
+A.1 Synthetic Experiments . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.2 Real-World Experiments . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 
+
+B Robust Bayes Implementation by Linear Transformers: Proof of Theorem 3.2 17 
+
+B.1 Robust Bayes classifier . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17 B.2 Query-Linear Representation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 B.3 Krylov structure and sufficient-depth realization . . . . . . . . . . . . . . . . . . . 21 
+
+C Adversarial and Standard Training: Proofs of Theorems 3.4 and 3.5 25 
+
+C.1 Directions selected by infinite-sample margin risks . . . . . . . . . . . . . . . . . 25 C.2 Infinite-sample minimizers and finite-context transfer . . . . . . . . . . . . . . . . 26 C.3 Finite-task adversarial risk minimization . . . . . . . . . . . . . . . . . . . . . . . 27 
+
+D Gradient Flow to Robust Bayes Optimality 31 E Accuracy–Robustness Trade-Off 33 F Demonstration Complexity 34 
+
+# A ADDITIONAL EXPERIMENTAL RESULTS 
+
+All experiments were conducted on a Linux server with an x86 64 CPU architecture and four NVIDIA A100-SXM4-80GB GPUs. A.1 SYNTHETIC EXPERIMENTS 
+
+Experimental design. We choose an anisotropic Gaussian distribution for which the standard and robust Bayes directions differ, allowing the experiments to distinguish standard from robust direction recovery. Specifically, we set d = 100 and ϵ = 0 .08 and, for every i ∈ [10] , define the mean and diagonal covariance entries by 
+
+μi := i
+
+10 , Σi,i := μi10 −1+2( i−1) /9. (A1) For every i ∈ [d] \ [10] , we set μi := 0 and Σi,i := 10 −6. The active signal-to-variance ratios 
+
+μi/Σi,i = 10 1−2( i−1) /9 therefore range logarithmically from 10 to 10 −1. Because the ten active coordinates have distinct covariance eigenvalues, this construction has Krylov dimension r = 10 .We independently draw each task basis U from the normalized Haar distribution on O(d) and then sample demonstrations and queries from Eq. (1). Each fixed pretraining dataset contains T task bases, N clean demonstrations per task, and one clean query per task. For evaluation, we use 
+
+40 ,000 independently drawn test tasks, a fresh context with the same value of N for each task, and 200 independent queries per context. We conduct three independent runs for T = 40 ,000 and 
+
+N = 100 ,000 and five independent runs otherwise. Each run uses separate training and evaluation random streams, and we report means and sample standard deviations across runs. 
+
+Model and training. We use the one-head masked linear-attention architecture in Eq. (4) and restrict its parameters to a rotation-equivariant family that respects the symmetry of the task distribution. In particular, every layer has the form 
+
+Pℓ := pℓ,x Πx + pℓ,y Πy , Qℓ := qℓ,x Πx + qℓ,y Πy , (A2) 
+
+Πx := diag( Id, 0) , Πy := diag( 0d, 1) . (A3) 14 L = 1 L = 2 L = 10 0.00 0.25 0.50 0.75 1.00                     
+
+> Cosine similarity Adversarial training
+> T= 40 ,000, N= 100 ,000 0.7906 0.9799 0.9999
+> 10 30 50 70100 300 500 1,000
+> Pretraining task size T
+> 0.85 0.90 0.95 1.00
+> Adv. training ( L= 10, N= 1 ,000)
+> 10 30 50 70100 300 500 1,000
+> In-context demonstration size N
+> 0.97 0.98 0.99 1.00
+> Adv. training ( L= 10, T= 1 ,000)
+> Mean ±sample std. dev.
+
+Figure A1: Cosine similarity between the population-context effective direction of an adversarially trained transformer and the robust Bayes direction. The distribution and the three experimental conditions are the same as in Fig. 1. The left panel varies the depth at T = 40 ,000 and N = 100 ,000 ,the center panel varies T with L = 10 and N = 1 ,000 , and the right panel varies N with L = 10 
+
+and T = 1 ,000 . Means and sample standard deviations are shown over three runs in the left panel and five runs in the other panels. The four coefficients in each layer are trainable and initialized independently from N (0 , 0.01 2). We minimize the logistic loss L(z) = log(1+exp( −z)) , which satisfies Assumption 3.1(d), by full-batch Adam for at most 2,500 updates on the fixed pretraining dataset. The learning rate increases linearly to 0.01 over the first 30 updates and subsequently either remains constant or follows cosine annealing to 0.001 without restarts. For each schedule, we retain the checkpoint with the smallest training loss and report the better of the two retained checkpoints under the same criterion. 
+
+Robust evaluation and Bayes baselines. Masked linear attention is linear in the query, so both adversarial training and robust evaluation can use the exact worst-case perturbation rather than an approximate attack such as the fast gradient sign method (Goodfellow et al., 2015) or projected gradient descent (PGD) (Madry et al., 2018). The adversary perturbs only the query and leaves all in-context demonstrations fixed and clean. Writing w(ΘL, DN ) for the context-dependent effective query direction, the exact perturbation for w(ΘL, DN )̸ = 0d is 
+
+∆ = −yϵ √d w(ΘL, DN )
+
+∥w(ΘL, DN )∥2
+
+. (A4) When the effective direction is zero, we instead set ∆ = 0d, and during adversarial training we recompute the perturbation from the current model at every update. For comparison with the theoretical optimum, we obtain the robust Bayes direction (Σ + τ Id)−1μ by numerically solving 
+
+τ ∥(Σ + τ Id)−1μ∥2 = ϵ√d (A5) and compute all Bayes risks analytically from the resulting Gaussian margins. 
+
+Alignment with the robust Bayes direction. To examine whether adversarial training recovers the optimal classifier rather than merely its error, Fig. A1 compares the effective direction of linear transformers with the robust Bayes direction characterized in Lemma B.4. At T = 40 ,000 and 
+
+N = 100 ,000 , the cosine similarity increases with depth and approaches one at depth ten. Thus, the depth-10 model recovers not only the robust Bayes error but also the unique optimal direction up to positive scaling. Increasing the number of pretraining tasks similarly improves the cosine similarity, while the values throughout the demonstration sweep remain close to one. Together with the robust errors in Fig. 1, these results support the convergence to the robust Bayes predictor established in Theorem 3.4. 
+
+Accuracy–robustness trade-off and demonstration complexity. To assess the accuracy–robustness trade-off and the qualitative dependence on context length, Tab. A1 compares clean and robust accuracy as the number of demonstrations increases. Standard training gives higher clean accuracy overall, whereas adversarial training gives substantially higher robust accuracy, supporting the accuracy–robustness trade-off in Theorems 3.5 and E.1. Moreover, standard clean accuracy saturates with relatively few demonstrations, while adversarial robust accuracy continues to improve toward the robust Bayes accuracy. This behavior is qualitatively consistent with Theorem F.1. 15 Table A1: Clean and robust accuracies (%), reported as mean ± sample standard deviation across five runs, for depth-10 models trained on T = 1 ,000 tasks. Each row uses the displayed number of demonstrations in both pretraining and evaluation. Robust accuracy uses ϵ = 0 .08 , and every model is evaluated on 40 ,000 test tasks with 200 queries per task. Standard training Adversarial training 
+
+N Clean Robust Clean Robust 
+
+10 84 .6 ± 4.2 63 .5 ± 4.5 84 .8 ± 0.7 67 .8 ± 0.350 95 .1 ± 4.3 52 .8 ± 20 .6 92 .4 ± 0.3 75 .5 ± 0.1100 98 .0 ± 0.6 45 .1 ± 15 .9 93 .6 ± 0.3 76 .6 ± 0.1500 98 .7 ± 0.2 39 .6 ± 7.0 94 .1 ± 0.3 77 .5 ± 0.11,000 98 .4 ± 0.6 45 .1 ± 13 .0 94 .0 ± 0.1 77 .6 ± 0.1
+
+A.2 REAL -W ORLD EXPERIMENTS 
+
+Datasets and class splits. We evaluate whether the benefit of adversarial pretraining extends beyond the theoretical Gaussian model by considering CIFAR-100 (Krizhevsky, 2009), Tiny ImageNet (Le & Yang, 2015), and Caltech-256 (Griffin et al., 2007). In each of the five independent runs, the respective pretraining splits contain 80 , 180 , and 236 classes, while each validation and test split contains ten classes, with all three partitions mutually disjoint. We draw a different class partition in each run. 
+
+PCA features. We represent each image by an unwhitened principal component analysis (PCA) features to reduce the input dimension before constructing the in-context episodes. Let dPCA denote the number of retained components and hence the dimension of each PCA feature. For every dataset and run, we scale RGB values to [0 , 1] and flatten each image in channel–height–width order. We fit the coordinatewise mean and PCA components using only images from that run’s pretraining classes, excluding all images from validation and test classes. We compute PCA with 32 oversampling dimensions and seven power iterations. After fitting PCA, we use the same mean and components to project every image in the training and query splits. We retain dPCA = 256 components for CIFAR-100 and dPCA = 512 components for Tiny ImageNet and Caltech-256. For Caltech-256, we exclude the clutter class and select 60 training images and 20 query images from each of the remaining 256 classes. Before computing its PCA feature, we convert each Caltech-256 image to RGB, center it on a square canvas padded with the RGB value (128 , 128 , 128) , and resize it to 64 × 64 
+
+pixels using bicubic interpolation with antialiasing. 
+
+Binary in-context episodes. Each episode is a binary classification task whose two classes determine the meaning of the labels within that context. At the beginning of every pretraining epoch, we randomly permute the pretraining classes and pair consecutive classes, ensuring that each class appears in exactly one task during that epoch. For each class in a task, we sample 50 demonstrations and 10 queries without replacement from its training features, with the demonstration and query sets disjoint within the task. Validation and testing instead enumerate all 45 unordered pairs of the corresponding ten held-out classes. For each pair, we form one fixed context from 50 training features per class and evaluate it on 10 query-split features per class, yielding 900 queries in each final test. 
+
+Transformer and optimization. We use a six-layer pre-normalization transformer with softmax attention, residual connections, and GELU feed-forward networks, thereby testing whether the qualitative prediction of the linear-attention theory persists in a standard nonlinear architecture. Each PCA feature is augmented with one of three learned embeddings that identifies a demonstration with label −1, a demonstration with label +1 , or an unlabeled query. CIFAR-100 uses four attention heads and a feed-forward dimension of 1,024 , whereas Tiny ImageNet and Caltech-256 use eight attention heads and a feed-forward dimension of 2,048 ; every attention head has dimension 64 . A linear head applied after the final layer normalization produces the scalar score optimized with the logistic loss. We use Xavier uniform initialization for linear weights, zero linear biases, independent N (0 , 0.02 2)
+
+initialization for the three embeddings, and unit scales and zero biases for layer normalization. We train for 300 epochs with AdamW, exponential decay rates 0.9 and 0.95 , numerical stability constant 
+
+10 −8, weight decay 0.05 , and global gradient clipping at 1.0. The standard and adversarial runs use peak learning rates of 3 × 10 −4 and 10 −3, respectively, with linear warmup over the first 5% of 16 updates followed by cosine decay to zero. We initialize the standard model from scratch and the adversarial model from the corresponding standardly trained model. Model selection minimizes the clean validation logistic loss for standard training and the 20 -step PGD validation loss for adversarial training. 
+
+Adversarial training and evaluation. The real-world threat model follows the theoretical setting by perturbing only the query while keeping all demonstrations clean and fixed. Specifically, the adversary may change a query PCA feature within an L2 ball of radius ϵ√dPCA , where ϵ = 0 .1 in both training and evaluation. Adversarial training uses untargeted 10 -step PGD with one uniformly sampled random start and step size ϵ√dPCA /4. For final evaluation, we measure robust accuracy using APGD-CE and binary FAB (Croce & Hein, 2020), each run for 100 iterations. We omit the remaining AutoAttack components because the DLR loss is undefined for scalar binary scores and Square Attack relies on spatial image structure. 
+
+# B ROBUST BAYES IMPLEMENTATION BY LINEAR TRANSFORMERS : P ROOF OF 
+
+# THEOREM 3.2 
+
+B.1 ROBUST BAYES CLASSIFIER 
+
+In this section, we characterize the robust Bayes classifier and its error for a fixed task independently of the linear-transformer architecture. For U = Id and thus x = ya, we derive the robust zero-one error of every linear function in Lemma B.1, the standard Bayes error in Lemma B.2, and the robust Bayes error and all linear functions attaining it in Lemma B.3. Then, for every U ∈ O (d) and 
+
+x = yU a , we generalize these results in Lemma B.4. Variants or equivalent formulations of these results appear in Hastie et al. (2009); Bhagoji et al. (2019); Dan et al. (2020). These lemmas are auxiliary to our main results, and we do not claim them as novel contributions. For completeness, we provide self-contained proofs, since adapting the existing results to our setting would require essentially as much exposition as proving them directly. 
+
+Lemma B.1 (Robust error of linear functions for the identity-basis task) . Suppose that y is uniform on {± 1} and x | y ∼ N (yμ, Σ), where Σ ≻ 0d,d . For every h ∈ Rd, define gh : Rd → R by 
+
+gh(x) := h⊤x. Then, for every ϵ ≥ 0 and h ∈ Rd \ { 0d},
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yg h(x + ∆) ≤ 0
+
+!
+
+= Φ − μ⊤h − ϵ√d∥h∥2
+
+√h⊤Σh
+
+!
+
+, (A6) 
+
+where Φ denotes the cumulative distribution function of the standard normal distribution. Proof. For every perturbation ∆ ∈ Rd, the signed margin is 
+
+yg h(x + ∆) = yh⊤x + yh⊤∆. (A7) Cauchy–Schwarz shows that its minimum over the perturbation ball is 
+
+inf 
+
+> ∥∆∥2≤ϵ√d
+
+yg h(x + ∆) = yh⊤x − ϵ√d∥h∥2. (A8) The class-conditional model implies 
+
+yh⊤x ∼ N (μ⊤h, h⊤Σh). (A9) Since h̸ = 0d and Σ ≻ 0d,d , the variance h⊤Σh is strictly positive. Therefore, standardizing the Gaussian signed margin gives 
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yg h(x + ∆) ≤ 0
+
+!
+
+(A10) 
+
+= P(yh⊤x ≤ ϵ√d∥h∥2) (A11) 
+
+= Pz∼N (0 ,1) z ≤ ϵ√d∥h∥2 − μ⊤h
+
+√h⊤Σh
+
+!
+
+(A12) 17 = Φ − μ⊤h − ϵ√d∥h∥2
+
+√h⊤Σh
+
+!
+
+. (A13) 
+
+Lemma B.2 (Bayes error for the identity-basis task) . Suppose that y is uniform on {± 1} and 
+
+x | y ∼ N (yμ, Σ), where μ̸ = 0d and Σ ≻ 0d,d . Then, for every measurable function φ : Rd → R,
+
+P(yφ (x) ≤ 0) ≥ Φ
+
+
+
+−pμ⊤Σ−1μ
+
+
+
+, (A14) 
+
+where Φ denotes the cumulative distribution function of the standard normal distribution. Proof. Lower bound. Let p+ and p− denote the conditional densities of x given y = +1 and 
+
+y = −1, respectively. Since the two labels have equal probability, conditioning on y gives 
+
+P(yφ (x) ≤ 0) = 12
+
+Z
+
+> x∈Rd
+
+[1{φ(x) ≤ 0}p+(x) + 1{φ(x) ≥ 0}p−(x)] dx. (A15) For every x ∈ Rd, the integrand satisfies 
+
+1{φ(x) ≤ 0}p+(x) + 1{φ(x) ≥ 0}p−(x) ≥ min {p+(x), p −(x)}. (A16) Consequently, 
+
+P(yφ (x) ≤ 0) ≥ 12
+
+Z
+
+> x∈Rd
+
+min {p+(x), p −(x)}dx. (A17) 
+
+Function that attains the lower bound. The Gaussian density formula gives 
+
+log 
+
+ p+(x)
+
+p−(x)
+
+
+
+= − 12 (x − μ)⊤Σ−1(x − μ) + 12 (x + μ)⊤Σ−1(x + μ) = 2 μ⊤Σ−1x. (A18) Therefore, the linear function φ⋆(x) := μ⊤Σ−1x is positive exactly when p+(x) > p −(x) and negative exactly when p+(x) < p −(x). Because Σ−1μ̸ = 0d, the hyperplane on which φ⋆(x) = 0 
+
+has Lebesgue measure zero. Thus, 
+
+12
+
+Z
+
+> x∈Rd
+
+min {p+(x), p −(x)}dx (A19) 
+
+= 12
+
+Z
+
+> x∈Rd
+
+[1{φ⋆(x) ≤ 0}p+(x) + 1{φ⋆(x) ≥ 0}p−(x)] dx (A20) 
+
+= P(yφ ⋆(x) ≤ 0) . (A21) 
+
+Value of the lower bound. The class-conditional model and the definition of φ⋆ imply 
+
+yφ ⋆(x) ∼ N (μ⊤Σ−1μ, μ⊤Σ−1μ). (A22) The mean and variance are both equal to μ⊤Σ−1μ, which is strictly positive because μ̸ = 0d and 
+
+Σ ≻ 0d,d . Standardizing therefore yields 
+
+P(yφ ⋆(x) ≤ 0) = Φ − μ⊤Σ−1μ
+
+pμ⊤Σ−1μ
+
+!
+
+= Φ 
+
+
+
+−pμ⊤Σ−1μ
+
+
+
+. (A23) 
+
+Lemma B.3 (Robust Bayes characterization for the identity-basis task) . Suppose that y is uniform on 
+
+{± 1} and x | y ∼ N (yμ, Σ), where μ̸ = 0d and Σ ≻ 0d,d . Suppose also that 0 ≤ ϵ√d < ∥μ∥2.There exists a unique τ ≥ 0 satisfying 
+
+τ ∥(Σ + τ Id)−1μ∥2 = ϵ√d. (A24) 18 For this τ , define 
+
+hτ := ( Σ + τ Id)−1μ. (A25) 
+
+Then, for every measurable function φ : Rd → R,
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yφ (x + ∆) ≤ 0
+
+!
+
+≥ Φ
+
+
+
+−
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ
+
+
+
+. (A26) 
+
+Among linear functions, equality is attained exactly by the functions x 7 → ωh⊤ 
+
+> τ
+
+x with ω > 0.Proof. Existence and uniqueness of τ . Let λ1, . . . , λ d > 0 be the eigenvalues of Σ, let u1, . . . , ud
+
+be corresponding orthonormal eigenvectors, and write μ = Pdi=1 miui. For τ ≥ 0, the spectral theorem gives 
+
+q(τ ) := τ 2∥(Σ + τ Id)−1μ∥22 =
+
+> d
+
+X
+
+> i=1
+
+m2
+
+> i
+
+ τλi + τ
+
+2
+
+. (A27) Since both sides of the equation defining τ are nonnegative, that equation is equivalent to q(τ ) = ϵ2d.Each map τ 7 → τ / (λi + τ ) is continuous and strictly increasing from zero to one on [0 , ∞). Because 
+
+μ̸ = 0d, at least one mi is nonzero, and hence q is continuous and strictly increasing with 
+
+q(0) = 0 , lim   
+
+> τ→∞
+
+q(τ ) = 
+
+> d
+
+X
+
+> i=1
+
+m2 
+
+> i
+
+= ∥μ∥22. (A28) If ϵ = 0 , the equation q(τ ) = ϵ2d has the unique solution τ = 0 . If ϵ > 0, the inequality 
+
+0 < ϵ 2d < ∥μ∥22 and the intermediate value theorem give a unique solution τ > 0.
+
+Lower bound. For the resulting hτ , define the label-dependent perturbation ∆y := −yτ hτ . This perturbation is admissible because 
+
+∥∆y ∥2 = τ ∥hτ ∥2 = ϵ√d. (A29) Therefore, for every measurable function φ,
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yφ (x + ∆) ≤ 0
+
+!
+
+≥ P(yφ (x + ∆y ) ≤ 0) . (A30) The definition of hτ implies 
+
+μ − τ hτ = Σhτ . (A31) Consequently, the perturbed input has the class-conditional distribution 
+
+x + ∆y | y ∼ N (yΣhτ , Σ). (A32) Since Σhτ̸ = 0d, applying Lemma B.2 to this symmetric Gaussian mixture gives 
+
+P(yφ (x + ∆y ) ≤ 0) ≥ Φ
+
+
+
+−
+
+q
+
+(Σhτ )⊤Σ−1(Σhτ )
+
+
+
+= Φ 
+
+
+
+−
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ
+
+
+
+. (A33) 
+
+Attainment of the lower bound. Applying Eq. (A6) with h = hτ to the linear function φ⋆(x) = 
+
+h⊤ 
+
+> τ
+
+x gives 
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yφ ⋆(x + ∆) ≤ 0
+
+!
+
+= Φ − μ⊤hτ − ϵ√d∥hτ ∥2
+
+ph⊤ 
+
+> τ
+
+Σhτ
+
+!
+
+. (A34) The definitions of τ and hτ give 
+
+μ⊤hτ − ϵ√d∥hτ ∥2 = h⊤ 
+
+> τ
+
+(Σ + τ Id)hτ − τ ∥hτ ∥22 = h⊤ 
+
+> τ
+
+Σhτ . (A35) Substitution into the preceding robust-error formula yields 
+
+P inf 
+
+> ∥∆∥2≤ϵ√d
+
+yφ ⋆(x + ∆) ≤ 0
+
+!
+
+= Φ − h⊤ 
+
+> τ
+
+Σhτ
+
+ph⊤ 
+
+> τ
+
+Σhτ
+
+!
+
+= Φ 
+
+
+
+−
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ
+
+
+
+. (A36) 19 Thus, φ⋆ attains the lower bound. 
+
+Uniqueness among linear functions. Positive scale invariance in Eq. (A6) shows that every positive multiple of hτ attains the same lower bound. Fix v ∈ Rd \{ 0d}. The identities μ = ( Σ+τ Id)hτ and 
+
+ϵ√d = τ ∥hτ ∥2, followed by the Euclidean Cauchy–Schwarz inequality and the Cauchy–Schwarz inequality for the inner product induced by Σ, give 
+
+μ⊤v − ϵ√d∥v∥2 = h⊤ 
+
+> τ
+
+Σv + τ (h⊤ 
+
+> τ
+
+v − ∥ hτ ∥2∥v∥2) (A37) 
+
+≤ h⊤ 
+
+> τ
+
+Σv (A38) 
+
+≤
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ
+
+√v⊤Σv. (A39) The denominator √v⊤Σv is strictly positive because Σ ≻ 0d,d . Dividing by this denominator and using the strict monotonicity of Φ in Eq. (A6) show that the robust error of gv is at least the lower bound. The robust error equals the lower bound only if both inequalities in the preceding display hold with equality. If τ > 0, equality in the first inequality requires h⊤ 
+
+> τ
+
+v = ∥hτ ∥2∥v∥2, which holds exactly when v = ωhτ for some ω > 0. If τ = 0 , the first inequality is automatically an equality, while equality in the Σ-inner-product Cauchy–Schwarz inequality again holds exactly when 
+
+v = ωhτ for some ω > 0. Conversely, every such positive multiple attains equality, as observed above. Finally, g0d is identically zero and therefore has robust error one, whereas the lower bound is strictly less than one half because h⊤ 
+
+> τ
+
+Σhτ > 0.
+
+Lemma B.4 (Taskwise robust Bayes characterization) . Suppose that (a) and (b) in Assumption 3.1 hold. For every U ∈ O (d) and h ∈ Rd, define the linear function gU ,h : Rd → R by 
+
+gU ,h(x) := h⊤U ⊤x.
+
+(a) For every U ∈ O (d) and h ∈ Rd \ { 0d},
+
+Eϵ, U (gU ,h) = Φ − μ⊤h − ϵ√d∥h∥2
+
+√h⊤Σh
+
+!
+
+, (A40) 
+
+(b) For every U ∈ O (d),
+
+Eϵ, U (gU ,hτ ) = Φ 
+
+
+
+−
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ
+
+
+
+= E⋆ϵ, U . (A41) 
+
+Among linear functions, the robust Bayes error is attained exactly by the functions x 7 →
+
+ωh⊤ 
+
+> τ
+
+U ⊤x with ω > 0.Proof. Define z := U ⊤x and e∆ := U ⊤∆. Conditional on U , the transformed input satisfies 
+
+z | y ∼ N (yμ, Σ). (A42) Orthogonality of U gives 
+
+∥ e∆∥2 = ∥∆∥2, gU ,h(x + ∆) = gh(z + e∆). (A43) The map ∆ 7 → e∆ is a bijection of the perturbation ball onto itself. 
+
+Part (a). Applying Eq. (A6) to gh in the transformed coordinates proves Eq. (A40). 
+
+Part (b). For every measurable function φ : Rd → R, define eφ : Rd → R by eφ(z) := φ(U z ).The map φ 7 → eφ is a bijection on the class of measurable functions, and the preceding change of coordinates gives 
+
+Eϵ, U (φ) = P inf  
+
+> ∥e∆∥2≤ϵ√d
+
+y eφ(z + e∆) ≤ 0
+
+!
+
+. (A44) Applying Lemma B.3 in the transformed coordinates proves Eq. (A41). Its uniqueness conclusion for linear functions proves the final statement of part (b). 20 B.2 QUERY -L INEAR REPRESENTATION 
+
+Define the population second moment by 
+
+S := Σ + μμ ⊤. (A45) The latent finite-context matrix and its population limit are 
+
+Ga,N := 
+
+N −1 PNn=1 ana⊤ 
+
+> n
+
+N −1 PNn=1 an
+
+N −1 PNn=1 a⊤ 
+
+> n
+
+1
+
+
+
+, G⋆ := 
+
+ S μμ⊤ 1
+
+
+
+. (A46) The strong law gives Ga,N → G⋆ almost surely. The corresponding ambient context matrix is 
+
+GN (U ) := 1
+
+N Z(0) M Z (0) ⊤ = diag( U , 1) Ga,N diag( U ⊤, 1) . (A47) For a context matrix G, define A(0)  
+
+> ΘL
+
+(G) := Id+1 and, for ℓ ∈ [L], recursively define 
+
+A(ℓ) 
+
+> ΘL
+
+(G) := {Id+1 + PℓA(ℓ−1)  
+
+> ΘL
+
+(G)GA (ℓ−1)  
+
+> ΘL
+
+(G)⊤
+
+Qℓ}A(ℓ−1)  
+
+> ΘL
+
+(G). (A48) For any context matrix G, define the depth-L effective direction by 
+
+θΘL (G) := [ Id 0d] A(L) 
+
+> ΘL
+
+(G)⊤
+
+ed+1 . (A49) Here, ed+1 is the last standard basis vector of Rd+1 . The mask in Eq. (4) removes the query column from every context matrix. Induction over the layers therefore shows that every depth-L transformer is linear in its query: 
+
+f (x + ∆; ΘL, DN ) = θΘL (GN (U )) ⊤(x + ∆). (A50) B.3 KRYLOV STRUCTURE AND SUFFICIENT -DEPTH REALIZATION 
+
+Define the feature and label projectors by 
+
+Πx := 
+
+ Id 0d
+
+0⊤ 
+
+> d
+
+0
+
+
+
+, Πy := 
+
+0d,d 0d
+
+0⊤ 
+
+> d
+
+1
+
+
+
+. (A51) We first relate the active spectra of Σ and S.
+
+Lemma B.5 (Active spectrum under the rank-one update) . The matrix S has exactly r distinct active eigenvalues, where an eigenvalue s is active when its orthogonal spectral projector Fs satisfies 
+
+Fsμ̸ = 0d and r is defined in Eq. (2) .Proof. Since Sv = Σv + μμ ⊤v, induction in both directions gives 
+
+span {μ, Sμ , S2μ, . . . } = span {μ, Σμ, Σ2μ, . . . }. (A52) The spectral decomposition of Σ and the Vandermonde determinant show that the right-hand side has dimension r, the number of distinct covariance eigenvalues with nonzero projection of μ. For any symmetric matrix, the dimension of the Krylov space generated by a vector equals the number of distinct eigenvalues whose spectral projectors do not annihilate that vector. Applying this fact to S
+
+proves the claim. We characterize the population output induced by block-selective parameters. We then choose their scalar coefficients to interpolate the desired response on the active spectrum. 
+
+Lemma B.6 (Population response of block-selective processing layers) . Fix an integer m ≥ 0. For 
+
+1 ≤ ℓ ≤ m, let κℓ, η ℓ ∈ R and define 
+
+Pℓ := κℓΠx + ηℓΠy , Qℓ := Πx. (A53) 21 Set Θm := {(Pℓ, Qℓ)}mℓ=1 . Set a0(s) := 1 and b0(s) := 0 , and, for 1 ≤ ℓ ≤ m, recursively define 
+
+aℓ(s) := aℓ−1(s){1 + κℓsa ℓ−1(s)2}, bℓ(s) := bℓ−1(s) + ηℓaℓ−1(s)2{1 + sb ℓ−1(s)}. (A54) 
+
+Then, 
+
+A(m) 
+
+> Θm
+
+(G⋆) = 
+
+ am(S) 0d
+
+μ⊤bm(S) 1
+
+
+
+. (A55) 
+
+Consequently, 
+
+θΘm (G⋆) = bm(S)μ. (A56) 
+
+Proof. The claim is immediate at m = 0 . Suppose that the claimed block form holds after ℓ layers, where 0 ≤ ℓ < m , and denote this cumulative transformation by Tℓ. Direct block multiplication gives 
+
+TℓG⋆T ⊤ 
+
+> ℓ
+
+Πx =
+
+ Saℓ(S)2 0d
+
+μ⊤{Id + bℓ(S)S}aℓ(S) 0
+
+
+
+. (A57) Substituting this expression and the (ℓ + 1) -st parameters from Eq. (A53) into Eq. (A48) gives the recursion in Eq. (A54) and proves Eq. (A55) by induction. The definition in Eq. (A49) gives 
+
+θΘm (G⋆) = bm(S)μ.
+
+Lemma B.7 (Sufficient-depth population optimal-direction comparator) . Fix τ ≥ 0 and ω > 0,define h⋆ := ω(Σ + τ Id)−1μ, and suppose that L ≥ r. There is a parameter tuple ΘL,⋆ such that, for every U ∈ O (d),
+
+U ⊤θΘL,⋆ (diag( U , 1) G⋆ diag( U ⊤, 1)) = h⋆. (A58) 
+
+Proof. Let s1, . . . , s r be the active eigenvalues of S, whose number is r by Lemma B.5, and set 
+
+C := ω{1 + μ⊤(Σ + τ Id)−1μ}. (A59) It is enough to construct the first r layers in latent coordinates at the population context G⋆. For the first r − 1 layers, use the notation and response recursion of Lemma B.6 with m = r − 1.These layers process r − 1 active eigenvalues sequentially. At the beginning of stage ℓ, let Iℓ be the indices not yet processed and define 
+
+z(ℓ) 
+
+> i
+
+:= siaℓ(si)2, i ∈ I ℓ. (A60) We maintain the invariant that these numbers are positive and pairwise distinct. This holds initially because z(0)  
+
+> i
+
+= si. Let kℓ be the unique index attaining their minimum and set 
+
+κℓ+1 := − 1
+
+z(ℓ)
+
+> kℓ
+
+, ηℓ+1 := c/ (skℓ + τ ) − bℓ(skℓ )
+
+aℓ(skℓ )2{1 + skℓ bℓ(skℓ )} , (A61) where c > 0 will be chosen sufficiently small. Equation Eq. (A54) then gives 
+
+aℓ+1 (skℓ ) = 0 , bℓ+1 (skℓ ) = cskℓ + τ . (A62) Every later increment of either response at this eigenvalue contains a factor aj (skℓ ), so the response remains fixed. For every remaining index i̸ = kℓ, the next transformed value is 
+
+z(ℓ+1)  
+
+> i
+
+= z(ℓ) 
+
+> i
+
+1 − z(ℓ)
+
+> i
+
+z(ℓ)
+
+> kℓ
+
+!2
+
+. (A63) The function z 7 → z(1 − z/z (ℓ) 
+
+> kℓ
+
+)2
+
+is positive and strictly increasing for z > z (ℓ) 
+
+> kℓ
+
+, because its derivative is (3 z/z (ℓ) 
+
+> kℓ
+
+− 1)( z/z (ℓ) 
+
+> kℓ
+
+− 1) > 0. Thus, positivity and pairwise distinctness hold at the next stage. When c = 0 , induction gives bℓ(si) = 0 and ηℓ = 0 at every stage. The finitely many responses and denominators in Eq. (A61) depend continuously on c near zero, so some sufficiently small c > 0
+
+makes every denominator nonzero. 22 Suppose first that r ≥ 2, and let k⋆ denote the single index left after these r − 1 stages. Let 
+
+Tr−1 := A(r−1)  
+
+> Θr−1
+
+(G⋆) and define 
+
+gr−1 := e⊤
+
+> d+1
+
+Tr−1G⋆T ⊤
+
+> r−1
+
+ed+1 > 0. (A64) The strict inequality holds because the Schur complement of the bottom-right entry of G⋆ is Σ ≻ 0d,d 
+
+and T ⊤
+
+> r−1
+
+ed+1 has final coordinate one. In the final layer, choose 
+
+Pr := Πy , Qr := αΠx + βΠy . (A65) Direct block multiplication gives θΘr (G⋆) = br (S)μ, where 
+
+br (s) := (1 + βg r−1)br−1(s) + αa r−1(s)2{1 + sb r−1(s)}. (A66) Shrinking c > 0 if necessary ensures that 1+ sk⋆ br−1(sk⋆ )̸ = 0 , because this expression is continuous in c and equals one at c = 0 . Set 
+
+β := C/c − 1
+
+gr−1
+
+, α := C/ (sk⋆ + τ ) − (C/c )br−1(sk⋆ )
+
+ar−1(sk⋆ )2{1 + sk⋆ br−1(sk⋆ )} . (A67) The denominator defining α is therefore nonzero because the induction invariant also gives 
+
+ar−1(sk⋆ )̸ = 0 . Equations Eqs. (A62), (A66) and (A67) imply 
+
+br (si) = Csi + τ , i ∈ [r]. (A68) If r = 1 , the same conclusion follows directly by choosing P1 := Πy and Q1 := C(s1 + τ )−1Πx.The spectral theorem and activity of s1, . . . , s r give 
+
+br (S)μ = C(S + τ Id)−1μ, (A69) and the Sherman–Morrison identity gives 
+
+C(S + τ Id)−1μ = ω(Σ + τ Id)−1μ = h⋆. (A70) Every constructed parameter commutes with diag( U , 1) , so rotation equivariance gives Eq. (A58) at depth r. If L > r , set Pℓ = Qℓ = 0d+1 ,d +1 for r < ℓ ≤ L. These additional zero layers leave the effective direction unchanged, completing the proof for every L ≥ r.We finally transfer the constructed comparator from the population context to finite contexts. 
+
+Lemma B.8 (Finite-context accuracy of the sufficient-depth comparator) . Under the conditions of Lemma B.7, let ΘL,⋆ and h⋆ be the comparator and target direction constructed there. There is a constant Ccmp > 0 such that, for every U ∈ O (d) and N ∈ N,
+
+EDN |U [∥U ⊤θΘL,⋆ (GN (U )) − h⋆∥22] ≤ Ccmp 
+
+N . (A71) 
+
+Proof. Conditional on any fixed U , induction in Eq. (A48) gives 
+
+U ⊤θΘL,⋆ (GN (U )) = θΘL,⋆ (Ga,N ). (A72) The right-hand side is a fixed polynomial in the entries of N −1 PNn=1 an and N −1 PNn=1 ana⊤
+
+> n
+
+whose value at (μ, S) is h⋆. For every fixed integer k ≥ 1, Gaussian sample-moment bounds give 
+
+Ea1: N
+
+"
+
+∥ 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+an − μ∥2k 
+
+> 2
+
++ ∥ 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+ana⊤ 
+
+> n
+
+− S∥2k
+
+> F
+
+#
+
+≤ Ck
+
+N k , N ∈ N, (A73) for a constant Ck > 0. Expanding the polynomial difference around (μ, S) and applying these bounds to its finitely many monomials proves Eq. (A71). 23 Lemma 3.3 (Proof sketch of Theorem 3.2) . Suppose that (a) and (b) in Assumption 3.1 hold. Suppose also that N → ∞ ; write D∞ := DN . Let τ ≥ 0 be the unique solution of 
+
+τ ∥(Σ + τ Id)−1μ∥2 = ϵ√d. (9) 
+
+(Bayes classifier) For every U ∈ O (d),
+
+g(x) := {(Σ + τ Id)−1μ}⊤U ⊤x, Eϵ, U (g) = E⋆ϵ, U . (10) 
+
+(Krylov order of the optimal direction) Let K0(Σ, μ) := {0}. Then, 
+
+(Σ + τ Id)−1μ ∈ K r (Σ, μ) \ K r−1(Σ, μ). (11) 
+
+(Effective weights of a linear transformer) There exists a parameter family {ΘL,ξ : ξ ∈ R} whose corresponding effective weights θ(ΘL,ξ ) satisfy, for every ξ ∈ R, U ∈ O (d), and x ∈ Rd,
+
+f (x; ΘL,ξ , D∞) = θ(ΘL,ξ )⊤U ⊤x. (12) 
+
+(Span of the effective weights) For the same parameter family, 
+
+span {θ(ΘL,ξ ) : ξ ∈ R} = KL(Σ, μ). (13) 
+
+Proof. Part (i) is the optimal-direction conclusion of Lemma B.4. For part (ii), let λ1, . . . , λ r be the distinct active eigenvalues of Σ. Polynomial interpolation gives a polynomial p of degree at most r − 1 satisfying p(λi) = ( λi + τ )−1 for every i ∈ [r]. The spectral theorem gives 
+
+(Σ + τ Id)−1μ = p(Σ)μ ∈ K r (Σ, μ). (A74) The polynomial p has degree exactly r − 1. This is immediate when r = 1 . If r ≥ 2 and p
+
+had smaller degree, then (s + τ )p(s) − 1 would have degree at most r − 1 and vanish at the r
+
+distinct points λ1, . . . , λ r, so it would vanish identically. This contradicts its value −1 at s = −τ .Since μ, Σμ, . . . , Σr−1μ are linearly independent, the nonzero leading coefficient of p implies 
+
+p(Σ)μ /∈ K r−1(Σ, μ), proving part (ii). For parts (iii) and (iv), fix t ∈ R and define the shared parameter tuple ΘL(t) by 
+
+Pℓ(t) := Πy , Qℓ(t) := tΠx, ℓ ∈ [L]. (A75) These parameters do not depend on U . Set q0,t (s) := 0 . Direct induction in Eq. (A48) at the latent population context G⋆ gives 
+
+A(ℓ)
+
+> ΘL(t)
+
+(G⋆) = 
+
+ Id 0d
+
+μ⊤qℓ,t (S) 1
+
+
+
+, qℓ,t (s) = qℓ−1,t (s) + t{1 + sq ℓ−1,t (s)}. (A76) Solving this scalar recursion yields 
+
+qL,t (s) = 
+
+> L
+
+X
+
+> j=1
+
+Lj
+
+
+
+tj sj−1. (A77) Since Πx and Πy commute with diag( U , 1) , rotation equivariance and Eq. (A49) give 
+
+θΘL(t)(diag( U , 1) G⋆ diag( U ⊤, 1)) = U qL,t (S)μ. (A78) Therefore, the population-context version of Eq. (A50) gives 
+
+f (x; ΘL(t), DN ) = μ⊤qL,t (S)U ⊤x, N → ∞ , (A79) which proves part (iii). Choose distinct nonzero numbers t1, . . . , t L. Relative to the monomial basis 1, s, . . . , s L−1, the coefficient matrix of qL,t 1 , . . . , q L,t L has entries  Lj
+
+tji and reduces to an invertible Vandermonde matrix after nonzero row and column scalings. Hence, {qL,t : t ∈ R} spans all polynomials of degree 24 at most L − 1. Since S = Σ + μμ ⊤, induction on the Krylov order gives KL(S, μ) = KL(Σ, μ).Combining these facts yields 
+
+span {qL,t (S)μ : t ∈ R} = span( μ, Sμ , . . . , SL−1μ)= KL(Σ, μ), (A80) proving part (iv). 
+
+Theorem 3.2 (A single linear transformer can be Bayes optimal across tasks) . Suppose that (a) to (c) in Assumption 3.1 hold. Then, there exists a parameter ΘL such that, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f ( · ; ΘL, DN )
+
+
+
+− E ⋆ϵ, U ≲P
+
+1
+
+N . (8) 
+
+The implied constant may depend on d, ϵ, μ, and Σ.Proof. Fix U ∈ O (d), N ∈ N, and δ ∈ (0 , 1) . Let ΘL,⋆ be the parameter tuple from Lemma B.7 with the solution τ of Eq. (A24) and ω = 1 . Define ψ(h) := Eϵ, U (x 7 → h⊤U ⊤x) for h ∈ Rd.By Eq. (A40), this function does not depend on U . By Lemma B.4, ψ(hτ ) = E⋆ϵ, U and hτ is a global minimizer of ψ. The vector hτ is nonzero, so ψ is twice continuously differentiable on a neighborhood of hτ . Its gradient vanishes at this global minimizer, and Taylor’s theorem gives a quadratic upper bound for ψ(h) − ψ(hτ ) on a sufficiently small ball centered at hτ . Outside that ball, the same bound holds after increasing its constant because 0 ≤ ψ ≤ 1 and the distance from hτ
+
+is bounded away from zero. Consequently, there is a constant Cψ > 0 such that 
+
+0 ≤ ψ(h) − ψ(hτ ) ≤ Cψ min {∥ h − hτ ∥22, 1}, h ∈ Rd. (A81) Let XN denote the excess error on the left-hand side of Eq. (8) with ΘL = ΘL,⋆ . Conditional on a realized context, Lemma B.4 and Eq. (A81) give 
+
+0 ≤ XN ≤ Cψ ∥U ⊤θΘL,⋆ (GN (U )) − hτ ∥22. (A82) Taking the conditional expectation and applying Lemma B.8 yield 
+
+EDN |U [XN ] ≤ Cψ Ccmp 
+
+N . (A83) Markov’s inequality therefore gives 
+
+PDN |U
+
+
+
+XN > Cψ Ccmp 
+
+δN 
+
+
+
+≤ δ. (A84) Since U was arbitrary and the constants are independent of U , this proves Eq. (8) with C := 
+
+Cψ Ccmp .
+
+# C ADVERSARIAL AND STANDARD TRAINING : P ROOFS OF THEOREMS 3.4 
+
+AND 3.5 
+
+C.1 DIRECTIONS SELECTED BY INFINITE -SAMPLE MARGIN RISKS 
+
+For ϵ ≥ 0, define the population margin risk 
+
+Jϵ(h) := Ea∼N (μ,Σ)[L(h⊤a − ϵ√d∥h∥2)] . (A85) The following result shows that minimizing this population surrogate risk selects the corresponding Bayes-optimal direction. 
+
+Lemma C.1 (Population margin-risk minimizers align with Bayes-optimal directions) . Suppose that 
+
+0 ≤ ϵ√d < ∥μ∥2. Then the function Jϵ is strictly convex and coercive and therefore has a unique 
+
+25 minimizer h⋆ϵ , which is nonzero. There is a constant ωϵ > 0 such that 
+
+argmin 
+
+> h∈Rd
+
+Jϵ(h) = {h⋆ϵ } = {ωϵhτ } = {ωϵ(Σ + τ Id)−1μ}. (A86) 
+
+Proof. For every fixed a, the map h 7 → h⊤a − ϵ√d∥h∥2 is concave, so its composition with the convex nonincreasing function L is convex. For two distinct directions, the corresponding random margins differ almost surely because Σ ≻ 0d,d . Strict convexity of L, together with concavity of the margin map, therefore makes the expected risk strictly convex. Moreover, for every unit vector u and 
+
+t > 0,
+
+Jϵ(tu) ≥ −L ′(0) tEa∼N (μ,Σ)[( ϵ√d − u⊤a)+]. (A87) This bound follows from the tangent inequality for L on the event u⊤a < ϵ √d and nonnegativity of 
+
+L on its complement. The expectation on the right is positive and continuous in u, so compactness of the unit sphere gives a positive uniform lower bound. Hence, Jϵ is coercive and has a unique minimizer. Its one-sided derivative at the origin along μ/∥μ∥2 equals L′(0)( ∥μ∥2 − ϵ√d) < 0, so the minimizer is nonzero. Let h := h⋆ϵ and set Z := h⊤a − ϵ√d∥h∥2. The derivative bounds and Gaussian moments justify differentiation under the expectation and the Gaussian integration by parts below. The first-order condition at the nonzero minimizer is 
+
+Ea∼N (μ,Σ)
+
+
+
+L′(Z)
+
+
+
+a − ϵ√d h
+
+∥h∥2
+
+ 
+
+= 0d. (A88) Gaussian integration by parts gives 
+
+Ea∼N (μ,Σ)[L′(Z)a] = Ea∼N (μ,Σ)[L′(Z)] μ + Ea∼N (μ,Σ)[L′′ (Z)] Σh. (A89) Substitution into the first-order condition yields 
+
+cΣ + ϵ√d
+
+∥h∥2
+
+Id
+
+!
+
+h = μ, c := Ea∼N (μ,Σ)[L′′ (Z)] 
+
+−Ea∼N (μ,Σ)[L′(Z)] > 0. (A90) Setting λ := ϵ√d/ (c∥h∥2) gives 
+
+h = 1
+
+c (Σ + λId)−1μ, λ∥(Σ + λId)−1μ∥2 = ϵ√d. (A91) Uniqueness in Lemma B.3 gives λ = τ . Setting ωϵ := 1 /c proves Eq. (A86). C.2 INFINITE -SAMPLE MINIMIZERS AND FINITE -CONTEXT TRANSFER 
+
+The infinite-task, infinite-context risk is 
+
+Rϵ, ∞,∞(ΘL) = EU ∈O (d)[Jϵ(U ⊤θΘL (diag( U , 1) G⋆ diag( U ⊤, 1)))] . (A92) The preceding result also identifies the infinite-sample global optimum of the unrestricted transformer risk, independently of gradient dynamics. 
+
+Theorem C.2 (Functional identification of unrestricted fixed-depth infinite-sample minimizers) .
+
+Suppose that L ≥ r and 0 ≤ ϵ√d < ∥μ∥2. The unrestricted infinite-task, infinite-context risk in Eq. (A92) attains the lower bound 
+
+inf 
+
+> ΘL
+
+Rϵ, ∞,∞(ΘL) = Jϵ(h⋆ϵ ). (A93) 
+
+Every global minimizer satisfies 
+
+U ⊤θΘL (diag( U , 1) G⋆ diag( U ⊤, 1)) = h⋆ϵ (A94) 
+
+for every U ∈ O (d). In particular, standard training identifies the direction Σ−1μ, whereas adversarial training identifies the direction hτ in Eq. (A25) .
+
+26 Proof. Fix ϵ ≥ 0 satisfying ϵ√d < ∥μ∥2. Conditional on U , orthogonality gives 
+
+Jϵ(U ⊤θΘL (diag( U , 1) G⋆ diag( U ⊤, 1))) ≥ J ϵ(h⋆ϵ ). (A95) Apply Lemma B.7 with the solution τ of Eq. (A24) and ω = ωϵ. Equation Eq. (A86) shows that the resulting comparator attains equality simultaneously for every U . Hence, the lower bound in Eq. (A95) is attainable simultaneously for every U , proving Eq. (A93). If a parameter tuple attains this value, the nonnegative conditional optimality gap in Eq. (A95) has expectation zero. The effective direction in Eq. (A49) is continuous in U , so this conditional optimality gap is continuous on O(d).Since normalized Haar measure has full support, a nonnegative continuous function with zero Haar integral vanishes everywhere. Strict convexity from Lemma C.1 therefore gives Eq. (A94) for every 
+
+U .For ϵ ≥ 0 and h̸ = 0d, define 
+
+Γϵ(h) := μ⊤h − ϵ√d∥h∥2
+
+√h⊤Σh , (A96) and set Γϵ(0d) := −∞ .
+
+Lemma C.3 (Uniform finite-context transfer) . Fix a depth-L parameter tuple ΘL and suppose that there is a nonzero vector h ∈ Rd such that its population-context effective direction in Eq. (A49) 
+
+satisfies 
+
+U ⊤θΘL (diag( U , 1) G⋆ diag( U ⊤, 1)) = h, U ∈ O (d). (A97) 
+
+Then, for every ϵ ≥ 0 satisfying ϵ√d < ∥μ∥2,
+
+lim   
+
+> N→∞
+
+sup  
+
+> U∈O (d)
+
+EDN |U [Eϵ, U (f ( · ; ΘL, DN ))] − Φ( −Γϵ(h)) = 0 . (A98) 
+
+Proof. Couple the contexts for all task bases using the same latent vectors a1, . . . , aN . Equations Eqs. (A46) and (A47) and the strong law give 
+
+sup  
+
+> U∈O (d)
+
+∥GN (U ) − diag( U , 1) G⋆ diag( U ⊤, 1) ∥F = ∥Ga,N − G⋆∥F → 0 (A99) almost surely. Continuity of the fixed-depth recursion in Eq. (A48) and compactness of O(d) imply that the finite-context latent direction converges to h uniformly over U almost surely. Since h̸ = 0d,the map v 7 → Φ( −Γϵ(v)) is continuous on a neighborhood of the limiting directions. By Lemma B.4, the conditional robust-error formula therefore converges uniformly over U almost surely. Since the robust errors and their limit belong to [0 , 1] , bounded convergence gives 
+
+Ea1,..., aN
+
+"
+
+sup  
+
+> U∈O (d)
+
+|E ϵ, U (f ( · ; ΘL, DN )) − Φ( −Γϵ(h)) |
+
+#
+
+→ 0. (A100) Under the coupling above, the distribution of each context agrees with that of DN conditional on its task basis, and hence 
+
+sup  
+
+> U∈O (d)
+
+EDN |U [Eϵ, U (f ( · ; ΘL, DN ))] − Φ( −Γϵ(h)) ≤ Ea1,..., aN
+
+"
+
+sup  
+
+> U∈O (d)
+
+|E ϵ, U (f ( · ; ΘL, DN )) − Φ( −Γϵ(h)) |
+
+#
+
+,
+
+(A101) which proves Eq. (A98). C.3 FINITE -TASK ADVERSARIAL RISK MINIMIZATION 
+
+In statements and arguments involving a single generic task, we suppress the task index t from Ut,
+
+Dt,N , xt,n , yt,n , and derived quantities, whereas we retain t when the T training tasks are considered jointly. The parameter constraint in Eq. (21) makes the empirical minimum attainable and is assumed to contain the comparator from Lemma B.7. For parameter tuples, ∥ΘL∥F denotes the Euclidean product of the 2L matrix Frobenius norms. 27 Let Ptask denote the distribution of a generic task (DN , x, y ) induced by the generative process. Let 
+
+ST,N := {(Dt,N , xt, y t)}Tt=1 consist of T independent tasks drawn from Ptask . For the finite-context representation above, the finite-sample risk in Eq. (6) at perturbation level ϵ is 
+
+Rϵ,T,N (ΘL) = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+L(ytθΘL (GN (Ut)) ⊤xt − ϵ√d∥θΘL (GN (Ut)) ∥2). (A102) Its infinite-task counterpart at context length N is 
+
+Rϵ, ∞,N (ΘL) := E(U ,DN )[Jϵ(U ⊤θΘL (GN (U )))] . (A103) 
+
+Theorem 3.4 (Adversarial training yields robust linear transformers) . Suppose that Assumption 3.1 holds. For sufficiently large B > 0, choose any empirical risk minimizer 
+
+bΘL,ϵ,T,N ∈ argmin 
+
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+Rϵ,T,N (ΘL). (21) 
+
+Then, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f
+
+
+
+· ; bΘL,ϵ,T,N , DN
+
+
+
+− E ⋆ϵ, U ≲P
+
+1
+
+√T + 1
+
+N . (22) 
+
+The implied constant may depend on d, B, L, L, ϵ, μ, and Σ.Proof. Let ΘL,⋆ be the comparator from Lemma B.7 with the solution τ of Eq. (A24) and ω = ωϵ
+
+from Eq. (A86). 
+
+Uniform concentration over training tasks. Let qΘL (ZN ) denote the summand in Eq. (A102), where ZN contains one context and its independent query. Equations Eqs. (A48) and (A49) show that 
+
+θΘL (GN (U )) is a polynomial of fixed degree in ΘL and GN (U ). Compactness of the parameter constraint in Eq. (21) and boundedness of L′ imply the existence of nonnegative envelopes F and M
+
+such that 
+
+|qΘL (ZN )| ≤ F (ZN ), |qΘL (ZN ) − q eΘL (ZN )| ≤ M (ZN )∥ΘL − eΘL∥F. (A104) The envelopes can be chosen as fixed polynomials in 1 + ∥GN (U )∥F and 1 + ∥x∥2, with coefficients independent of T and N . The Gaussian task model and the averaging in GN (U ) give 
+
+sup  
+
+> N∈N
+
+EZN [F (ZN )2 + M (ZN )2] < ∞. (A105) The constrained parameter set is compact and finite-dimensional and hence has logarithmic Euclidean covering entropy in the covering radius. Define 
+
+∆T,N := max 
+
+> ΘL={(Pℓ,Qℓ)}Lℓ=1
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+|R ϵ,T,N (ΘL) − R ϵ, ∞,N (ΘL)|. (A106) Symmetrization, the Euclidean covering bound, and Cauchy–Schwarz with Eq. (A105) yield a constant Cconc > 0 such that, for every T, N ∈ N,
+
+EST ,N ∼P⊗T
+
+> task
+
+[∆ T,N ] ≤ Cconc T −1/2. (A107) 
+
+Loss geometry and calibration. Define ψ(h) := Φ( −Γϵ(h)) , ψ⋆ := ψ(h⋆ϵ ), and 
+
+m(h) := min {∥ h − h⋆ϵ ∥22, 1}. (A108) By Lemma C.1, h⋆ϵ = ωϵhτ . Positive scale invariance of Γϵ and Eqs. (A40), (A41) and (A96) therefore give 
+
+ψ⋆ = Φ( −Γϵ(hτ )) = Eϵ, U (x 7 → hτ ⊤U ⊤x) = E⋆ϵ, U , U ∈ O (d). (A109) The function Jϵ( · ) is twice continuously differentiable near the nonzero vector h⋆ϵ , and its gradient vanishes there. Set u⋆ := h⋆ϵ /∥h⋆ϵ ∥2 and Z⋆ := h⋆ϵ ⊤a − ϵ√d∥h⋆ϵ ∥2. Direct differentiation at h⋆ϵ
+
+gives, for every v̸ = 0d,
+
+v⊤∇2Jϵ(h⋆ϵ )v (A110) 28 = Ea∼N (μ,Σ)[L′′ (Z⋆)( v⊤(a − ϵ√du⋆)) 2
+
+] (A111) 
+
+− ϵ√dEa∼N (μ,Σ)[L′(Z⋆)] 
+
+∥h⋆ϵ ∥2
+
+(∥v∥22 − (v⊤u⋆)2) (A112) 
+
+> 0. (A113) The strict inequality holds because the first expectation is positive by L′′ > 0 and Σ ≻ 0d,d , while the second term is nonnegative by L′ < 0. Taylor’s theorem gives a quadratic upper and lower bound for the margin-risk gap on a neighborhood of h⋆ϵ . Boundedness of L′ makes Jϵ( · ) globally Lipschitz, so its quadratic upper bound extends outside this neighborhood because ∥h − h⋆ϵ ∥2 is then bounded away from zero. Uniqueness and coercivity of Jϵ( · ) extend the truncated lower bound. Positive scale invariance of ψ, the identity h⋆ϵ = ωϵhτ from Eq. (A86), and Eq. (A81) give 
+
+ψ(h) − ψ⋆ ≤ Cψ max {ω−2 
+
+> ϵ
+
+, 1}m(h). Consequently, there are constants CJ , c m, C m > 0 such that, for every h ∈ Rd,
+
+0 ≤ J ϵ(h) − J ϵ(h⋆ϵ ) ≤ CJ ∥h − h⋆ϵ ∥22, (A114) 
+
+cmm(h) ≤ J ϵ(h) − J ϵ(h⋆ϵ ), (A115) 
+
+0 ≤ ψ(h) − ψ⋆ ≤ Cmm(h). (A116) 
+
+Finite-context comparator and finite-sample risk. Set δN := θΘL,⋆ (Ga,N ) − h⋆ϵ . Applying Lemma B.8 with U = Id gives 
+
+Ea1,..., aN [∥δN ∥22] ≤ Ccmp 
+
+N . (A117) The infinite-context direction of ΘL,⋆ is h⋆ϵ , so Eq. (A92) gives Rϵ, ∞,∞(ΘL,⋆ ) = Jϵ(h⋆ϵ ). The quadratic upper bound in Eq. (A116) therefore gives 
+
+Rϵ, ∞,N (ΘL,⋆ ) − R ϵ, ∞,∞(ΘL,⋆ ) ≤ CJ Ccmp 
+
+N . (A118) Every conditional latent risk is at least Jϵ(h⋆ϵ ) by Lemma C.1. The minimizing property in Eq. (21) and the definition of ∆T,N yield 
+
+0 ≤ R ϵ, ∞,N ( bΘL,ϵ,T,N ) − J ϵ(h⋆ϵ )
+
+≤ 2∆ T,N + Rϵ, ∞,N (ΘL,⋆ ) − R ϵ, ∞,∞(ΘL,⋆ )
+
+≤ 2∆ T,N + CJ Ccmp 
+
+N .
+
+(A119) 
+
+Uniform calibration over the task basis. We next record the finite-dimensional comparison that turns Haar averages into worst-task bounds without changing the rate. Let DL ∈ N be an upper bound on the total degree in the entries of U of the latent direction U ⊤θΘL (GN (U )) , and let Vd,L 
+
+be the vector space of restrictions to O(d) of Rd-valued polynomials of degree at most DL. Since 
+
+Vd,L is finite dimensional and normalized Haar measure has full support, its uniform norm and its L2
+
+norm under Haar measure are equivalent. Hence, there is Cd,L > 0 such that 
+
+∥q∥2 
+
+> ∞
+
+≤ Cd,L EU ∈O (d)[∥q(U )∥22], q ∈ V d,L . (A120) Consequently, 
+
+EU ∈O (d)[min {∥ q(U )∥22, 1}] ≥ EU ∈O (d)[∥q(U )∥22]max {∥ q∥2
+
+> ∞
+
+, 1} ≥ min {∥ q∥2
+
+> ∞
+
+, 1}
+
+Cd,L 
+
+. (A121) Since min {∥ q∥2
+
+> ∞
+
+, 1} = sup U ∈O (d) min {∥ q(U )∥22, 1}, every q ∈ V d,L satisfies 
+
+sup  
+
+> U∈O (d)
+
+min {∥ q(U )∥22, 1} ≤ Cd,L EU ∈O (d)[min {∥ q(U )∥22, 1}]. (A122) Using the coupled latent context matrix Ga,N from Eq. (A46), the ambient context is GN (U ) = diag( U , 1) Ga,N diag( U ⊤, 1) . The recursion in Eq. (A48) uses only matrix addition and multiplica-tion, so for fixed latent vectors and fixed ΘL, the map 
+
+U 7 → U ⊤θΘL (GN (U )) − h⋆ϵ (A123) 29 belongs to Vd,L , with a degree bound independent of N , ΘL, and the realized latent vectors. Applying Eqs. (A116) and (A122) for each fixed latent context and then taking expectations gives 
+
+0 ≤ sup  
+
+> U∈O (d)
+
+EDN |U [Eϵ, U (f ( · ; ΘL, DN )) − E ⋆ϵ, U ]
+
+≤ CmEa1: N
+
+"
+
+sup  
+
+> U∈O (d)
+
+m(U ⊤θΘL (GN (U ))) 
+
+#
+
+≤ CmCd,L E(U ,a1: N )[m(U ⊤θΘL (GN (U )))] 
+
+≤ CmCd,L 
+
+cm
+
+{R ϵ, ∞,N (ΘL) − J ϵ(h⋆ϵ )}.
+
+(A124) Conditional on the pretraining sample, apply Eq. (A119) to Eq. (A124) with ΘL = bΘL,ϵ,T,N , and then take the expectation over the pretraining sample. Define 
+
+C := CmCd,L 
+
+cm
+
+(2 Cconc + CJ Ccmp ). (A125) Then, for every fixed U ∈ O (d),
+
+EST ,N ,DN |U [Eϵ, U (f ( · ; bΘL,ϵ,T,N , DN )) − E ⋆ϵ, U ] ≤ C(T −1/2 + N −1). (A126) Since the excess error is nonnegative, Markov’s inequality shows that, for every δ ∈ (0 , 1) ,
+
+PST ,N ,DN |U
+
+
+
+Eϵ, U (f ( · ; bΘL,ϵ,T,N , DN )) − E ⋆ϵ, U > Cδ (T −1/2 + N −1)
+
+
+
+≤ δ. (A127) This proves Eq. (22). 
+
+Theorem 3.5 (Standard training does not yield robust linear transformers) . Suppose that Assump-tion 3.1 holds. Suppose also that T, N → ∞ ; write D∞ := DN and R0,∞,∞ := R0,T,N . For sufficiently large B > 0, choose any population risk minimizer 
+
+bΘL, 0,∞,∞ ∈ argmin 
+
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+R0,∞,∞(ΘL). (23) 
+
+Then, there exists a constant C > 0 such that, for every U ∈ O (d),
+
+Eϵ, U
+
+
+
+f
+
+
+
+· ; bΘL, 0,∞,∞, D∞
+
+
+
+− E ⋆ϵ, U =
+
+0 (ϵ = 0 or r = 1) 
+
+C (ϵ > 0 and r ≥ 2) . (24) 
+
+The constant C may depend on d, ϵ, μ, and Σ.Proof. Define h0 := Σ−1μ. Applying Eq. (A86) at ϵ = 0 , the unique minimizer of the standard latent margin risk is h⋆ 
+
+> 0
+
+= ω0h0. Let ΘL, std be the comparator from Lemma B.7 with τ = 0 and 
+
+ω = ω0, and take B sufficiently large that this comparator is feasible in Eq. (23). The conditional lower bound in Eq. (A95) and the comparator construction give 
+
+R0,∞,∞(ΘL) ≥ J 0(h⋆
+
+> 0
+
+) = R0,∞,∞(ΘL, std ), (A128) for every parameter tuple ΘL. Therefore, the minimizing property in Eq. (23) implies that bΘL, 0,∞,∞
+
+is also an unrestricted global minimizer of the infinite-sample standard risk. Applying Theorem C.2 yields, for every U ∈ O (d),
+
+U ⊤θ bΘL, 0,∞,∞ (diag( U , 1) G⋆ diag( U ⊤, 1)) = ω0h0. (A129) Hence, query linearity, positive scale invariance of Γϵ, and Lemma B.4 give 
+
+Eϵ, U (f ( · ; bΘL, 0,∞,∞, D∞)) − E ⋆ϵ, U
+
+= Φ( −Γϵ(h0)) − Φ( −
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ ).
+
+(A130) 30 In particular, the right-hand side is independent of U .If ϵ = 0 , then τ = 0 and hτ = h0, so Eq. (A130) is zero. Suppose next that r = 1 , and let λ > 0
+
+be the unique active eigenvalue of Σ. Then Σ−1μ = λ−1μ and hτ = ( λ + τ )−1μ, so the two directions are positive multiples of each other and Eq. (A130) is again zero. It remains to consider ϵ > 0 and r ≥ 2. Equation Eq. (A24) implies τ > 0. Choose two distinct active eigenvalues λi̸ = λj of Σ, with spectral projectors Ei and Ej . If h0 = chτ for some c > 0,then projecting this identity onto either active eigenspace gives 
+
+c = λk + τλk
+
+= 1 + τλk
+
+, k ∈ { i, j }. (A131) This is impossible because τ > 0 and λi̸ = λj . Thus, h0 is not a positive multiple of hτ , so the uniqueness conclusion of Lemma B.4 shows that its robust error is strictly larger than the robust Bayes error. Consequently, the constant 
+
+C := Φ( −Γϵ(h0)) − Φ( −
+
+q
+
+h⊤ 
+
+> τ
+
+Σhτ ) (A132) is strictly positive, and Eq. (A130) equals C for every U ∈ O (d). In the zero-gap cases, any positive choice of C is admissible because that constant does not appear in the corresponding branch of Eq. (24). 
+
+# D GRADIENT FLOW TO ROBUST BAYES OPTIMALITY 
+
+For each task t, the adversarial loss as a function of the last-layer parameter takes the form 
+
+Q 7 → L (ytθt(Q)⊤xt − ϵ√d∥θt(Q)∥2).
+
+Because the Euclidean norm is nondifferentiable at 0d, this objective need not be differentiable when 
+
+θt(Q) = 0d; we therefore use subgradient flow, which agrees with ordinary gradient flow wherever all effective directions are nonzero. 
+
+Theorem D.1 (Bayes consistency of last-layer gradient flow) . Assume L = 2 and P1 = P2 =
+
+Q1 = Id+1 . Suppose that Assumption 3.1 holds. For sufficiently large B > 0, let QB := {Q ∈
+
+R(d+1) ×(d+1) : ∥Q∥F ≤ B}. Fix any Q0 ∈ R(d+1) ×(d+1) . Let QT,N (s) be the unique global solution to the Frobenius subgradient flow 
+
+˙QT,N (s) ∈ − ∂QRϵ,T,N (QT,N (s)) , QT,N (0) = Q0. (A133) 
+
+Assume that QB contains a population-risk minimizer and, almost surely, the entire unconstrained subgradient-flow trajectory {QT,N (s) : s ≥ 0}. Then, for every U ∈ O (d) and s > 0,
+
+Eϵ, U (f ( · ; QT,N (s), DN )) − E ⋆ϵ, U ≲P
+
+1
+
+s + 1
+
+√T + 1
+
+N . (A134) 
+
+Proof. For task t, let Gt,N be its finite-context matrix in Eq. (A47). 
+
+At, 1 := Id+1 + Gt,N , Gt, 1 := At, 1Gt,N A⊤
+
+> t, 1
+
+. (A135) The final cumulative transformation and its effective direction are 
+
+At, 2(Q) = {Id+1 + Gt, 1Q}At, 1, θt(Q) := [ Id 0d] At, 2(Q)⊤ed+1 . (A136) Thus, θt(Q) is affine in Q. Since L is decreasing, query linearity gives 
+
+Rϵ,T,N (Q) = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+L
+
+
+
+yt,N +1 θt(Q)⊤xt,N +1 − ϵ√d∥θt(Q)∥2
+
+
+
+. (A137) For every t, the argument of L in Eq. (A137) is concave in Q. Because L is convex and decreasing, its composition with this argument is convex. Hence, Rϵ,T,N ( · ) is finite, continuous, and convex. 31 We next show that the restricted last-layer class contains an infinite-sample optimal comparator. For 
+
+qx, q y ∈ R, define Q(qx, q y ) := qxΠx + qy Πy . Replacing the finite-context matrix in Eq. (A136) by the population context and multiplying the blocks at U = Id gives the population latent direction 
+
+h(qx, q y ) = (1 + zq y )μ + qxv, (A138) 
+
+z := μ⊤Sμ + 4 ∥μ∥22 + 4 > 0, (A139) 
+
+v := ( Id + S){S2 + 3 S + ( ∥μ∥22 + 4) Id}μ. (A140) The same latent direction is realized for every U ∈ O (d) because the fixed prefix and Q(qx, q y )
+
+commute with diag( U , 1) . Let K := Kr (Σ, μ) and recall that r ≤ 2 by assumption. The subspace 
+
+K contains μ and, by Eq. (A86), h⋆ϵ , and it is invariant under S. By Lemma B.5, S has exactly r
+
+distinct active eigenvalues on K. Write 
+
+v = p(S)μ, p(s) := (1+ s)( s2+3 s+∥μ∥22+4) , p′(s) = 3 s2+8 s+∥μ∥22+7 > 0. (A141) If r = 1 , then μ spans K. If r = 2 , the spectral theorem and strict monotonicity of p on the positive active eigenvalues make μ and v linearly independent. Thus, span {μ, v} = K in both cases. Since 
+
+z > 0, Eq. (A140) therefore gives scalars q⋆x, q ⋆y such that h(q⋆x, q ⋆y ) = h⋆ϵ . Set Q⋆ := Q(q⋆x, q ⋆y ),which belongs to QB by the choice of B. Equation Eq. (A92) and the optimality of h⋆ϵ show that Q⋆
+
+minimizes Rϵ, ∞,∞ even within the unrestricted depth-two class. Continuity of the finite-sample risk and compactness of QB give a finite-sample minimizer 
+
+bQT,N ∈ argmin 
+
+> Q∈Q B
+
+Rϵ,T,N (Q). (A142) Since the finite-sample risk is finite, continuous, and convex, its subdifferential is maximal monotone. Therefore, the flow in Eq. (A133) exists uniquely for all s ≥ 0.Because QT,N (s) and bQT,N belong to QB , the finite-sample risk gap between them is nonnegative. The subgradient inequality gives, for almost every s ≥ 0,
+
+dds
+
+12 ∥QT,N (s) − bQT,N ∥2F ≤ −{R ϵ,T,N (QT,N (s)) − R ϵ,T,N ( bQT,N )}. (A143) The convex subgradient-flow chain rule shows that the finite-sample risk is nonincreasing along the flow. Integrating the preceding inequality and using this monotonicity and ∥Q0 − bQT,N ∥F ≤ 2B
+
+gives, for every s > 0,
+
+0 ≤ R ϵ,T,N (QT,N (s)) − R ϵ,T,N ( bQT,N ) ≤ ∥Q0 − bQT,N ∥2F
+
+2s ≤ 2B2
+
+s . (A144) It remains to transfer empirical optimization to robust Bayes error. Since Q⋆ is fixed, Eq. (A48) makes its finite-context direction a fixed polynomial in the empirical latent moments whose population value is h⋆ϵ . The Gaussian sample-moment bound in Eq. (A73) therefore gives, for every U ∈ O (d),
+
+EDN |U [∥U ⊤θQ⋆ (GN (U )) − h⋆ϵ ∥22] ≲ 1
+
+N . (A145) The quadratic upper bound in Eq. (A116) therefore yields 
+
+Rϵ, ∞,N (Q⋆) − R ϵ, ∞,∞(Q⋆) ≲ 1
+
+N . (A146) Define the restricted uniform deviation 
+
+∆T,N := max 
+
+> Q∈Q B
+
+|R ϵ,T,N (Q) − R ϵ, ∞,N (Q)|. (A147) The uniform concentration argument in the proof of Theorem 3.4, with parameter bound 
+
+max {B, √d + 1 } and restricted to the compact last-layer class, gives 
+
+EST ,N ∼P⊗T
+
+> task
+
+[∆ T,N ] ≲ 1
+
+√T , (A148) 32 uniformly over N . Fix any U ∈ O (d). Since bQT,N minimizes the finite-sample risk over QB and 
+
+Q⋆ ∈ Q B , Eqs. (A124) and (A144) give 
+
+0 ≤ EDN |U [Eϵ, U (f ( · ; QT,N (s), DN )) − E ⋆ϵ, U ]
+
+≤ CmCd, 2
+
+cm
+
+{2∆ T,N + 2 B2s−1 + Rϵ, ∞,N (Q⋆) − R ϵ, ∞,∞(Q⋆)}. (A149) Taking the expectation over the pretraining sample and applying Eqs. (A146) and (A148) give a constant C > 0 such that 
+
+EST ,N ,DN |U [Eϵ, U (f ( · ; QT,N (s), DN )) − E ⋆ϵ, U ] ≤ C
+
+ 1
+
+s + 1
+
+√T + 1
+
+N
+
+
+
+. (A150) Markov’s inequality therefore gives, for every δ ∈ (0 , 1) ,
+
+PST ,N ,DN |U
+
+
+
+Eϵ, U (f ( · ; QT,N (s), DN )) − E ⋆ϵ, U > Cδ
+
+ 1
+
+s + 1
+
+√T + 1
+
+N
+
+ 
+
+≤ δ, (A151) which proves Eq. (A134). 
+
+# E ACCURACY –R OBUSTNESS TRADE -O FF 
+
+Theorem E.1 (Adversarial training loses standard accuracy) . Suppose that Assumption 3.1 holds. Suppose also that T, N → ∞ ; write D∞ := DN and Rϵ, ∞,∞ := Rϵ,T,N . For sufficiently large 
+
+B > 0, choose any population risk minimizer 
+
+bΘL,ϵ, ∞,∞ ∈ argmin 
+
+> max ℓ∈[L]{∥ Pℓ∥F,∥Qℓ∥F}≤ B
+
+Rϵ, ∞,∞(ΘL). (A152) 
+
+Then, there exists a constant C > 0 such that, for every U ∈ O (d),
+
+E0,U (f ( · ; bΘL,ϵ, ∞,∞, D∞)) − E ⋆ 
+
+> 0,U
+
+=
+
+0 (ϵ = 0 or r = 1) ,C (ϵ > 0 and r ≥ 2) . (A153) 
+
+The constant C may depend on d, ϵ, μ, and Σ.Proof. Define h0 := Σ−1μ. By Eq. (A86), the unique minimizer of the adversarial latent margin risk is h⋆ϵ = ωϵhτ for some ωϵ > 0. Let ΘL, adv be the comparator from Lemma B.7 with the solution τ
+
+of Eq. (A24) and ω = ωϵ, and take B sufficiently large that this comparator is feasible in Eq. (A152). The conditional lower bound in Eq. (A95) and the comparator construction give 
+
+Rϵ, ∞,∞(ΘL) ≥ J ϵ(h⋆ϵ ) = Rϵ, ∞,∞(ΘL, adv ) (A154) for every parameter tuple ΘL. Therefore, the minimizing property in Eq. (A152) implies that 
+
+bΘL,ϵ, ∞,∞ is also an unrestricted global minimizer of the infinite-sample adversarial risk. Applying Theorem C.2 yields, for every U ∈ O (d),
+
+U ⊤θ bΘL,ϵ, ∞,∞ (diag( U , 1) G⋆ diag( U ⊤, 1)) = ωϵhτ . (A155) Hence, query linearity, positive scale invariance of Γ0, and Lemma B.4 give 
+
+E0,U (f ( · ; bΘL,ϵ, ∞,∞, D∞)) − E ⋆
+
+> 0,U
+
+= Φ − μ⊤hτ
+
+ph⊤ 
+
+> τ
+
+Σhτ
+
+!
+
+− Φ( −pμ⊤Σ−1μ). (A156) In particular, the right-hand side is independent of U .If ϵ = 0 , then τ = 0 and hτ = h0, so Eq. (A156) is zero. Suppose next that r = 1 , and let λ > 0 be the unique active eigenvalue of Σ. Then h0 = λ−1μ and hτ = ( λ + τ )−1μ, so the two directions are positive multiples of each other and Eq. (A156) is again zero. 33 It remains to consider ϵ > 0 and r ≥ 2. Equation Eq. (A24) implies τ > 0. Choose two distinct active eigenvalues λi̸ = λj of Σ, with spectral projectors Ei and Ej . If hτ = ch0 for some c > 0,then projecting this identity onto either active eigenspace gives 
+
+c = λk
+
+λk + τ , k ∈ { i, j }. (A157) This is impossible because τ > 0 and λi̸ = λj . Thus, hτ is not a positive multiple of h0, so the uniqueness conclusion of Lemma B.4, applied at perturbation radius zero, shows that its standard error is strictly larger than the standard Bayes error. Consequently, the constant 
+
+C := Φ − μ⊤hτ
+
+ph⊤ 
+
+> τ
+
+Σhτ
+
+!
+
+− Φ( −pμ⊤Σ−1μ) (A158) is strictly positive, and Eq. (A156) equals C for every U ∈ O (d).
+
+# F DEMONSTRATION COMPLEXITY 
+
+Theorem F.1 (Robust prediction requires more demonstrations) . Suppose that, for constants 0 <c < C < ∞,
+
+c√d ≤ ∥ μ∥2 ≤ C√d, cId ⪯ Σ ⪯ CId, c ≤ ∥ μ∥2 − ϵ√d ≤ C. (A159) 
+
+Fix any depth L ∈ N. For every target error η > E⋆ϵ, U , define 
+
+Nϵ(η) := min {N ∈ N : inf 
+
+> ΘL
+
+sup  
+
+> U∈O (d)
+
+EDN |U [Eϵ, U (f ( · ; ΘL, DN ))] ≤ η}. (A160) 
+
+Then, for every fixed δ ∈ (0 , 1/2) and all sufficiently large d,
+
+N0(E⋆ 
+
+> 0,U
+
++ δ) = 1 , Nϵ(E⋆ϵ, U + δ) = Θ( √d). (A161) 
+
+The constants hidden in Θ depend only on c, C, and δ.Proof. Write μ := μ/∥μ∥2.
+
+The robust Bayes error is asymptotically attained by the mean direction. For every unit vector 
+
+q ∈ Rd, define its robust standardized margin by 
+
+M (q) := μ⊤q − ϵ√d
+
+pq⊤Σq = ∥μ∥2 − ϵ√d − ∥ μ∥2(1 − μ⊤q)
+
+pq⊤Σq . (A162) By Lemma B.4, the robust Bayes error is Φ( −M ⋆), where M ⋆ := max ∥q∥2=1 M (q). Substituting 
+
+q = μ gives 
+
+M ⋆ ≥ ∥μ∥2 − ϵ√d
+
+pμ⊤Σμ > 0. (A163) Every maximizer q⋆ therefore has a positive numerator in Eq. (A162), and hence 
+
+∥q⋆ − μ∥22 = 2(1 − μ⊤q⋆) < 2( ∥μ∥2 − ϵ√d)
+
+∥μ∥2
+
+= O(d−1/2). (A164) The spectral bounds and Eq. (A164) imply 
+
+|q⋆⊤Σq⋆ − μ⊤Σμ| ≤ 2C∥q⋆ − μ∥2 = O(d−1/4). (A165) The numerator of M (q⋆) is at most ∥μ∥2 − ϵ√d, while every denominator in Eq. (A162) is at least √c. It follows that 
+
+0 ≤ M ⋆ − ∥μ∥2 − ϵ√d
+
+pμ⊤Σμ = O(d−1/4). (A166) 34 Since the standard normal density is bounded, Eq. (A166) yields 
+
+E⋆ϵ, U = Φ − ∥μ∥2 − ϵ√d
+
+pμ⊤Σμ
+
+!
+
++ O(d−1/4) (A167) uniformly over U ∈ O (d).
+
+The empirical-mean predictor. Given N demonstrations, define 
+
+vN := 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+ynxn, fmean (x; DN ) := v⊤ 
+
+> N
+
+x. (A168) For every depth L ∈ N, this predictor is realized by setting Pℓ = Qℓ = 0d+1 ,d +1 for 1 ≤ ℓ < L ,
+
+PL = Πy , and QL = Id+1 . Conditional on a task basis U , its latent direction is 
+
+aN := μ + ξN , ξN ∼ N 
+
+
+
+0d, Σ
+
+N
+
+
+
+, vN = U a N . (A169) 
+
+One demonstration suffices for standard prediction. For N = 1 , Eq. (A169) and the spectral bounds give 
+
+μ⊤a1 = ∥μ∥22 + OP(∥μ∥2), a⊤ 
+
+> 1
+
+Σa1 = OP(d). (A170) Hence, the standardized clean margin diverges in probability: 
+
+μ⊤a1
+
+q
+
+a⊤ 
+
+> 1
+
+Σa1
+
+> P
+
+−→ ∞ . (A171) Equations Eqs. (A40) and (A171), boundedness of the error, and convergence in probability imply 
+
+sup  
+
+> U∈O (d)
+
+ED1|U [E0,U (fmean ( · ; D1))] → 0. (A172) The standard Bayes error is nonnegative, so Eq. (A172) shows that, for every fixed δ > 0 and all sufficiently large d,
+
+N0(E⋆ 
+
+> 0,U
+
++ δ) = 1 . (A173) 
+
+Upper bound for robust prediction. Fix a > 0, set N := ⌈a√d⌉, and define bq := aN /∥aN ∥2. Let 
+
+A := {∥ ξN ∥2 ≤ ∥ μ∥2/2}. Markov’s inequality and Eq. (A159) give 
+
+P(Ac) ≤ 4E[∥ξN ∥22]
+
+∥μ∥22
+
+= 4 tr( Σ)
+
+N ∥μ∥22
+
+= O(d−1/2). (A174) On A, normalization is Lipschitz and therefore 
+
+∥μ∥2(1 − μ⊤ bq) = ∥μ∥2
+
+2 ∥ bq − μ∥22 ≤ 2∥ξN ∥22
+
+∥μ∥2
+
+. (A175) Taking expectations in Eq. (A175) yields 
+
+E[∥μ∥2(1 − μ⊤ bq)1{A} ] ≤ 2 tr( Σ)
+
+N ∥μ∥2
+
+≤ Ka (A176) for a constant K > 0 depending only on c and C. Moreover, Cauchy–Schwarz, Eq. (A174), and the same normalization bound give 
+
+E[∥ bq − μ∥21{A} ] = O(d−1/4), P(Ac) = O(d−1/2). (A177) The map q 7 → (q⊤Σq)−1/2 is uniformly Lipschitz on the unit sphere under Eq. (A159). Combining Eqs. (A40), (A167), (A174), (A176) and (A177) with the Lipschitz continuity of Φ gives 
+
+sup  
+
+> U∈O (d)
+
+EDN |U [Eϵ, U (fmean ( · ; DN ))] − E ⋆ϵ, U ≤ K′
+
+a + o(1) (A178) 35 for a constant K′ > 0 depending only on c and C. Choosing a > 2K′/δ proves 
+
+Nϵ(E⋆ϵ, U + δ) = O(√d) (A179) uniformly over L.
+
+Lower bound for robust prediction. A standard volumetric packing argument gives unit vectors 
+
+v1, . . . , vJd ∈ μ⊥ such that 
+
+Jd ≥ exp( kd ), ∥vi − vj ∥2 ≥ 1 (i̸ = j) (A180) for a numerical constant k > 0. Fix a constant B ≥ 32 C/c , to be chosen sufficiently large below, set 
+
+βd := √Bd −1/4, and, for each j ∈ [Jd], let Uj be the rotation through angle βd in the plane spanned by μ and vj that maps μ to 
+
+uj := cos( βd)μ + sin( βd)vj (A181) and acts as the identity on the orthogonal complement of this plane. For all sufficiently large d,Eq. (A180) implies 
+
+∥ui − uj ∥2 ≥ βd
+
+2 (i̸ = j). (A182) Let Pj be the distribution of one labeled demonstration under task Uj . The label is independent of the task, while the signed feature has distribution 
+
+yx ∼ N (Uj μ, Uj ΣU ⊤ 
+
+> j
+
+). (A183) Each difference Ui − Uj has rank at most four and Frobenius norm O(βd). In particular, 
+
+∥Uiμ − Uj μ∥2 = O(∥μ∥2βd), ∥UiΣU ⊤ 
+
+> i
+
+− Uj ΣU ⊤ 
+
+> j
+
+∥F = O(βd). (A184) To control the covariance contribution to the Gaussian relative entropy, apply x − 1 − log x ≤
+
+K0(x − 1) 2 on the compact interval [c/C, C/c ] to the eigenvalues of 
+
+(Uj ΣU ⊤ 
+
+> j
+
+)−1/2UiΣU ⊤ 
+
+> i
+
+(Uj ΣU ⊤ 
+
+> j
+
+)−1/2. (A185) The Gaussian relative-entropy formula, Eqs. (A159) and (A184), and this scalar bound give 
+
+max  
+
+> i,j ∈[Jd]
+
+KL( Pi∥Pj ) ≤ K′′ ∥μ∥22β2 
+
+> d
+
+≤ K′′ C2B√d (A186) for a constant K′′ > 0 depending only on c and C. Fix α > 0 and suppose that N ≤ α√d.Tensorization, Eqs. (A180) and (A186), and Fano’s inequality show that every estimator bJ based on 
+
+N demonstrations satisfies 
+
+1
+
+JdJdX
+
+> j=1
+
+P⊗Nj ( bJ̸ = j) ≥ 1 − K′′ C2αBd + log 2 
+
+kd . (A187) By Eq. (A50), every linear transformer has an effective direction determined by the demonstrations. Assign an arbitrary unit direction when this effective direction is zero, and otherwise normalize it to obtain bq. Decode the task by choosing the element of {u1, . . . , uJd } nearest to bq. Whenever this decoder is incorrect, Eq. (A182) gives 
+
+1 − u⊤ 
+
+> j
+
+bq = 12 ∥ bq − uj ∥22 ≥ β2
+
+> d
+
+32 . (A188) On this event, the numerator in the conditional robust-error formula is bounded below by 
+
+ϵ√d − ∥ μ∥2u⊤ 
+
+> j
+
+bq = ∥μ∥2(1 − u⊤ 
+
+> j
+
+bq) − (∥μ∥2 − ϵ√d) ≥ cB 
+
+32 − C. (A189) The choice B ≥ 32 C/c makes this lower bound nonnegative. Its standard deviation is at most √C
+
+by Eq. (A159). Thus, Eqs. (A40), (A187) and (A189) lower-bound the robust error averaged over the packed tasks by 
+
+1 − K′′ C2αB k − o(1) 
+
+
+
+Φ
+
+ cB/ 32 − C
+
+√C
+
+
+
+. (A190) 36 The zero effective direction itself has robust error one, so the arbitrary assignment made above does not weaken the lower bound. The mean direction is a feasible robust classifier, so 
+
+E⋆ϵ, U ≤ Φ − ∥μ∥2 − ϵ√d
+
+pμ⊤Σμ
+
+!
+
+≤ Φ
+
+
+
+− c
+
+√C
+
+
+
+< 12 . (A191) Since Φ( −c/ √C) + δ < 1, first choose B ≥ 32 C/c sufficiently large and then α sufficiently small that the lower bound in Eq. (A190) is strictly larger than Φ( −c/ √C) + δ for all sufficiently large d.The worst-task error is at least the average over the packed tasks, so Eq. (A191) implies 
+
+Nϵ(E⋆ϵ, U + δ) = Ω( √d) (A192) uniformly over L. Combining Eqs. (A173), (A179) and (A192) proves Eq. (A161). 37

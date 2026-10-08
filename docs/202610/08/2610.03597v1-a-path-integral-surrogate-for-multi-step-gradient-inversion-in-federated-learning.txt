@@ -1,0 +1,366 @@
+Title: A Path Integral Surrogate for Multi-Step Gradient Inversion in Federated Learning
+
+URL Source: https://arxiv.org/pdf/2610.03597v1
+
+Published Time: Mon, 05 Oct 2026 01:34:57 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# A PATH INTEGRAL SURROGATE FOR MULTI-STEP GRADIENT INVERSION IN FEDERATED LEARNING 
+
+# Agnivo Ghosh Saumik Bhattacharya 
+
+# Department of Electronics and Electrical Communication Engineering Indian Institute of Technology Kharagpur, India 
+
+# agnivo200325@kgpian.iitkgp.ac.in, saumik@ece.iitkgp.ac.in 
+
+ABSTRACT 
+
+Federated learning lets many clients train a shared model together without ever sending their private data to a central server. Each client shares only a model update, and this update should reveal far less about the client than its raw training examples would. This premise is what protects the privacy of the clients. Gradient inversion attacks challenge it directly by trying to reconstruct a client’s private input images from the single update it shared. Under FedAvg, a client’s update accumulates several local training steps, so the server sees only the two endpoints of a hidden weight trajectory. Recent gra-dient inversion attacks fit a surrogate model along the path between these two endpoints but they still read its gradient at a single point. We propose the Path-Integral Surrogate Model Extension (PI-SME) which treats the accumulated update as a path integral of the gradient field and approximates it by Gauss–Legendre quadrature over sev-eral nodes along a learnable B´ ezier path. On CIFAR-100 and FEM-NIST images across a range of trajectory lengths and class-restricted batches PI-SME reconstructs the private inputs more faithfully than the strongest surrogate baseline on several inversion metrics and the matching loss. 
+
+Index Terms — federated learning, gradient inversion, privacy, surrogate model, numerical quadrature 
+
+1. INTRODUCTION 
+
+Federated learning trains a shared model across many clients with-out collecting their data on a central server [1, 2]. A server holds a global model and repeatedly sends it to participating clients. Each client owns a private dataset. Given a batch (X, Y ) of input images 
+
+X and labels Y , the client trains a model fw with weights w un-der a loss ℓ. It then returns only the resulting model update. The server aggregates these updates to form a new global model and re-peats the process over multiple communication rounds. Since raw samples remain on the clients, federated learning is used in settings where privacy or data-governance requirements discourage central data collection, including mobile keyboard prediction [3], clinical modeling across hospitals [4], fraud detection across financial insti-tutions [5], and intelligence on edge and IoT devices [6]. The predominantly used federated learning algorithm is Fe-dAvg [1]. In FedAvg, each client performs several local SGD steps before returning its updated model to the server. The server then aggregates the client models using a weighted average. FedSGD is the one-step special case in which each client returns the gradient at the current global model rather than an update accumulated over multiple local steps. Sharing updates instead of data is intended to protect client privacy. This protection is further supported by defenses such as secure aggregation [7] and differential privacy [8]. Gradient inversion attacks challenge this protection by reconstruct-ing private inputs from a shared update. An honest-but-curious server optimizes a dummy batch ˆX with the same shape as X until its gradient matches the observed update. DLG [9] minimizes the Euclidean distance between the two gradients, while iDLG [10] first recovers the labels. IG [11] uses a cosine matching objective together with a total-variation image prior TV( ˆX), while GradIn-version [12] scales to larger batches. Prior-enhanced attacks such as GI-NAS [13] and DGGI [14] incorporate architectural or diffusion image priors. These methods are primarily designed for single-step gradients. In contrast, FedAvg produces an update accumulated over multiple local steps, and the server observes only the endpoints: the initial global model and the model returned by the client after local training. Recent surrogate-model attacks such as SME [15] and NL-SME [16] fit a surrogate path between these endpoints but still evaluate its gradient at a single point. 
+
+Our contribution is to treat the accumulated update as a path integral of the gradient field along the client trajectory. We recon-struct this integral using numerical quadrature rather than a single gradient evaluation. We propose the Path-Integral Surrogate Model Extension (PI-SME), which evaluates the surrogate gradient at sev-eral nodes along a learnable B´ ezier path and combines these evalu-ations using Gauss–Legendre weights to approximate the accumu-lated update. To our knowledge, this is the first gradient inver-sion attack to model the multi-step update as a path integral and use multi-node quadrature for inversion. On CIFAR-100 [17] and FEMNIST [18, 19], PI-SME improves over the strongest surrogate baseline across all reconstruction metrics. The largest gains occur on long trajectories and class-scarce batches, where the single-point approximation is weakest. Section 2 reviews the multi-step setting and surrogate baselines. Section 3 presents PI-SME. Section 4 reports the main results and benchmark comparisons. Section 5 presents the ablation studies. Section 6 concludes the paper. 
+
+2. BACKGROUND AND RELATED WORK 2.1. Multi-step updates in FedAvg 
+
+The initial gradient inversion attacks of Section 1 assume a single-step FedSGD gradient. In practice a client takes T local SGD steps before reporting. The T steps produce the weight sequence 
+
+w0, w1, . . . , wT , of which the server observes only the endpoints 
+
+w0 and wT while the intermediate states w1, . . . , wT −1 stay hid-den. With learning rate η, and writing each per-step gradient on the arXiv:2610.03597v1 [cs.LG] 2 Oct 2026 full batch for clarity as in [15], the observed accumulated update is 
+
+∆w = w0 − wT = η 
+
+> T−1
+
+X 
+
+> τ=0
+
+∇w ℓ(fwτ (X), Y ) , (1) a sum of the gradients evaluated at the T states w0, . . . , wT −1 that precede each step. Its direction is the mean gradient along the tra-jectory, 
+
+¯g = ∆w
+
+ηT = 1
+
+T 
+
+> T−1
+
+X 
+
+> τ=0
+
+∇w ℓ(fwτ (X), Y ) . (2) Since ∆w sums gradients over T distinct states, a single-step attack evaluated at w0 mismatches the update, and the mismatch grows with T .
+
+2.2. Surrogate-model attacks 
+
+SME [15] attacks the multi-step update by matching the gradient of a surrogate model to ∆w. It restricts the surrogate to the line between the observed endpoints, bw = αw0 + (1 − α)wT , and jointly optimizes α ∈ [0 , 1] and the dummy batch ˆX so that the surrogate gradient gsur = ∇w ℓ(f bw ( ˆX), Y ) aligns with ∆w under the cosine matching loss of [11], 
+
+Lsim (gsur , ∆w) = 1 − ⟨gsur , ∆w⟩∥gsur ∥ ∥ ∆w∥ , (3) where ∆w is the observed update of Eq. (1), ⟨· , ·⟩ the inner product, and ∥ · ∥ the Euclidean norm. SME minimizes Lsim over α and ˆX.NL-SME [16] replaces the straight-line surrogate with a quadratic B´ ezier curve 
+
+w(t) = (1 − t)2w0 + 2(1 − t)t P 1 + t2wT , t ∈ [0 , 1] , (4) with a learnable control point P1 and a learnable position t, and matches the gradient ∇w ℓ(fw(t)( ˆX), Y ) evaluated at that single po-sition. NL-SME further introduces a learnable calibration vector d
+
+that rescales the surrogate gradient coordinatewise before matching, which lowers Lsim by up to an order of magnitude over SME [16]. SME and NL-SME both read the surrogate gradient at a single state of the path. 
+
+3. PROPOSED METHOD: PI-SME 
+
+The update ∆w accumulates gradients along the client’s local trajec-tory, so up to the step size it is a discrete line integral of the gradient field. The quantity to reconstruct is therefore this path integral, not any single gradient. SME and NL-SME approximate the integral by reading the gradient at a single surrogate state, which replaces the whole path by one sample and leaves an error that grows as the trajectory lengthens with T . A single sample is also insufficient in principle. Matching ¯g from one state requires that state’s gradient to be parallel to ¯g, the average of the per-step gradients. For a scalar function the mean value theorem guarantees such a point, but it does not carry over to the vector-valued, high-dimensional gradients at-tacked here [20]. The path-consistency test in Section 5.2 confirms this on real trajectories, where the best single point is measurably worse than a quadrature over several nodes. We therefore treat the reconstruction of ∆w as a quadrature problem and approximate the path integral with m fixed nodes along the path. Increasing the node count m pulls the surrogate direc-tion toward the true accumulated update and recovers more of it the longer and harder the trajectory is to match. Our method, the Path-Integral Surrogate Model Extension (PI-SME), realises this. Each node costs one backward pass, the dominant cost of the attack. The 
+
+m nodes are selected using Gauss–Legendre quadrature, which pro-vides a high-order approximation with m gradient evaluations and is exact for polynomial integrands of degree up to 2m − 1.
+
+3.1. Path-integral surrogate 
+
+Modelling the unknown trajectory by the B´ ezier curve w(t) of Eq. (4), the surrogate counterpart of ¯g is the path average 
+
+I( ˆX, P 1) = 
+
+Z 10
+
+∇w ℓ
+
+
+
+fw(t)( ˆX), Y 
+
+
+
+dt. (5) We evaluate this integral with an m-node Gauss–Legendre rule [21], which for a continuous scalar integrand h approximates 
+
+Z 1
+
+> −1
+
+h(ξ) dξ ≈
+
+> m
+
+X
+
+> i=1
+
+wi h(ξi), (6) and is exact for polynomials of degree up to 2m − 1; the nodes 
+
+ξi ∈ (−1, 1) are the roots of the degree-m Legendre polynomial and the weights wi are the corresponding closed-form Gauss–Legendre weights [21]. We apply the rule componentwise to the vector-valued gradient integrand. Since the surrogate curve is parameterised on 
+
+t ∈ [0 , 1] , the affine change of variables ξ 7 → 12 (ξ + 1) maps each node and weight, 
+
+ti = 12 (ξi + 1) , ci = 12 wi, (7) where the factor 12 is the Jacobian of the map. The mapped weights satisfy Pmi=1 ci = 1 , giving nodes {ti}mi=1 ⊂ [0 , 1] , so that 
+
+G( ˆX, P 1) = 
+
+> m
+
+X
+
+> i=1
+
+ci ∇w ℓ
+
+
+
+fw(ti)( ˆX), Y 
+
+
+
+(8) is a weighted average of the surrogate gradient at m fixed points of the curve. The node count m sets how finely the path is resolved, and each node adds one gradient evaluation per iteration. 
+
+3.2. Calibration and objective 
+
+PI-SME matches G to ∆w under the same calibration as NL-SME [16]. Since the reliability of the observed update can vary across layers, per-coordinate rescaling allows less reliable com-ponents to be downweighted during matching. A learnable vec-tor d of the same dimension as G scales the integrated gradient, 
+
+d ⊙ G( ˆX, P 1), where ⊙ is the elementwise product, and is pulled toward the all-ones vector 1 by Rd = ∥d − 1∥22. Setting d = 1
+
+recovers the honest matching loss since the calibration can lower the reported loss without improving the true alignment. The control point is kept near the straight line by Rp = ∥P1 − 12 (w0 + wT )∥22.The reconstruction ˆX is regularized by the anisotropic total-variation prior 
+
+TV( ˆX) = X
+
+> i,j
+
+ ˆXi+1 ,j − ˆXi,j + ˆXi,j +1 − ˆXi,j 
+
+
+
+, (9) where ˆXi,j is the pixel at row i and column j, summed over the batch and colour channels. The reconstruction objective is 
+
+L( ˆX, P 1, d ) = Lsim 
+
+
+
+d ⊙ G( ˆX, P 1), ∆w
+
+
+
++ λtv TV( ˆX) + λpRp + λdRd,
+
+(10) Algorithm 1 PI-SME reconstruction. 
+
+Require: observed models w0, wT ; labels Y ; nodes m; iterations 
+
+K; weights λtv , λ p, λ d
+
+Ensure: reconstructed batch ˆX 
+
+> 1:
+
+Gauss–Legendre nodes and weights {(ti, c i)}mi=1 on [0 , 1] ,P 
+
+> i
+
+ci = 1 ; ∆w ← w0 − wT 
+
+> 2:
+
+init ˆX ∼ N (0 , I ), P1 ← 12 (w0 + wT ), d ← 1 
+
+> 3:
+
+for k = 0 to K − 1 do  
+
+> 4:
+
+for i = 1 to m do  
+
+> 5:
+
+w(ti) ← (1 − ti)2w0 + 2(1 − ti)tiP1 + t2 
+
+> i
+
+wT 
+
+> 6:
+
+gi ← ∇ w ℓ(fw(ti)( ˆX), Y ) 
+
+> 7:
+
+end for  
+
+> 8:
+
+G ← Pmi=1 ci gi 
+
+> 9:
+
+L ← L sim (d ⊙ G, ∆w) + λtv TV( ˆX) + λpRp + λdRd 
+
+> 10:
+
+( ˆX, P 1, d ) ← Adam update on ∇L  
+
+> 11:
+
+end for  
+
+> 12:
+
+return ˆX
+
+where Lsim is the cosine matching loss of Eq. (3), G the inte-grated gradient of Eq. (8), ∆w the observed update of Eq. (1), and λtv , λ p, λ d > 0 weight the prior and the two regularizers. We set λtv = 10 −2, λp = 10 −3, and λd = 10 −6, following the calibration of NL-SME [16]. We optimize Θ = { ˆX, P 1, d }
+
+jointly with Adam [22] for 1000 iterations, at learning rates 1 for 
+
+ˆX, 10 −3 for P1, and 2.5 × 10 −3 for d, starting from ˆX ∼ N (0 , I ),
+
+P1 = 12 (w0 + wT ), and d = 1, with d clamped to [0 .1, 10] . Labels are recovered from the last-layer update and held fixed. Algorithm 1 lists the procedure. 
+
+4. RESULTS 
+
+We evaluate on CIFAR-100 [17] ( 100 classes, 32 × 32 RGB images) and FEMNIST [18, 19] ( 62 classes, 28 × 28 grayscale images), cho-sen to probe inversion across different terrains, colour and grayscale images with search spaces of different size. The victim networks are small CNNs with two convolutional layers followed by two fully connected layers, as in [15, 16], and the node count is fixed at m=7 
+
+from the ablation in Section 5. We compare PI-SME against SME, NL-SME, and three further gradient inversion attacks, test whether extra optimization closes the NL-SME gap, and measure reconstruc-tion under low-rank updates. 
+
+4.1. Benchmark comparison 
+
+Figure 1 shows sample inversions using PI-SME on CIFAR-100. Ta-ble 1 compares PI-SME with the surrogate baselines SME and NL-SME and with three further gradient inversion attacks, the single-step IG and the prior-enhanced GI-NAS and DGGI, on CIFAR-100 and FEMNIST. The single-step and prior-based methods trail the surrogate line by a wide margin on the multi-step update, since they are not built to follow an accumulated trajectory. Among the surro-gate methods, PI-SME improves on NL-SME in every setting and on every metric. On CIFAR-100 the PSNR gain over NL-SME is about 
+
+0.8 dB at T =100 and about 3 dB at T =250 ; on FEMNIST it is about 1.2 dB at both trajectory lengths, and SSIM [23], FSIM [24], LPIPS [25], and Lsim move the same way. 
+
+Fig. 1 . Sample inversions using PI-SME on CIFAR-100; each col-umn shows the original (top) and its reconstruction (bottom). 
+
+Table 1 . Inversion metrics, mean ± variance for the PSNR (dB) column; best per column in bold. E=20 for T =100 and E=50 for 
+
+T =250 .                                                                                                                                                                              
+
+> Method PSNR (dB) ↑SSIM ↑FSIM ↑LPIPS ↓Lsim ↓
+> CIFAR-100
+> T =100  IG (2020) 15 .01 ±0.3156 0.384 0.719 0.461 0.1385
+> GI-NAS (2025) 16 .00 ±0.8537 0.445 0.732 0.438 0.1586
+> DGGI (2025) 19 .93 ±0.6229 0.678 0.825 0.279 0.0521
+> SME (2023) 21 .88 ±0.9726 0.733 0.861 0.242 0.0452
+> NL-SME (2025) 25 .77 ±0.2115 0.855 0.920 0.163 0.0032
+> PI-SME (ours) 26 .52 ±0.4288 0.868 0.926 0.149 0.0017
+> CIFAR-100
+> T =250  IG (2020) 12 .28 ±0.2554 0.221 0.664 0.517 0.2681
+> GI-NAS (2025) 12 .70 ±0.3716 0.246 0.662 0.509 0.2914
+> DGGI (2025) 18 .60 ±0.4002 0.576 0.772 0.380 0.0592
+> SME (2023) 18 .26 ±0.3333 0.563 0.765 0.389 0.0625
+> NL-SME (2025) 20 .29 ±0.4908 0.685 0.827 0.316 0.0079
+> PI-SME (ours) 23 .20 ±0.3706 0.778 0.868 0.248 0.0036
+> FEMNIST
+> T =100  IG (2020) 17 .09 ±0.3498 0.524 0.695 0.365 0.1617
+> GI-NAS (2025) 17 .31 ±0.2166 0.562 0.740 0.300 0.1929
+> DGGI (2025) 21 .33 ±0.4132 0.771 0.892 0.114 0.0408
+> SME (2023) 22 .27 ±0.4209 0.790 0.880 0.173 0.0338
+> NL-SME (2025) 24 .06 ±0.2576 0.877 0.956 0.056 0.0009
+> PI-SME (ours) 25 .34 ±0.3513 0.904 0.966 0.048 0.0006
+> FEMNIST
+> T =250  IG (2020) 13 .64 ±0.3229 0.397 0.609 0.429 0.3102
+> GI-NAS (2025) 13 .62 ±0.4942 0.435 0.653 0.369 0.3332
+> DGGI (2025) 20 .50 ±0.2810 0.739 0.887 0.118 0.0484
+> SME (2023) 21 .35 ±0.3961 0.754 0.851 0.213 0.0482
+> NL-SME (2025) 23 .14 ±0.1863 0.848 0.945 0.076 0.0014
+> PI-SME (ours) 24 .37 ±0.2922 0.886 0.962 0.061 0.0006
+
+4.2. NL-SME under matched compute conditions 
+
+A larger attack budget does not lift NL-SME inversion quality to PI-SME. On CIFAR-100 at T =100 its PSNR stays flat as the budget grows, at 25 .76 , 25 .63 , and 25 .80 dB for 1000 , 5000 , and 7000 
+
+iterations. At T =250 it drops over the same three budgets, at 20 .21 ,
+
+19 .15 , and 19 .26 dB. Over this range its calibrated Lsim keeps falling while its honest matching loss (Eq. (10) with d=1) rises at 
+
+T =250 , from 0.0147 to 0.0233 : the calibration vector d absorbs the extra iterations instead of improving alignment with the observed update. 
+
+4.3. Class deficiency conditions 
+
+For softmax cross-entropy the last-layer weight update ∆wL has rank 
+
+rank(∆ wL) ≤ min( k, C − 1) , (11) with k the number of images in the batch and C the number of classes, since the per-sample softmax residuals sum to zero across the C logits. Fewer classes therefore leave a lower-rank signal to invert. Table 1 shows that only SME and NL-SME come close to PI-SME, so we restrict the class-deficiency study to these three attacks. Figure 2 traces reconstruction as the CIFAR label set shrinks from 
+
+C=100 to C=10 . All three attacks lose quality as C falls, and PI-SME degrades the slowest. Its PSNR margin over NL-SME widens from about 0.8 dB at C=100 to about 4.2 dB at C=10 . At C=10 
+
+SME and NL-SME collapse close to each other while PI-SME stays several decibels ahead. 10 20 30 60 100 
+
+Number of classes C
+
+> 15.0 17.5 20.0 22.5 25.0 27.5
+> PSNR (dB)
+> SME NL-SME PI-SME
+
+Fig. 2 . PSNR versus the number of classes C in the client batch on CIFAR-100, mean over five seeds. 
+
+5. ABLATION STUDY 5.1. Node-count selection 
+
+Table 2 sweeps m ∈ { 3, 4, 5, 7, 10 , 12 } on both datasets. The met-rics change little across this range and a larger m gives no monotone gain, with the best count varying by setting and seed. We fix m=7 
+
+for the remaining experiments, which sits near the best mean on both datasets while each added node costs one more gradient evaluation per iteration. 
+
+5.2. Path-consistency test 
+
+This experiment separates the numerical behaviour of the quadrature from the reconstruction problem. It tests whether integrating the sur-rogate gradient over several nodes of an optimized path aligns with the accumulated update more closely than the gradient read at any single state. The adversary is granted oracle access to the full se-quence of true intermediate states {wτ }Tτ =0 and to the private batch 
+
+X, taken here from a CIFAR-100 client. No dummy data is opti-mized and the comparison is made purely between gradient direc-tions and the true mean direction ¯g of Eq. (2), scored by the honest cosine loss ( d=1). The single-node reference measures the closest any one point on the true trajectory can come to ¯g,
+
+δsingle = min   
+
+> 0≤τ≤T
+
+Lsim (∇w ℓ(fwτ (X), Y ), ¯g) , (12) obtained by scanning all T +1 states, and is the strongest a single-state attack can reach even with full knowledge of the path. The quadrature counterpart evaluates the m-node estimate G of Eq. (8) 
+
+Table 2 . Node-count sweep for PI-SME: reconstruction PSNR (dB) across m (mean over five seeds). CIFAR-100 FEMNIST 
+
+m T =100 T =250 T =100 T =250 3 26 .49 22 .97 25 .08 24 .00 4 26 .63 23 .14 25 .21 24 .24 5 26 .73 23 .05 24 .86 24 .34 7 26 .52 23 .20 25 .34 24 .37 10 26 .55 23 .10 25 .43 24 .34 12 26 .72 23 .36 25 .09 24 .17 
+
+on the B´ ezier path and reports the honest loss at the fitted control point, 
+
+δquad (m) = Lsim (G(X, P ⋆ 
+
+> 1
+
+), ¯g) ,P ⋆ 
+
+> 1
+
+= arg min 
+
+> P1
+
+Lsim (G(X, P 1), ¯g) + λpRp, (13) where only the control point P1 is fitted, from the two observed end-points, and Rp is the control-point regularizer of Section 3. Table 3 reports both quantities at two trajectory lengths. The quadrature loss lies below the single-node reference at every node count and at both lengths, even though δsingle is computed over the entire trajectory while δquad has access only to the two endpoints. Even a two-node quadrature already cuts the reference by roughly a factor of three, from 0.0242 to 0.0079 at T =100 and from 0.0446 to 0.0136 at 
+
+T =250 , and additional nodes lower it further before saturating near 
+
+m=3 . The advantage widens with the trajectory length, matching the growth of the reconstruction margin in Section 4. The best sin-gle state also moves along the path as T grows, from 44% of the way at T =100 to 71% at T =250 , so no fixed position is adequate across settings. 
+
+Table 3 . Path-consistency test on a CIFAR-100 client: honest cosine loss against ¯g.
+
+δsingle m=2 m=3 m=5 
+
+T =100 0.0242 0.0079 0.0065 0.0055 
+
+T =250 0.0446 0.0136 0.0113 0.0119 
+
+6. CONCLUSION 
+
+PI-SME reframes multi-step gradient inversion as a quadrature prob-lem. Because the FedAvg update is the accumulation of gradients along a client’s local trajectory, the object worth matching is the path integral of the gradient field rather than the gradient at any one weight, and PI-SME approximates that integral with an m-node Gauss–Legendre rule along a learnable B´ ezier curve. The size of the gain tracks the difficulty of the setting. On the easy regimes PI-SME and the strongest surrogate baseline sit close together, but the margin over NL-SME widens as the client trains longer, from about 0.8 dB at T =100 to about 3 dB at T =250 , and as the batch spans fewer classes, from about 0.8 dB at C=100 to about 4.2 dB at C=10 . As the observed update drifts further from any single surrogate state, integrating along the trajectory recovers more of the signal. Choos-ing m from a principled bound rather than a sweep and explaining the sharp fall all surrogate methods show on class deficient batches remain open as scope for future work. 7. REFERENCES 
+
+[1] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hamp-son, and Blaise Ag¨ uera y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Proc. Int. Conf. on Artificial Intelligence and Statistics (AISTATS) ,2017, pp. 1273–1282. [2] Peter Kairouz, H. Brendan McMahan, Brendan Avent, et al., “Advances and open problems in federated learning,” Foun-dations and Trends in Machine Learning , vol. 14, no. 1–2, pp. 1–210, 2021. [3] Andrew Hard, Kanishka Rao, Rajiv Mathews, et al., “Feder-ated learning for mobile keyboard prediction,” arXiv preprint arXiv:1811.03604 , 2018. [4] Nicola Rieke, Jonny Hancox, Wenqi Li, et al., “The future of digital health with federated learning,” npj Digital Medicine ,vol. 3, pp. 119, 2020. [5] Qiang Yang, Yang Liu, Tianjian Chen, and Yongxin Tong, “Federated machine learning: Concept and applications,” ACM Trans. on Intelligent Systems and Technology , vol. 10, no. 2, pp. 1–19, 2019. [6] Dinh C. Nguyen, Ming Ding, Pubudu N. Pathirana, et al., “Federated learning for internet of things: A comprehensive survey,” IEEE Communications Surveys & Tutorials , vol. 23, no. 3, pp. 1622–1658, 2021. [7] Keith Bonawitz, Vladimir Ivanov, Ben Kreuter, et al., “Prac-tical secure aggregation for privacy-preserving machine learn-ing,” in Proc. ACM SIGSAC Conf. on Computer and Commu-nications Security (CCS) , 2017, pp. 1175–1191. [8] Mart´ ın Abadi, Andy Chu, Ian Goodfellow, et al., “Deep learn-ing with differential privacy,” in Proc. ACM SIGSAC Conf. on Computer and Communications Security (CCS) , 2016, pp. 308–318. [9] Ligeng Zhu, Zhijian Liu, and Song Han, “Deep leakage from gradients,” in Advances in Neural Information Processing Sys-tems (NeurIPS) , 2019, pp. 14774–14784. [10] Bo Zhao, Konda Reddy Mopuri, and Hakan Bilen, “iDLG: Improved deep leakage from gradients,” arXiv preprint arXiv:2001.02610 , 2020. [11] Jonas Geiping, Hartmut Bauermeister, Hannah Dr¨ oge, and Michael Moeller, “Inverting gradients – how easy is it to break privacy in federated learning?,” in Advances in Neural Information Processing Systems (NeurIPS) , 2020, pp. 16937– 16947. [12] Hongxu Yin, Arun Mallya, Arash Vahdat, et al., “See through gradients: Image batch recovery via GradInversion,” in Proc. IEEE/CVF Conf. on Computer Vision and Pattern Recognition (CVPR) , 2021, pp. 16337–16346. [13] Wenbo Yu, Hao Fang, Bin Chen, et al., “GI-NAS: Boosting gradient inversion attacks through adaptive neural architecture search,” IEEE Trans. on Information Forensics and Security ,vol. 20, pp. 7648–7662, 2025. [14] Liang Wu, Zhiwei Liu, Bo Pu, et al., “DGGI: Deep generative gradient inversion with diffusion model,” Information Fusion ,vol. 113, pp. 102620, 2025. [15] Junyi Zhu, Ruicong Yao, and Matthew B. Blaschko, “Surro-gate model extension (SME): A fast and accurate weight up-date attack on federated learning,” in Proc. 40th Int. Conf. on Machine Learning (ICML) , 2023, PMLR 202, pp. 43228– 43257. [16] Li Xia, Zheng Liu, Sili Huang, Wei Tang, and Xuan Liu, “Trajectory-aware information matching for multi-step gradient inversion in federated learning,” arXiv preprint arXiv:2509.22082 , 2025, Preprint submitted to Elsevier. [17] Alex Krizhevsky, “Learning multiple layers of features from tiny images,” Tech. Rep., University of Toronto, 2009. [18] Sebastian Caldas, Sai Meher Karthik Duddu, Peter Wu, et al., “LEAF: A benchmark for federated settings,” arXiv preprint arXiv:1812.01097 , 2018. [19] Gregory Cohen, Saeed Afshar, Jonathan Tapson, and Andr´ evan Schaik, “EMNIST: Extending MNIST to handwritten let-ters,” in Proc. Int. Joint Conf. on Neural Networks (IJCNN) ,2017, pp. 2921–2926. [20] Walter Rudin, Principles of Mathematical Analysis , McGraw-Hill, 3rd edition, 1976. [21] Philip J. Davis and Philip Rabinowitz, Methods of Numerical Integration , Academic Press, 2nd edition, 1984. [22] Diederik P. Kingma and Jimmy Ba, “Adam: A method for stochastic optimization,” in Proc. Int. Conf. on Learning Rep-resentations (ICLR) , 2015. [23] Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, and Eero P. Simoncelli, “Image quality assessment: From error visibility to structural similarity,” IEEE Trans. on Image Processing , vol. 13, no. 4, pp. 600–612, 2004. [24] Lin Zhang, Lei Zhang, Xuanqin Mou, and David Zhang, “FSIM: A feature similarity index for image quality assess-ment,” IEEE Trans. on Image Processing , vol. 20, no. 8, pp. 2378–2386, 2011. [25] Richard Zhang, Phillip Isola, Alexei A. Efros, Eli Shechtman, and Oliver Wang, “The unreasonable effectiveness of deep fea-tures as a perceptual metric,” in Proc. IEEE/CVF Conf. on Computer Vision and Pattern Recognition (CVPR) , 2018, pp. 586–595.
