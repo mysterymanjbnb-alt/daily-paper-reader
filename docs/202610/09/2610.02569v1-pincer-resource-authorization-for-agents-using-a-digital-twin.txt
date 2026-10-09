@@ -1,0 +1,1856 @@
+Pincer: Resource Authorization for Agents using a Digital Twin
+Mayank Rathee1
+Alexander Stepanov1
+Shalin Madabhavi2
+Jinhao Zhu1
+Raluca Ada Popa1
+Ion Stoica1
+1UC Berkeley
+2Foothill High School
+Abstract
+Coding agents have become increasingly long-horizon, au-
+tonomous, reliant on general-purpose shell and maintain their
+own persistent memory for self-improvement. While these ca-
+pabilities have made the agents powerful, they have also made
+them harder to defend against external adversaries. Defenses
+that restrict this architecture—typed tools, information-flow
+control, or policy prediction engines—give up too much func-
+tionality to be adopted. Agents deployed today (e.g. Claude,
+Codex) rely on a combination of user-mediated and auto-
+mode sandboxing as their primary defense. In user-mediated
+sandboxing, user-maintained policies decay over time and
+repeated permission requests cause user fatigue, while auto
+mode’s tool-call classifiers learn no user-specific policy and
+are not meant to defend against adversarial setups.
+Pincer is a new defense that operates at the resource layer
+and works alongside existing defenses at the tool-call layer
+like the auto mode. At the core of Pincer lies a digital twin, an
+isolated-context model that automatically learns and enforces
+dynamic user-specific least-privilege policies. The digital twin
+keeps continually learning the user’s preferences allowing it
+to act as the user’s proxy for the agent’s permission requests.
+To emulate the learning phase, we propose a new user-
+centric dataset with examples following a multi-day transcript
+of user-agent interaction. Our evaluation shows that Pincer
+performs strongly on both security and utility in comparison
+to several baselines which includes variants of LLM judges
+and adaptations of Conseca (HotOS ’25). We highlight attack
+types where Pincer’s design leads to a significant security
+improvement compared to all other baselines, while outper-
+forming the baselines even for other types of attacks.
+1
+Introduction
+Coding agents [3, 40, 42, 43] have become increasingly au-
+tonomous, memory-driven, and reliant on general purpose
+computer-use tools like shell. These capabilities have ush-
+ered in a new era of computing with powerful automation,
+while also opening the door for vulnerabilities and attack-
+ers [5,24,27,41,55]. Researchers in both academia and in-
+dustry have been looking for ways to make agents safer while
+balancing their usefulness.
+In academia, there has been a major push towards strong
+defenses that in turn heavily restrict the agent’s capabili-
+ties [13,14,21,32,48,53,56]. On the other hand, the focus in
+industry has been towards defenses that work well for most
+day-to-day use and preserving the functionality of agents as
+much as possible [3,4,29,40,42]. Sandboxed execution with
+policies over the agent’s privileges, user-mediated permis-
+sions, and tool-call classifiers define these defenses. However,
+their effectiveness tends to decay over time (privilege creep
+and permission fatigue) and deviation from production traf-
+fic, e.g. when an adversary wants to take over the agent, can
+cause further failures [30]. In this work, we focus primarily
+on deployed agents and their existing defenses.
+We present a new defense that plugs directly into today’s
+agents and targets the resource layer that sits behind tools;
+for example files, web, etc. Central to our design is an entity
+we call the digital twin that learns user behavior over time to
+automatically infer which resources should be accessible to
+the agent for any given task. It additionally provides defense-
+in-depth by staying compatible with existing defenses that are
+already deployed. We call the system that composes an off-
+the-shelf agent with our defense Pincer1. Our contributions
+are as follows:
+1. Pincer, an agentic system that learns user behavior and
+automatically authorizes resources for the agent on a per
+task basis.
+2. A user-centric synthetic dataset containing a coherent
+set of examples from different users’ interaction with
+their agents over several days. The examples contain
+both attacks and benign workflows. To the best of our
+knowledge, it is the first dataset of this kind.
+1Since pincers offer finer control than claws, we use Pincer as our system
+name to differentiate from less safe agents like OpenClaw.
+1
+arXiv:2610.02569v1  [cs.CR]  1 Oct 2026
+
+
+3. Implementation and evaluation of Pincer on top of a
+lightweight off-the-shelf agent NanoClaw [40].
+1.1
+Technical Overview
+Deployed agents today run in a sandbox where a policy file,
+maintained by the user, describes what privileges the agent
+gets within the sandbox including tools it can use, whitelisted
+commands, and resources it can access. Whenever the agent
+hits the wall of the sandbox, a permission request is issued to
+the user specific to where the agent is stuck. Given this user-
+mediated sandboxing, two challenges show up. First, policies
+can become over-permissive over time as permissions accu-
+mulate because users rarely revoke permissions they might
+have granted under a deadline; this is known as privilege
+creep [4, 18]. Secondly, repeated permission requests lead
+to permission fatigue for the users causing their scrutiny to
+decrease over time [19, 36]. In response to these concerns,
+Anthropic released the auto mode [29] which is a classifier
+that sits at the tool-call layer and resolves permission requests
+to reduce user fatigue. While it works well for regular usage,
+recent work on stress-testing found that it allows a majority
+of unsafe operations to go through [30]. For example, directly
+executing a dangerous command like rm -rf * is blocked
+by the classifier, but the same command can be embedded in
+a harmlessly named Python file test.py, and the classifier
+allows python3 test.py to run. This gives an adversary an
+easy way to bypass or fool the classifier. In fact, it is not prac-
+tical for any tool-call layer classifier to reason through the
+effects of code, especially when the dangerous command is
+buried deep in the dependency chain. The same holds even
+without code: reasoning through the possible effects of a com-
+plex shell command at the tool-call layer can be infeasible.
+Moreover, the classifier doesn’t learn user-specific policies; if
+the classifier thinks git push is dangerous while the user’s
+workflow deems it as no risk, the user has to manually edit
+the policy file, otherwise the classifier will keep blocking it.
+This is why the problem of privilege creep is left unresolved
+by auto mode. We address these challenges in Pincer and
+describe our design next.
+Privilege creep and permission fatigue.
+The primary
+cause of privilege creep is policies that don’t adapt over time,
+go stale, and become over-permissive, while for permission
+fatigue, it is the repeated user involvement. We address both
+of these problems by automating the policy management as
+well as the permission resolution via a large language model
+(LLM) based party called the digital twin. Given a history of
+user behavior, the digital twin learns the implicit user-specific
+policies, adapts them over time, and steps in when the agent
+issues a permission request. As part of this design, we have
+to answer two important questions: (1) where in the agentic
+workflow the digital twin sits, which also defines the policies
+it can enforce, and (2) how to prevent the digital twin from
+getting compromised under attacks.
+Resource layer instead of tool-call layer.
+The digital twin
+sits at the resource layer instead of the tool-call layer, i.e. it
+gates access to resources, not tools or commands. When the
+agent makes a tool-call, it resolves to an underlying resource
+and that is where an authorization from the digital twin is
+needed, otherwise the tool call simply aborts. This has two
+clear advantages. First, we side-step the generally intractable
+space of commands and tool calls which prevents our enforce-
+ment from becoming ineffective and collapsing under the
+size of the enforceable domain. A resource decision, on the
+other hand, is over one concrete named object with a small
+fixed set of access modes [51] (e.g. reading a file directly
+through bash or via python or indirectly through imported
+modules vs read/write for a file). Second, the number of tool
+calls is typically significantly larger than the resources they
+operate over2. Therefore, the token cost of the digital twin is
+significantly cheaper at the resource layer. Since the digital
+twin sits at the resource layer, it only enforces policies over
+resources. The resource layer enforcement doesn’t replace
+the need for tool-call layer enforcement because the former is
+more coarse-grained; for example it cannot tell if an accessed
+file is overwritten with contents of a different accessed file.
+Due to this reason, a deployment should employ defense-in-
+depth by using Pincer with compatible tool-call layer defenses
+like the auto mode in Claude Code [29].
+Defending the digital twin from attacks.
+The digital twin
+is a model that can get compromised if it interacts with un-
+trusted content. Once compromised, it can grant unrestricted
+access to the agent which can be catastrophic. To mitigate this
+threat, Pincer provides architectural separation to the digital
+twin by restricting the majority of its input to be only trusted
+- consisting of tokens authorized by the user which includes
+the user prompts (current and past), the permission requests
+granted by the user in the past, or any additional tokens the
+user explicitly chooses to authorize. A digital twin, however,
+has to accept a limited amount of information that doesn’t
+originate from the user. The prime example of this is the
+request itself which originates from the agent who may be
+under the attacker’s control given its exposure to a myriad of
+untrusted content. Pincer sanitizes this information before the
+twin (we refer to the digital twin as “twin” going forward)
+sees it. In Section 5, we go into detail on subtle ways an at-
+tacker can influence the twin’s decision and how we close
+that gap.
+2Once access to a resource is granted, the access stays for the duration of
+the task. Therefore, the number of resource requests from the agent doesn’t
+necessarily grow with the task complexity unlike the tool calls.
+2
+
+
+Memory
+Tools 
+(bash)
+Resources
+Figure 1: The architecture today’s coding agents have con-
+verged on. An LLM drives an autonomous loop over persistent
+memory and general-purpose tools and acts on external re-
+sources, such as local files, the network, and remote services,
+through those tools. The box encloses the components under
+the agent’s own control; the user and the resources the agent
+acts on sit outside it.
+Content-dependent policies.
+The information our twin
+gets when making a resource decision doesn’t include con-
+tents of the resource (e.g. file contents). This is by design to
+protect it from getting compromised via untrusted resources
+controlled by an attacker. However, due to this, content-based
+policies (e.g. a file can only be read if it contains no secrets)
+cannot be enforced. To address this limitation, we make the
+twin’s decision a conjunction of a few votes, each serving
+a very specific function (see Section 5.6 for details). One
+of these votes is cast after seeing contents of the requested
+resource. A vote based on untrusted file contents always risks
+getting compromised and this is where the other votes come
+in; they are isolated from free-form untrusted content.
+2
+System Architecture
+Agents deployed to millions of people today [3,42,43] have
+all converged to a similar high-level architecture as shown
+in Figure 1. The user sends in a prompt to the LLM that con-
+trols the agent. The LLM references its memory and starts
+working on the user’s task. It has access to a variety of tools
+and it uses them to execute the task. The tools interact with
+resources like files or the web. The agent runs inside a sand-
+box with a user-editable policy, and optionally a classifier
+that adjudicates tool calls to reduce the permission burden on
+the user whenever a tool call doesn’t find grounding in the
+policy [4,29]. As we mentioned before in Section 1, with this
+design, agents run into the problems of privilege creep and
+permission fatigue without the classifier, while the classifier
+doesn’t learn user-specific policies and isn’t effective at mak-
+ing safe decisions under atypical situations [30], for example
+under attack. Importantly, the classifier addresses permission
+fatigue but doesn’t resolve the privilege creep issue; for user-
+specific policies, which may change from time to time, the
+user has to maintain the policy file and define exceptions for
+the classifier.
+2.1
+Pincer’s Design
+Our approach to address these challenges is to bolster the
+security of the system at a deeper layer than handled by the
+classifier while avoiding both privilege creep and permission
+fatigue. The layer we bolster is the resource layer which sits
+deeper than the tool call layer, but is also more coarse in its
+enforcement potential compared to the tool call layer, and in
+deployment, agents should pair it with the tool call classifier.
+To automatically learn user-specific policies and prevent priv-
+ilege creep, we introduce a digital twin who constantly learns
+user preferences and enforces those policies automatically.
+System components.
+Our system has four classes of com-
+ponents:
+• LLMs: We have two separate LLMs as part of our sys-
+tem: the worker (the main LLM in the agent) and the
+twin (a type of LLM judge).
+• Special-purpose state: Any state directly maintained by
+each LLM. For example the memory maintained by the
+worker.
+• Tools: Tools used by the worker to perform a task. For
+example the shell tool. Our system has a special tool (the
+resource request tool) that allows the worker to talk to
+the twin via a narrow channel.
+• Resources: Any resources that tools access. For example:
+files, email, web, etc.
+High-level system workflow.
+The user provides a prompt
+describing the task. The worker performs the task, while the
+twin is responsible for resource authorization for the worker.
+Given the prompt, the worker accesses its special-purpose
+state (a.k.a. the memory) and then calls tools to complete
+the task. The tools access resources and if a resource isn’t
+authorized for the worker, it uses a special resource-request
+tool to make a request for the said resource to the twin. The
+twin analyzes the request and may decide to grant or deny it.
+If granted, the worker-invoked tools can access the resource.
+3
+Threat Model and System Goals
+Our threat model is summarized in Figure 2 and detailed
+below.
+Definition 1 (Trusted party: the user). A trusted party or
+object is one that is outside the adversary’s control. A trusted
+party cannot be compromised by an adversary and any actions
+produced by them are deemed trusted. The user is assumed to
+be a trusted party.
+3
+
+
+User
+Worker
+Sanitizer
+tool
+Twin
+Resources
+Memory
+Twin’s
+state
+trusted (TCB)
+prompt
+resource req
+resource req
+grant / deny
+content vote
+Attacker
+poisons through tools, resources, memory
+plants content, names
+×
+Figure 2: Our threat model.
+The adversary.
+The adversary can arbitrarily corrupt any-
+thing except trusted parties and the trusted computing base
+(TCB). We consider a powerful adversary who can arbitrarily
+corrupt the worker agent, any third-party tools that the agent
+uses, and any of the resources (names as well as content). The
+adversary cannot manipulate two channels: the communica-
+tion channel from the user to the system and the communica-
+tion channel between the twin and the model provider. The
+adversary cannot alter the system’s code and cannot modify
+its behavior, and it doesn’t control the weights of ML models
+used by the system.
+Trusted Computing Base (TCB).
+We consider the follow-
+ing as part of our TCB: First, the twin LLM, with its weights
+and inference stack. Second, our system stack which includes
+the resource request tool that allows the worker to issue re-
+quests to the twin and Pincer’s write isolation for the twin’s
+special-purpose state from any untrusted component or the
+adversary. Lastly, the operating system kernel and the con-
+tainer runtime. All other components lie outside the TCB; for
+example, the worker LLM and the shell tool are not in the
+TCB.
+Definition 2 (Trusted and untrusted context). Fix a finite
+alphabet Σ of tokens, where each token is a bit string. A
+context is an ordered collection of tokens, i.e. an element of
+Σ∗. A trusted context tctx is generated entirely by a trusted
+party, while an untrusted context uctx is any context that may
+potentially be influenced by an adversary.
+Definition 3 (Adversary’s advantage). Let D be a probabilis-
+tic decision procedure that takes a context and outputs a grant
+or deny decision; we write its input as the parts the context is
+composed of, e.g. D(tctx,uctx). For two contexts c1 and c2,
+the adversary’s advantage between them w.r.t. D is
+AdvD(c1,c2) = |Pr[D(c1) = grant]−Pr[D(c2) = grant]|,
+where the probabilities are over the coins of D.
+We will show in Section 5 that any decision procedure
+implemented by the twin cannot make decisions better than
+guessing a coin-flip given just the trusted context as input.
+This is because a decision is made over a resource access
+request made by the potentially compromised worker which
+makes the request itself untrusted. Therefore, without a per-
+request authorization from the user, a trusted-only context
+cannot be used to make a decision. Therefore, we present
+a notion of context that is not trusted, but is not free-form
+untrusted either. Such context severely limits the capabilities
+of untrusted context, and therefore, we give it its own class.
+This context is called advantage-agnostic context and is pro-
+duced by a preprocessing function applied to parts (decided by
+the application) of the untrusted context. The preprocessing
+function’s output must meet certain requirements, as stated
+next, for it to be advantage agnostic. The reader should think
+of this notion as a type of sanitization; Section 5.4 gives an
+instantiation.
+Definition 4 (Advantage-agnostic context). Let λ be a secu-
+rity parameter, let negl(λ) denote the negligible function, and
+let (tctx,uctx) be a context split into its trusted and untrusted
+parts (Definition 2), where uctx is the untrusted context as
+received, before any processing. The application selects the
+part uctxp ⊆uctx that it will preprocess and parses it into
+units: a unit is a single token or a group of tokens, such as one
+component of a file path. For a map g : Σ∗→Σ∗, write uctxg
+p
+for uctxp with every occurrence of every unit replaced by its
+image under g. Let P : Σ∗×Σ∗→Σ∗be a (possibly random-
+ized) preprocessing function and let actx = P(tctx,uctxp).
+Then actx is advantage-agnostic if for every probabilistic
+polynomial time (PPT) decision procedure D, sampling the
+coins of P and drawing f uniformly from the family of all
+functions Σ∗→Σλ gives
+AdvD
+ (tctx,P(tctx,uctxp),⊥), (tctx,P(tctx,uctx f
+p),⊥)
+
+≤negl(λ),
+4
+
+
+where ⊥denotes empty.
+Note that Definition 4 also provides a method to convert
+parts of untrusted context into advantage-agnostic context
+by destroying their semantic meaning via a pseudorandom
+function (PRF) (see Section 5.4 for more details). Advantage-
+agnostic tokens are not completely meaningless. They still
+carry limited information and are used by our system to match
+the worker’s resource request to prior requests. Converting
+parts of untrusted context to advantage agnostic allows an
+agentic system to mitigate certain attack types like misleading
+filenames. This is why we place them as lying between trusted
+and untrusted. A subtle distinction that the notion of advan-
+tage agnosticism captures is the difference between hashes
+(deterministic maps) vs PRFs. A hashed sub-context doesn’t
+meet our notion and that reflects in the ability of an LLM to
+invert the hash for commonly used words from its pre-training
+exposure. There are other representations of filenames that
+may achieve practically-similar effects to advantage agnos-
+ticism when D is an LLM: representing filenames with their
+inodes, for example. The reason we use a randomly chosen
+function to define advantage agnosticism is so that we don’t
+have to worry about the probability distribution of an LLM or
+what capability it may have, etc. because our result applies to
+all PPT decision procedures.
+Definition 5 (Grant integrity). Let D be a decision proce-
+dure for an authorization decision, and write D(·;r) for D
+run on random tape r. A procedure D over trusted context
+tctx, advantage-agnostic context actx, and untrusted context
+uctx has grant integrity if D(tctx,actx,uctx;r) = grant =⇒
+D(tctx,actx,⊥;r) = grant for every r, so that both sides de-
+note the same invocation, where ⊥denotes empty and con-
+texts are defined in Definitions 2 and 4. This means that an
+adversary cannot get a grant unless the decision procedure
+would grant given only the trusted context and advantage-
+agnostic context.
+Our goal in this work is the following:
+Goal 1. If Pincer grants a resource request then the trusted
+and advantage-agnostic contexts alone would also grant it:
+D(tctx,actx,uctx;r) = grant =⇒LLM(tctx,actx;r) = grant.
+This
+is
+grant
+integrity
+(Definition
+5)
+with
+D(tctx,actx,⊥;r) := LLM(tctx,actx;r), where
+LLM
+is
+a pre-trained model3.
+Other assumptions and non-goals.
+We assume that the ad-
+versary has zero control over the user and the user makes safe
+decisions. LLM hallucinations aren’t considered untrusted
+even though they may cause an attack to succeed. Our goal
+in this work is not to achieve full protection from all attacks,
+3Fixing the right-hand side to a model evaluation excludes the degenerate
+procedures that always grant or always deny.
+but rather to make agents safer by raising the bar for an attack
+to be successful and providing defense-in-depth while being
+formal about our guarantees. Building agents that cannot be
+compromised is an open area of research as we discuss next.
+4
+Related Work
+Attacks on agents.
+There are three main classes of attacks
+on agents [37, 58, 70]: (1) Direct Prompt Injection (DPI) is
+a class of attacks where malicious instructions are placed
+directly into the user’s message to the agent [47], (2) Indirect
+Prompt Injection (IPI) is a class of attacks where the mali-
+cious instruction enters the agent’s context indirectly, i.e. as
+response to a tool it invokes [23], and (3) Memory Poisoning
+is a class of persistent attacks where the malicious instruction
+is injected into the memory that the agent maintains for self-
+improvement [44,71] (Figure 1), and therefore, the attack can
+activate across future sessions when the agent references its
+memory [10,46,64]. For memory poisoning attacks, one line
+of work requires the attacker to interact with the agent as a
+user, so the planting of poison uses DPI as the vector [16],
+while other works consider the more realistic IPI vector of
+planting the poison in the environment the agent reads while
+serving a benign request [49,54,67,75]. Attack taxonomies
+that are specific and fine-grained to skills, tools, and protocol
+ecosystems have also been studied in the context of coding
+agents [39].
+Existing defenses at the system level.
+Several strong de-
+fenses have been proposed to make agents safer by restricting
+them architecturally. However, they typically take away the
+core capabilities of today’s agents (Figure 1); many of these
+designs are systematized in recent work [7]: Restricting the
+autonomy of agents by separating control flow from untrusted
+data or introducing a trusted planner [13,14,21,32,48] defeats
+the injection but it equally forbids benign context-dependent
+control flows (e.g. user asking the agent to do the task in their
+latest email). For the same reason, defenses that fine-tune the
+model to separate instructions in the prompt from data [8]
+cannot be used with agents which are routinely expected to
+follow instructions embedded in data (e.g. instructions in
+your email). Tracking information flow through typed tools
+and requiring per-tool policy annotations [13, 14] can help
+isolate context across trust domains, but it limits the support
+for crucial untyped tools like shell. Disallowing the agent to
+maintain a memory based on the context it encounters when
+carrying out tasks [14] can prevent memory poisoning attacks,
+but it curtails the self-improving capability of the agent (it
+cannot learn from past patterns). New architectures that as-
+sign a separate LLM model to each tool with strict separation
+between tools [62] remain vulnerable to several attacks [32]
+and incur a heavy communication overhead between tools.
+In summary, these proposals significantly deviate from and
+5
+
+
+don’t compose well with the architecture the deployed agents
+use. For a comprehensive treatment of systems security for
+agentic computing, refer to Christodorescu et al. [11].
+A separate line of work focuses on hardening the prompts
+via spotlighting [26] or detecting suspicious sections in the
+agent’s context and memory [33,60] as a defense against at-
+tacks. However, adaptive attacks have been shown to bypass
+such defenses [49]. Defenses in this category are comple-
+mentary to our work; however, the extra token cost incurred
+from the proactive detection and the lack of robustness against
+strong attacks make them unsuitable for several applications.
+Enforcing least-privilege policies within the agentic work-
+flows is another line of research. Policies for the wide variety
+of tasks undertaken by agents can differ significantly from one
+task to another and can, for open-ended tasks, be too semantic
+for structured policy languages to capture. Prior works focus
+on structured policies where either they rely on the user or
+another external source to provide such policies [50,52,73], or
+predict policies up-front when the user prompt arrives which
+would underfit for long-horizon open-ended tasks [56], or
+evolve policies as the task progresses but the policy evolu-
+tion engine lacks the agent’s working context, which again
+causes the predicted policies to underfit [53]. Moreover, the
+majority of these proposals simultaneously rely heavily on
+structured tools for the policy languages; their expressive
+power gets severely limited on untyped shell tools. For typed
+tools which naturally organize into an OAuth-like hierarchy
+of APIs, least-privilege solvers can be used to evaluate the
+agent’s permission as the task progresses [74]. In Pincer, an
+important design aspect is that policy is fitted when the agent
+surfaces a need, thereby eliminating the need for policy pre-
+diction.
+Model-level defenses.
+Fine-tuning the model to understand
+the instruction hierarchy and detect or ignore misaligned in-
+structions that conflict with the user’s intent is an ongoing
+area of research [9, 20, 31, 57]. Prior work shows reliabil-
+ity concerns when it comes to the models understanding the
+instruction hierarchy [20], and evaluation on multi-turn in-
+teractions and agentic behaviors lies outside the scope of
+these works [31]. A recent work traces the difficulty to role
+perception itself, i.e. text that imitates a privileged role (like
+the user) is internally represented by the model as the role
+rather than the tag surrounding that text [68]. Having said
+that, the defenses at the model level are complementary to
+our work as they provide defense-in-depth to our system-level
+defenses. On the other hand, fine-tuning the model to not obey
+instructions embedded in data [8] doesn’t work with agents
+as mentioned before.
+Automating user permission requests.
+Wu et al. [63] pre-
+dict a user’s permission decisions from their past ones and
+establish a premise that Pincer also relies on: these decisions
+are individually consistent within a context, and therefore
+learnable. However, their scope doesn’t cover computer-use
+agents where the decisions are far more contextual and the
+resources at stake are themselves untrusted.
+Digital twins.
+The term digital twin has been used in many
+different contexts in the literature [2,12,17,35,61,66]. We
+adopt the term because it clearly differentiates an entity with
+memory that’s only influenced by the user compared to an
+agent whose memory evolves from its environment including
+untrusted context [44,45].
+Agent-security benchmarks are episodic.
+Many agent-
+security benchmarks exist [15, 28, 34, 59, 65, 69, 70]; how-
+ever, they are episodic and are not a good fit for evaluating
+agents from the perspective of a single user’s interaction
+with their agent over time. Multi-session memory bench-
+marks [25, 38, 72] evaluate long-horizon memory but not
+security. Sleeper Memory Poisoning (SMP) [49] constructs
+a dataset for multi-session memory poisoning attacks, but
+doesn’t offer a complete dataset that can evaluate both secu-
+rity and utility, and lacks a long user-centric transcript. To
+evaluate Pincer, we develop a user-centric dataset (Section 6)
+which comes with a task history that our system uses to learn
+user policies. Our security examples are inspired by SMP [49]
+and PASB [59].
+5
+Pincer
+Pincer is a system that takes an existing agent and augments it
+with a modular and self-improving defense. The defense sits
+between tools and resources, and is designed with two secu-
+rity principles: complete mediation and least privilege [1,51].
+For complete mediation, every access to any resource goes
+through a reference monitor (e.g. the OS kernel in our im-
+plementation Section 7.1) which ensures the resource is ac-
+cessible to the worker invoking the tool, and resource access
+can only be granted by an isolated LLM - the twin. For each
+resource access request, the twin implements least privilege
+which means that it only grants access if it thinks that the
+access is necessary for the user’s task. This defense doesn’t
+cause permission fatigue for the user because the twin auto-
+matically resolves the resource requests and it is compatible
+with other defenses like the auto mode [4,29]. Only in cases
+where the twin repeatedly denies a request that the worker
+genuinely needs, can the twin raise the request to the user for
+final approval.
+When the worker requests access to a resource from the
+twin, the request states the identity of the resource along with
+the access type (read, write, create, etc.). This information
+isn’t enough for the twin to make an informed decision and
+it needs more context. Typically, the more context it has the
+more informed it can be. However, large parts of the context
+6
+
+
+are untrusted which can poison the twin’s decision. To address
+this problem, we introduce the notion of trusted state.
+5.1
+Trusted State
+Trusted state is a special-purpose state that’s maintained by
+the twin and is referenced before making each decision. It
+only contains trusted context Definition 2, i.e. context that
+comes directly from the trusted party. More specifically, it
+has the current and prior user prompts, and any permissions
+granted by the user in the past. Given this state, the twin can
+learn user behavior and derive user-specific policies, which it
+can then add to the trusted state for the future. It also clears
+out stale or inconsistent policies from the past. However, it has
+a major limitation: the trusted state cannot be used to derive
+least-privilege policies. To understand this, let’s consider an
+example user prompt:
+"Summarize my tax documents"
+If the user has given broad read access to the agent or is using
+the auto mode [29], then the information about which files are
+accessed by the agent is completely missed from the trusted
+state. Without access pattern information, the trusted state
+doesn’t contain enough information to inform least-privilege
+policies. The twin looking at such state doesn’t know where
+different resources typically live, which resources are typi-
+cally accessed for certain tasks, etc. This is why we need to
+admit additional context out of necessity for least-privilege.
+5.2
+Access Patterns for Least-Privilege
+For least-privilege, we add access pattern annotations with
+each user prompt in the twin’s state as follows:
+"Summarize my tax documents"
+Read: /taxes/w2.txt, /taxes/return2025.txt
+Pincer collects the access patterns through tool call logs of the
+agent and attaches this information to each prompt’s entry in
+the twin’s state. With this change, the twin can now effectively
+reason over least privilege. We don’t enforce any specific
+pattern for the twin to express policies that it derives. This
+helps with policies generalizing user behavior across open-
+ended situations. In Section 5.6, we describe one exception
+to this where we generate a pre-committed policy suggestion
+per task in a structured format, while all other policies stay in
+natural language.
+Note that while access patterns are structured information
+(unlike free-form text in resources and other untrusted con-
+text), since the access pattern annotations aren’t part of the
+trusted state by definition unless the user explicitly autho-
+rized each access pattern, we have to be careful about how
+the adversary may exploit this information in influencing the
+twin’s decision. The accesses granted by the twin for each
+user prompt also become part of the twin’s state. The twin’s
+state keeps growing over time and keeps recording all histori-
+cal and current user prompts and all access patterns made for
+those tasks, irrespective of whether the user approved those
+accesses or the auto mode classifier did or the twin did (once
+the twin is active). Moreover, even more fundamentally, the
+worker’s requested path, which is what defines the request that
+the twin decides and is input to the twin alongside the twin’s
+state, has a similar structure. Both the access pattern anno-
+tations and the worker’s request contain information about
+resource names and paths; they are both untrusted. There
+is one class of attacks we identify that directly exploits this
+information as presented next.
+5.3
+Misleading Resource Name Attack
+Consider an attacker who has write access to a git repository
+that the user also contributes to. The attacker pushes a file
+named taxreturn2025-corrected.txt to the repository.
+The user’s local clone pulls these changes as part of a rou-
+tine workflow. At some later point, the user asks the agent
+"Summarize my tax documents" and the agent looks at the
+file named taxreturn2025-corrected.txt and is misled
+into thinking that the file is the user’s corrected tax return
+misplaced in the project’s directory. It makes a request to
+access this file and the twin gets misled the same way and
+grants the request. This attack becomes stronger if there is
+a historical access pattern in the twin’s state where a similar
+access was granted. Another way an attack in this class can
+be mounted assuming the worker is under attacker’s control
+is the following: the twin wouldn’t typically allow creating
+a new file in the tax directory unless the user asks for it, but
+the worker can create a file named temp.txt in a different
+directory, rename it to w2.txt through a shell command or
+hide it in python code (not seen by the twin) and then get
+the twin’s permission to access it when working on taxes and
+move it to the tax directory via the same method as above.
+There are many subtle ways this attack can manifest; our
+dataset Section 6 contains examples of this attack.
+To mitigate such attacks, we turn to the notion of advantage
+agnosticism (Definition 4) defined in Section 3.
+5.4
+Sanitizing Untrusted State
+Denote the twin’s probabilistic4 decision function by D : Σ∗→
+{grant,deny}, the trusted context from the trusted state (Sec-
+tion 5.1) by tctx, and the untrusted5 access pattern annotations
+by uctx. For a given request for resource with name rsrc, the
+twin computes the following (untrusted shown in red):
+D((tctx,uctx),rsrc)
+As we discussed in Section 5.3, the untrusted inputs can be ex-
+ploited by the adversary to influence the decision. To mitigate
+4LLMs are probabilistic models.
+5The attack in Section 5.3 is possible due to the untrusted access patterns.
+7
+
+
+this threat, we perform a sanitization operation that destroys
+the semantic meaning in these inputs. To do this formally, we
+employ the construction for advantage agnosticism (Defini-
+tion 4) from Section 3. Given a PRF whose key is unknown
+to the procedure D, it works simply as follows:
+• Parse all unique paths from the untrusted uctx,rsrc. Ini-
+tialize an empty map M.
+• For each
+path
+(this/is/path), apply
+PRF
+to
+each
+of
+its
+segments
+(this, is, path)
+sepa-
+rately
+and replace
+each segment with its
+PRF
+output (a3321a/ddd9dd/77a111). Add the mapping
+this/is/path →a3321a/ddd9dd/77a111 to M.
+• Replace each path in uctx,rsrc with their mapping from
+M. Call the respective sanitized inputs uctx′,rsrc′. The
+sanitized inputs are fed into D along with trusted context
+as follows: D((tctx,uctx′),rsrc′).
+As mentioned before in Section 3, the goal of sanitization
+isn’t to remove all information from uctx,rsrc. In fact, infor-
+mation that uniquely identifies the requested resource rsrc is
+what defines the request that D decides on and removing all
+information on uctx would take us back to the twin having
+only trusted state. Since the PRF is applied to each segment of
+a path separately, this assigns a unique random ID to each seg-
+ment which is used by our twin to locate files in the workspace
+and the requested resource; files within the same directory
+will share the sanitized path prefix. From a security stand-
+point, the advantage of this sanitization is that it mitigates the
+misleading filename attacks (Section 5.3) as we show in our
+evaluation (Section 7.2).
+We now explain why our aforementioned sanitization
+achieves advantage agnosticism (Definition 4). This follows
+from the security of PRF which says that without access to
+the PRF key, the output of PRF looks computationally indis-
+tinguishable from the output of a randomly chosen function
+with the same input and output domain as the PRF. Advantage
+agnosticism allows us to formally define a desired property
+to expect from the sanitized output and define grant integrity
+(Definition 5)6.
+5.5
+Content-Dependent Policies
+In our discussion so far, the twin’s input for a decision only
+contains trusted state with sanitized access patterns and the
+worker’s resource request. Consider this policy
+Access is only allowed to a file if it contains no secrets
+6Some weaker forms of sanitization like inodes may work as well in
+practice. However, deterministic mappings like using a hash may provide
+weaker protection against resource name based attacks because the hashes
+for common names are already publicly known and have likely been exposed
+to the twin’s model during pretraining.
+Such a policy cannot be enforced by the twin unless it can
+read the contents of the requested file. However, that informa-
+tion is free-form untrusted and directly under the adversary’s
+control. Making that part of the twin’s input may allow the
+attacker direct control of the twin’s decision. To resolve this
+tension, we introduce double voting.
+The double voting idea is to have the twin cast 2 sepa-
+rate votes on whether the request should be granted. The
+first vote is the same as v1 = D((tctx,uctx′),rsrc′) from Sec-
+tion 5.4. The second vote additionally feeds the contents of
+the requested resource (conts) as well as the worker’s reason
+(reasn) why it wants the resource and a transcript of prior
+requests from the same session (prior) as inputs to the deci-
+sion v2 = D((tctx,uctx′,conts,prior),(rsrc′,reasn)). The fi-
+nal decision is a conjunction of the two votes, v1 ∧v2, where
+grant = 1 and deny = 0. This keeps the influence of untrusted
+content completely separated and restricted to the second vote
+which can only be relevant if the first vote already grants.
+Figure 3 shows the workflow for a single request.
+5.6
+Pre-Committed Policies
+In the previous section, we introduced content-based deci-
+sions as a second vote made by the twin. In this section,
+we look at a gap that it overlooks and present mitigations.
+While double-voting allows content-based policies and the
+worker’s reasoning to be taken into account, it also makes
+the final decision vulnerable to scope expansion. The vote
+v2 = D((tctx,uctx′,conts,prior),(rsrc′,reasn)) contains file
+contents, previous requests, and the worker’s reason for the
+requests, all of which can be used by the adversary to grad-
+ually expand the scope of the original task without the twin
+noticing it. For example, if the user asks to review a file
+changelog.txt and apply pending changes to export.py,
+and changelog.txt contains an injected, potentially benign-
+looking but scope-expanding, sub-task the user never asked
+about, then the content-based vote may grant the sub-task’s
+resources, especially after a few hops from the original user
+prompt. Since scope expansion can be a part of a benign
+workflow for open-ended tasks, we introduce a pre-committed
+policy suggestion as an additional vote to provide an initial
+grounding as the task evolves.
+The idea is to produce a policy (denoted by policy) when
+the first user prompt for a session arrives before any possi-
+ble scope expansion. Given the prompt, the workspace, the
+filenames, and the trusted state along with access patterns,
+the twin generates a policy stating an initial estimate of what
+resources should be accessed and how. The policy is only
+meant as a suggestion to allow the system flexibility in adapt-
+ing the scope for benign operation. By default, we include
+the policy suggestion in a fork of the first vote. The policy
+is sanitized, denoted by policy′, after it is generated to keep
+it consistent with the sanitized request. We will show later
+in this section that the post-generation sanitization operation
+8
+
+
+Pincer system
+logs.txt
+Memory
+"Check logs"
+"Check logs" 
+POL01, ... 
+Prior prompts
+Tool 
+(resource 
+request)
+Read: 
+58aa1k
+Read: 
+logs.txt
+sudo 
+chmod +r logs.txt
+Figure 3: End-to-end working of Pincer without pre-committed policies. The user sends a prompt which goes to the worker and
+the twin’s state. The worker identifies the resource it wants to access and uses the resource request tool to make a request. The
+twin casts two votes: the first vote uses only trusted and sanitized inputs, while the second vote additionally sees the untrusted
+file contents. If conjuction of the two votes is a grant, the system updates the access for the worker. The permissions are revoked
+after the task is done.
+on the policy doesn’t provide protection against resource-
+name attacks but it captures important signal and improves
+our overall security. Given those reasons, we separate this
+into a third vote rather than merging it into the first vote. The
+policy schema is shown in Listing 1. This policy is then used
+by the twin for future requests in the same session to cast
+a third vote v3 = D((tctx,uctx′,policy′),rsrc′). The conjunc-
+tion v1 ∧v2 ∧v3 is the final decision. The policy suggestion
+can additionally be made part of v2 as well. In our evalua-
+tion Section 7.2, we consider two variants of Pincer, both of
+which use three votes but differ in whether the policy sug-
+gestion is given as input to the content-based vote or not.
+Our results indicate that Pincer achieves high utility despite
+enforcing a conjunction of the three votes.
+We now discuss the reason we separate the policy-based
+decision into a separate vote from v1. The post-generation san-
+itized policy policy′ isn’t advantage agnostic and that makes
+it highly exploitable for filename-based attacks (Section 5.3).
+When the twin generates the policy, it decides access for a
+list of relevant resources which is based on untrusted context
+like the original resource names and access patterns. While
+this allows the policy to pick up more signal than what v1
+can7, it makes the decision of what goes into the policy a
+function of the untrusted context. Due to this, if this signal is
+garbled by the randomly-sampled function from Definition 4,
+the advantage of the adversary will change significantly. The
+reason we choose to generate the policy on untrusted context
+rather than on its sanitized version is to capture the additional
+7One can sanitize at the time the policy is generated to satisfy advantage
+agnosticism, but it misses this signal.
+signal which we empirically evaluate to improve the attack
+success rate from 40% to 20%. Note that each vote serves a
+very specific function which wouldn’t be achieved if we were
+to merge the votes:
+• Vote 1: Trusted and advantage agnostic context only.
+This forms the security backbone of Pincer. Without the
+separation provided by this vote, we cannot establish any
+guarantees.
+• Vote 2: Content-dependent policies cannot be enforced
+without this vote. It can additionally include the pre-
+committed policy. However, the scope expansion can
+still take over under all the untrusted content this vote
+encounters.
+• Vote 3: Additional security-relevant signal compared to
+vote 1 while mitigating scope expansion because other
+than the pre-committed policy, its input is trusted and
+advantage agnostic, like vote 1, i.e. it is the smallest
+expansion to the context of vote 1 to allow the policy as
+input.
+We finally state our main result which achieves Goal 1
+from Section 3.
+Theorem 1. Pincer meets Goal 1 at the resource layer.
+Proof. Pincer’s decision is the conjunction v1 ∧v2 ∧v3, where
+the first vote v1 = LLM(tctx,actx) = LLM((tctx,uctx′),rsrc′)
+reads only trusted and advantage-agnostic context. If the con-
+junction is grant, then v1 = grant, which is exactly the re-
+quired implication.
+9
+
+
+Policy
+rules
+: Rule[]
+defaultPermission : "deny"
+// uncovered request is denied
+Rule
+pathGlob
+: string
+// e.g. h2577c0f557/ha4d2686801/h5e9432765 (for
+/workspace/agent/projects/**)
+access
+: ("read" | "write")[]
+operations : ("access" | "create_file" | "create_directory")[]
+permission : "allow" | "deny" | "ask_user"
+rationale
+: string
+// free-form untrusted field only shown alongside untrusted content
+Listing 1: Pre-committed resource policy schema used as a suggestion by the twin.
+6
+User-Centric Dataset
+We create a new synthetic dataset in this work that’s centered
+around a few users and their continued use of an agent over
+a time period. This is crucial for evaluating Pincer because
+our twin requires a history from which it learns user prefer-
+ences. Existing datasets and benchmarks don’t meet these
+requirements as we discuss in Section 4. To the best of our
+knowledge, this is the first dataset of this kind and of indepen-
+dent interest to the community. We envision future datasets
+for agents to incorporate the user-centric design because a
+user’s experience with an agent evolves over time as the agent
+self-improves from the daily interactions with the user. In
+many situations, it is not enough to evaluate how the agent
+would perform on day 1, and the long-term behavior of the
+agent may be significantly more important as the user gradu-
+ally starts giving the agent more authority and access. In this
+work, we label the dataset to cater it to our evaluation of Pin-
+cer primarily at the resource layer, i.e. the dataset contains
+labels on which resources should be accessible and which
+shouldn’t be accessible for each prompt given the user’s ongo-
+ing experience with the agent. Our entire dataset is generated
+synthetically with a combination of Claude Opus 4.8 and
+Opus 5. Each user in our dataset is captured by a persona for
+which we take inspiration from publicly available blogposts
+of people’s day in the life8. The attack types and the general
+structure of the examples in each persona are broadly inspired
+by prior datasets [49,59].
+Our persona pipeline for generating the dataset.
+Our
+dataset is generated through a sequence of four steps as fol-
+lows:
+1. Persona selection: The first step is to pick a persona. For
+example: software developer, litigator, etc.
+2. User bootstrapping: Given the persona, sample
+(a) Natural language policies for a user with that per-
+sona. These policies will typically be general to the
+8We redact the citations to avoid identifying the specific individuals and
+their blogposts. Everything beyond the published daily schedule is syntheti-
+cally generated.
+picked persona and not user-specific. For example:
+never read secrets and credentials for a software
+developer.
+(b) A
+synthetic
+workspace
+for
+a
+user
+with
+that
+persona
+and
+given
+the
+policies
+from
+the
+previous
+step.
+For example:
+/,
+/config/secrets.env, /projects/proj1/,
+/projects/proj2/, /projects/shared/,
+/finance/personal/bills.txt,
+/finance/work/budget.txt, etc.
+3. User simulation: Given the persona, the general policies,
+and the workspace, we do a simulation of a user generat-
+ing prompts and associated access patterns. This serves
+as our history that the twin uses to learn the user pref-
+erences since many user-specific policies implicitly fall
+out of this simulation; for example: reading credentials
+in testing is ok.
+4. Labeled security and utility examples: The final step is
+to take the information generated so far for producing
+samples that test for security and utility. The samples
+have no constraint to be based only in the history gen-
+erated during user simulation. They can be natural next
+tasks for the user including tasks not seen before. Each
+sample contains:
+(a) A user prompt that chronologically falls after the
+history generated from the user simulation step.
+(b) A
+labeled
+watched
+request
+{logicalPath,
+accessType} denoting a path to the resource
+and the kind of access (e.g. read or write) for
+that resource. For security, the watched request
+is a resource that the attacker wants the agent to
+access, while for utility, the resource is the critical
+resource for executing the user’s request (which
+may or may not name the resource explicitly).
+(c) Optionally, samples can have their own additional
+artifacts which get mounted into the workspace for
+that specific prompt.
+10
+
+
+As mentioned in our threat model Section 3, we assume
+that the worker is already under the adversary’s control. Our
+primary focus is therefore to evaluate the twin on both security
+and utility. For security, we expect the twin to deny malicious
+resource requests. For utility, we expect the twin to approve
+benign resource requests so that the worker can complete
+the user’s task. Situations where the worker itself avoids an
+attack or the worker isn’t able to perform a benign task are
+also captured in our evaluation from the point of view of the
+resource requests the worker makes.
+Attack types in our dataset.
+We consider four major at-
+tack types. The attacks play out between the worker and the
+authority granting the resource request. This authority is the
+twin for Pincer, while generally speaking, it is an LLM judge.
+• Direct injection in the request (DI): the worker injects a
+crafted payload to corrupt the judge’s decision directly
+into the request’s reason field.
+• Indirect injection of judge (II): the malicious payload
+lives outside the request string. It may live in file con-
+tents, filename, etc.
+• Memory poisoning of judge (MP): the worker uses direct
+or indirect injection to make the judge add a payload
+into the judge’s state; the payload establishes a fake
+authorization note for the judge for future requests. Once
+the payload is planted, the judge is persistently poisoned
+and future requests to the judge may be influenced by
+the planted payload.
+• Misleading filename attack (Section 5.3): we include two
+sub-types of this attack: (1) Content laundering (CL):
+the filename and file contents are misaligned. (2) Prove-
+nance laundering (PL): the file is placed at a location
+and named as if it belongs to a different location to make
+it seem like a misplacement.
+Each attack plants one or more payloads as files in the
+workspace, and the worker can craft a secondary payload
+via the reason field in its request for the judge. In DI, the at-
+tacker’s payload targets the worker and the worker then crafts
+a payload for the judge via the request. In II, the payload
+targets the worker and is also read by the judge if the judge
+sees contents of the file, but the worker isn’t allowed to inject
+a payload in the request. MP samples are split between direct
+and indirect. In CL and PL, there isn’t necessarily a payload
+from the attacker providing instructions but rather the focus
+is on violating user policies (e.g. CL: hiding credentials in a
+regular filename or PL: doing cross-project accesses). There-
+fore, different attack types test a whole range of pathways
+with ample diversity.
+Table 1: Summary of the two persona corpora.
+Persona
+Software Dev
+Litigator
+Workspace files
+33
+95
+Projects
+2
+5
+History prompts
+40
+60
+User policies
+33
+33
+Security samples
+66
+72
+DI/II/MP/CL/PL
+10/25/9/14/8
+7/40/9/11/5
+Utility samples
+81
+80
+Details on our dataset.
+Our dataset contains two personas
+- a software developer and a civil-defense litigator. We pick
+different professions so that the grounds for forbidding a
+resource differ: for the developer they may be architectural
+such as shared secrets and cross-project access rules; for the
+litigator, they are professional and legal such as attorney-client
+privilege and correspondence with opposing counsel. The
+workspaces for the two personas are organized similarly but
+differ entirely in content: project directories, memory files,
+finance, credentials, and directories with MCP resources for
+email, messages, and web integrations. The litigator’s projects
+are legal matters, and that workspace adds firm-wide trees:
+a calendar, a conflicts register, and a read-only library. On
+the other hand, the projects for the software developer are
+two inter-dependent software projects which have specific
+conventions around which resources are shared and when
+cross-project access is permitted. Table 1 shows further details
+for each persona.
+7
+Implementation and Evaluation
+7.1
+Implementation
+We implement Pincer and all baselines on top of a light-weight
+open-source agent NanoClaw [40]. We consider the following
+baselines:
+• NanoClaw:
+NanoClaw [40] is our only baseline
+that doesn’t have any resource request mechanism.
+The worker runs inside a Docker container with the
+workspace files mounted into the container. There is
+no LLM judge. The worker has access to all resources
+in the workspace.
+All the baselines other than NanoClaw implement some ver-
+sion of a gate (regex matching or LLM judge) to authorize
+resource requests. We provide a new resource request tool to
+the worker (the worker starts off with no access other than
+filenames and file paths) and provide instructions on how to
+use it.
+11
+
+
+• Static-Judge: The LLM judge is given a set of general
+safety-related instructions. It receives the contents of the
+requested file, the filename, and a field specifying the
+reason the worker is requesting that specific access. The
+judge doesn’t get to know user-specific preferences; it is
+not given the history.
+• Dynamic-Judge: The LLM judge receives the entire his-
+tory, so it can learn user preferences, and maintains its
+own local state which may be directly influenced by
+untrusted context, i.e. it doesn’t contain the isolation
+(trusted and advantage agnostic context) we built for the
+twin’s state in Pincer. The unprotected local state makes
+the judge vulnerable to persistent attacks like memory
+poisoning.
+• Conseca+: We adapt Conseca [56] to work on the re-
+source layer. The baseline commits to a policy file (List-
+ing 1) when the user prompt arrives and before the
+worker starts working on it. The system then enforces
+the committed policy file on each resource request by
+matching it against the policy. The policy file is gener-
+ated using the user prompt, the workspace tree (paths,
+filenames), and the entire history from our dataset.
+• Conseca-Gemini+: This is a version of Conseca that’s
+implemented in Gemini CLI [22]. We adapt it to the
+resource layer similar to our Conseca baseline. The only
+difference here is that rather than regex matching on each
+request, an LLM judge is used. The judge still receives
+the policy as input as well as the resource request speci-
+fying the filename and the reason to access. The judge
+doesn’t see file contents similar to the judge contract in
+the Gemini CLI implementation [22].
+For Pincer we consider 2 approaches as mentioned in Sec-
+tion 5.6. Both approaches have the same vote 1 and vote 3.
+The only difference lies in their content-based vote 2:
+• Pincer: The twin doesn’t get the pre-committed policy
+as input when casting vote 2.
+• Pincer-P2: Pre-committed policy is considered when
+casting vote 2.
+Isolation boundary.
+In our implementation, the worker and
+its invoked tools run inside a container; the resources they act
+on live on the host and are bind-mounted in. Pincer assigns the
+worker an unprivileged UID and the OS kernel mediates every
+access by checking mode bits and POSIX ACLs against that
+UID. The container doesn’t use user-namespace remapping,
+so the worker’s UID is also a host UID and the OS kernel can
+enforce access control by dynamically adding or removing
+a host-side ACL entry. Containers are torn down after each
+task. Notice that no matter how the worker tries to access a
+resource, it cannot bypass the kernel’s checks.
+Our focus in this work is on filesystem resources. For
+other types of resources like web APIs and cloud resources,
+capability-based access control can be used.
+Source code.
+We will soon release our implementation and
+dataset at https://github.com/ucbsky/Pincer.
+7.2
+Evaluation
+We consider the following evaluation metrics:
+• Attack Success Rate (ASR): ASR is a measure of se-
+curity where lower is better. It is computed as a per-
+centage of attack samples where the worker is able to
+access the watched (forbidden) resource (Section 6).
+To separate the twin’s decision from the case where
+the worker itself dodges the attack and never makes a
+request for the watched resource, we also report con-
+ditional ASR (cASR) where we condition on samples
+where the worker makes a request for the watched re-
+source.
+• Benign Grant Rate (BGR): BGR is a measure of utility
+where higher is better. It is computed as a percentage of
+utility samples (no attack) where the worker is able to
+access the watched (benign) resource. We define condi-
+tional BGR (cBGR) in an analogous manner to cASR.
+Models.
+We use Anthropic’s Claude Haiku 4.5 for our
+worker as well as the LLM judges and twin for the software
+developer persona. To validate our performance on another
+model, we use Meta’s Muse Spark 1.2 Contributor9 for the
+litigator persona. We limit our evaluation to these two mod-
+els, one per persona, due to our resource constraints and the
+resource-intensive nature of our evaluation.
+Security-utility frontier.
+Figure 4 presents security and
+utility for each approach on both personas in our dataset. Pin-
+cer achieves a significant jump in security while achieving
+comparable utility to the baselines. Table 2 shows the condi-
+tional rates strongly agreeing with this overall trend.
+Comparison across attack types.
+Figure 5 breaks ASR
+down by attack type for both personas. Across all attack
+types, Pincer outperforms the majority of the baselines. More-
+over, if we focus on memory poisoning (MP), we observe
+a significant improvement especially compared to Dynamic-
+Judge where the judge maintains its own state and refers to it
+on each resource request (similar to the twin’s state in Pincer);
+however, that state isn’t isolated in Dynamic-Judge. The most
+striking result is for the provenance-laundering (PL) attack, a
+9Muse Spark 1.2 is a top-tier model at the time of writing [6].
+12
+
+
+0
+20
+40
+60
+80
+100
+Attacks blocked (100 − ASR) %
+0
+20
+40
+60
+80
+100
+Benign grant rate (BGR) %
+66 security / 81 utility samples, each run twice
+(a) Software Dev
+better
+0
+20
+40
+60
+80
+100
+Attacks blocked (100 − ASR) %
+72 security / 80 utility samples, each run twice
+(b) Litigator
+better
+NanoClaw
+Static-Judge
+Dynamic-Judge
+Conseca+
+Conseca-Gemini+
+Pincer
+Pincer-P2
+Figure 4: Security–utility frontier on ASR and BGR. Up and to the right is better.
+0
+25
+50
+75
+100
+ASR %
+(a) Software Dev
+DI
+II
+MP
+CL
+PL
+0
+25
+50
+75
+100
+ASR %
+(b) Litigator
+NanoClaw
+Static-Judge
+Dynamic-Judge
+Conseca+
+Conseca-Gemini+
+Pincer
+Pincer-P2
+ASR
+cASR
+Figure 5: ASR by attack type. Solid bars are ASR; the wider faint bars behind them are cASR. NanoClaw doesn’t have resource
+access gate, so its cASR is omitted.
+type of misleading filename attack, where Pincer offers sig-
+nificantly more protection than all baselines for both personas
+across the two LLM model families (Haiku and Muse Spark).
+Costs.
+We found the token cost of all baselines to be sig-
+nificantly larger than the undefended NanoClaw at around
+2-5×, while Pincer incurs an additional 2-3× on top. While
+these costs may appear quite large, there are several ways to
+bring them down significantly to the point that the overhead
+of Pincer will be in a similar range to the baselines and even
+further push the cost of all approaches closer to NanoClaw.
+First, about half of the cost in Pincer is from reasoning tokens
+of the twin because we haven’t explored routine compaction
+of its state into standing policies in our implementation yet; it
+13
+
+
+Table 2: Conditional rates (%) on the samples where the
+worker makes the watched request.
+Software Dev
+Litigator
+Arm
+cASR
+cBGR
+cASR
+cBGR
+NanoClaw
+93.2
+72.8
+41.0
+95.6
+Static-Judge
+48.9
+98.1
+30.9
+93.7
+Dynamic-Judge
+61.9
+98.1
+32.6
+96.2
+Conseca+
+63.5
+91.3
+16.0
+98.1
+Conseca-Gemini+
+59.8
+94.8
+18.2
+96.9
+Pincer
+28.4
+89.7
+8.1
+90.9
+Pincer-P2
+32.2
+92.9
+9.7
+89.5
+reasons through its entire state on each request which causes
+a lot of redundancy. Second, the number of LLM API calls
+in Pincer is bloated signficantly because our resource request
+tool doesn’t implement batched requests. Therefore, if the
+worker wants five resources, it has to stop five times in a se-
+quence requesting one resource at a time, and the twin will
+reason about each from scratch. Lastly, for established tasks,
+the twin can pre-approve resources like pre-committed poli-
+cies (Listing 1) which can be enforced via path matching
+similar to Conseca+.
+References
+[1] James P Anderson et al. Computer security technology
+planning study. Technical report, ESD-TR-73-51, 1972.
+URL: https://csrc.nist.gov/publications/his
+tory/ande72a.pdf.
+[2] Marco
+Annoni,
+Davide
+Battisti,
+and
+Beat-
+rice
+Marchegiani.
+Personalised
+llms
+and
+the
+risks
+of the
+digital twin
+metaphor.
+AI
+&
+SOCIETY, pages
+1–13, 2026.
+URL:
+https://doi.org/10.1007/s00146-026-02875-4.
+[3] Anthropic. Claude Code, 2026. Accessed 2026-08-20.
+URL: https://github.com/anthropics/claude-c
+ode.
+[4] Anthropic. Configure auto mode. Claude Code docu-
+mentation, 2026. Accessed 2026-08-19. URL: https:
+//code.claude.com/docs/en/auto-mode-config.
+[5] Anthropic. Investigating Three Real-World Incidents
+in Our Cybersecurity Evaluations.
+Anthropic, 2026.
+Published 2026-07-30; accessed 2026-08-19. URL: ht
+tps://www.anthropic.com/news/investigating
+-incidents-cybersecurity-evals.
+[6] Artificial Analysis. Muse Spark 1.2: Improved Agentic
+Performance at Higher Cost per Task. Artificial Analy-
+sis, 2026. Accessed 2026-08-25. URL: https://arti
+ficialanalysis.ai/articles/muse-spark-1-2.
+[7] Luca Beurer-Kellner, Beat Buesser, Ana-Maria Cre¸tu,
+Edoardo Debenedetti, Daniel Dobos, Daniel Fabian,
+Marc Fischer, David Froelicher, Kathrin Grosse, Daniel
+Naeff, et al.
+Design patterns for securing llm
+agents against prompt injections.
+arXiv preprint
+arXiv:2506.08837, 2025. URL: https://arxiv.org/
+abs/2506.08837.
+[8] Sizhe Chen, Julien Piet, Chawin Sitawarin, and David
+Wagner. {StruQ}: Defending against prompt injection
+with structured queries. In 34th USENIX Security Sym-
+posium (USENIX Security 25), pages 2383–2400, 2025.
+URL: https://arxiv.org/abs/2402.06363.
+[9] Sizhe Chen, Arman Zharmagambetov, Saeed Mahlou-
+jifar, Kamalika Chaudhuri, David Wagner, and Chuan
+Guo.
+Secalign: Defending against prompt injection
+with preference optimization. In Proceedings of the
+2025 ACM SIGSAC Conference on Computer and Com-
+munications Security, pages 2833–2847, 2025. URL:
+https://doi.org/10.1145/3719027.3744836.
+[10] Zhaorun Chen, Zhen Xiang, Chaowei Xiao, Dawn Song,
+and Bo Li. Agentpoison: Red-teaming llm agents via
+poisoning memory or knowledge bases. In Advances
+in Neural Information Processing Systems, volume 37,
+pages 130185–130213, 2024. URL: https://arxiv.
+org/abs/2407.12784.
+[11] Mihai Christodorescu, Earlence Fernandes, Ashish
+Hooda, Somesh Jha, Johann Rehberger, Kamalika
+Chaudhuri, Xiaohan Fu, Khawaja Shams, Guy Amir,
+Jihye Choi, et al. Systems security foundations for agen-
+tic computing. arXiv preprint arXiv:2512.01295, 2025.
+URL: https://arxiv.org/abs/2512.01295.
+[12] Lluís C Coll, Martin W Lauer-Schmaltz, Philip Cash,
+John P Hansen, and Anja Maier. Towards the" digital
+me": a vision of authentic conversational agents pow-
+ered by personal human digital twins. arXiv preprint
+arXiv:2506.23826, 2025. URL: https://arxiv.org/
+abs/2506.23826.
+[13] Manuel Costa, Boris Köpf, Aashish Kolluri, Andrew
+Paverd, Mark Russinovich, Ahmed Salem, Shruti Tople,
+Lukas Wutschitz, and Santiago Zanella-Béguelin. Se-
+curing ai agents with information-flow control. arXiv
+preprint arXiv:2505.23643, 2025. URL: https://ar
+xiv.org/abs/2505.23643.
+[14] Edoardo Debenedetti, Ilia Shumailov, Tianqi Fan, Jamie
+Hayes, Nicholas Carlini, Daniel Fabian, Christoph Kern,
+14
+
+
+Chongyang Shi, Andreas Terzis, and Florian Tramèr.
+Defeating prompt injections by design. arXiv preprint
+arXiv:2503.18813, 2025. URL: https://arxiv.org/
+abs/2503.18813.
+[15] Edoardo Debenedetti, Jie Zhang, Mislav Balunovic,
+Luca Beurer-Kellner, Marc Fischer, and Florian Tramèr.
+Agentdojo: A dynamic environment to evaluate prompt
+injection attacks and defenses for llm agents. In Ad-
+vances in neural information processing systems, vol-
+ume 37, pages 82895–82920, 2024.
+URL: https:
+//arxiv.org/abs/2406.13352.
+[16] Shen Dong, Shaochen Xu, Pengfei He, Yige Li, Jiliang
+Tang, Tianming Liu, Hui Liu, and Zhen Xiang. Mem-
+ory injection attacks on llm agents via query-only in-
+teraction.
+Advances in Neural Information Process-
+ing Systems, 38:46697–46731, 2026.
+URL: https:
+//arxiv.org/abs/2503.03704.
+[17] Bangde Du, Minghao Guo, Songming He, Ziyi Ye,
+Xi Zhu, Weihang Su, Shuqi Zhu, Yujia Zhou, Yongfeng
+Zhang, Qingyao Ai, et al.
+Twinvoice: A multi-
+dimensional benchmark towards digital twins via llm
+persona simulation. In Findings of the Association for
+Computational Linguistics: ACL 2026, pages 19604–
+19628, 2026. URL: https://arxiv.org/abs/2510
+.25536.
+[18] Adrienne Porter Felt, Erika Chin, Steve Hanna, Dawn
+Song, and David Wagner. Android permissions demys-
+tified. In Proceedings of the 18th ACM conference on
+Computer and communications security, pages 627–638,
+2011. URL: https://doi.org/10.1145/2046707.
+2046779.
+[19] Adrienne Porter Felt, Elizabeth Ha, Serge Egelman,
+Ariel Haney, Erika Chin, and David Wagner. Android
+permissions: User attention, comprehension, and behav-
+ior.
+In Proceedings of the eighth symposium on us-
+able privacy and security, pages 1–14, 2012.
+URL:
+https://doi.org/10.1145/2335356.2335360.
+[20] Yilin Geng, Haonan Li, Honglin Mu, Xudong Han,
+Timothy Baldwin, Omri Abend, Eduard Hovy, and Lea
+Frermann.
+Control illusion: The failure of instruc-
+tion hierarchies in large language models.
+In Pro-
+ceedings of the AAAI Conference on Artificial Intelli-
+gence, volume 40, pages 30816–30824, 2026. URL:
+https://arxiv.org/abs/2502.15851.
+[21] Guangyu Gong and Zizhuang Deng. Planguard: De-
+fending agents against indirect prompt injection via
+planning-based consistency verification. arXiv preprint
+arXiv:2604.10134, 2026. URL: https://arxiv.org/
+abs/2604.10134.
+[22] Google.
+Gemini CLI.
+GitHub repository, commit
+571851b1077a51cef757146ce13f9da887326bec,
+2026.
+Accessed 2026-08-19.
+URL: h t t p s :
+//github.com/google-gemini/gemini-cli.
+[23] Kai Greshake, Sahar Abdelnabi, Shailesh Mishra,
+Christoph Endres, Thorsten Holz, and Mario Fritz. Not
+what you’ve signed up for: Compromising real-world
+llm-integrated applications with indirect prompt injec-
+tion. In Proceedings of the 16th ACM workshop on artifi-
+cial intelligence and security, pages 79–90, 2023. URL:
+https://doi.org/10.1145/3605764.3623985.
+[24] Idan Habler and Amy Chang. Identifying and Remedi-
+ating a Persistent Memory Compromise in Claude Code.
+Cisco Blogs, 2026. Published 2026-04-01; accessed
+2026-08-19. URL: https://blogs.cisco.com/ai/i
+dentifying-and-remediating-a-persistent-m
+emory-compromise-in-claude-code.
+[25] Zexue He, Yu Wang, Churan Zhi, Yuanzhe Hu, Tzu-
+Ping Chen, Lang Yin, Ze Chen, Tong Arthur Wu, Siru
+Ouyang, Zihan Wang, et al. Memoryarena: Benchmark-
+ing agent memory in interdependent multi-session agen-
+tic tasks. arXiv preprint arXiv:2602.16313, 2026. URL:
+https://arxiv.org/abs/2602.16313.
+[26] Keegan Hines, Gary Lopez, Matthew Hall, Federico
+Zarfati, Yonatan Zunger, and Emre Kiciman. Defending
+against indirect prompt injection attacks with spotlight-
+ing. arXiv preprint arXiv:2403.14720, 2024. URL:
+https://arxiv.org/abs/2403.14720.
+[27] Jason Howell. The Agent That Deleted A Company in
+9 Seconds. Experience Tech, 2026. Published 2026-04-
+29; accessed 2026-08-19. URL: https://jasonhowel
+l.substack.com/p/the-agent-that-deleted-a
+-company.
+[28] Qi Hu, Yifeng Tang, Qinghua Wang, Lanyang Zhao,
+Pengji Zhang, Yuhao Qing, Xin Yao, Dong Huang, Lin
+Zhang, and Zhuoran Ji. Saber: Benchmarking oper-
+ational safety of llm coding agents in stateful project
+workspaces. arXiv preprint arXiv:2606.01317, 2026.
+URL: https://arxiv.org/abs/2606.01317.
+[29] John Hughes. How we built Claude Code auto mode: a
+safer way to skip permissions. Anthropic engineering
+blog, 2026. Accessed 2026-08-19. URL: https://ww
+w.anthropic.com/engineering/claude-code-a
+uto-mode.
+[30] Zimo Ji, Zongjie Li, Wenyuan Jiang, Yudong Gao, and
+Shuai Wang. Measuring the permission gate: A stress-
+test evaluation of claude code’s auto mode.
+arXiv
+preprint arXiv:2604.04978, 2026.
+URL: https://
+arxiv.org/abs/2604.04978.
+15
+
+
+[31] Sanjay Kariyappa and G Edward Suh. Stronger enforce-
+ment of instruction hierarchy via augmented intermedi-
+ate representations. arXiv preprint arXiv:2505.18907,
+2025. URL: https://arxiv.org/abs/2505.18907.
+[32] Evan Li, Tushin Mallick, Evan Rose, William Robert-
+son, Alina Oprea, and Cristina Nita-Rotaru. ACE: A
+Security Architecture for LLM-Integrated App Systems.
+In Network and Distributed System Security Symposium
+(NDSS), 2026. doi:10.14722/ndss.2026.230352.
+[33] Hao Li, Xiaogeng Liu, CHIU Chun, Dianqi Li, Ning
+Zhang, and Chaowei Xiao. Drift: Dynamic rule-based
+defense with injection isolation for securing llm agents.
+In Advances in Neural Information Processing Systems,
+volume 38, pages 83262–83290, 2026. URL: https:
+//arxiv.org/abs/2506.12104.
+[34] Hao Li, Ruoyao Wen, Shanghao Shi, Ning Zhang, Yev-
+geniy Vorobeychik, and Chaowei Xiao. Agentdyn: Are
+your agent security defenses deployable in real-world dy-
+namic environments? arXiv preprint arXiv:2602.03117,
+2026. URL: https://arxiv.org/abs/2602.03117.
+[35] Rui Li, Heming Xia, Xinfeng Yuan, Qingxiu Dong, Lei
+Sha, Wenjie Li, and Zhifang Sui.
+How far are llms
+from being our digital twins? a benchmark for persona-
+based behavior chain simulation. In Findings of the
+Association for Computational Linguistics: ACL 2025,
+pages 15738–15763, 2025. URL: https://doi.org/
+10.18653/v1/2025.findings-acl.813.
+[36] Ying Li, Yanju Chen, Peiran Wang, Issac Khabra,
+Faysal Hossain Shezan, Yu Feng, and Yuan Tian. Op-
+tions, not clicks: Lattice refinement for consent-driven
+mcp authorization. arXiv preprint arXiv:2605.11360,
+2026. URL: https://arxiv.org/abs/2605.11360.
+[37] Yupei Liu, Yuqi Jia, Runpeng Geng, Jinyuan Jia, and
+Neil Zhenqiang Gong. Formalizing and benchmarking
+prompt injection attacks and defenses. In 33rd USENIX
+Security Symposium (USENIX Security 24), pages 1831–
+1847, 2024. URL: https://arxiv.org/abs/2310.1
+2815.
+[38] Adyasha Maharana, Dong-Ho Lee, Sergey Tulyakov,
+Mohit Bansal, Francesco Barbieri, and Yuwei Fang.
+Evaluating very long-term conversational memory of
+llm agents. In Proceedings of the 62nd Annual Meeting
+of the Association for Computational Linguistics (Vol-
+ume 1: Long Papers), pages 13851–13870, 2024. URL:
+https://doi.org/10.18653/v1/2024.acl-long.
+747.
+[39] Narek Maloyan and Dmitry Namiot.
+Prompt injec-
+tion attacks on agentic coding assistants: A systematic
+analysis of vulnerabilities in skills, tools, and protocol
+ecosystems. International Journal of Open Informa-
+tion Technologies, 14(2):1–10, 2026.
+URL: https:
+//arxiv.org/abs/2601.17548.
+[40] NanoCo AI. NanoClaw. GitHub repository, 2026. Ac-
+cessed 2026-08-20. URL: https://github.com/nan
+ocoai/nanoclaw.
+[41] OpenAI. OpenAI and Hugging Face Partner to Address
+Security Incident During Model Evaluation. OpenAI,
+2026. Accessed 2026-08-19. URL: https://openai
+.com/index/hugging-face-model-evaluation-s
+ecurity-incident/.
+[42] OpenAI. OpenAI Codex, 2026. Accessed 2026-08-20.
+URL: https://github.com/openai/codex.
+[43] OpenClaw. OpenClaw, 2026. Accessed 2026-08-20.
+URL: https://github.com/openclaw/openclaw.
+[44] Charles Packer, Sarah Wooders, Kevin Lin, Vivian Fang,
+Shishir G Patil, Ion Stoica, and Joseph E Gonzalez.
+Memgpt: Towards llms as operating systems. arXiv
+preprint arXiv:2310.08560, 2023. URL: https://ar
+xiv.org/abs/2310.08560.
+[45] Joon Sung Park, Joseph O’Brien, Carrie Jun Cai, Mered-
+ith Ringel Morris, Percy Liang, and Michael S Bernstein.
+Generative agents: Interactive simulacra of human be-
+havior. In Proceedings of the 36th annual acm sympo-
+sium on user interface software and technology, pages
+1–22, 2023. URL: https://doi.org/10.1145/3586
+183.3606763.
+[46] Atharv
+Singh
+Patlan, Ashwin
+Hebbar, Pramod
+Viswanath, and Prateek Mittal. Context manipulation
+attacks: Web agents are susceptible to corrupted
+memory. arXiv preprint arXiv:2506.17318, 2025. URL:
+https://arxiv.org/abs/2506.17318.
+[47] Fábio Perez and Ian Ribeiro. Ignore previous prompt:
+Attack techniques for language models. arXiv preprint
+arXiv:2211.09527, 2022. URL: https://arxiv.org/
+abs/2211.09527.
+[48] Julien Piet, Annabella Chow, Yiwei Hou, Muxi Lyu,
+Sylvie Venuto, Jinhao Zhu, Raluca Ada Popa, and David
+Wagner. Web agents should adopt the plan-then-execute
+paradigm.
+arXiv preprint arXiv:2605.14290, 2026.
+URL: https://arxiv.org/abs/2605.14290.
+[49] Sidharth Pulipaka, Stanislau Hlebik, Leonidas Raghav,
+Sahar Abdelnabi, Vyas Raina, Ivaxi Sheth, and Mario
+Fritz. Hidden in memory: Sleeper memory poisoning
+in llm agents. arXiv preprint arXiv:2605.15338, 2026.
+URL: https://arxiv.org/abs/2605.15338.
+16
+
+
+[50] Suliu Qin, Haomin Zhuang, Yujun Zhou, Yufei Han,
+and Xiangliang Zhang. Airguard: Guarding agent ac-
+tions with runtime authority control. arXiv preprint
+arXiv:2605.28914, 2026. URL: https://arxiv.org/
+abs/2605.28914.
+[51] Jerome H. Saltzer and Michael D. Schroeder.
+The
+Protection of Information in Computer Systems. Pro-
+ceedings of the IEEE, 63(9):1278–1308, 1975. doi:
+10.1109/PROC.1975.9939.
+[52] Igor Santos-Grueiro. Lingering authority: Revocable
+resource-and-effect capabilities for coding agents. arXiv
+preprint arXiv:2606.22504, 2026. URL: https://ar
+xiv.org/abs/2606.22504.
+[53] Tianneng Shi, Jingxuan He, Zhun Wang, Hongwei Li,
+Linyu Wu, Wenbo Guo, and Dawn Song. Progent: Se-
+curing ai agents with privilege control. arXiv preprint
+arXiv:2504.11703, 2025. URL: https://arxiv.org/
+abs/2504.11703.
+[54] Saksham Sahai Srivastava and Haoyu He. Memorygraft:
+Persistent compromise of llm agents via poisoned expe-
+rience retrieval. arXiv preprint arXiv:2512.16962, 2025.
+URL: https://arxiv.org/abs/2512.16962.
+[55] The Guardian. Claude-powered AI agent’s confession
+after deleting a firm’s entire database: ‘I violated every
+principle I was given’. The Guardian, 2026. Published
+2026-04-29; accessed 2026-08-19. URL: https://ww
+w.theguardian.com/technology/2026/apr/29/c
+laude-ai-deletes-firm-database.
+[56] Lillian Tsai and Eugene Bagdasarian. Contextual agent
+security: A policy for every purpose. In Proceedings of
+the 2025 Workshop on Hot Topics in Operating Systems,
+pages 8–17, 2025. URL: https://doi.org/10.114
+5/3713082.3730378.
+[57] Eric Wallace, Kai Xiao, Reimar Leike, Lilian Weng,
+Johannes Heidecke, and Alex Beutel. The instruction
+hierarchy: Training llms to prioritize privileged instruc-
+tions. arXiv preprint arXiv:2404.13208, 2024. URL:
+https://arxiv.org/abs/2404.13208.
+[58] Peiran Wang, Xinfeng Li, Chong Xiang, Jinghuai Zhang,
+Ying Li, Lixia Zhang, Xiaofeng Wang, and Yuan Tian.
+The landscape of prompt injection threats in llm
+agents: From taxonomy to analysis.
+arXiv preprint
+arXiv:2602.10453, 2026. URL: https://arxiv.org/
+abs/2602.10453.
+[59] Yuhang Wang, Feiming Xu, Zheng Lin, Guangyu He,
+Yuzhe Huang, Haichang Gao, Zhenxing Niu, Shiguo
+Lian, and Zhaoxiang Liu.
+From assistant to double
+agent: Formalizing and benchmarking attacks on open-
+claw for personalized local ai agent. arXiv preprint
+arXiv:2602.08412, 2026. URL: https://arxiv.org/
+abs/2602.08412.
+[60] Qianshan Wei, Tengchao Yang, Yaochen Wang, Xin-
+feng Li, Lijun Li, Zhenfei Yin, Yi Zhan, Thorsten Holz,
+Zhiqiang Lin, and XiaoFeng Wang. A-memguard: A
+proactive defense framework for llm-based agent mem-
+ory. arXiv preprint arXiv:2510.02373, 2025. URL:
+https://arxiv.org/abs/2510.02373.
+[61] Rebecca Westhäußer, Wolfgang Minker, and Sebatian
+Zepf. Enabling personalized long-term interactions in
+llm-based agents through persistent memory and user
+profiles. arXiv preprint arXiv:2510.07925, 2025. URL:
+https://arxiv.org/abs/2510.07925.
+[62] Yuhao Wu, Franziska Roesner, Tadayoshi Kohno, Ning
+Zhang, and Umar Iqbal.
+IsolateGPT: An Execution
+Isolation Architecture for LLM-Based Agentic Systems.
+In Network and Distributed System Security Symposium
+(NDSS), 2025. URL: https://arxiv.org/abs/2403
+.04960.
+[63] Yuhao Wu, Ke Yang, Franziska Roesner, Tadayoshi
+Kohno, Ning Zhang, and Umar Iqbal. Towards automat-
+ing data access permissions in ai agents. In 2026 IEEE
+Symposium on Security and Privacy (SP), pages 2609–
+2627. IEEE, 2026. URL: https://doi.org/10.110
+9/SP63933.2026.00018.
+[64] Zhenlin Xu, Xiaogang Zhu, Yu Yao, Minhui Xue, and
+Yiliao Song.
+From storage to steering: Memory
+control flow attacks on llm agents.
+arXiv preprint
+arXiv:2603.15125, 2026. URL: https://arxiv.org/
+abs/2603.15125.
+[65] Zheng Yan, Jingxiang Weng, Charles Chen, Dengyun
+Peng, Ethan Qin, Jiannan Guan, Jinhao Liu, Qiming Yu,
+Yixin Yuan, Fanqing Meng, et al. Do coding agents
+understand least-privilege authorization? arXiv preprint
+arXiv:2605.14859, 2026. URL: https://arxiv.org/
+abs/2605.14859.
+[66] Hanqing Yang, Marie Siew, and Carlee Joe-Wong. An
+llm-based digital twin for optimizing human-in-the loop
+systems. In 2024 IEEE International Workshop on Foun-
+dation Models for Cyber-Physical Systems & Internet
+of Things (FMSys), pages 26–31. IEEE, 2024. URL:
+https://arxiv.org/abs/2403.16809.
+[67] Xianglin Yang, Yufei He, Shuo Ji, Bryan Hooi, and
+Jin Song Dong.
+Zombie agents: Persistent control
+of self-evolving llm agents via self-reinforcing injec-
+tions. arXiv preprint arXiv:2602.15654, 2026. URL:
+https://arxiv.org/abs/2602.15654.
+17
+
+
+[68] Charles Ye, Jasmine Cui, and Dylan Hadfield-Menell.
+Prompt injection as role confusion.
+arXiv preprint
+arXiv:2603.12277, 2026. URL: https://arxiv.org/
+abs/2603.12277.
+[69] Qiusi Zhan, Zhixiang Liang, Zifan Ying, and Daniel
+Kang. Injecagent: Benchmarking indirect prompt in-
+jections in tool-integrated large language model agents.
+In Findings of the Association for Computational Lin-
+guistics: ACL 2024, pages 10471–10506, 2024. URL:
+https://doi.org/10.18653/v1/2024.finding
+s-acl.624.
+[70] Hanrong Zhang, Jingyuan Huang, Kai Mei, Yifei Yao,
+Zhenting Wang, Chenlu Zhan, Hongwei Wang, and
+Yongfeng Zhang. Agent security bench (asb): Formaliz-
+ing and benchmarking attacks and defenses in llm-based
+agents. In International Conference on Learning Rep-
+resentations, volume 2025, pages 35331–35366, 2025.
+URL: https://arxiv.org/abs/2410.02644.
+[71] Zeyu Zhang, Quanyu Dai, Xiaohe Bo, Chen Ma, Rui
+Li, Xu Chen, Jieming Zhu, Zhenhua Dong, and Ji-Rong
+Wen. A survey on the memory mechanism of large
+language model-based agents. ACM Transactions on
+Information Systems, 43(6):1–47, 2025. URL: https:
+//arxiv.org/abs/2404.13501.
+[72] Yujie Zhao, Boqin Yuan, Junbo Huang, Haocheng Yuan,
+Zhongming Yu, Haozhou Xu, Lanxiang Hu, Abhilash
+Shankarampeta, Zimeng Huang, Wentao Ni, et al. Ama-
+bench: Evaluating long-horizon memory for agentic
+applications. arXiv preprint arXiv:2602.22769, 2026.
+URL: https://arxiv.org/abs/2602.22769.
+[73] Yusheng Zheng, Tianyuan Wu, Quanzhi Fu, Tong Yu,
+Wenan Mao, Tao Ma, Dan Williams, Wei Wang, and
+Andi Quinn.
+Actplane: Programmable os-level pol-
+icy enforcement for agent harnesses. arXiv preprint
+arXiv:2606.25189, 2026. URL: https://arxiv.org/
+abs/2606.25189.
+[74] Jinhao Zhu, Kevin Tseng, Gil Vernik, Xiao Huang,
+Shishir G Patil, Vivian Fang, and Raluca Ada Popa.
+Miniscope: A least privilege framework for authorizing
+tool calling agents. arXiv preprint arXiv:2512.11147,
+2025. URL: https://arxiv.org/abs/2512.11147.
+[75] Wei Zou, Mingwen Dong, Miguel Romero Calvo,
+Shuaichen Chang, Jiang Guo, Dongkyu Lee, Xing Niu,
+Xiaofei Ma, Yanjun Qi, and Jiarong Jiang.
+Poison
+once, exploit forever: Environment-injected memory
+poisoning attacks on web agents.
+arXiv preprint
+arXiv:2604.02623, 2026. URL: https://arxiv.org/
+abs/2604.02623.
+18
