@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-09</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-27 ~ 2026-11-05</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>10</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-09 00:57:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-11-05 01:20:48 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-09日报：25篇论文中精读10篇、速读15篇，多智能体安全与鲁棒联邦强化学习领跑。</p>
-<p>最值得看的是两篇9分精读：用CaMeLs防御多智能体间接提示注入，以及从不可靠轨迹做对抗鲁棒联邦Q-learning。</p>
-<p>普通读者建议先读这两篇，再按兴趣补看脉冲驱动视觉-语言-动作模型、语义安全机器人控制和认证式差分隐私学习。</p>
+<p>今日无新推荐，系统未产出可展示论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Can CaMeLs Talk? Securing Multi-Agent Systems Against Indirect Prompt Injection Attacks">Can CaMeLs Talk? Securing Multi-Agent Systems Against Indirect Prompt Injection Attacks</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning from Unreliable Trajectories: Adversarially-Robust Federated Q-Learning">Learning from Unreliable Trajectories: Adversarially-Robust Federated Q-Learning</span></li><li><span class="dpr-home-dashboard-paper-title" title="ASPIRE: Agentic Safety &amp; Prompt Injection Red-teaming Engine">ASPIRE: Agentic Safety &amp; Prompt Injection Red-teaming Engine</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">ai-agents <strong>5</strong></span><span class="dpr-home-dashboard-tag">federated-learning <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>1</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>1</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">15 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Spike-driven Vision-Language-Action Model">Spike-driven Vision-Language-Action Model</span></li><li><span class="dpr-home-dashboard-paper-title" title="Neuro-Symbolic Predicate Learning for Semantic Safe Robot Control">Neuro-Symbolic Predicate Learning for Semantic Safe Robot Control</span></li><li><span class="dpr-home-dashboard-paper-title" title="Certification-Based Differentially Private Learning">Certification-Based Differentially Private Learning</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">federated-learning <strong>6</strong></span><span class="dpr-home-dashboard-tag">ai-agents <strong>3</strong></span><span class="dpr-home-dashboard-tag">embodied-ai-security <strong>3</strong></span><span class="dpr-home-dashboard-tag">large-language-models <strong>2</strong></span><span class="dpr-home-dashboard-tag">ai-security <strong>1</strong></span></div>
+
 </section>
 </div>
 
